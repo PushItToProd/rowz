@@ -1,17 +1,56 @@
 # rowz
 
-An open source, web-based spreadsheet modeled on rows.com. A spreadsheet holds pages, a page holds several independent tables, and a formula can describe a side effect that runs when someone clicks a button.
-
-```
-=BUTTON("Sum range", EXECUTE(SUM(A1,A2),A3))
-=BUTTON("Click me!", SEND_EMAIL(A1,A2,A3))
-```
+rowz is a web app for building pages out of blocks. A block is a table, a chart, or a text view, and spreadsheet formulas connect them. A table is a spreadsheet grid. A chart or a text view shows what its formulas compute from the tables. A formula can also describe a side effect, such as writing to a cell or sending an email, that runs when someone clicks a button.
 
 ![A page holding a table with named columns, a bar chart of it, and a text view that reports on it](docs/screenshots/editor.png)
 
-The first formula shows a button that writes the sum of A1 and A2 into A3. The second shows a button that sends an email built from three cells.
+## Why it exists
 
-`SEND_EMAIL` delivers through a mail server when `SMTP_URL` is set. Without one it writes the message to the server log and delivers nothing.
+rowz is a proof of concept of the spreadsheet app I have wanted for years. Its ideas come from Excel, Google Sheets, Apple Numbers, rows.com, Notion, and Vue, among others. Most of them already exist somewhere. I have not seen them combined in a way I like.
+
+## Status
+
+rowz is vibecoded in my spare time. AI coding agents, mostly Claude with some Codex, wrote nearly all of the code, much of it without my supervision. I skim some of the changes. Otherwise I rely on the tests and on reviews of the code by other models.
+
+Expect bugs and breaking changes, and don't keep anything in it that you can't afford to lose. [What's missing](#whats-missing) lists the largest gaps.
+
+## How it differs from a traditional spreadsheet
+
+- **A page holds blocks.** A traditional sheet is one unbounded grid with charts and text boxes floating over it. A rowz page is a stack of blocks in an order you choose.
+- **Each table is its own grid.** Every table has its own cell A1 and only the rows and columns it was given. A formula reads another table by name: `Orders!A1`, or `'Page 1'!Orders!A1` from another page.
+- **Columns can have names and types.** `[Price]` is the cell of the Price column in the formula's own row. A formula column computes one formula in every row.
+- **Text computes.** A text view is a Markdown template whose tags hold formulas, with loops and conditions, so a report is written as prose and not laid out in cells.
+- **A chart's data is a formula.** A chart is a block that draws whatever its formula returns. It is not anchored to cells of a grid.
+- **A formula can describe a side effect.** `BUTTON`, `EXECUTE`, `SEND_EMAIL`, and the other action functions replace macros. Recalculation never runs an action. A click does, on the server, which keeps a record of it.
+- **A cell can be an input.** `CHECKBOX` and `DROPDOWN` show a control that writes to another cell, so a table can be a form.
+- **A function can live in a cell.** A cell that holds a `LAMBDA` is called by its address: `=D1(21)`.
+
+## What's missing
+
+The aim is to do what a traditional spreadsheet does, and do it better. I build what I want from one first, so some of what follows may stay missing. [todo.md](todo.md) lists what is planned.
+
+### Features of other spreadsheets
+
+- **Layout:** merged cells, borders, resizing rows and columns, wrapping text in a cell, hiding rows and columns, and freezing header rows.
+- **Working with data:** sorting and filtering a table in place, pivot tables (`QUERY` has a `pivot` clause), find and replace, conditional formats, and validation of what a cell accepts.
+- **Functions:** coverage follows what I use. Less common financial, statistical, and scientific functions are missing or lightly tested. There are no regular expressions, no random numbers, and no `INDIRECT` or `OFFSET`.
+- **Names:** a range, value, or function cannot be given a name for the whole document.
+- **Charts:** four kinds, with no axis titles, colors, or stacking.
+- **Files:** rowz does not open or save Excel files. It has no layout for printing.
+- **Dates:** there are no time zones, and numbers and dates are written one way whatever the reader's locale.
+- **Working together:** edits made at the same moment are not merged. Open sessions see each other's changes within a second, and the last write to a cell wins. There are no comments on cells and no protected ranges. A document can be shared only with someone who already has an account.
+- **Size:** a document holds at most 100,000 filled cells.
+
+### Known spreadsheet flaws
+
+rowz has not fixed these.
+
+- **Data and business logic are intermingled.** A table holds typed values and formulas side by side, and nothing marks which cells are which. Formula columns and text views move some formulas out of the cells.
+- **Formulas cannot be tested.** There is no way to state what a formula should return and have that checked. History keeps versions of a document but does not show what changed between two of them.
+- **Numbers are binary floating point.** `=0.1+0.2=0.3` is `FALSE`. There is no decimal type for money.
+- **Typed text is converted by guesswork.** A cell typed as `2026-09-30` becomes a date. Outside a typed column, nothing says what a cell should hold.
+- **A reference names a position.** `B2:B9` says nothing about what it reads. Named columns fix this only for tables that have them.
+- **The whole document is computed at once.** The browser loads every cell of a document and recalculates it there.
 
 ## Quick start
 
@@ -35,6 +74,45 @@ BASE_URL=https://devbox.example.com:5173
 `pnpm dev` gives that file to both processes. The Vite dev server takes its port from the URL, listens on every interface, and accepts the URL's host name. The API server accepts sign-in requests from that origin alone, so http://localhost:5173 stops working while the setting is in place.
 
 Use an `https` URL. The app calls `crypto.randomUUID`, which browsers provide over plain HTTP only on localhost. With an `https` URL the dev server presents a self-signed certificate, which the browser asks you to accept on the first visit.
+
+## Pages and blocks
+
+A document holds pages, and a page holds blocks: tables, charts, and text views. The arrows beside a block move it up or down the page.
+
+### Tables
+
+A table is a grid of cells with its own column letters and row numbers.
+
+A table can have named columns, which makes it a data table. `[Price]` is the cell of that column in the formula's own row, and `Sales[Price]` is the whole column of the table Sales. A column can be typed (text, number, date, checkbox) or be a formula column, which computes one formula in every row that holds something.
+
+The toolbar under the formula bar gives the selected cells bold, italic, an alignment, a number format, a text color, or a fill color. Formats are stored per table as rules over ranges, so a whole column is one rule.
+
+Each table also exports to CSV (the values shown) and imports from CSV.
+
+### Charts
+
+A chart draws a range as bars, lines, a pie, or a scatter. Its data is a formula such as `Sales!A1:C9`. The first column labels the points and each other column is a series.
+
+### Text views
+
+A text view is Markdown with tags that put values from tables into it:
+
+```
+## Sales report
+
+{% let total = SUM(Sales!B2:B) %}
+We sold **{{ total }}** in all.
+
+{% for name, amount in Sales!A2:B4 %}
+- {{ name }}: {{ amount }}{% if amount > 100 %} (a big one){% end %}
+{% end %}
+
+{{ BAR_CHART(Sales!A2:B4, "Sales by person") }}
+```
+
+<img src="docs/screenshots/text-view.png" alt="A text view being edited, with its source above the result" width="407">
+
+`{{ }}` shows one value in the sentence, a range as a table, and the result of `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, or `SCATTER_CHART` as a chart. A formula in a chart or text view is written on a page and not in a table, so it names the table of every cell it reads.
 
 ## Formulas
 
@@ -64,13 +142,18 @@ Typing a formula offers the functions and names that match, with what each funct
 | Names       | `LET LAMBDA`. A function kept in a cell is called by the cell's address: `=D1(21)`                                                                                                                                                                                                                                    |
 | Errors      | `#DIV/0! #VALUE! #REF! #NAME? #N/A #SPILL! #CYCLE! #ERROR!`                                                                                                                                                                                                                                                           |
 
-A table can have named columns, which makes it a data table. `[Price]` is the cell of that column in the formula's own row, and `Sales[Price]` is the whole column of the table Sales. A column can be typed (text, number, date, checkbox) or be a formula column, which computes one formula in every row that holds something.
-
 Page, table, and column names in references ignore case. Names with spaces need single quotes.
 
 ### Actions
 
 An action is a function that describes a side effect. It does nothing until a button runs it.
+
+```
+=BUTTON("Sum range", EXECUTE(SUM(A1,A2),A3))
+=BUTTON("Click me!", SEND_EMAIL(A1,A2,A3))
+```
+
+The first formula shows a button that writes the sum of A1 and A2 into A3. The second shows a button that sends an email built from three cells.
 
 | Function                            | Effect                                                                                                   |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -84,6 +167,18 @@ An action is a function that describes a side effect. It does nothing until a bu
 | `CLEAR(range)`                      | Empties the cells of the range.                                                                          |
 | `DO(action, ...)`                   | Runs several actions from one click.                                                                     |
 
+`SEND_EMAIL` delivers through a mail server when `SMTP_URL` is set. Without one it writes the message to the server log and delivers nothing.
+
+An action's arguments are evaluated when the button is clicked, not when formulas recalculate. `=BUTTON("Add one", EXECUTE(A1+1, A1))` is a counter, not a circular reference.
+
+### Controls
+
+A control is a cell that shows an input bound to another cell. `CHECKBOX(cell, label)` and `DROPDOWN(choices, cell)` show that cell's value and write a change back to it.
+
+![A form whose dropdown and checkbox fill cells, and a button that appends them to a log table](docs/screenshots/form.png)
+
+The **Save order** button above appends the form's cells to the Log table and then empties the form.
+
 ### Queries
 
 `QUERY(range, query, [headers])` runs a query written like SQL over a range:
@@ -94,54 +189,10 @@ An action is a function that describes a side effect. It does nothing until a bu
 
 It supports `select`, `where`, `group by`, `having`, `pivot`, `order by`, `limit`, `offset`, and `label`. Columns are named by letter, counting from the first column of the range, or by header. A query expression can call any formula function.
 
-### Formats
+## History and files
 
-The toolbar under the formula bar gives the selected cells bold, italic, an alignment, a number format, a text color, or a fill color. Formats are stored per table as rules over ranges, so a whole column is one rule.
-
-### History
-
-The server keeps versions of a spreadsheet: before anything is deleted, before a change to many cells at once, and every ten minutes while it is edited. **History** in the editor restores a version or opens it as a new spreadsheet.
-
-### Files
-
-**Export** in the editor saves a spreadsheet as a JSON file holding its pages, their blocks (tables, charts, and text views), and cell inputs. **Import** on the spreadsheet list creates a spreadsheet from one. A spreadsheet holds at most 50 pages, 50 blocks on a page, and 100,000 filled cells, which are also the most a file may hold. The format is the `spreadsheetFile` schema in `packages/shared/src/index.ts`. It identifies things by name and order, with no ids.
-
-Each table also exports to CSV (the values shown) and imports from CSV.
-
-### Charts and text views
-
-A page holds blocks: tables, charts, and text views.
-
-A chart draws a range as bars, lines, a pie, or a scatter. Its data is a formula such as `Sales!A1:C9`. The first column labels the points and each other column is a series.
-
-A text view is Markdown with tags that put spreadsheet values into it:
-
-```
-## Sales report
-
-{% let total = SUM(Sales!B2:B) %}
-We sold **{{ total }}** in all.
-
-{% for name, amount in Sales!A2:B4 %}
-- {{ name }}: {{ amount }}{% if amount > 100 %} (a big one){% end %}
-{% end %}
-
-{{ BAR_CHART(Sales!A2:B4, "Sales by person") }}
-```
-
-<img src="docs/screenshots/text-view.png" alt="A text view being edited, with its source above the result" width="407">
-
-`{{ }}` shows one value in the sentence, a range as a table, and the result of `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, or `SCATTER_CHART` as a chart. A formula in a chart or text view is written on a page and not in a table, so it names the table of every cell it reads.
-
-### Controls
-
-A control is a cell that shows an input bound to another cell. `CHECKBOX(cell, label)` and `DROPDOWN(choices, cell)` show that cell's value and write a change back to it.
-
-![A form whose dropdown and checkbox fill cells, and a button that appends them to a log table](docs/screenshots/form.png)
-
-The **Save order** button above appends the form's cells to the Log table and then empties the form.
-
-An action's arguments are evaluated when the button is clicked, not when the sheet recalculates. `=BUTTON("Add one", EXECUTE(A1+1, A1))` is a counter, not a circular reference.
+The server keeps versions of a document: before anything is deleted, before a change to many cells at once, and every ten minutes while it is edited. **History** in the editor restores a version or opens it as a new document.
+**Export** in the editor saves a document as a JSON file holding its pages, their blocks, and cell inputs. **Import** on the document list creates a document from one. A document holds at most 50 pages, 50 blocks on a page, and 100,000 filled cells, which are also the most a file may hold. The format is the `spreadsheetFile` schema in `packages/shared/src/index.ts`. It identifies things by name and order, with no ids.
 
 ## How it works
 
@@ -159,26 +210,26 @@ The same engine runs in two places. The browser runs it to show values as soon a
 
 Cell writes and a record in `action_runs` commit in one transaction. Email is sent after the commit.
 
-Every change to what a spreadsheet holds runs in a transaction that first locks the spreadsheet's row, so changes to one spreadsheet happen one at a time and each reads what the one before it left. A request that changes anything must also come from a page served at `BASE_URL`: the server refuses one whose `Origin` header names another origin. `action_runs` records who clicked which cell, the effects, and the outcome.
+Every change to what a document holds runs in a transaction that first locks the document's row, so changes to one document happen one at a time and each reads what the one before it left. A request that changes anything must also come from a page served at `BASE_URL`: the server refuses one whose `Origin` header names another origin. `action_runs` records who clicked which cell, the effects, and the outcome.
 
-Every spreadsheet belongs to a workspace, and users reach spreadsheets through workspace membership with a role of owner, editor, or viewer. All data access goes through `SpreadsheetRepository`, which checks membership in each query. A spreadsheet outside the user's workspaces is reported as not found.
+Every document belongs to a workspace, and users reach documents through workspace membership with a role of owner, editor, or viewer. All data access goes through `SpreadsheetRepository`, which checks membership in each query. A document outside the user's workspaces is reported as not found.
 
 ## Configuration
 
 The server reads environment variables, and the web app's build reads `APP_NAME`. Development needs none. `pnpm dev` also reads them from `.env.local` at the repository root, which Git ignores.
 
-| Variable                     | Default                              | Meaning                                                                                                                                                                                                                              |
-| ---------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `APP_NAME`                   | `rowz`                               | The name the app calls itself, in the browser tab and as the sender of email. The web app takes it when Vite builds or serves it, so set it for `pnpm build` as well as for the server                                               |
-| `DATABASE_URL`               | `.data/pglite`                       | A `postgres://` URL, or a directory for the embedded PGlite database                                                                                                                                                                 |
-| `AUTH_SECRET`                | a development value                  | Signs sessions. Required when `NODE_ENV=production`.                                                                                                                                                                                 |
-| `BASE_URL`                   | `http://localhost:5173`              | The URL browsers use to reach the app                                                                                                                                                                                                |
-| `PORT`                       | `3000`                               | Port of the API server                                                                                                                                                                                                               |
-| `EMAILS_PER_HOUR`            | `50`                                 | Emails one user's button clicks may send in an hour, counting each recipient of each message. Stops use as an open mail relay                                                                                                        |
-| `SMTP_URL`                   | none                                 | An `smtp://` or `smtps://` URL of a mail server, with any user name and password in it. Without it email is logged, not sent                                                                                                         |
-| `MAIL_FROM`                  | `APP_NAME`, at `no-reply@localhost`  | The address email is sent from                                                                                                                                                                                                       |
-| `REQUIRE_EMAIL_VERIFICATION` | off                                  | Set to `true` to make a new account confirm its email address, through a link sent to it, before it can sign in. A spreadsheet can then be shared only with an account that has confirmed its address. Needs `SMTP_URL` to be useful |
-| `WEB_ROOT`                   | none, or `../web/dist` in production | The directory of the built web app, which the server then serves. Set it to nothing when something else serves the web app                                                                                                           |
+| Variable                     | Default                              | Meaning                                                                                                                                                                                                                           |
+| ---------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_NAME`                   | `rowz`                               | The name the app calls itself, in the browser tab and as the sender of email. The web app takes it when Vite builds or serves it, so set it for `pnpm build` as well as for the server                                            |
+| `DATABASE_URL`               | `.data/pglite`                       | A `postgres://` URL, or a directory for the embedded PGlite database                                                                                                                                                              |
+| `AUTH_SECRET`                | a development value                  | Signs sessions. Required when `NODE_ENV=production`.                                                                                                                                                                              |
+| `BASE_URL`                   | `http://localhost:5173`              | The URL browsers use to reach the app                                                                                                                                                                                             |
+| `PORT`                       | `3000`                               | Port of the API server                                                                                                                                                                                                            |
+| `EMAILS_PER_HOUR`            | `50`                                 | Emails one user's button clicks may send in an hour, counting each recipient of each message. Stops use as an open mail relay                                                                                                     |
+| `SMTP_URL`                   | none                                 | An `smtp://` or `smtps://` URL of a mail server, with any user name and password in it. Without it email is logged, not sent                                                                                                      |
+| `MAIL_FROM`                  | `APP_NAME`, at `no-reply@localhost`  | The address email is sent from                                                                                                                                                                                                    |
+| `REQUIRE_EMAIL_VERIFICATION` | off                                  | Set to `true` to make a new account confirm its email address, through a link sent to it, before it can sign in. A document can then be shared only with an account that has confirmed its address. Needs `SMTP_URL` to be useful |
+| `WEB_ROOT`                   | none, or `../web/dist` in production | The directory of the built web app, which the server then serves. Set it to nothing when something else serves the web app                                                                                                        |
 
 The server applies database migrations at startup. After changing `apps/server/src/db/schema.ts`, run `pnpm --filter @spreadsheet-app/server db:generate` and commit the new file in `apps/server/drizzle/`.
 
@@ -213,12 +264,6 @@ One server process is assumed. Live updates between sessions are announced in th
 | `pnpm screenshots`   | Retakes the screenshots in this file (`e2e/screenshots.ts`)          |
 
 Server tests run against PGlite in memory. Set `TEST_DATABASE_URL` to a Postgres server to run them against real Postgres instead; each test file creates and drops its own database. CI does this on every push.
-
-## Not built yet
-
-- Merging of edits made at the same moment. Open sessions see each other's changes within a second, and the last write to a cell wins.
-- Inviting someone who has no account yet. A spreadsheet can be shared only with an existing account.
-- Column resizing.
 
 ## License
 
