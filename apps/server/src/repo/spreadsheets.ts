@@ -1174,7 +1174,12 @@ export class SpreadsheetRepository {
       const updated = await writer.updateTable(tableId, {
         columns: names.map((name) => ({ name, type: "any" as const })),
       });
-      return { ...rewritten, table: updated };
+      return {
+        ...rewritten,
+        table: updated,
+        // The edit returned this table as it was before its columns were named.
+        tables: rewritten.tables.filter((candidate) => candidate.id !== tableId),
+      };
     });
   }
 

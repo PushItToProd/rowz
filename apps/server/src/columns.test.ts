@@ -131,11 +131,16 @@ describe("naming a table's columns", () => {
       B3: "=A2+A3",
       C3: "=A1",
     });
-    const result = await user.json<{ cells: object[] }>("POST", `/tables/${table.id}/columns`, {
-      headerRow: true,
-    });
+    const result = await user.json<{ cells: object[]; table: TableRecord; tables: TableRecord[] }>(
+      "POST",
+      `/tables/${table.id}/columns`,
+      { headerRow: true },
+    );
     expect(await stored()).toEqual({ "0:0": "5", "1:0": "7", "1:1": "=A1+A2", "1:2": "=#REF!" });
     expect(result.cells.length).toBeGreaterThan(0);
+    expect(names(result.table)[0]).toBe("Amount");
+    // The client applies `tables` after `table`, so a copy of the table from before it was named would undo the naming.
+    expect(result.tables.map(({ id }) => id)).not.toContain(table.id);
   });
 
   it("keeps the one row of a table that has only a header row", async () => {
