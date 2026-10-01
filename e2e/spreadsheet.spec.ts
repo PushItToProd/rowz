@@ -776,6 +776,17 @@ test("the help page documents formulas, with or without an account", async ({ pa
   await expect(page).toHaveURL(/\/help#errors$/);
   await expect(page.locator('[data-error="#CYCLE!"]')).toBeInViewport();
 
+  // The contents stay on screen and mark the section being read.
+  const contents = page.getByRole("navigation", { name: "Contents" });
+  await expect(contents.locator('[aria-current="true"]')).toHaveText("Errors");
+  await contents.getByText("Queries").click();
+  await expect(contents.locator('[aria-current="true"]')).toHaveText("Queries");
+  await expect(contents.getByText("Queries")).toBeInViewport();
+  await page.getByRole("heading", { name: "Sharing" }).scrollIntoViewIfNeeded();
+  await page.mouse.wheel(0, 300);
+  await expect(contents.locator('[aria-current="true"]')).not.toHaveText("Queries");
+  await expect(contents.locator('[aria-current="true"]')).toBeInViewport();
+
   await newSpreadsheet(page);
   const opened = context.waitForEvent("page");
   await page.getByRole("link", { name: "Help" }).click();

@@ -1,12 +1,31 @@
 import { defaultFunctions, errorDocs } from "@spreadsheet-app/engine";
 import { mount, RouterLinkStub, type VueWrapper } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { APP_NAME } from "../appName";
 import HelpView from "./HelpView.vue";
 
 function render(): VueWrapper {
   return mount(HelpView, { global: { stubs: { RouterLink: RouterLinkStub } } });
 }
+
+/** Lays the sections out 500 pixels apart, with the window scrolled down by `scrolled`. */
+function scrollTo(wrapper: VueWrapper, scrolled: number): Promise<void> {
+  wrapper.findAll("section").forEach((section, index) => {
+    vi.spyOn(section.element, "getBoundingClientRect").mockReturnValue({
+      top: index * 500 - scrolled,
+    } as DOMRect);
+  });
+  window.dispatchEvent(new Event("scroll"));
+  return wrapper.vm.$nextTick();
+}
+
+function reading(wrapper: VueWrapper): string[] {
+  return wrapper.findAll('.help__contents [aria-current="true"]').map((link) => link.text());
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("HelpView", () => {
   it("lists every function the engine has, each with its syntax", () => {
@@ -77,5 +96,28 @@ describe("HelpView", () => {
     expect(targets).toHaveLength(19);
     for (const target of targets)
       expect(wrapper.find(`section${target ?? ""}`).exists()).toBe(true);
+  });
+
+  it("marks the section being read in the contents, and follows the scrolling", async () => {
+    const wrapper = mount(HelpView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+      attachTo: document.body,
+    });
+    expect(reading(wrapper)).toEqual(["Typing into cells"]);
+
+    await scrollTo(wrapper, 1000);
+    expect(reading(wrapper)).toEqual(["Pages and tables"]);
+    // A section counts once its heading nears the top of the window.
+    await scrollTo(wrapper, 1400);
+    expect(reading(wrapper)).toEqual(["Tables with named columns"]);
+    await scrollTo(wrapper, 0);
+    expect(reading(wrapper)).toEqual(["Typing into cells"]);
+
+    // The end of the page is the last section, which is too short to reach the top.
+    vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(9000);
+    vi.spyOn(window, "scrollY", "get").mockReturnValue(9000 - window.innerHeight);
+    await scrollTo(wrapper, 8000);
+    expect(reading(wrapper)).toEqual(["Errors"]);
+    wrapper.unmount();
   });
 });

@@ -15,6 +15,7 @@ import {
   type FunctionDoc,
 } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { usePageTitle } from "../pageTitle";
 
 usePageTitle("Help");
@@ -99,6 +100,46 @@ const SECTIONS = [
   ["text-views", "Text views"],
   ["errors", "Errors"],
 ] as const;
+
+type SectionId = (typeof SECTIONS)[number][0];
+
+/** A section is the one being read once its top is within this many pixels of the top of the window. */
+const READING_LINE = 120;
+
+/** The section being read, which the contents mark. */
+const reading = ref<SectionId>(SECTIONS[0][0]);
+const contents = ref<HTMLElement>();
+
+function trackSection(): void {
+  const page = document.documentElement;
+  // The last sections are too short to reach the top of the window.
+  const atEnd = window.scrollY > 0 && window.innerHeight + window.scrollY >= page.scrollHeight - 2;
+  const passed = SECTIONS.map(([id]) => id).filter((id) => {
+    const top = document.getElementById(id)?.getBoundingClientRect().top;
+    return top !== undefined && top <= READING_LINE;
+  });
+  reading.value = (atEnd ? SECTIONS.at(-1)?.[0] : passed.at(-1)) ?? SECTIONS[0][0];
+}
+
+// The contents scroll on their own where they do not fit. Keep the marked entry in view.
+watch(reading, async () => {
+  await nextTick();
+  const list = contents.value;
+  const link = list?.querySelector<HTMLElement>('[aria-current="true"]');
+  if (!list || !link) return;
+  list.scrollLeft = link.offsetLeft - (list.clientWidth - link.offsetWidth) / 2;
+  list.scrollTop = link.offsetTop - (list.clientHeight - link.offsetHeight) / 2;
+});
+
+onMounted(() => {
+  window.addEventListener("scroll", trackSection, { passive: true });
+  window.addEventListener("resize", trackSection);
+  trackSection();
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("scroll", trackSection);
+  window.removeEventListener("resize", trackSection);
+});
 
 const KEYS = [
   ["Arrow keys", "Move the selection."],
@@ -216,8 +257,15 @@ const OPERATORS = [
       <h1>Help</h1>
     </header>
 
-    <nav class="help__contents" aria-label="Contents">
-      <a v-for="[id, title] in SECTIONS" :key="id" :href="`#${id}`">{{ title }}</a>
+    <nav ref="contents" class="help__contents" aria-label="Contents">
+      <a
+        v-for="[id, title] in SECTIONS"
+        :key="id"
+        :href="`#${id}`"
+        :aria-current="id === reading ? 'true' : undefined"
+      >
+        {{ title }}
+      </a>
     </nav>
 
     <section id="basics">
