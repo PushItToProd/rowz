@@ -12,6 +12,7 @@ export default tseslint.config(
       "**/.data/",
       "apps/server/drizzle/",
       ".claude/",
+      ".worktrees/",
       ".playwright-mcp/",
     ],
   },

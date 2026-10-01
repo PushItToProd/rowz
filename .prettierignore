@@ -10,6 +10,7 @@ LICENSE
 .mcp.json
 .vscode
 .idea
+.worktrees/
 .playwright-mcp/
 todo.md
 _scratch/
