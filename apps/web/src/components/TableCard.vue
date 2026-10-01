@@ -9,6 +9,7 @@ import { useWorkbookStore } from "../stores/workbook";
 import ContextMenu from "./ContextMenu.vue";
 import EditableName from "./EditableName.vue";
 import GridView from "./GridView.vue";
+import ResizeTable from "./ResizeTable.vue";
 import type { MenuItem, MenuScope } from "./menu";
 
 const props = defineProps<{ table: TableRecord }>();
@@ -89,6 +90,31 @@ function removeLines(lines: Lines): void {
   if (holdContent(lines) && !window.confirm(`Delete ${describeLines(lines)} and ${held}?`)) return;
   const { axis, first: index, count } = lines;
   void store.editTable(props.table.id, { axis, kind: "delete", index, count });
+}
+
+/** Whether the form that sets the table's size is open. */
+const resizing = ref(false);
+
+/** Whether the rows and columns past a size hold anything. */
+function holdsContentPast(rowCount: number, colCount: number): boolean {
+  const { id } = props.table;
+  for (let row = 0; row < props.table.rowCount; row += 1) {
+    for (let col = row < rowCount ? colCount : 0; col < props.table.colCount; col += 1) {
+      if (store.inputOf({ tableId: id, row, col }) !== "") return true;
+    }
+  }
+  return false;
+}
+
+/** Sets the table's size, asking first when a smaller one would discard content. */
+function resize({ rowCount, colCount }: { rowCount: number; colCount: number }): void {
+  const { id, name } = props.table;
+  const size = `${String(colCount)} ${colCount === 1 ? "column" : "columns"} and ${String(rowCount)} ${rowCount === 1 ? "row" : "rows"}`;
+  const asked = `Resizing ${name} to ${size} deletes what its other rows and columns hold. Resize it?`;
+  if (holdsContentPast(rowCount, colCount) && !window.confirm(asked)) return;
+  resizing.value = false;
+  if (rowCount === props.table.rowCount && colCount === props.table.colCount) return;
+  void store.updateTable(id, { rowCount, colCount });
 }
 
 /** Where the menu that offers the two ways to name columns is open, if it is. */
@@ -250,6 +276,7 @@ const menuLabel = computed(() => {
         />
       </h2>
       <div v-if="store.canEdit" class="table-card__actions">
+        <button type="button" aria-haspopup="dialog" @click="resizing = !resizing">Resize</button>
         <button v-if="table.columns" type="button" @click="dropColumns">Remove column names</button>
         <button v-else type="button" aria-haspopup="menu" @click="openNaming">Name columns</button>
         <label class="file-button">
@@ -262,6 +289,7 @@ const menuLabel = computed(() => {
       <div v-else class="table-card__actions">
         <button type="button" @click="exportCsv">Export CSV</button>
       </div>
+      <ResizeTable v-if="resizing" :table="table" @close="resizing = false" @resize="resize" />
     </header>
 
     <!-- Always present, so selecting a cell does not push the grid down. -->

@@ -361,6 +361,8 @@ input.editable-name--editing {
 }
 
 .table-card__header {
+  /* The resize form opens under it. */
+  position: relative;
   display: flex;
   gap: 16px;
   align-items: center;
@@ -371,6 +373,35 @@ input.editable-name--editing {
 .table-card__actions {
   display: flex;
   gap: 6px;
+}
+
+/* The form that sets a table's size, which opens under the table's buttons. */
+.resize-table {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  max-width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 14%);
+}
+
+.resize-table label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+}
+
+.resize-table input {
+  width: 72px;
 }
 
 /* The grid, with a strip along its right edge and one along its bottom edge that add a column or a row. */

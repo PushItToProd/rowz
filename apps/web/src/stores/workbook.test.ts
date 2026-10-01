@@ -544,6 +544,36 @@ describe("structure", () => {
     expect(store.selectedRange).toEqual({ startRow: 1, endRow: 2, startCol: 0, endCol: 2 });
   });
 
+  it("applies a smaller size: drops the cells that went, and keeps the selection inside", async () => {
+    const store = await open({ A1: "1", C4: "gone", B1: "=C4" });
+    store.selection = at("B2");
+    store.extendSelection(at("C4"));
+    server.updateTable.mockResolvedValue({
+      table: { ...TABLE, rowCount: 2, colCount: 2 },
+      cells: [
+        { ...at("C4"), input: "" },
+        { ...at("B1"), input: "=#REF!" },
+      ],
+      views: [],
+      tables: [],
+    });
+    expect(await store.updateTable("t1", { rowCount: 2, colCount: 2 })).toBe(true);
+    expect(store.inputOf(at("C4"))).toBe("");
+    expect(store.inputOf(at("B1"))).toBe("=#REF!");
+    expect(store.selection).toEqual(at("B2"));
+    expect(store.selectedRange).toEqual({ startRow: 1, endRow: 1, startCol: 1, endCol: 1 });
+
+    store.selection = at("A2");
+    server.updateTable.mockResolvedValue({
+      table: { ...TABLE, rowCount: 1, colCount: 2 },
+      cells: [],
+      views: [],
+      tables: [],
+    });
+    await store.updateTable("t1", { rowCount: 1 });
+    expect(store.selection).toEqual(at("A1"));
+  });
+
   it("stores pending cell edits before asking the server to move cells", async () => {
     const store = await open({ A1: "1" });
     const save = deferred();

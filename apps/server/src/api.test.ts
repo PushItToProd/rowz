@@ -247,7 +247,10 @@ describe("tables", () => {
     const resized = await user.json("PATCH", `/tables/${table.id}`, { rowCount: 4, colCount: 2 });
     expect(resized).toMatchObject({
       table: { rowCount: 4, colCount: 2, name: "Table 1" },
-      cells: [],
+      cells: [
+        { tableId: table.id, row: 4, col: 0, input: "" },
+        { tableId: table.id, row: 0, col: 2, input: "" },
+      ],
     });
     expect(await storedInputs(user, snapshot.id, table.id)).toEqual({
       "0:0": "keep",
@@ -467,6 +470,72 @@ describe("inserting and deleting rows and columns", () => {
     expect(await stored()).toEqual({ "0:0": "kept" });
     const filled = await edit({ axis: "row", kind: "insert", index: 3, count: room });
     expect(filled.table).toMatchObject({ rowCount: LIMITS.tableRows });
+  });
+
+  it("makes a table smaller by deleting the rows and columns past its new size", async () => {
+    const { table, stored } = await tableWith({
+      A1: "1",
+      A2: "2",
+      A3: "gone",
+      B1: "=SUM(A1:A3)",
+      B2: "=A3",
+      C1: "gone",
+      C3: "gone",
+      A4: "gone",
+    });
+    await user.json("POST", `/tables/${table.id}/formats`, {
+      range: { startRow: 0, endRow: 5, startCol: 0, endCol: 4 },
+      format: { bold: true },
+    });
+    const result = await user.json<{ table: TableRecord; cells: object[] }>(
+      "PATCH",
+      `/tables/${table.id}`,
+      { rowCount: 2, colCount: 2 },
+    );
+    expect(result.table).toMatchObject({
+      rowCount: 2,
+      colCount: 2,
+      formats: [{ startRow: 0, endRow: 1, startCol: 0, endCol: 1, format: { bold: true } }],
+    });
+    expect(await stored()).toEqual({
+      "0:0": "1",
+      "1:0": "2",
+      "0:1": "=SUM(A1:A2)",
+      "1:1": "=#REF!",
+    });
+    // The client is told of every cell that changed or went.
+    expect(result.cells).toEqual(
+      expect.arrayContaining([
+        { tableId: table.id, row: 0, col: 1, input: "=SUM(A1:A2)" },
+        { tableId: table.id, row: 1, col: 1, input: "=#REF!" },
+        { tableId: table.id, row: 2, col: 0, input: "" },
+        { tableId: table.id, row: 3, col: 0, input: "" },
+        { tableId: table.id, row: 0, col: 2, input: "" },
+        { tableId: table.id, row: 2, col: 2, input: "" },
+      ]),
+    );
+    expect(result.cells).toHaveLength(6);
+  });
+
+  it("renames, shrinks one way, and grows the other in one request", async () => {
+    const { snapshot, page, table, stored } = await tableWith({ A1: "1", A3: "gone" });
+    const sibling = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
+    await user.json(
+      "PUT",
+      `/tables/${sibling.id}/cells`,
+      cellsBody({ A1: "=SUM('Table 1'!A1:A5)" }),
+      204,
+    );
+    const result = await user.json<{ table: TableRecord }>("PATCH", `/tables/${table.id}`, {
+      name: "Small",
+      rowCount: 2,
+      colCount: 30,
+    });
+    expect(result.table).toMatchObject({ name: "Small", rowCount: 2, colCount: 30 });
+    expect(await stored()).toEqual({ "0:0": "1" });
+    expect(await storedInputs(user, snapshot.id, sibling.id)).toEqual({
+      "0:0": "=SUM(Small!A1:A2)",
+    });
   });
 
   it("rewrites formulas in other tables and on other pages", async () => {

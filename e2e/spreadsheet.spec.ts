@@ -207,6 +207,29 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
   await expect(table.locator("tbody tr")).toHaveCount(21);
   await table.getByRole("button", { name: "Add column" }).click();
   await expect(cell(page, "J1")).toBeVisible();
+
+  // Resize sets both at once. A smaller size asks before it discards content.
+  await enter(page, "B1", "=A4*2");
+  await expect(cell(page, "B1")).toHaveText("28");
+  await table.getByRole("button", { name: "Resize" }).click();
+  const resize = page.getByRole("dialog", { name: "Resize Table 1" });
+  await expect(resize.getByLabel("Columns")).toHaveValue("10");
+  await expect(resize.getByLabel("Rows")).toHaveValue("21");
+  await resize.getByLabel("Columns").fill("3");
+  await resize.getByLabel("Rows").fill("3");
+  page.once("dialog", (dialog) => {
+    expect(dialog.message()).toContain("Resizing Table 1 to 3 columns and 3 rows deletes");
+    void dialog.accept();
+  });
+  await resize.getByRole("button", { name: "Resize" }).click();
+  await expect(resize).toHaveCount(0);
+  await expect(table.locator("tbody tr")).toHaveCount(3);
+  await expect(cell(page, "D1")).toHaveCount(0);
+  // The formula that read a row that went says so.
+  await expect(cell(page, "B1")).toHaveText("#REF!");
+  await page.reload();
+  await expect(table.locator("tbody tr")).toHaveCount(3);
+  await expect(cell(page, "B1")).toHaveText("#REF!");
 });
 
 test("a formula with several results fills the cells around it", async ({ page }) => {

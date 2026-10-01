@@ -390,6 +390,11 @@ const OPERATORS = [
           {{ LIMITS.tableCols }} columns.
         </li>
         <li>
+          <strong>Resize</strong> sets how many columns and rows a table has. A smaller size deletes
+          the rows and columns past it, as deleting them by hand does, and asks first when they hold
+          something.
+        </li>
+        <li>
           Right-click a cell to insert a row or column next to it, or to delete its row or column.
           With several cells selected, the menu inserts as many rows or columns as the selection
           spans, and deletes the ones it spans. Right-click a row number or a column letter for the

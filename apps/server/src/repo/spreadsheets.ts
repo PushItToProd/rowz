@@ -17,6 +17,7 @@ import {
   type ColumnType,
   type FormatRule,
   type Rename,
+  type StructuralEdit,
 } from "@spreadsheet-app/engine";
 import {
   DEFAULT_TABLE_SIZE,
@@ -846,8 +847,8 @@ export class SpreadsheetRepository {
 
   /**
    * Renames or resizes a table. Renaming rewrites the formulas that name the
-   * table, and `cells` lists the ones that changed. Shrinking deletes the
-   * cells that no longer fit.
+   * table. Making it smaller deletes the rows and columns past the new size
+   * as any others are deleted, so formulas, views, and formats follow.
    */
   async updateTable(
     tableId: string,
@@ -858,21 +859,25 @@ export class SpreadsheetRepository {
     },
   ): Promise<Rewritten & { table: TableRecord }> {
     return this.changeTable(tableId, async (table, tx) => {
-      const shrinks =
-        (changes.rowCount ?? table.rowCount) < table.rowCount ||
-        (changes.colCount ?? table.colCount) < table.colCount;
-      if (shrinks) {
-        await this.keepVersion(tx, table.spreadsheetId, `Before making ${table.name} smaller`);
+      const { spreadsheetId } = table;
+      const sizes = [
+        { axis: "row", from: table.rowCount, to: changes.rowCount ?? table.rowCount },
+        { axis: "col", from: table.colCount, to: changes.colCount ?? table.colCount },
+      ] as const;
+      if (sizes.some(({ from, to }) => to < from)) {
+        await this.keepVersion(tx, spreadsheetId, `Before making ${table.name} smaller`);
       }
-      const rewritten =
-        changes.name === undefined
-          ? { cells: [], views: [], tables: [] }
-          : await this.rewriteFormulas(tx, table.spreadsheetId, {
-              kind: "table",
-              tableId,
-              name: changes.name,
-            });
-      // The rename may have rewritten this table's own formula columns.
+      let rewritten: Rewritten = { cells: [], views: [], tables: [] };
+      for (const { axis, from, to } of sizes) {
+        if (to >= from) continue;
+        const edit = { tableId, axis, kind: "delete", index: to, count: from - to } as const;
+        rewritten = merged(rewritten, await this.applyEdit(tx, spreadsheetId, edit));
+      }
+      if (changes.name !== undefined) {
+        const rename = { kind: "table", tableId, name: changes.name } as const;
+        rewritten = merged(rewritten, await this.rewriteFormulas(tx, spreadsheetId, rename));
+      }
+      // The steps above may have rewritten this table's own formula columns.
       const current =
         rewritten.tables.find((candidate) => candidate.id === tableId)?.columns ?? table.columns;
       const columns =
@@ -884,14 +889,6 @@ export class SpreadsheetRepository {
         .returning(tableColumns)
         .catch(rethrowDuplicate("table", changes.name ?? ""));
       if (!updated) throw notFound("Table");
-      await tx
-        .delete(cells)
-        .where(
-          and(
-            eq(cells.tableId, tableId),
-            or(gte(cells.row, updated.rowCount), gte(cells.col, updated.colCount)),
-          ),
-        );
       return {
         table: updated,
         ...rewritten,
@@ -1211,12 +1208,8 @@ export class SpreadsheetRepository {
     tableId: string,
     body: StructuralEditBody,
   ): Promise<Rewritten & { table: TableRecord }> {
-    const { spreadsheetId } = await this.findTable(tableId, "write");
-    return this.change(spreadsheetId, async (tx) => {
-      const snapshot = await this.within(tx).getSnapshot(spreadsheetId);
-      const table = snapshot.tables.find((candidate) => candidate.id === tableId);
-      if (!table) throw notFound("Table");
-
+    return this.changeTable(tableId, async (table, tx) => {
+      const { spreadsheetId } = table;
       const { count = 1 } = body;
       const edit = { tableId, ...body, count };
       const rows = edit.axis === "row";
@@ -1245,42 +1238,67 @@ export class SpreadsheetRepository {
         }
       }
 
-      const written = inputsAfterEdit(snapshot, edit);
-      await this.storeCells(tx, written);
-      const rewrittenViews = viewsAfterEdit(snapshot, snapshot.views, edit);
-      await this.storeViewSources(tx, rewrittenViews);
-      const changed = await this.storeColumnFormulas(
-        tx,
-        snapshot.tables,
-        columnFormulasAfterEdit(snapshot, edit),
-      );
-      // The formulas were rewritten at the positions the columns had before the edit.
-      const current =
-        changed.find((candidate) => candidate.id === tableId)?.columns ?? table.columns;
-      const columns =
-        current && !rows
-          ? edit.kind === "insert"
-            ? withColumnsInserted(current, edit.index, count)
-            : current.toSpliced(edit.index, count)
-          : current;
-      const newSize = size + (edit.kind === "insert" ? count : -count);
-      const [updated] = await tx
-        .update(tables)
-        .set({
-          ...(rows ? { rowCount: newSize } : { colCount: newSize, columns }),
-          // Formats follow the cells they were given to.
-          formats: formatRulesAfterEdit(table.formats, edit),
-        })
-        .where(eq(tables.id, tableId))
-        .returning(tableColumns);
+      const { tables: changed, ...rewritten } = await this.applyEdit(tx, spreadsheetId, edit);
+      const updated = changed.find((candidate) => candidate.id === tableId);
       if (!updated) throw notFound("Table");
       return {
         table: updated,
-        cells: written,
-        views: rewrittenViews,
+        ...rewritten,
         tables: changed.filter((candidate) => candidate.id !== tableId),
       };
     });
+  }
+
+  /**
+   * Carries out an edit that is known to fit its table: moves the cells,
+   * rewrites what reads them, and resizes the table. Must run inside `change`.
+   * The tables returned include the edited one.
+   */
+  private async applyEdit(
+    tx: Database,
+    spreadsheetId: string,
+    edit: StructuralEdit & { count: number },
+  ): Promise<Rewritten> {
+    const snapshot = await this.within(tx).getSnapshot(spreadsheetId);
+    const table = snapshot.tables.find((candidate) => candidate.id === edit.tableId);
+    if (!table) throw notFound("Table");
+    const rows = edit.axis === "row";
+
+    const written = inputsAfterEdit(snapshot, edit);
+    await this.storeCells(tx, written);
+    const rewrittenViews = viewsAfterEdit(snapshot, snapshot.views, edit);
+    await this.storeViewSources(tx, rewrittenViews);
+    const changed = await this.storeColumnFormulas(
+      tx,
+      snapshot.tables,
+      columnFormulasAfterEdit(snapshot, edit),
+    );
+    // The formulas were rewritten at the positions the columns had before the edit.
+    const current =
+      changed.find((candidate) => candidate.id === table.id)?.columns ?? table.columns;
+    const columns =
+      current && !rows
+        ? edit.kind === "insert"
+          ? withColumnsInserted(current, edit.index, edit.count)
+          : current.toSpliced(edit.index, edit.count)
+        : current;
+    const size =
+      (rows ? table.rowCount : table.colCount) + edit.count * (edit.kind === "insert" ? 1 : -1);
+    const [updated] = await tx
+      .update(tables)
+      .set({
+        ...(rows ? { rowCount: size } : { colCount: size, columns }),
+        // Formats follow the cells they were given to.
+        formats: formatRulesAfterEdit(table.formats, edit),
+      })
+      .where(eq(tables.id, table.id))
+      .returning(tableColumns);
+    if (!updated) throw notFound("Table");
+    return {
+      cells: written,
+      views: rewrittenViews,
+      tables: [...changed.filter((candidate) => candidate.id !== table.id), updated],
+    };
   }
 
   /**
@@ -1542,6 +1560,24 @@ function nextColumnName(columns: readonly ColumnDefinition[]): string {
     "Column",
     columns.map((column) => column.name),
   );
+}
+
+/**
+ * What two rewrites in a row rewrote together. Where both wrote the same
+ * cell, view, or table, the later one has it as it now is.
+ */
+function merged(earlier: Rewritten, later: Rewritten): Rewritten {
+  const latest = <T>(items: readonly T[], key: (item: T) => string): T[] => [
+    ...new Map(items.map((item) => [key(item), item])).values(),
+  ];
+  return {
+    cells: latest(
+      [...earlier.cells, ...later.cells],
+      (cell) => `${cell.tableId}:${formatAddress(cell)}`,
+    ),
+    views: latest([...earlier.views, ...later.views], (view) => view.id),
+    tables: latest([...earlier.tables, ...later.tables], (table) => table.id),
+  };
 }
 
 /** A table's columns with `count` new ones put in at `index`, each with the next free name. */

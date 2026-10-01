@@ -718,12 +718,30 @@ export const useWorkbookStore = defineStore("workbook", () => {
     changes: { name?: string; rowCount?: number; colCount?: number },
   ): Promise<boolean> {
     return attempt(async () => {
+      // A smaller table loses cells, so pending edits must be stored first.
+      await saves;
       const { table: updated, ...rewritten } = await api.updateTable(tableId, changes);
       tables.value = tables.value.map((table) => (table.id === tableId ? updated : table));
       syncStructure();
-      // After a rename, the server rewrote the formulas that named the table.
+      // The server rewrote the formulas that named a renamed table, or that read rows and
+      // columns a smaller table no longer has.
       applyRewritten(rewritten);
+      keepSelectionInside(updated);
     }, "The table could not be changed");
+  }
+
+  /** Leaves the selection where it was in a table that changed size, as far as the table still reaches. */
+  function keepSelectionInside(table: TableRecord): void {
+    const [selected, end] = [selection.value, selectionEnd.value];
+    if (selected?.tableId !== table.id) return;
+    const inside = ({ row, col }: CellAddress): CellAddress => ({
+      row: Math.min(row, table.rowCount - 1),
+      col: Math.min(col, table.colCount - 1),
+    });
+    if (selected.row >= table.rowCount || selected.col >= table.colCount) {
+      selection.value = { tableId: table.id, ...inside(selected) };
+    }
+    if (end) extendSelection(inside(end));
   }
 
   /** Shows a table as the server now has it, with what the change rewrote elsewhere. */
@@ -772,16 +790,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
       syncStructure();
       applyRewritten(rewritten);
 
-      // The selection stays where it was, as far as the table still reaches.
-      const [selected, end] = [selection.value, selectionEnd.value];
-      if (selected?.tableId === tableId) {
-        const inside = ({ row, col }: CellAddress): CellAddress => ({
-          row: Math.min(row, updated.rowCount - 1),
-          col: Math.min(col, updated.colCount - 1),
-        });
-        selection.value = { tableId, ...inside(selected) };
-        if (end) extendSelection(inside(end));
-      }
+      keepSelectionInside(updated);
     }, "The table could not be changed");
   }
 

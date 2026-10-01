@@ -64,7 +64,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
   - example: in a table, select C3. hit tab 3 times (optionally entering values in any cells in C3:E3 along the way) - now you're in F3. hit enter to focus the cell input (or just start typing), type anything (or nothing), and hit enter to submit. the selection should move to C4.
 
 - [x] add a long thin "+" button along the full width/height of the bottom/right side of each table for adding rows/cols. this way I can just click anywhere along the range
-- [ ] **P2** support resizing a whole table by just setting its width and height in cols/rows (warn the user and show a confirmation prompt if resizing will delete data)
+- [x] support resizing a whole table by just setting its width and height in cols/rows (warn the user and show a confirmation prompt if resizing will delete data)
 - [x] dragging over col/row headers should select multiple full columns/rows
 - [x] when multiple rows/columns are selected (either via row/col selection or by selecting specific cells), the context menu's "insert [row/column]" actions should become "insert N [rows/columns]", where `N` is the number of selected rows and cols as appropriate
   - if I select C:E using the column headers and right click, I should see "Insert 3 columns left" and "Insert 3 columns right"

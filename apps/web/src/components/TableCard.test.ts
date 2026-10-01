@@ -124,6 +124,97 @@ describe("table actions", () => {
     expect(wrapper.find(".table-card__grow").exists()).toBe(false);
   });
 
+  async function resizeTo(columns: string, rows: string): Promise<void> {
+    await button("Resize").trigger("click");
+    const form = wrapper.get('[role="dialog"]');
+    const [colCount, rowCount] = form.findAll("input");
+    await colCount!.setValue(columns);
+    await rowCount!.setValue(rows);
+    await form.trigger("submit");
+  }
+
+  it("sets the size of the table from a form that starts at its size", async () => {
+    await render();
+    server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
+    await button("Resize").trigger("click");
+    const form = wrapper.get('[role="dialog"]');
+    expect(form.attributes("aria-label")).toBe("Resize Table 1");
+    expect(form.findAll("input").map((input) => input.element.value)).toEqual(["3", "4"]);
+
+    await form.findAll("input")[0]!.setValue("6");
+    await form.findAll("input")[1]!.setValue("10");
+    await form.trigger("submit");
+    await vi.waitFor(() => {
+      expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
+        rowCount: 10,
+        colCount: 6,
+      });
+    });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+  });
+
+  it("asks before a smaller size discards content, and keeps the form open if refused", async () => {
+    await render({ A1: "kept", C4: "would go" });
+    server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
+    confirm.mockReturnValue(false);
+    await resizeTo("2", "4");
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(
+      "Resizing Table 1 to 2 columns and 4 rows deletes what its other rows and columns hold. Resize it?",
+    );
+    expect(server.updateTable).not.toHaveBeenCalled();
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
+
+    confirm.mockReturnValue(true);
+    await wrapper.get('[role="dialog"]').trigger("submit");
+    await vi.waitFor(() => {
+      expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
+        rowCount: 4,
+        colCount: 2,
+      });
+    });
+  });
+
+  it("does not ask when the rows and columns that go are empty", async () => {
+    await render({ A1: "kept", B2: "kept" });
+    server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
+    await resizeTo("2", "2");
+    expect(confirm).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(server.updateTable).toHaveBeenCalledOnce();
+    });
+  });
+
+  it("refuses a size a table cannot have, and sends nothing for the size it has", async () => {
+    await render();
+    await button("Resize").trigger("click");
+    const form = wrapper.get('[role="dialog"]');
+    const submit = form.get('button[type="submit"]');
+    for (const bad of ["0", "101", "2.5", ""]) {
+      await form.findAll("input")[0]!.setValue(bad);
+      expect(submit.attributes("disabled")).toBeDefined();
+    }
+    await form.findAll("input")[0]!.setValue("3");
+    await form.trigger("submit");
+    expect(server.updateTable).not.toHaveBeenCalled();
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+  });
+
+  it("closes the resize form on Escape, Cancel, or a press outside it", async () => {
+    await render();
+    for (const close of [
+      () => wrapper.get('[role="dialog"]').trigger("keydown", { key: "Escape" }),
+      () => button("Cancel").trigger("click"),
+      () => wrapper.get(".grid").trigger("mousedown"),
+    ]) {
+      await button("Resize").trigger("click");
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
+      await close();
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    }
+    expect(server.updateTable).not.toHaveBeenCalled();
+  });
+
   it("deletes the table after confirmation", async () => {
     await render();
     confirm.mockReturnValue(false);
