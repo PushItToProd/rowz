@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ColumnDefinition } from "@spreadsheet-app/engine";
 import { computed } from "vue";
 import { api, type Snapshot, type ViewRecord } from "../api/client";
-import { at, clickResult, snapshotWith, TABLE, type MockedApi } from "../testing";
+import { at, clickResult, notifyJournaled, snapshotWith, TABLE, type MockedApi } from "../testing";
 import { useWorkbookStore } from "./workbook";
 
-vi.mock("../api/client", async () => ({ api: (await import("../testing")).mockApi() }));
+vi.mock("../api/client", async () => {
+  const testing = await import("../testing");
+  return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
+});
 const server = api as unknown as MockedApi;
 
 type Store = ReturnType<typeof useWorkbookStore>;
@@ -33,6 +36,7 @@ beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
   server.setCells.mockResolvedValue(undefined);
+  server.deleteTable.mockResolvedValue(undefined);
   server.click.mockResolvedValue(clickResult());
 });
 
@@ -99,9 +103,11 @@ describe("setCell", () => {
     expect(store.valueOf(at("B1"))).toBe(11);
     save.resolve();
     await done;
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
-      { row: 0, col: 0, input: "10" },
-    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [{ row: 0, col: 0, input: "10" }],
+      expect.any(String),
+    );
     expect(store.notice).toBeNull();
   });
 
@@ -148,7 +154,11 @@ describe("setCell", () => {
     await Promise.all([firstDone, secondDone]);
 
     expect(store.inputOf(at("A1"))).toBe("3");
-    expect(server.setCells).toHaveBeenLastCalledWith("t1", [{ row: 0, col: 0, input: "3" }]);
+    expect(server.setCells).toHaveBeenLastCalledWith(
+      "t1",
+      [{ row: 0, col: 0, input: "3" }],
+      expect.any(String),
+    );
   });
 
   it("saves edits one at a time, in the order they were made", async () => {
@@ -158,8 +168,9 @@ describe("setCell", () => {
 
     void store.setCell(at("A1"), "first");
     const second = store.setCell(at("A2"), "second");
-    await Promise.resolve();
-    expect(server.setCells).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(server.setCells).toHaveBeenCalledTimes(1);
+    });
 
     first.resolve();
     await second;
@@ -192,10 +203,14 @@ describe("setCells", () => {
     ]);
     expect(store.valueOf(at("B1"))).toBe(2);
     // A1 already held "1", so it is not sent.
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
-      { row: 0, col: 1, input: "=A1+1" },
-      { row: 1, col: 0, input: "x" },
-    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [
+        { row: 0, col: 1, input: "=A1+1" },
+        { row: 1, col: 0, input: "x" },
+      ],
+      expect.any(String),
+    );
   });
 
   it("puts every cell back when the save fails", async () => {
@@ -228,6 +243,7 @@ describe("setCells", () => {
 
     await store.setCells("t1", writes);
     expect(server.setCells.mock.calls.map(([, cells]) => cells.length)).toEqual([1000, 500]);
+    expect(new Set(server.setCells.mock.calls.map(([, , stepId]) => stepId)).size).toBe(1);
     expect(store.inputOf({ tableId: "t1", row: 999, col: 0 })).toBe("999");
     expect(store.inputOf({ tableId: "t1", row: 0, col: 1 })).toBe("");
   });
@@ -275,10 +291,15 @@ describe("selection", () => {
     });
     store.selection = at("A1");
     await store.paste(cols);
-    expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
-      rowCount: 4,
-      colCount: 100,
-    });
+    expect(server.updateTable).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      {
+        rowCount: 4,
+        colCount: 100,
+      },
+      expect.any(String),
+    );
+    expect(server.updateTable.mock.calls[0]?.[2]).toBe(server.setCells.mock.calls[0]?.[2]);
     expect(store.inputOf({ tableId: "t1", row: 0, col: 99 })).toBe("99");
     expect(store.notice).toEqual({
       kind: "error",
@@ -706,6 +727,29 @@ describe("views", () => {
     expect(store.views).toEqual([{ ...CHART, chartType: "pie" }, TEXT]);
   });
 
+  it("serializes overlapping updates to the same view", async () => {
+    const store = await openWith([CHART, TEXT]);
+    let finishFirst!: (view: ViewRecord) => void;
+    let finishSecond!: (view: ViewRecord) => void;
+    const firstResponse = new Promise<ViewRecord>((resolve) => (finishFirst = resolve));
+    const secondResponse = new Promise<ViewRecord>((resolve) => (finishSecond = resolve));
+    server.updateView.mockReturnValueOnce(firstResponse).mockReturnValueOnce(secondResponse);
+
+    const first = store.updateView("v1", { source: "first" });
+    const second = store.updateView("v1", { source: "second" });
+    await vi.waitFor(() => {
+      expect(server.updateView).toHaveBeenCalledTimes(1);
+    });
+    finishFirst({ ...CHART, source: "first" });
+    expect(await first).toBe(true);
+    await vi.waitFor(() => {
+      expect(server.updateView).toHaveBeenCalledTimes(2);
+    });
+    finishSecond({ ...CHART, source: "second" });
+    expect(await second).toBe(true);
+    expect(store.views.find((view) => view.id === "v1")?.source).toBe("second");
+  });
+
   it("deletes a view", async () => {
     const store = await openWith([CHART, TEXT]);
     expect(await store.deleteView("v1")).toBe(true);
@@ -858,10 +902,14 @@ describe("data tables", () => {
     const store = await openData();
     store.selection = at("B1");
     await store.paste("7\t8\n9\t10");
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
-      { row: 0, col: 1, input: "7" },
-      { row: 1, col: 1, input: "9" },
-    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [
+        { row: 0, col: 1, input: "7" },
+        { row: 1, col: 1, input: "9" },
+      ],
+      expect.any(String),
+    );
     expect(store.valueOf(at("C1"))).toBe(14);
   });
 
@@ -992,6 +1040,32 @@ describe("the order of a page", () => {
     expect(await store.moveBlock("p1", "v1", 1)).toBe(false);
     expect(store.blocksOn("p1")).toEqual(["t1", "v1", "v2"]);
   });
+
+  it("keeps a later block order when an earlier move fails", async () => {
+    const store = await openPage();
+    server.reorderPage
+      .mockRejectedValueOnce(new Error("first move failed"))
+      .mockResolvedValueOnce(undefined);
+    const first = store.moveBlock("p1", "t1", 1);
+    const second = store.moveBlock("p1", "t1", 1);
+    expect(await Promise.all([first, second])).toEqual([false, true]);
+    expect(store.blocksOn("p1")).toEqual(["v1", "v2", "t1"]);
+    expect(server.reorderPage.mock.calls.map(([, blocks]) => blocks)).toEqual([
+      ["v1", "t1", "v2"],
+      ["v1", "v2", "t1"],
+    ]);
+  });
+
+  it("restores the accepted block order when every queued move fails", async () => {
+    const store = await openPage();
+    server.reorderPage
+      .mockRejectedValueOnce(new Error("first move failed"))
+      .mockRejectedValueOnce(new Error("second move failed"));
+    const first = store.moveBlock("p1", "t1", 1);
+    const second = store.moveBlock("p1", "t1", 1);
+    expect(await Promise.all([first, second])).toEqual([false, false]);
+    expect(store.blocksOn("p1")).toEqual(["t1", "v1", "v2"]);
+  });
 });
 
 describe("the order of the pages, and moving a block between them", () => {
@@ -1040,6 +1114,32 @@ describe("the order of the pages, and moving a block between them", () => {
     expect(store.notice).toEqual({ kind: "error", text: "The pages have changed" });
   });
 
+  it("keeps the later order when an earlier page move fails", async () => {
+    const store = await openPages();
+    server.reorderPages
+      .mockRejectedValueOnce(new Error("first move failed"))
+      .mockResolvedValueOnce(undefined);
+    const first = store.movePage("p1", 1);
+    const second = store.movePage("p1", 1);
+    expect(await Promise.all([first, second])).toEqual([false, true]);
+    expect(order(store)).toEqual(["p2", "p3", "p1"]);
+    expect(server.reorderPages.mock.calls.map(([, pages]) => pages)).toEqual([
+      ["p2", "p1", "p3"],
+      ["p2", "p3", "p1"],
+    ]);
+  });
+
+  it("restores the last accepted order when every queued page move fails", async () => {
+    const store = await openPages();
+    server.reorderPages
+      .mockRejectedValueOnce(new Error("first move failed"))
+      .mockRejectedValueOnce(new Error("second move failed"));
+    const first = store.movePage("p1", 1);
+    const second = store.movePage("p1", 1);
+    expect(await Promise.all([first, second])).toEqual([false, false]);
+    expect(order(store)).toEqual(["p1", "p2", "p3"]);
+  });
+
   it("moves a table to another page, with the formulas the server rewrote", async () => {
     const store = await openPages({ A1: "5" });
     store.selection = at("A1");
@@ -1082,88 +1182,150 @@ describe("the order of the pages, and moving a block between them", () => {
 });
 
 describe("undo and redo", () => {
-  it("takes back the last edit, and makes it again", async () => {
-    const store = await open({ A1: "1" });
-    expect(store.canUndo).toBe(false);
-    await store.setCell(at("A1"), "2");
-    await store.setCell(at("B1"), "=A1*10");
-    expect(store.canUndo).toBe(true);
+  const changedCell = (input: string) => ({
+    pages: [],
+    tables: [],
+    views: [],
+    cells: [{ ...at("A1"), input }],
+  });
 
-    await store.undo();
-    expect(store.inputOf(at("B1"))).toBe("");
-    expect(store.selection).toEqual(at("B1"));
+  it("follows the journal response and applies undo and redo", async () => {
+    const store = await open({ A1: "2" });
+    expect(store.canUndo).toBe(false);
+    notifyJournaled();
+    expect(store.canUndo).toBe(true);
+    expect(store.canRedo).toBe(false);
+
+    server.undo.mockResolvedValue({
+      outcome: "done",
+      label: "Change cells in Table 1",
+      error: null,
+      changed: changedCell("1"),
+      undoable: false,
+      redoable: true,
+    });
     await store.undo();
     expect(store.inputOf(at("A1"))).toBe("1");
     expect(store.canUndo).toBe(false);
-    expect(server.setCells).toHaveBeenLastCalledWith("t1", [{ row: 0, col: 0, input: "1" }]);
+    expect(store.canRedo).toBe(true);
 
-    await store.redo();
-    await store.redo();
-    expect(store.valueOf(at("B1"))).toBe(20);
-    expect(store.canRedo).toBe(false);
-    await store.redo();
-    expect(store.valueOf(at("B1"))).toBe(20);
-  });
-
-  it("takes back a change to many cells as one step", async () => {
-    const store = await open({ A1: "x", A2: "y" });
-    store.selection = at("A1");
-    await store.paste("1\t2\n3\t4");
-    await store.undo();
-    expect(["A1", "B1", "A2", "B2"].map((address) => store.inputOf(at(address)))).toEqual([
-      "x",
-      "",
-      "y",
-      "",
-    ]);
-    await store.redo();
-    expect(store.inputOf(at("B2"))).toBe("4");
-  });
-
-  it("forgets what could be made again once a new edit is made", async () => {
-    const store = await open();
-    await store.setCell(at("A1"), "1");
-    await store.undo();
-    await store.setCell(at("A1"), "2");
-    expect(store.canRedo).toBe(false);
+    server.redo.mockResolvedValue({
+      outcome: "done",
+      label: "Change cells in Table 1",
+      error: null,
+      changed: changedCell("2"),
+      undoable: true,
+      redoable: false,
+    });
     await store.redo();
     expect(store.inputOf(at("A1"))).toBe("2");
+    expect(store.canUndo).toBe(true);
+    expect(store.canRedo).toBe(false);
   });
 
-  it("does not record an edit that changes nothing", async () => {
+  it("restores a deleted table before applying its cells", async () => {
+    const store = await open();
+    await store.deleteTable("t1");
+    expect(store.tables).toEqual([]);
+    notifyJournaled();
+    server.undo.mockResolvedValue({
+      outcome: "done",
+      label: "Delete table Table 1",
+      error: null,
+      changed: {
+        pages: [],
+        tables: [{ id: "t1", table: TABLE }],
+        views: [],
+        cells: [{ ...at("A1"), input: "restored" }],
+      },
+      undoable: false,
+      redoable: true,
+    });
+
+    await store.undo();
+    expect(store.tables).toEqual([TABLE]);
+    expect(store.inputOf(at("A1"))).toBe("restored");
+  });
+
+  it("waits for pending saves before sending undo", async () => {
     const store = await open({ A1: "1" });
-    await store.setCell(at("A1"), "1");
-    expect(store.canUndo).toBe(false);
+    const saving = deferred();
+    server.setCells.mockReturnValue(saving.promise);
+    const save = store.setCell(at("A1"), "2");
+    const undo = store.undo();
+    await Promise.resolve();
+    expect(server.undo).not.toHaveBeenCalled();
+
+    saving.resolve();
+    notifyJournaled();
+    await Promise.all([save, undo]);
+    expect(server.undo).toHaveBeenCalledOnce();
   });
 
-  it("forgets edits when rows move or something is renamed, since formulas are rewritten", async () => {
-    const store = await open();
-    await store.setCell(at("A1"), "1");
-    server.editTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
-    await store.editTable("t1", { axis: "row", kind: "insert", index: 0 });
-    expect(store.canUndo).toBe(false);
+  it("waits for pending page reorders and view updates before sending undo", async () => {
+    const pages = [
+      { id: "p1", name: "Page 1", position: 0 },
+      { id: "p2", name: "Page 2", position: 1 },
+    ];
+    const view: ViewRecord = {
+      id: "v1",
+      pageId: "p1",
+      kind: "text",
+      name: "Text 1",
+      position: 1,
+      source: "before",
+      chartType: null,
+    };
+    server.getSnapshot.mockResolvedValue({ ...snapshotWith(), pages, views: [view] });
+    const store = useWorkbookStore();
+    await store.load("s1");
 
-    await store.setCell(at("A1"), "2");
-    server.renamePage.mockResolvedValue({ cells: [], views: [], tables: [] });
-    await store.renamePage("p1", "Data");
-    expect(store.canUndo).toBe(false);
+    const reordering = deferred();
+    let finishView!: (value: ViewRecord) => void;
+    const updating = new Promise<ViewRecord>((resolve) => (finishView = resolve));
+    server.reorderPages.mockReturnValue(reordering.promise);
+    server.updateView.mockReturnValue(updating);
+    const pageMove = store.movePage("p1", 1);
+    const viewUpdate = store.updateView("v1", { source: "after" });
+    const history = store.undo();
+    await vi.waitFor(() => {
+      expect(server.reorderPages).toHaveBeenCalledOnce();
+      expect(server.updateView).toHaveBeenCalledOnce();
+    });
+    expect(server.undo).not.toHaveBeenCalled();
+
+    reordering.resolve();
+    finishView({ ...view, source: "after" });
+    notifyJournaled();
+    await Promise.all([pageMove, viewUpdate, history]);
+    expect(server.undo).toHaveBeenCalledOnce();
+  });
+
+  it("shows a refusal from the server", async () => {
+    const store = await open();
+    notifyJournaled();
+    server.undo.mockResolvedValue({
+      outcome: "refused",
+      label: "Insert row 1",
+      error: "A later change prevents undoing this structural change",
+      changed: { pages: [], tables: [], views: [], cells: [] },
+      undoable: false,
+      redoable: false,
+    });
     await store.undo();
-    expect(store.inputOf(at("A1"))).toBe("2");
+    expect(store.notice).toEqual({
+      kind: "error",
+      text: "A later change prevents undoing this structural change",
+    });
   });
 
-  it("keeps at most a hundred edits", async () => {
-    const store = await open();
-    for (let value = 1; value <= 105; value += 1) await store.setCell(at("A1"), String(value));
-    for (let step = 0; step < 105; step += 1) await store.undo();
-    expect(store.inputOf(at("A1"))).toBe("5");
-    expect(store.canUndo).toBe(false);
-  });
-
-  it("is not offered to a viewer", async () => {
+  it("does not offer undo or redo to a viewer", async () => {
     const store = await open({}, "viewer");
+    notifyJournaled();
     expect(store.canUndo).toBe(false);
+    expect(store.canRedo).toBe(false);
     await store.undo();
-    expect(server.setCells).not.toHaveBeenCalled();
+    expect(server.undo).not.toHaveBeenCalled();
   });
 });
 
@@ -1227,19 +1389,27 @@ describe("refreshing after a change made elsewhere", () => {
     expect(store.selection).toEqual(at("B1"));
   });
 
-  it("keeps what can be undone when only cells changed, and forgets it when a table did", async () => {
+  it("loads undo and redo flags from a refreshed snapshot", async () => {
     const store = await open({ A1: "1" });
     await store.setCell(at("A1"), "2");
-    server.getSnapshot.mockResolvedValue(snapshotWith({ A1: "2", B1: "theirs" }));
+    notifyJournaled();
+    server.getSnapshot.mockResolvedValue({
+      ...snapshotWith({ A1: "2", B1: "theirs" }),
+      undoable: true,
+      redoable: false,
+    });
     await store.refresh();
     expect(store.canUndo).toBe(true);
 
     server.getSnapshot.mockResolvedValue({
       ...snapshotWith({ A1: "2" }),
       tables: [{ ...TABLE, name: "Renamed" }],
+      undoable: false,
+      redoable: true,
     });
     await store.refresh();
     expect(store.canUndo).toBe(false);
+    expect(store.canRedo).toBe(true);
   });
 
   it("drops a selection in a table or a row that is gone", async () => {

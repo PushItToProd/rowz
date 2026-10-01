@@ -4,10 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FormatRule } from "@spreadsheet-app/engine";
 import { api } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, snapshotWith, TABLE, type MockedApi } from "../testing";
+import { at, notifyJournaled, snapshotWith, TABLE, type MockedApi } from "../testing";
 import FormatBar from "./FormatBar.vue";
 
-vi.mock("../api/client", async () => ({ api: (await import("../testing")).mockApi() }));
+vi.mock("../api/client", async () => {
+  const testing = await import("../testing");
+  return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
+});
 const server = api as unknown as MockedApi;
 
 let wrapper: VueWrapper;
@@ -155,13 +158,34 @@ describe("FormatBar", () => {
     const store = await render();
     expect(control("Undo").attributes("disabled")).toBeDefined();
     await store.setCell(at("A1"), "typed");
+    notifyJournaled();
+    server.undo.mockResolvedValue({
+      outcome: "done",
+      label: "Change cells in Table 1",
+      error: null,
+      changed: { pages: [], tables: [], views: [], cells: [{ ...at("A1"), input: "" }] },
+      undoable: false,
+      redoable: true,
+    });
+    server.redo.mockResolvedValue({
+      outcome: "done",
+      label: "Change cells in Table 1",
+      error: null,
+      changed: { pages: [], tables: [], views: [], cells: [{ ...at("A1"), input: "typed" }] },
+      undoable: true,
+      redoable: false,
+    });
     await wrapper.vm.$nextTick();
     await control("Undo").trigger("click");
-    expect(store.inputOf(at("A1"))).toBe("");
+    await vi.waitFor(() => {
+      expect(store.inputOf(at("A1"))).toBe("");
+    });
     await wrapper.vm.$nextTick();
     expect(control("Undo").attributes("disabled")).toBeDefined();
     await control("Redo").trigger("click");
-    expect(store.inputOf(at("A1"))).toBe("typed");
+    await vi.waitFor(() => {
+      expect(store.inputOf(at("A1"))).toBe("typed");
+    });
   });
 
   it("reports a refused change", async () => {

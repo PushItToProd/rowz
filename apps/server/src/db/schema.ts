@@ -1,7 +1,9 @@
 import type { ChartType, ColumnDefinition, Effect, FormatRule } from "@spreadsheet-app/engine";
 import type { SpreadsheetFile } from "@spreadsheet-app/shared";
+import type { JournalData } from "../repo/journal";
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -226,6 +228,31 @@ export const versions = pgTable(
     data: jsonb("data").$type<SpreadsheetFile>().notNull(),
   },
   (table) => [index("versions_spreadsheet_time").on(table.spreadsheetId, table.createdAt)],
+);
+
+/** A content change in one tab's undo and redo history. */
+export const journal = pgTable(
+  "journal",
+  {
+    seq: bigint("seq", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    spreadsheetId: uuid("spreadsheet_id")
+      .notNull()
+      .references(() => spreadsheets.id, { onDelete: "cascade" }),
+    step: uuid("step").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientId: text("client_id"),
+    undone: boolean("undone").notNull().default(false),
+    rewrites: boolean("rewrites").notNull(),
+    label: text("label").notNull(),
+    data: jsonb("data").$type<JournalData | null>(),
+    bytes: integer("bytes").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [index("journal_spreadsheet_seq").on(table.spreadsheetId, table.seq)],
 );
 
 export type RunStatus = "pending" | "succeeded" | "failed";

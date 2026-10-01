@@ -6,7 +6,10 @@ import { useWorkbookStore } from "../stores/workbook";
 import { at, snapshotWith, type MockedApi } from "../testing";
 import FormulaBar from "./FormulaBar.vue";
 
-vi.mock("../api/client", async () => ({ api: (await import("../testing")).mockApi() }));
+vi.mock("../api/client", async () => {
+  const testing = await import("../testing");
+  return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
+});
 const server = api as unknown as MockedApi;
 
 async function render(
@@ -58,9 +61,11 @@ describe("FormulaBar", () => {
     await field(wrapper).trigger("focus");
     await field(wrapper).setValue("=1+1");
     await field(wrapper).trigger("keydown", { key: "Enter" });
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
-      { row: 0, col: 0, input: "=1+1" },
-    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [{ row: 0, col: 0, input: "=1+1" }],
+      expect.any(String),
+    );
     expect(store.valueOf(at("A1"))).toBe(2);
     expect(store.selection).toEqual(at("A2"));
     expect(store.gridFocusRequests).toBe(1);
@@ -105,9 +110,11 @@ describe("FormulaBar", () => {
     expect(field(wrapper).element.value).toBe("typed for A1");
     await field(wrapper).trigger("blur");
 
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
-      { row: 0, col: 0, input: "typed for A1" },
-    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [{ row: 0, col: 0, input: "typed for A1" }],
+      expect.any(String),
+    );
     expect(useWorkbookStore().inputOf(at("B1"))).toBe("5");
     expect(field(wrapper).element.value).toBe("5");
   });

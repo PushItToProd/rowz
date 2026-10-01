@@ -57,6 +57,13 @@
       "when": 1790874296091,
       "tag": "0007_version_blocks",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790885762982,
+      "tag": "0008_mean_doctor_doom",
+      "breakpoints": true
     }
   ]
 }

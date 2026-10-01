@@ -736,6 +736,24 @@ test("cells are formatted from the toolbar, and the formats follow their cells",
   await expect(cell(page, "B2")).toHaveText("1234.5");
 });
 
+test("undo reverses a format, a row insertion, and a cell edit", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "remove me");
+  await cell(page, "A1").click();
+  await page.getByRole("button", { name: "Insert row above" }).click();
+  await cell(page, "A2").click();
+  await page.getByRole("toolbar", { name: "Format" }).getByRole("button", { name: "Bold" }).click();
+  await expect(cell(page, "A2").locator(".cell-value")).toHaveCSS("font-weight", "700");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await page.keyboard.press("ControlOrMeta+z");
+  await page.keyboard.press("ControlOrMeta+z");
+
+  await expect(cell(page, "A1")).toHaveText("");
+  await expect(cell(page, "A2")).toHaveCount(1);
+  await expect(cell(page, "A1").locator(".cell-value")).not.toHaveCSS("font-weight", "700");
+});
+
 test("a deleted row is brought back from the history, and a version opens as a copy", async ({
   page,
 }) => {

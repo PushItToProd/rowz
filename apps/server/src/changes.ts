@@ -1,5 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
+import { CLIENT_ID_HEADER, STEP_ID_HEADER, UNDOABLE_HEADER } from "@spreadsheet-app/shared";
+import { z } from "zod";
 import { createMiddleware } from "hono/factory";
+import { ApiFailure } from "./errors";
 
 /**
  * The header a client sends to name itself. It gives the same name when it
@@ -7,7 +11,7 @@ import { createMiddleware } from "hono/factory";
  * under that name. The name is never sent to another client: whoever knew it
  * could make changes under it that its owner would not hear of.
  */
-export const CLIENT_ID_HEADER = "x-client-id";
+export { CLIENT_ID_HEADER } from "@spreadsheet-app/shared";
 
 type Listener = (origin: string) => void;
 
@@ -34,12 +38,29 @@ export class ChangeFeed {
   }
 }
 
-/** The spreadsheets changed while handling the current request. */
-const changed = new AsyncLocalStorage<Set<string>>();
+export interface RequestContext {
+  clientId: string | null;
+  stepId: string;
+  journaled: boolean;
+  changed: Set<string>;
+}
+
+/** The spreadsheet changes and undo identity for the current request. */
+const current = new AsyncLocalStorage<RequestContext>();
+
+export function requestContext(): RequestContext | undefined {
+  return current.getStore();
+}
+
+/** Marks that a transaction committed an entry for the current request. */
+export function noteJournaled(): void {
+  const context = current.getStore();
+  if (context) context.journaled = true;
+}
 
 /** Records that the request being handled changed a spreadsheet. Outside a request it does nothing. */
 export function noteChange(spreadsheetId: string): void {
-  changed.getStore()?.add(spreadsheetId);
+  current.getStore()?.changed.add(spreadsheetId);
 }
 
 /**
@@ -49,11 +70,21 @@ export function noteChange(spreadsheetId: string): void {
  */
 export function announceChanges(feed: ChangeFeed) {
   return createMiddleware(async (c, next) => {
-    const touched = new Set<string>();
-    await changed.run(touched, next);
+    const clientId = c.req.header(CLIENT_ID_HEADER) ?? null;
+    const requestedStep = c.req.header(STEP_ID_HEADER);
+    if (requestedStep !== undefined && !z.uuid().safeParse(requestedStep).success) {
+      throw new ApiFailure(400, "invalid_request", `${STEP_ID_HEADER} must be a UUID`);
+    }
+    const context: RequestContext = {
+      clientId,
+      stepId: requestedStep ?? randomUUID(),
+      journaled: false,
+      changed: new Set(),
+    };
+    await current.run(context, next);
     // A request that failed rolled back whatever it had begun.
     if (c.res.status >= 400) return;
-    const origin = c.req.header(CLIENT_ID_HEADER) ?? "";
-    for (const spreadsheetId of touched) feed.publish(spreadsheetId, origin);
+    for (const spreadsheetId of context.changed) feed.publish(spreadsheetId, clientId ?? "");
+    if (clientId !== null && context.journaled) c.header(UNDOABLE_HEADER, "1");
   });
 }

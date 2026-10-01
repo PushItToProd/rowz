@@ -17,16 +17,24 @@ const TYPES: readonly { value: ChartType; label: string }[] = [
   { value: "scatter", label: "Scatter" },
 ];
 
+const editing = ref(false);
 const draft = ref(props.view.source);
 // Follow changes made elsewhere, such as a table rename rewriting the range.
 watch(
   () => props.view.source,
-  (source) => (draft.value = source),
+  (source) => {
+    if (!editing.value) draft.value = source;
+  },
 );
 
 function saveSource(): void {
   if (draft.value !== props.view.source)
     void store.updateView(props.view.id, { source: draft.value });
+}
+
+function finishSource(): void {
+  saveSource();
+  editing.value = false;
 }
 
 function setType(event: Event): void {
@@ -83,7 +91,8 @@ const data = computed((): { rows: CellValue[][] } | { problem: string } => {
         placeholder="'Table 1'!A1:B10"
         :maxlength="LIMITS.viewSourceLength"
         @keydown.enter="saveSource"
-        @blur="saveSource"
+        @focus="editing = true"
+        @blur="finishSource"
       />
     </label>
 

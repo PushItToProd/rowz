@@ -11,7 +11,29 @@ export const LIMITS = {
   viewSourceLength: 50_000,
   /** Kept versions of one spreadsheet. Older ones are dropped. */
   versions: 50,
+  /** Undo history entries kept for one spreadsheet. */
+  journalEntries: 200,
+  /** Age of undo history entries before they are pruned. */
+  journalAgeMs: 24 * 60 * 60_000,
+  /** Undo history data kept for one spreadsheet. */
+  journalBytes: 64 * 1024 * 1024,
+  /** Maximum undo history data kept for one change. */
+  journalEntryBytes: 8 * 1024 * 1024,
 } as const;
+
+export interface JournalLimits {
+  journalEntries: number;
+  journalAgeMs: number;
+  journalBytes: number;
+  journalEntryBytes: number;
+}
+
+/** Names this tab to the server's change feed and undo journal. */
+export const CLIENT_ID_HEADER = "x-client-id";
+/** Groups requests into one undo step. */
+export const STEP_ID_HEADER = "x-step-id";
+/** Signals that the response added an undoable step for this tab. */
+export const UNDOABLE_HEADER = "x-undoable";
 
 /**
  * The name the app calls itself, in the browser tab and as the sender of its

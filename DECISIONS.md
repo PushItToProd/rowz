@@ -47,7 +47,7 @@ A review listed 20 findings. All were addressed. These are the places where the 
 - **Server-sent events, not WebSockets.** Changes still go up as ordinary requests, so only a one-way stream down is needed, and it passes through the dev proxy and through HTTP middleware unchanged.
 - **The feed is in the server's memory.** With more than one server process, a session hears only the changes made through its own process. Running several needs Postgres `LISTEN/NOTIFY` or similar behind `ChangeFeed`.
 - **A session's own typing is saved before it re-reads,** and the read is repeated if more was typed meanwhile, so a remote change does not wipe out a cell being saved. A cell that is open for editing keeps what is being typed.
-- **Undo survives a remote change to cells** and is emptied by a remote change to pages or tables.
+- **Undo and redo use a per-tab server journal.** Separate tabs and users have separate stacks. A later write to the same content can refuse an undo, and a later reference rewrite or structural change blocks an older step. Restoring a version clears the journal.
 - **Losing access shows at once:** the page of someone whose share ended says the spreadsheet was not found.
 
 **To change.** Server: `apps/server/src/changes.ts`. Browser: `apps/web/src/api/live.ts` and `refresh` in the workbook store.
@@ -72,9 +72,13 @@ A review listed 20 findings. All were addressed. These are the places where the 
 
 ## 2026-10-01: Version history
 
-**Decision.** The todo item read "undo and redo (persistent version history)". Both halves are built. The server keeps whole-spreadsheet versions, and a History panel restores one or opens it as a copy. Ctrl+Z and Ctrl+Y take back and remake cell edits within a session.
+**Decision.** The todo item read "undo and redo (persistent version history)". The server keeps whole-spreadsheet versions, and a History panel restores one or opens it as a copy. Ctrl+Z and Ctrl+Y use a server journal to take back and remake content changes from the current tab.
 
-**Ctrl+Z covers cell edits only,** up to 100 of them, and lives in the browser. A paste or a fill is one step. Inserting or deleting a row or column, or renaming anything, empties the list: those rewrite formulas and move addresses, so an older edit could no longer be put back where and as it was. Structural changes are undone from History.
+**The journal records cell inputs, formatting, tables, pages, and views.** Structural edits and renames include the formulas they rewrite. Requests with the same step id, such as a paste that grows a table or a button action that writes cells, undo as one step. The stack belongs to the signed-in user and the client id generated for the current page load, so it is cleared by reloading the page or restoring a version.
+
+**An undo is refused when later content makes its inverse unsafe.** A later write to a recorded cell or record blocks the step. A reference rewrite or page, table, or view creation or deletion is refused after any later active change; an older step is also refused after a later reference rewrite. Refused steps leave the stack so the next Ctrl+Z can reach the step below. Independent cell edits by different tabs can still be undone separately.
+
+**The journal keeps at most 200 entries, one day, 64 MB per spreadsheet, and 8 MB per entry.** Pruning removes entries oldest first and removes a whole step from its stack if pruning deletes any part of it. A change larger than 8 MB succeeds without stored undo data and its undo is refused. History remains the recovery path for older versions and journal entries that cannot be applied safely.
 
 **When a version is kept.**
 

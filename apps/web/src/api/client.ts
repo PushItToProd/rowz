@@ -5,12 +5,14 @@ import type {
   MemberRecord,
   PageRecord,
   Rewritten,
-  Snapshot,
+  SnapshotWithHistory,
   SpreadsheetSummary,
   TableRecord,
+  UndoResult,
   VersionRecord,
   ViewRecord,
 } from "@spreadsheet-app/server";
+import { CLIENT_ID_HEADER, STEP_ID_HEADER, UNDOABLE_HEADER } from "@spreadsheet-app/shared";
 import type {
   ApiError,
   CellInput,
@@ -26,7 +28,18 @@ import type {
 } from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
-export type { ClickResult, MemberRecord, PageRecord, Rewritten, Snapshot, TableRecord, ViewRecord };
+export type {
+  ClickResult,
+  MemberRecord,
+  PageRecord,
+  Rewritten,
+  SnapshotWithHistory,
+  TableRecord,
+  UndoResult,
+  ViewRecord,
+};
+
+export type Snapshot = SnapshotWithHistory;
 
 /** A value a control can send. A date is sent as the text it is written as. */
 export type ControlInput = string | number | boolean | null;
@@ -50,13 +63,20 @@ export class ApiRequestError extends Error {
 }
 
 let onUnauthenticated: () => void = () => undefined;
+let onJournaled: () => void = () => undefined;
 
 /** Registers what to do when the server says the session is gone. */
 export function setUnauthenticatedHandler(handler: () => void): void {
   onUnauthenticated = handler;
 }
 
+/** Registers what to do when a response adds a step to this tab's undo journal. */
+export function setJournaledHandler(handler: () => void): void {
+  onJournaled = handler;
+}
+
 async function check(response: Response): Promise<void> {
+  if (response.headers.get(UNDOABLE_HEADER) === "1") onJournaled();
   if (response.ok) return;
   const body = (await response.json().catch(() => null)) as ApiError | null;
   if (response.status === 401) onUnauthenticated();
@@ -80,7 +100,7 @@ async function done(request: Promise<Response>): Promise<void> {
 /** Names this tab to the server, so that the tab can tell its own changes from other people's. */
 export const CLIENT_ID = crypto.randomUUID();
 
-const { api: routes } = hc<AppType>("/", { headers: { "x-client-id": CLIENT_ID } });
+const { api: routes } = hc<AppType>("/", { headers: { [CLIENT_ID_HEADER]: CLIENT_ID } });
 
 /**
  * Tells the server what time it is here, so `TODAY` and `NOW` in an action it
@@ -128,8 +148,14 @@ export const api = {
   createSpreadsheet: (name: string): Promise<SpreadsheetListItem> =>
     body(routes.spreadsheets.$post({ json: { name } })),
 
-  getSnapshot: (spreadsheetId: string): Promise<Snapshot> =>
+  getSnapshot: (spreadsheetId: string): Promise<SnapshotWithHistory> =>
     body(routes.spreadsheets[":spreadsheetId"].$get({ param: { spreadsheetId } })),
+
+  undo: (spreadsheetId: string): Promise<UndoResult> =>
+    body(routes.spreadsheets[":spreadsheetId"].undo.$post({ param: { spreadsheetId } })),
+
+  redo: (spreadsheetId: string): Promise<UndoResult> =>
+    body(routes.spreadsheets[":spreadsheetId"].redo.$post({ param: { spreadsheetId } })),
 
   /** The kept versions of a spreadsheet, newest first. */
   listVersions: (spreadsheetId: string): Promise<VersionListItem[]> =>
@@ -196,8 +222,15 @@ export const api = {
   updateTable: (
     tableId: string,
     changes: { name?: string; rowCount?: number; colCount?: number },
+    stepId?: string,
   ): Promise<Rewritten & { table: TableRecord }> =>
-    body(routes.tables[":tableId"].$patch({ param: { tableId }, json: changes })),
+    body(
+      routes.tables[":tableId"].$patch({
+        param: { tableId },
+        json: changes,
+        ...(stepId === undefined ? {} : { headers: { [STEP_ID_HEADER]: stepId } }),
+      }),
+    ),
 
   /** Inserts or deletes a row or column. Resolves to the resized table and every cell that changed. */
   editTable: (
@@ -257,8 +290,14 @@ export const api = {
   deleteTable: (tableId: string): Promise<void> =>
     done(routes.tables[":tableId"].$delete({ param: { tableId } })),
 
-  setCells: (tableId: string, cells: CellInput[]): Promise<void> =>
-    done(routes.tables[":tableId"].cells.$put({ param: { tableId }, json: { cells } })),
+  setCells: (tableId: string, cells: CellInput[], stepId?: string): Promise<void> =>
+    done(
+      routes.tables[":tableId"].cells.$put({
+        param: { tableId },
+        json: { cells },
+        ...(stepId === undefined ? {} : { headers: { [STEP_ID_HEADER]: stepId } }),
+      }),
+    ),
 
   /** Stores a value chosen through the checkbox or dropdown in a cell. */
   input: ({ tableId, row, col }: CellId, value: ControlInput): Promise<ClickResult> =>

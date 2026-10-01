@@ -7,7 +7,10 @@ import { useWorkbookStore } from "../stores/workbook";
 import { snapshotWith, type MockedApi } from "../testing";
 import PageTabs from "./PageTabs.vue";
 
-vi.mock("../api/client", async () => ({ api: (await import("../testing")).mockApi() }));
+vi.mock("../api/client", async () => {
+  const testing = await import("../testing");
+  return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
+});
 const server = api as unknown as MockedApi;
 
 let router: Router;

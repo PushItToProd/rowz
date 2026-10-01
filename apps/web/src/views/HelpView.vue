@@ -154,7 +154,7 @@ const KEYS = [
   ["Delete or Backspace", "Clear the selected cells."],
   ["Shift with an arrow key", "Select a range of cells."],
   ["Ctrl+C, Ctrl+X, Ctrl+V", "Copy, cut, and paste the selected cells."],
-  ["Ctrl+Z, Ctrl+Y", "Take back the last change to cells, and make it again."],
+  ["Ctrl+Z, Ctrl+Y", "Undo or redo the last change made since this page was opened."],
   ["Ctrl+A", "Select every cell of the table."],
   ["Shift+F10", "Open the menu of row, column, and cell actions."],
   ["Ctrl+D, Ctrl+R", "Copy the first row of the selection down, or its first column across."],
@@ -905,9 +905,10 @@ const OPERATORS = [
         </li>
         <li>The newest {{ LIMITS.versions }} versions are kept.</li>
         <li>
-          For a change to cells made a moment ago, Ctrl+Z is quicker. It takes back the last 100
-          edits made since the page was opened, until a row or column is inserted or deleted or
-          something is renamed.
+          Ctrl+Z and Ctrl+Y undo and redo changes made since this page was opened, including cell
+          edits, formatting, and structural changes. A later edit can make an undo unsafe; when that
+          happens, the app explains why and moves to the next change. Use History to restore an
+          older version of the whole spreadsheet.
         </li>
       </ul>
     </section>

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { parseAddress } from "@spreadsheet-app/engine";
+import { CLIENT_ID_HEADER } from "@spreadsheet-app/shared";
+import type { RepositoryOptions } from "./repo/spreadsheets";
 import pg from "pg";
 import { expect } from "vitest";
 import { createApp, type Snapshot, type SpreadsheetSummary } from "./app";
@@ -11,6 +13,8 @@ const BASE_URL = "http://localhost:5173";
 
 export interface TestServer {
   db: Database;
+  /** Opens another connection to the test database when it uses PostgreSQL. */
+  openConnection?: () => Promise<DatabaseHandle>;
   /** Messages the app asked to send, oldest first. */
   sent: EmailMessage[];
   /** Makes the next sends fail, to exercise the failure path. An address fails only the messages sent to it. */
@@ -35,6 +39,21 @@ export interface TestClient {
   json<T>(method: string, path: string, body?: unknown, status?: number): Promise<T>;
 }
 
+/** Gives a test client a stable identity for its undo and redo stack. */
+export function withClientId(client: TestClient, clientId = randomUUID()): TestClient {
+  const request: TestClient["request"] = (method, path, body, headers = {}, signal) =>
+    client.request(method, path, body, { ...headers, [CLIENT_ID_HEADER]: clientId }, signal);
+  return {
+    request,
+    async json<T>(method: string, path: string, body?: unknown, status = 200) {
+      const response = await request(method, path, body);
+      const text = await response.text();
+      expect(response.status, text).toBe(status);
+      return (text === "" ? undefined : JSON.parse(text)) as T;
+    },
+  };
+}
+
 export interface TestUser extends TestClient {
   userId: string;
   email: string;
@@ -42,13 +61,17 @@ export interface TestUser extends TestClient {
 
 let accounts = 0;
 
+interface TestDatabaseHandle extends DatabaseHandle {
+  openConnection?: () => Promise<DatabaseHandle>;
+}
+
 /**
  * Opens an empty database for one test file. By default it is in memory.
  * When TEST_DATABASE_URL names a Postgres server, it is a database created on
  * that server and dropped on close, which checks that the code behaves the
  * same on real Postgres as on PGlite.
  */
-async function openTestDatabase(): Promise<DatabaseHandle> {
+async function openTestDatabase(): Promise<TestDatabaseHandle> {
   const serverUrl = process.env.TEST_DATABASE_URL;
   if (serverUrl === undefined) return openDatabase(IN_MEMORY);
 
@@ -58,9 +81,11 @@ async function openTestDatabase(): Promise<DatabaseHandle> {
   await admin.query(`CREATE DATABASE ${name}`);
   const url = new URL(serverUrl);
   url.pathname = `/${name}`;
-  const handle = await openDatabase(url.toString());
+  const databaseUrl = url.toString();
+  const handle = await openDatabase(databaseUrl);
   return {
     db: handle.db,
+    openConnection: () => openDatabase(databaseUrl),
     async close() {
       await handle.close();
       await admin.query(`DROP DATABASE ${name}`);
@@ -102,7 +127,12 @@ export async function storedInputs(
 
 /** Starts the app on a fresh database. Call `close` when the test file is done. */
 export async function startTestServer(
-  options: { emailsPerHour?: number; verifyEmail?: boolean; shutdown?: AbortSignal } = {},
+  options: {
+    emailsPerHour?: number;
+    verifyEmail?: boolean;
+    shutdown?: AbortSignal;
+    repositoryOptions?: RepositoryOptions;
+  } = {},
 ): Promise<TestServer> {
   const database = await openTestDatabase();
   const sent: EmailMessage[] = [];
@@ -127,6 +157,7 @@ export async function startTestServer(
     emailsPerHour: options.emailsPerHour ?? 20,
     trustedOrigins: [BASE_URL],
     requireEmailVerification: options.verifyEmail ?? false,
+    ...(options.repositoryOptions ? { repositoryOptions: options.repositoryOptions } : {}),
     ...(options.shutdown ? { shutdown: options.shutdown } : {}),
   });
 
@@ -157,6 +188,7 @@ export async function startTestServer(
 
   return {
     db: database.db,
+    openConnection: database.openConnection,
     sent,
     failSending(fail) {
       failing = fail;

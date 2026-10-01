@@ -6,7 +6,10 @@ import { useWorkbookStore } from "../stores/workbook";
 import { at, snapshotWith, type MockedApi } from "../testing";
 import ChartCard from "./ChartCard.vue";
 
-vi.mock("../api/client", async () => ({ api: (await import("../testing")).mockApi() }));
+vi.mock("../api/client", async () => {
+  const testing = await import("../testing");
+  return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
+});
 const server = api as unknown as MockedApi;
 
 const CHART: ViewRecord = {
@@ -138,6 +141,18 @@ describe("ChartCard", () => {
       "Fruit!A1:B3",
     );
     expect(wrapper.findAll(".chart__bar")).toHaveLength(3);
+  });
+
+  it("keeps the source draft while the input has focus", async () => {
+    await render();
+    const store = useWorkbookStore();
+    const input = wrapper.get<HTMLInputElement>('input[aria-label="Chart data"]');
+    await input.trigger("focus");
+    await input.setValue("draft source");
+
+    store.views = store.views.map((view) => ({ ...view, source: "source from undo" }));
+    await flushPromises();
+    expect(input.element.value).toBe("draft source");
   });
 
   it("deletes the chart after confirming", async () => {

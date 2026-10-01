@@ -4,7 +4,7 @@ import { createMiddleware } from "hono/factory";
 import type { ActionDependencies } from "./actions/run";
 import type { Auth } from "./auth";
 import { ApiFailure, crossOrigin, unauthenticated } from "./errors";
-import { SpreadsheetRepository } from "./repo/spreadsheets";
+import { SpreadsheetRepository, type RepositoryOptions } from "./repo/spreadsheets";
 
 export interface AppDependencies extends ActionDependencies {
   auth: Auth;
@@ -12,6 +12,8 @@ export interface AppDependencies extends ActionDependencies {
   trustedOrigins: string[];
   /** Whether a new account must confirm its email address. An account a spreadsheet is shared with must then have. */
   requireEmailVerification: boolean;
+  /** Repository overrides used by focused integration tests. */
+  repositoryOptions?: RepositoryOptions;
   /** Aborted when the server is shutting down, which ends the streams that otherwise never end. */
   shutdown?: AbortSignal;
 }
@@ -25,8 +27,16 @@ export interface Env {
 }
 
 /** Rejects requests without a session and gives the rest a repository for their user. */
-export function requireSession({ auth, db, requireEmailVerification }: AppDependencies) {
-  const options = { sharesNeedVerifiedEmail: requireEmailVerification };
+export function requireSession({
+  auth,
+  db,
+  requireEmailVerification,
+  repositoryOptions,
+}: AppDependencies) {
+  const options = {
+    ...repositoryOptions,
+    sharesNeedVerifiedEmail: requireEmailVerification,
+  };
   return createMiddleware<Env>(async (c, next) => {
     const session = await auth.api.getSession({ headers: c.req.raw.headers });
     if (!session) throw unauthenticated();

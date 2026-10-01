@@ -20,7 +20,11 @@ import type { Database } from "../db/client";
 import { actionRuns, type RunStatus } from "../db/schema";
 import { ApiFailure, unprocessable } from "../errors";
 import type { Mailer } from "../mail/mailer";
-import { SpreadsheetRepository, type TableRecord } from "../repo/spreadsheets";
+import {
+  SpreadsheetRepository,
+  type RepositoryOptions,
+  type TableRecord,
+} from "../repo/spreadsheets";
 
 /** The header in which the browser says how many minutes its clock is behind UTC. */
 export const UTC_OFFSET_HEADER = "x-utc-offset-minutes";
@@ -42,6 +46,7 @@ export function clientClock(offsetHeader: string | undefined): () => number {
 export interface ActionDependencies {
   db: Database;
   mailer: Mailer;
+  repositoryOptions?: RepositoryOptions;
   /** How many emails a user's button clicks may send in any one-hour window. Each recipient of a message is one email. */
   emailsPerHour: number;
 }
@@ -146,14 +151,14 @@ export function runControl(
  * run never sends mail.
  */
 async function runCell(
-  { db, mailer, emailsPerHour }: ActionDependencies,
+  { db, mailer, emailsPerHour, repositoryOptions }: ActionDependencies,
   userId: string,
   cell: CellId,
   now: () => number,
   decide: Decide,
 ): Promise<ClickResult> {
   const planned = await db.transaction(async (tx): Promise<Planned> => {
-    const repository = new SpreadsheetRepository(tx, userId);
+    const repository = new SpreadsheetRepository(tx, userId, repositoryOptions);
     const { spreadsheetId } = await repository.findTable(cell.tableId, "write");
     await repository.lockSpreadsheet(spreadsheetId);
 
@@ -201,7 +206,7 @@ async function runCell(
       // A nested transaction, so a change that is refused undoes the changes
       // before it while the failed run is still recorded.
       const tables = await tx.transaction(async (writes) => {
-        const writer = new SpreadsheetRepository(writes, userId);
+        const writer = new SpreadsheetRepository(writes, userId, repositoryOptions);
         const grown: TableRecord[] = [];
         // Tables grow first, so the cells written into new rows are inside the table.
         for (const { tableId, rowCount } of effects.filter(isEnsureRows)) {

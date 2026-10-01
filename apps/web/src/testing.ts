@@ -2,6 +2,16 @@ import { parseAddress, type CellId } from "@spreadsheet-app/engine";
 import { vi, type Mock } from "vitest";
 import type { api, ClickResult, Snapshot, TableRecord } from "./api/client";
 
+let onJournaled: () => void = () => undefined;
+
+export function setJournaledHandler(handler: () => void): void {
+  onJournaled = handler;
+}
+
+export function notifyJournaled(): void {
+  onJournaled();
+}
+
 export const TABLE: TableRecord = {
   id: "t1",
   pageId: "p1",
@@ -23,6 +33,8 @@ export function snapshotWith(inputs: Record<string, string> = {}, role = "owner"
     tables: [TABLE],
     views: [],
     cells: Object.entries(inputs).map(([address, input]) => ({ ...at(address), input })),
+    undoable: false,
+    redoable: false,
   };
 }
 
@@ -80,6 +92,22 @@ export function mockApi(): MockedApi {
     updateColumn: vi.fn(),
     deleteTable: vi.fn().mockResolvedValue(undefined),
     setCells: vi.fn().mockResolvedValue(undefined),
+    undo: vi.fn().mockResolvedValue({
+      outcome: "nothing",
+      label: null,
+      error: null,
+      changed: { pages: [], tables: [], views: [], cells: [] },
+      undoable: false,
+      redoable: false,
+    }),
+    redo: vi.fn().mockResolvedValue({
+      outcome: "nothing",
+      label: null,
+      error: null,
+      changed: { pages: [], tables: [], views: [], cells: [] },
+      undoable: false,
+      redoable: false,
+    }),
     click: vi.fn().mockResolvedValue(clickResult()),
     input: vi.fn().mockResolvedValue(clickResult()),
   };

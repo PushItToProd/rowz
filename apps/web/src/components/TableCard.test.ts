@@ -7,7 +7,10 @@ import { useWorkbookStore } from "../stores/workbook";
 import { at, snapshotWith, TABLE, type MockedApi } from "../testing";
 import TableCard from "./TableCard.vue";
 
-vi.mock("../api/client", async () => ({ api: (await import("../testing")).mockApi() }));
+vi.mock("../api/client", async () => {
+  const testing = await import("../testing");
+  return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
+});
 vi.mock("../files/download", () => ({
   download: vi.fn(),
   fileName: (name: string, extension: string) => `${name}.${extension}`,
@@ -364,7 +367,11 @@ describe("the menu of row, column, and cell actions", () => {
   it("clears the selected cells", async () => {
     await open("B2");
     await item("Clear cells").trigger("click");
-    expect(server.setCells).toHaveBeenCalledWith("t1", [{ row: 1, col: 1, input: "" }]);
+    expect(server.setCells).toHaveBeenCalledWith(
+      "t1",
+      [{ row: 1, col: 1, input: "" }],
+      expect.any(String),
+    );
   });
 
   it("closes on Escape and leaves the table alone", async () => {
@@ -400,12 +407,16 @@ describe("files", () => {
   it("imports a CSV file into the table from its first cell", async () => {
     await render();
     await choose("data.csv", 'x,"y, z"\n1,=A2*2\n');
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
-      { row: 0, col: 0, input: "x" },
-      { row: 0, col: 1, input: "y, z" },
-      { row: 1, col: 0, input: "1" },
-      { row: 1, col: 1, input: "=A2*2" },
-    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [
+        { row: 0, col: 0, input: "x" },
+        { row: 0, col: 1, input: "y, z" },
+        { row: 1, col: 0, input: "1" },
+        { row: 1, col: 1, input: "=A2*2" },
+      ],
+      expect.any(String),
+    );
     const store = useWorkbookStore();
     expect(store.valueOf(at("B2"))).toBe(2);
     expect(store.selectedRange).toEqual({ startRow: 0, endRow: 1, startCol: 0, endCol: 1 });
@@ -421,7 +432,12 @@ describe("files", () => {
       tables: [],
     });
     await choose("data.csv", Array.from({ length: 6 }, () => "1,2,3,4,5").join("\n"));
-    expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", { rowCount: 6, colCount: 5 });
+    expect(server.updateTable).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      { rowCount: 6, colCount: 5 },
+      expect.any(String),
+    );
+    expect(server.updateTable.mock.calls[0]?.[2]).toBe(server.setCells.mock.calls[0]?.[2]);
     expect(useWorkbookStore().valueOf({ tableId: "t1", row: 5, col: 4 })).toBe(5);
   });
 
@@ -434,7 +450,11 @@ describe("files", () => {
 
     confirm.mockReturnValue(true);
     await choose("data.csv", "x");
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [{ row: 0, col: 0, input: "x" }]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [{ row: 0, col: 0, input: "x" }],
+      expect.any(String),
+    );
     expect(useWorkbookStore().inputOf(at("C3"))).toBe("kept");
   });
 });

@@ -191,7 +191,7 @@ It supports `select`, `where`, `group by`, `having`, `pivot`, `order by`, `limit
 
 ## History and files
 
-The server keeps versions of a document: before anything is deleted, before a change to many cells at once, and every ten minutes while it is edited. **History** in the editor restores a version or opens it as a new document.
+The server keeps a per-tab undo journal for content changes, including cells, formatting, and structural edits. Ctrl+Z and Ctrl+Y undo and redo changes made since the page was opened while they remain safe to apply. A conflicting later change can make an undo unavailable; **History** restores an earlier whole-spreadsheet version or opens it as a new document. The server also keeps versions before destructive or large changes and every ten minutes while a document is edited.
 **Export** in the editor saves a document as a JSON file holding its pages, their blocks, and cell inputs. **Import** on the document list creates a document from one. A document holds at most 50 pages, 50 blocks on a page, and 100,000 filled cells, which are also the most a file may hold. The format is the `spreadsheetFile` schema in `packages/shared/src/index.ts`. It identifies things by name and order, with no ids.
 
 ## How it works

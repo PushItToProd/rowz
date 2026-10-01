@@ -6,7 +6,10 @@ import { useWorkbookStore } from "../stores/workbook";
 import { at, snapshotWith, type MockedApi } from "../testing";
 import TextCard from "./TextCard.vue";
 
-vi.mock("../api/client", async () => ({ api: (await import("../testing")).mockApi() }));
+vi.mock("../api/client", async () => {
+  const testing = await import("../testing");
+  return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
+});
 const server = api as unknown as MockedApi;
 
 const TEXT: ViewRecord = {

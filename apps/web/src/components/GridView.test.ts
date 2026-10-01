@@ -3,10 +3,13 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, clickResult, snapshotWith, TABLE, type MockedApi } from "../testing";
+import { at, clickResult, notifyJournaled, snapshotWith, TABLE, type MockedApi } from "../testing";
 import GridView from "./GridView.vue";
 
-vi.mock("../api/client", async () => ({ api: (await import("../testing")).mockApi() }));
+vi.mock("../api/client", async () => {
+  const testing = await import("../testing");
+  return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
+});
 const server = api as unknown as MockedApi;
 
 let wrapper: VueWrapper;
@@ -164,9 +167,11 @@ describe("editing", () => {
 
     await editor.setValue("75");
     await press("Enter");
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
-      { row: 0, col: 0, input: "75" },
-    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [{ row: 0, col: 0, input: "75" }],
+      expect.any(String),
+    );
     expect(cellAt("A1").text()).toBe("75");
     expect(selectedAddress()).toBe("A2");
     expect(document.activeElement).toBe(wrapper.get(".grid").element);
@@ -269,7 +274,11 @@ describe("editing", () => {
     await select("A1");
     await press(key);
     expect(cellAt("A1").text()).toBe("");
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [{ row: 0, col: 0, input: "" }]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [{ row: 0, col: 0, input: "" }],
+      expect.any(String),
+    );
   });
 
   it("does not start editing on a keyboard shortcut", async () => {
@@ -349,11 +358,15 @@ describe("selecting a range", () => {
       "",
       "kept",
     ]);
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
-      { row: 0, col: 0, input: "" },
-      { row: 0, col: 1, input: "" },
-      { row: 1, col: 0, input: "" },
-    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [
+        { row: 0, col: 0, input: "" },
+        { row: 0, col: 1, input: "" },
+        { row: 1, col: 0, input: "" },
+      ],
+      expect.any(String),
+    );
   });
 
   it("ignores the right mouse button", async () => {
@@ -385,12 +398,19 @@ describe("filling", () => {
     expect(server.setCells).not.toHaveBeenCalled();
 
     window.dispatchEvent(new MouseEvent("mouseup"));
+    await vi.waitFor(() => {
+      expect(server.setCells).toHaveBeenCalledOnce();
+    });
     await wrapper.vm.$nextTick();
     expect(["B1", "B2", "B3"].map((address) => cellAt(address).text())).toEqual(["10", "20", "30"]);
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
-      { row: 1, col: 1, input: "=A2*10" },
-      { row: 2, col: 1, input: "=A3*10" },
-    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [
+        { row: 1, col: 1, input: "=A2*10" },
+        { row: 2, col: 1, input: "=A3*10" },
+      ],
+      expect.any(String),
+    );
     expect(wrapper.findAll(".grid__cell--in-range")).toHaveLength(3);
     expect(wrapper.find(".grid__cell--fill-preview").exists()).toBe(false);
   });
@@ -515,14 +535,19 @@ describe("copy and paste", () => {
     await focusAndSelect("C4");
     clipboard("paste", "one\ntwo\nthree");
     await vi.waitFor(() => {
-      expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
-        rowCount: 6,
-        colCount: 3,
-      });
+      expect(server.updateTable).toHaveBeenCalledExactlyOnceWith(
+        "t1",
+        {
+          rowCount: 6,
+          colCount: 3,
+        },
+        expect.any(String),
+      );
     });
     await vi.waitFor(() => {
       expect(server.setCells).toHaveBeenCalledOnce();
     });
+    expect(server.updateTable.mock.calls[0]?.[2]).toBe(server.setCells.mock.calls[0]?.[2]);
   });
 
   it("cuts by copying and then clearing", async () => {
@@ -596,9 +621,11 @@ describe("formula suggestions", () => {
     await type("=ab");
     expect(options()).toEqual(["ABS"]);
     await press("Enter");
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
-      { row: 0, col: 0, input: "=ab" },
-    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [{ row: 0, col: 0, input: "=ab" }],
+      expect.any(String),
+    );
     expect(selectedAddress()).toBe("A2");
     expect(document.querySelector(".formula-assist")).toBeNull();
   });
@@ -1036,11 +1063,17 @@ describe("a data table", () => {
     );
     expect(boxes.map((box) => box.element.checked)).toEqual([true, false, false]);
     await boxes[2]!.setValue(true);
-    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
-      { row: 2, col: 1, input: "TRUE" },
-    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [{ row: 2, col: 1, input: "TRUE" }],
+      expect.any(String),
+    );
     await boxes[0]!.setValue(false);
-    expect(server.setCells).toHaveBeenLastCalledWith("t1", [{ row: 0, col: 1, input: "FALSE" }]);
+    expect(server.setCells).toHaveBeenLastCalledWith(
+      "t1",
+      [{ row: 0, col: 1, input: "FALSE" }],
+      expect.any(String),
+    );
   });
 
   it("shows the error for something in a checkbox column that is not TRUE or FALSE", async () => {
@@ -1109,14 +1142,40 @@ describe("undo from the keyboard", () => {
     await wrapper.get(".grid__editor").setValue("new");
     await press("Enter");
     expect(cellAt("A1").text()).toBe("new");
+    notifyJournaled();
+    server.undo.mockResolvedValue({
+      outcome: "done",
+      label: "Change cells in Table 1",
+      error: null,
+      changed: { pages: [], tables: [], views: [], cells: [{ ...at("A1"), input: "old" }] },
+      undoable: false,
+      redoable: true,
+    });
+    server.redo.mockResolvedValue({
+      outcome: "done",
+      label: "Change cells in Table 1",
+      error: null,
+      changed: { pages: [], tables: [], views: [], cells: [{ ...at("A1"), input: "new" }] },
+      undoable: true,
+      redoable: false,
+    });
 
     await press("z", { ctrlKey: true });
-    expect(cellAt("A1").text()).toBe("old");
-    expect(selectedAddress()).toBe("A1");
+    await vi.waitFor(() => {
+      expect(cellAt("A1").text()).toBe("old");
+    });
+    expect(selectedAddress()).toBe("A2");
     await press("y", { ctrlKey: true });
-    expect(cellAt("A1").text()).toBe("new");
+    await vi.waitFor(() => {
+      expect(cellAt("A1").text()).toBe("new");
+    });
     await press("z", { ctrlKey: true });
+    await vi.waitFor(() => {
+      expect(cellAt("A1").text()).toBe("old");
+    });
     await press("Z", { ctrlKey: true, shiftKey: true });
-    expect(cellAt("A1").text()).toBe("new");
+    await vi.waitFor(() => {
+      expect(cellAt("A1").text()).toBe("new");
+    });
   });
 });
