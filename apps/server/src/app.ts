@@ -9,6 +9,8 @@ import { viewRoutes } from "./routes/views";
 
 export type { ClickResult } from "./actions/run";
 export type {
+  ListedSpreadsheet,
+  MemberRecord,
   PageRecord,
   Rewritten,
   Snapshot,

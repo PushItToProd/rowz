@@ -35,6 +35,7 @@ export interface TestClient {
 
 export interface TestUser extends TestClient {
   userId: string;
+  email: string;
 }
 
 let accounts = 0;
@@ -155,9 +156,10 @@ export async function startTestServer(
     anonymous,
     async signUp(name = "Ada") {
       accounts += 1;
+      const email = `user${String(accounts)}@example.com`;
       const response = await anonymous.request("POST", "/auth/sign-up/email", {
         name,
-        email: `user${String(accounts)}@example.com`,
+        email,
         password: "correct horse battery staple",
       });
       expect(response.status, await response.clone().text()).toBe(200);
@@ -166,7 +168,7 @@ export async function startTestServer(
         .getSetCookie()
         .map((value) => value.split(";")[0])
         .join("; ");
-      return { ...client(cookie), userId: user.id };
+      return { ...client(cookie), userId: user.id, email };
     },
     close: () => database.close(),
   };

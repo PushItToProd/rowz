@@ -1,7 +1,9 @@
 import { zValidator } from "@hono/zod-validator";
 import {
+  memberParam,
   nameBody,
   optionalNameBody,
+  shareBody,
   spreadsheetFile,
   spreadsheetParam,
   versionParam,
@@ -39,6 +41,31 @@ export function spreadsheetRoutes() {
         await c.var.repository.deleteSpreadsheet(c.req.valid("param").spreadsheetId);
         return c.body(null, 204);
       })
+      // Everyone who can open the spreadsheet.
+      .get("/:spreadsheetId/members", zValidator("param", spreadsheetParam, onInvalid), async (c) =>
+        c.json(await c.var.repository.listMembers(c.req.valid("param").spreadsheetId)),
+      )
+      // Shares the spreadsheet with an account, or changes the role of a share.
+      .put(
+        "/:spreadsheetId/members",
+        zValidator("param", spreadsheetParam, onInvalid),
+        zValidator("json", shareBody, onInvalid),
+        async (c) => {
+          const { spreadsheetId } = c.req.valid("param");
+          const { email, role } = c.req.valid("json");
+          await c.var.repository.share(spreadsheetId, email, role);
+          return c.json(await c.var.repository.listMembers(spreadsheetId));
+        },
+      )
+      .delete(
+        "/:spreadsheetId/members/:userId",
+        zValidator("param", memberParam, onInvalid),
+        async (c) => {
+          const { spreadsheetId, userId } = c.req.valid("param");
+          await c.var.repository.unshare(spreadsheetId, userId);
+          return c.body(null, 204);
+        },
+      )
       // The kept versions of a spreadsheet, newest first.
       .get(
         "/:spreadsheetId/versions",

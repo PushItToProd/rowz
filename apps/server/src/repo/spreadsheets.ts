@@ -35,6 +35,7 @@ import {
   actionRuns,
   cells,
   pages,
+  spreadsheetMembers,
   versions,
   spreadsheets,
   tables,
@@ -45,14 +46,37 @@ import {
   type Role,
   type ViewKind,
 } from "../db/schema";
-import { conflict, forbidden, isUniqueViolation, notFound, unprocessable } from "../errors";
+import {
+  conflict,
+  forbidden,
+  isUniqueViolation,
+  notFound,
+  ownerOnly,
+  unprocessable,
+} from "../errors";
 
-export type Access = "read" | "write";
+/** What a caller means to do: read, change the contents, or do what only the owner may. */
+export type Access = "read" | "write" | "own";
+
+/** Someone who can open a spreadsheet, as the Share panel lists them. */
+export interface MemberRecord {
+  userId: string;
+  name: string;
+  email: string;
+  role: Role;
+  /** Whether the person has the spreadsheet through a share, which the owner can change or remove. */
+  shared: boolean;
+}
 
 export interface SpreadsheetSummary {
   id: string;
   name: string;
   updatedAt: Date;
+}
+
+/** A spreadsheet in the caller's list, with the caller's role on it. */
+export interface ListedSpreadsheet extends SpreadsheetSummary {
+  role: Role;
 }
 
 export interface PageRecord {
@@ -226,17 +250,117 @@ function nextName(prefix: string, existing: readonly string[]): string {
  * a caller cannot tell it exists.
  */
 export class SpreadsheetRepository {
+  /**
+   * Who may open which spreadsheet, and as what: the members of its
+   * workspace, and the people it is shared with. Every query for spreadsheet
+   * data joins this, limited to the caller.
+   */
+  private readonly access;
+
   constructor(
     private readonly db: Database,
     private readonly userId: string,
-  ) {}
-
-  async listSpreadsheets(): Promise<SpreadsheetSummary[]> {
-    return this.db
-      .select({ id: spreadsheets.id, name: spreadsheets.name, updatedAt: spreadsheets.updatedAt })
+  ) {
+    this.access = db
+      .select({
+        spreadsheetId: spreadsheets.id,
+        userId: workspaceMembers.userId,
+        role: workspaceMembers.role,
+      })
       .from(spreadsheets)
-      .innerJoin(workspaceMembers, this.membership())
+      .innerJoin(workspaceMembers, eq(workspaceMembers.workspaceId, spreadsheets.workspaceId))
+      .unionAll(
+        db
+          .select({
+            spreadsheetId: spreadsheetMembers.spreadsheetId,
+            userId: spreadsheetMembers.userId,
+            role: spreadsheetMembers.role,
+          })
+          .from(spreadsheetMembers),
+      )
+      .as("access");
+  }
+
+  async listSpreadsheets(): Promise<ListedSpreadsheet[]> {
+    return this.db
+      .select({
+        id: spreadsheets.id,
+        name: spreadsheets.name,
+        updatedAt: spreadsheets.updatedAt,
+        role: this.access.role,
+      })
+      .from(spreadsheets)
+      .innerJoin(this.access, this.granted())
       .orderBy(desc(spreadsheets.updatedAt));
+  }
+
+  /** Everyone who can open a spreadsheet: the members of its workspace, then the people it is shared with. */
+  async listMembers(spreadsheetId: string): Promise<MemberRecord[]> {
+    await this.findSpreadsheet(spreadsheetId, "read");
+    const person = { userId: users.id, name: users.name, email: users.email };
+    const [inWorkspace, shared] = await Promise.all([
+      this.db
+        .select({ ...person, role: workspaceMembers.role })
+        .from(spreadsheets)
+        .innerJoin(workspaceMembers, eq(workspaceMembers.workspaceId, spreadsheets.workspaceId))
+        .innerJoin(users, eq(users.id, workspaceMembers.userId))
+        .where(eq(spreadsheets.id, spreadsheetId))
+        .orderBy(asc(workspaceMembers.createdAt)),
+      this.db
+        .select({ ...person, role: spreadsheetMembers.role })
+        .from(spreadsheetMembers)
+        .innerJoin(users, eq(users.id, spreadsheetMembers.userId))
+        .where(eq(spreadsheetMembers.spreadsheetId, spreadsheetId))
+        .orderBy(asc(spreadsheetMembers.createdAt)),
+    ]);
+    return [
+      ...inWorkspace.map((member) => ({ ...member, shared: false })),
+      ...shared.map((member) => ({ ...member, shared: true })),
+    ];
+  }
+
+  /**
+   * Shares a spreadsheet with the account that has an email address, or
+   * changes the role of someone it is already shared with. Only the owner can.
+   */
+  async share(spreadsheetId: string, email: string, role: "editor" | "viewer"): Promise<void> {
+    await this.findSpreadsheet(spreadsheetId, "own");
+    const [user] = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(sql`lower(${users.email})`, email.trim().toLowerCase()));
+    if (!user) {
+      throw unprocessable(
+        "no_such_account",
+        `No account uses ${email}. Ask them to sign up, then share again`,
+      );
+    }
+    const members = await this.listMembers(spreadsheetId);
+    if (members.some((member) => member.userId === user.id && !member.shared)) {
+      throw conflict(`${email} already has this spreadsheet through its workspace`);
+    }
+    await this.db
+      .insert(spreadsheetMembers)
+      .values({ spreadsheetId, userId: user.id, role })
+      .onConflictDoUpdate({
+        target: [spreadsheetMembers.spreadsheetId, spreadsheetMembers.userId],
+        set: { role },
+      });
+  }
+
+  /** Stops sharing a spreadsheet with someone. The owner can remove anyone, and anyone can remove themselves. */
+  async unshare(spreadsheetId: string, userId: string): Promise<void> {
+    await this.findSpreadsheet(spreadsheetId, userId === this.userId ? "read" : "own");
+    const removed = await this.db
+      .delete(spreadsheetMembers)
+      .where(
+        and(
+          eq(spreadsheetMembers.spreadsheetId, spreadsheetId),
+          eq(spreadsheetMembers.userId, userId),
+        ),
+      )
+      .returning({ userId: spreadsheetMembers.userId });
+    if (removed.length === 0) throw notFound("Share");
   }
 
   /** Creates a spreadsheet with one page holding one empty table. */
@@ -495,7 +619,7 @@ export class SpreadsheetRepository {
   }
 
   async deleteSpreadsheet(spreadsheetId: string): Promise<void> {
-    await this.findSpreadsheet(spreadsheetId, "write");
+    await this.findSpreadsheet(spreadsheetId, "own");
     await this.db.delete(spreadsheets).where(eq(spreadsheets.id, spreadsheetId));
   }
 
@@ -1075,9 +1199,9 @@ export class SpreadsheetRepository {
     access: Access,
   ): Promise<{ id: string; name: string; role: Role }> {
     const [row] = await this.db
-      .select({ id: spreadsheets.id, name: spreadsheets.name, role: workspaceMembers.role })
+      .select({ id: spreadsheets.id, name: spreadsheets.name, role: this.access.role })
       .from(spreadsheets)
-      .innerJoin(workspaceMembers, this.membership())
+      .innerJoin(this.access, this.granted())
       .where(eq(spreadsheets.id, spreadsheetId));
     return authorize(row, access, "Spreadsheet");
   }
@@ -1087,10 +1211,10 @@ export class SpreadsheetRepository {
     access: Access,
   ): Promise<PageRecord & { spreadsheetId: string; role: Role }> {
     const [row] = await this.db
-      .select({ ...pageColumns, spreadsheetId: spreadsheets.id, role: workspaceMembers.role })
+      .select({ ...pageColumns, spreadsheetId: spreadsheets.id, role: this.access.role })
       .from(pages)
       .innerJoin(spreadsheets, eq(spreadsheets.id, pages.spreadsheetId))
-      .innerJoin(workspaceMembers, this.membership())
+      .innerJoin(this.access, this.granted())
       .where(eq(pages.id, pageId));
     return authorize(row, access, "Page");
   }
@@ -1100,11 +1224,11 @@ export class SpreadsheetRepository {
     access: Access,
   ): Promise<TableRecord & { spreadsheetId: string; role: Role }> {
     const [row] = await this.db
-      .select({ ...tableColumns, spreadsheetId: spreadsheets.id, role: workspaceMembers.role })
+      .select({ ...tableColumns, spreadsheetId: spreadsheets.id, role: this.access.role })
       .from(tables)
       .innerJoin(pages, eq(pages.id, tables.pageId))
       .innerJoin(spreadsheets, eq(spreadsheets.id, pages.spreadsheetId))
-      .innerJoin(workspaceMembers, this.membership())
+      .innerJoin(this.access, this.granted())
       .where(eq(tables.id, tableId));
     return authorize(row, access, "Table");
   }
@@ -1221,21 +1345,18 @@ export class SpreadsheetRepository {
     access: Access,
   ): Promise<ViewRecord & { spreadsheetId: string; role: Role }> {
     const [row] = await this.db
-      .select({ ...viewColumns, spreadsheetId: spreadsheets.id, role: workspaceMembers.role })
+      .select({ ...viewColumns, spreadsheetId: spreadsheets.id, role: this.access.role })
       .from(views)
       .innerJoin(pages, eq(pages.id, views.pageId))
       .innerJoin(spreadsheets, eq(spreadsheets.id, pages.spreadsheetId))
-      .innerJoin(workspaceMembers, this.membership())
+      .innerJoin(this.access, this.granted())
       .where(eq(views.id, viewId));
     return authorize(row, access, "View");
   }
 
-  /** The join condition that limits a query to spreadsheets in the user's workspaces. */
-  private membership() {
-    return and(
-      eq(workspaceMembers.workspaceId, spreadsheets.workspaceId),
-      eq(workspaceMembers.userId, this.userId),
-    );
+  /** The join condition that limits a query to the spreadsheets the user may open. */
+  private granted() {
+    return and(eq(this.access.spreadsheetId, spreadsheets.id), eq(this.access.userId, this.userId));
   }
 
   /**
@@ -1274,7 +1395,8 @@ export class SpreadsheetRepository {
 
 function authorize<T extends { role: Role }>(row: T | undefined, access: Access, what: string): T {
   if (!row) throw notFound(what);
-  if (access === "write" && row.role === "viewer") throw forbidden();
+  if (access !== "read" && row.role === "viewer") throw forbidden();
+  if (access === "own" && row.role !== "owner") throw ownerOnly();
   return row;
 }
 

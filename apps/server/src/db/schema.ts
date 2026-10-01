@@ -111,6 +111,28 @@ export const spreadsheets = pgTable(
   (table) => [index("spreadsheets_workspace").on(table.workspaceId)],
 );
 
+/**
+ * People a spreadsheet is shared with, who are not members of its workspace.
+ * A share gives the role of editor or viewer on that one spreadsheet.
+ */
+export const spreadsheetMembers = pgTable(
+  "spreadsheet_members",
+  {
+    spreadsheetId: uuid("spreadsheet_id")
+      .notNull()
+      .references(() => spreadsheets.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").$type<Role>().notNull(),
+    createdAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.spreadsheetId, table.userId] }),
+    index("spreadsheet_members_user").on(table.userId),
+  ],
+);
+
 // Formulas refer to pages and tables by name without regard to case, so names
 // are unique within their parent the same way.
 

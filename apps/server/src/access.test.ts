@@ -38,6 +38,7 @@ function readRoutes(): Route[] {
   return [
     ["GET", `/spreadsheets/${snapshot.id}`],
     ["GET", `/spreadsheets/${snapshot.id}/versions`],
+    ["GET", `/spreadsheets/${snapshot.id}/members`],
     ["POST", `/spreadsheets/${snapshot.id}/versions/${UNKNOWN_ID}/copy`],
   ];
 }
@@ -73,6 +74,12 @@ function writeRoutes(): Route[] {
     ["DELETE", `/views/${view}`],
     ["DELETE", `/tables/${table}`],
     ["DELETE", `/pages/${page}`],
+    [
+      "PUT",
+      `/spreadsheets/${snapshot.id}/members`,
+      { email: "nobody@example.com", role: "viewer" },
+    ],
+    ["DELETE", `/spreadsheets/${snapshot.id}/members/someone`],
     ["DELETE", `/spreadsheets/${snapshot.id}`],
   ];
 }
@@ -151,18 +158,19 @@ describe("a viewer", () => {
 
 describe("an editor", () => {
   // Runs last: it carries out the writes, including the deletes.
-  it("can read and make every change", async () => {
+  it("can read and make every change to the contents, and cannot share or delete the spreadsheet", async () => {
     const editor = await server.signUp("Editor");
     await addMember(editor, "editor");
 
     expect(await editor.json("GET", `/spreadsheets/${snapshot.id}`)).toMatchObject({
       role: "editor",
     });
-    // The page delete is refused because it is the last page, not for lack of access.
+    // The restore names a version that does not exist. Sharing and deleting are the owner's.
     expect(await statuses(editor, writeRoutes())).toEqual([
       404, 204, 201, 200, 204, 201, 200, 204, 200, 200, 200, 200, 200, 200, 200, 201, 200, 204, 204,
-      204, 204,
+      204, 403, 403, 403,
     ]);
-    await owner.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);
+    await owner.json("DELETE", `/spreadsheets/${snapshot.id}`, undefined, 204);
+    await editor.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);
   });
 });

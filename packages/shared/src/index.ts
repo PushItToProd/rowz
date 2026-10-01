@@ -294,6 +294,16 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
 }
 
 export const spreadsheetParam = z.object({ spreadsheetId: z.uuid() });
+/** Sharing a spreadsheet with the account that has this email address. */
+export const shareBody = z.object({
+  email: z.email().max(320),
+  role: z.enum(["editor", "viewer"]),
+});
+
+export const memberParam = z.object({
+  spreadsheetId: z.uuid(),
+  userId: z.string().min(1).max(200),
+});
 export const versionParam = z.object({ spreadsheetId: z.uuid(), versionId: z.uuid() });
 export const pageParam = z.object({ pageId: z.uuid() });
 export const tableParam = z.object({ tableId: z.uuid() });

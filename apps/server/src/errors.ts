@@ -18,6 +18,9 @@ export const unauthenticated = (): ApiFailure =>
 export const forbidden = (): ApiFailure =>
   new ApiFailure(403, "forbidden", "You can view this spreadsheet but not change it");
 
+export const ownerOnly = (): ApiFailure =>
+  new ApiFailure(403, "forbidden", "Only the owner of this spreadsheet can do that");
+
 export const notFound = (what: string): ApiFailure =>
   new ApiFailure(404, "not_found", `${what} not found`);
 
