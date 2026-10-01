@@ -7,6 +7,8 @@ import PageTabs from "../components/PageTabs.vue";
 import ChartCard from "../components/ChartCard.vue";
 import FormatBar from "../components/FormatBar.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
+import SharePanel from "../components/SharePanel.vue";
+import { useSessionStore } from "../stores/session";
 import { download, fileName } from "../files/download";
 import TableCard from "../components/TableCard.vue";
 import TextCard from "../components/TextCard.vue";
@@ -26,6 +28,8 @@ function exportFile(): void {
 }
 
 const historyOpen = ref(false);
+const shareOpen = ref(false);
+const session = useSessionStore();
 
 /** Reads the spreadsheet again after a version was restored. Its pages are new, so the first one opens. */
 async function reload(): Promise<void> {
@@ -111,9 +115,10 @@ watch(
           />
         </h1>
         <span v-if="loaded && !store.canEdit" class="badge">View only</span>
-        <button v-if="loaded" type="button" class="editor__export" @click="historyOpen = true">
-          History
+        <button v-if="loaded" type="button" class="editor__export" @click="shareOpen = true">
+          Share
         </button>
+        <button v-if="loaded" type="button" @click="historyOpen = true">History</button>
         <button v-if="loaded" type="button" @click="exportFile">Export</button>
         <!-- A new tab, so reading about a formula does not take the user away from the sheet. -->
         <RouterLink :to="{ name: 'help' }" target="_blank" class="editor__help">Help</RouterLink>
@@ -161,6 +166,14 @@ watch(
       </div>
     </main>
 
+    <SharePanel
+      v-if="shareOpen && loaded"
+      :spreadsheet-id="spreadsheetId"
+      :owner="store.spreadsheet?.role === 'owner'"
+      :user-id="session.user?.id"
+      @close="shareOpen = false"
+      @left="router.push({ name: 'spreadsheets' })"
+    />
     <HistoryPanel
       v-if="historyOpen && loaded"
       :spreadsheet-id="spreadsheetId"

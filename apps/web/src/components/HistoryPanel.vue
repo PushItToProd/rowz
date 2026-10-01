@@ -73,8 +73,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <aside ref="panel" class="history" role="dialog" aria-label="History" tabindex="-1">
-    <header class="history__header">
+  <aside ref="panel" class="side-panel history" role="dialog" aria-label="History" tabindex="-1">
+    <header class="side-panel__header">
       <h2>History</h2>
       <button type="button" aria-label="Close history" @click="emit('close')">×</button>
     </header>

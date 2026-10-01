@@ -1221,9 +1221,9 @@ select.cell-control--dropdown {
   }
 }
 
-/* History */
+/* A panel that slides over the right of the editor: History and Share */
 
-.history {
+.side-panel {
   position: fixed;
   top: 0;
   right: 0;
@@ -1240,17 +1240,17 @@ select.cell-control--dropdown {
   box-shadow: -8px 0 24px rgb(0 0 0 / 10%);
 }
 
-.history:focus {
+.side-panel:focus {
   outline: none;
 }
 
-.history__header {
+.side-panel__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.history__header h2 {
+.side-panel__header h2 {
   margin: 0;
   font-size: 1.1rem;
 }
@@ -1290,4 +1290,60 @@ select.cell-control--dropdown {
 .history__actions {
   display: flex;
   gap: 6px;
+}
+
+/* Share */
+
+.share__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.share__form input {
+  flex: 1;
+  min-width: 12em;
+}
+
+.share__form select,
+.share__list select {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font: inherit;
+}
+
+.share__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share__list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.share__who {
+  display: grid;
+  flex: 1;
+  min-width: 10em;
+}
+
+.share__email,
+.share__role {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.share__email {
+  overflow-wrap: anywhere;
 }

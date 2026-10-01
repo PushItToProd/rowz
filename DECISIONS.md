@@ -2,6 +2,24 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: Sharing
+
+**Decision.** A spreadsheet can be shared with another account as an editor or a viewer, from a Share panel in the editor. A share covers that one spreadsheet.
+
+**Why not workspace membership.** The data model already had workspaces with roles, and every spreadsheet a person creates goes into their personal workspace. Adding someone to that workspace would hand over every spreadsheet in it. Shares are a separate table, `spreadsheet_members`. Authorization still happens in one place: every query joins a single subquery that unions workspace members and shares.
+
+**Choices.**
+
+- **Only an existing account can be given a spreadsheet,** by its email address. There is no invitation for people who have not signed up, because there is no real email delivery to send one with.
+- **The error for an unknown address says so** ("No account uses ..."). An owner can therefore learn whether an address has an account. Hiding that would mean a share that silently does nothing.
+- **Accounts are not email-verified.** Whoever signed up with an address holds it. Sharing with `ada@example.com` shares with whoever registered that address, who may not be Ada. On a public instance, turn on email verification in better-auth before relying on sharing. This is the main risk of the feature as built.
+- **Three levels of access in the repository:** `read`, `write`, and `own`. Deleting a spreadsheet and managing shares need `own`. An editor could delete a spreadsheet before this change. An editor can still restore an old version.
+- **A guest can leave** a spreadsheet shared with them. Nobody but the owner can remove another person.
+- **New spreadsheets a guest makes go into the guest's own workspace,** including copies opened from a shared spreadsheet's history.
+- **No live sync.** Two people editing see each other's changes after a reload, and the last write to a cell wins. That was the original decision for the MVP and sharing makes it more visible.
+
+**Not done.** Transferring ownership, sharing by link, and workspace management (the workspace tables are still there and still honored).
+
 ## 2026-10-01: Version history
 
 **Decision.** The todo item read "undo and redo (persistent version history)". Both halves are built. The server keeps whole-spreadsheet versions, and a History panel restores one or opens it as a copy. Ctrl+Z and Ctrl+Y take back and remake cell edits within a session.

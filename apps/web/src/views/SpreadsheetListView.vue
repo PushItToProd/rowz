@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { api, type SpreadsheetListItem } from "../api/client";
+import { api, type ListedSpreadsheetItem } from "../api/client";
 import { readSpreadsheetFile } from "../files/spreadsheetFile";
 import { useSessionStore } from "../stores/session";
 
 const session = useSessionStore();
 const router = useRouter();
 
-const spreadsheets = ref<SpreadsheetListItem[] | null>(null);
+const spreadsheets = ref<ListedSpreadsheetItem[] | null>(null);
 const error = ref<string | null>(null);
 
 async function run(action: () => Promise<void>): Promise<void> {
@@ -43,7 +43,7 @@ const importFile = (event: Event): Promise<void> =>
     await router.push({ name: "editor", params: { spreadsheetId: created.id } });
   });
 
-const remove = (spreadsheet: SpreadsheetListItem): Promise<void> =>
+const remove = (spreadsheet: ListedSpreadsheetItem): Promise<void> =>
   run(async () => {
     if (!window.confirm(`Delete ${spreadsheet.name}? This cannot be undone.`)) return;
     await api.deleteSpreadsheet(spreadsheet.id);
@@ -90,8 +90,12 @@ onMounted(refresh);
         <RouterLink :to="{ name: 'editor', params: { spreadsheetId: spreadsheet.id } }">
           {{ spreadsheet.name }}
         </RouterLink>
+        <span v-if="spreadsheet.role !== 'owner'" class="badge">
+          Shared with you · {{ spreadsheet.role === "editor" ? "can edit" : "can view" }}
+        </span>
         <time :datetime="spreadsheet.updatedAt">{{ formatDate(spreadsheet.updatedAt) }}</time>
         <button
+          v-if="spreadsheet.role === 'owner'"
           type="button"
           class="danger"
           :aria-label="`Delete ${spreadsheet.name}`"

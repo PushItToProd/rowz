@@ -89,6 +89,7 @@ const SECTIONS = [
   ["actions", "Buttons and actions"],
   ["controls", "Checkboxes and dropdowns"],
   ["formats", "Formats"],
+  ["sharing", "Sharing"],
   ["history", "History"],
   ["files", "Files"],
   ["charts", "Charts"],
@@ -774,6 +775,30 @@ const OPERATORS = [
           For a formatted value as text inside a formula, use
           <code>TEXT(A1, "#,##0.00")</code>.
         </li>
+      </ul>
+    </section>
+
+    <section id="sharing">
+      <h2>Sharing</h2>
+      <p>
+        <strong>Share</strong>, at the top of a spreadsheet, gives it to another person who has an
+        account here. Type their email address and choose what they can do.
+      </p>
+      <ul>
+        <li>
+          Someone who <strong>can edit</strong> can change everything in the spreadsheet and run its
+          buttons. Someone who <strong>can view</strong> can read it and open copies from its
+          history.
+        </li>
+        <li>
+          Only the owner can share the spreadsheet, change what someone can do, stop sharing, or
+          delete it. A person it is shared with can leave it.
+        </li>
+        <li>
+          A shared spreadsheet shows in the other person's list, marked as shared with them. They
+          see changes made by others after reloading the page.
+        </li>
+        <li>The person must sign up before the spreadsheet can be shared with them.</li>
       </ul>
     </section>
 

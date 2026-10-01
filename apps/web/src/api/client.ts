@@ -1,6 +1,8 @@
 import type {
   AppType,
   ClickResult,
+  ListedSpreadsheet,
+  MemberRecord,
   PageRecord,
   Rewritten,
   Snapshot,
@@ -24,7 +26,7 @@ import type {
 } from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
-export type { ClickResult, PageRecord, Rewritten, Snapshot, TableRecord, ViewRecord };
+export type { ClickResult, MemberRecord, PageRecord, Rewritten, Snapshot, TableRecord, ViewRecord };
 
 /** A value a control can send. A date is sent as the text it is written as. */
 export type ControlInput = string | number | boolean | null;
@@ -32,6 +34,8 @@ export type ControlInput = string | number | boolean | null;
 /** `updatedAt` arrives as an ISO string: JSON has no date type. */
 export type VersionListItem = Omit<VersionRecord, "createdAt"> & { createdAt: string };
 export type SpreadsheetListItem = Omit<SpreadsheetSummary, "updatedAt"> & { updatedAt: string };
+/** A spreadsheet in the list, with the viewer's role on it. */
+export type ListedSpreadsheetItem = SpreadsheetListItem & Pick<ListedSpreadsheet, "role">;
 
 /** A response with an error status. `message` is written for the person using the app. */
 export class ApiRequestError extends Error {
@@ -88,7 +92,31 @@ function clock(): { headers: Record<string, string> } {
  * throws `ApiRequestError`.
  */
 export const api = {
-  listSpreadsheets: (): Promise<SpreadsheetListItem[]> => body(routes.spreadsheets.$get()),
+  listSpreadsheets: (): Promise<ListedSpreadsheetItem[]> => body(routes.spreadsheets.$get()),
+
+  /** Everyone who can open a spreadsheet. */
+  listMembers: (spreadsheetId: string): Promise<MemberRecord[]> =>
+    body(routes.spreadsheets[":spreadsheetId"].members.$get({ param: { spreadsheetId } })),
+
+  /** Shares a spreadsheet with the account that has an email, or changes a share's role. Resolves to everyone who can open it. */
+  share: (
+    spreadsheetId: string,
+    email: string,
+    role: "editor" | "viewer",
+  ): Promise<MemberRecord[]> =>
+    body(
+      routes.spreadsheets[":spreadsheetId"].members.$put({
+        param: { spreadsheetId },
+        json: { email, role },
+      }),
+    ),
+
+  unshare: (spreadsheetId: string, userId: string): Promise<void> =>
+    done(
+      routes.spreadsheets[":spreadsheetId"].members[":userId"].$delete({
+        param: { spreadsheetId, userId },
+      }),
+    ),
 
   /** Creates a spreadsheet from a file an export wrote. */
   importSpreadsheet: (file: SpreadsheetFile): Promise<SpreadsheetListItem> =>

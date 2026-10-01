@@ -703,6 +703,53 @@ test("spreadsheets are private to the account that made them", async ({ page }) 
   await expect(page.getByRole("link", { name: "Untitled spreadsheet" })).toBeVisible();
 });
 
+test("a spreadsheet is shared with another account, which can edit it until the share ends", async ({
+  page,
+  browser,
+}) => {
+  // The guest signs up first, in a browser of their own.
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  const guestEmail = await signUp(guest);
+
+  await newSpreadsheet(page);
+  await enter(page, "A1", "from the owner");
+  await page.getByRole("button", { name: "Share" }).click();
+  const share = page.getByRole("dialog", { name: "Share" });
+  await share.getByLabel("Email of the person to share with").fill("nobody@example.com");
+  await share.getByRole("button", { name: "Share" }).click();
+  await expect(share.getByRole("alert")).toContainText("No account uses nobody@example.com");
+
+  await share.getByLabel("Email of the person to share with").fill(guestEmail);
+  await share.getByRole("button", { name: "Share" }).click();
+  await expect(share.locator(`[data-member="${guestEmail}"]`)).toBeVisible();
+
+  // The guest sees it in their list, opens it, and edits it.
+  await guest.reload();
+  await expect(guest.getByText("Shared with you · can edit")).toBeVisible();
+  await guest.getByRole("link", { name: "Untitled spreadsheet" }).click();
+  await expect(cell(guest, "A1")).toHaveText("from the owner");
+  await enter(guest, "B1", "from the guest");
+  await expect(guest.getByRole("button", { name: "Delete table" })).toBeVisible();
+
+  // The owner sees the guest's edit after a reload, then makes the guest a viewer.
+  await page.reload();
+  await expect(cell(page, "B1")).toHaveText("from the guest");
+  await page.getByRole("button", { name: "Share" }).click();
+  await share.getByLabel("What Ada can do").nth(0).selectOption("viewer");
+  await guest.reload();
+  await expect(guest.getByText("View only")).toBeVisible();
+  await expect(guest.getByRole("button", { name: "Delete table" })).toHaveCount(0);
+
+  // Ending the share takes the spreadsheet away.
+  page.once("dialog", (dialog) => void dialog.accept());
+  await share.getByRole("button", { name: "Stop sharing with Ada" }).click();
+  await expect(share.locator(`[data-member="${guestEmail}"]`)).toHaveCount(0);
+  await guest.reload();
+  await expect(guest.getByRole("alert")).toBeVisible();
+  await guestContext.close();
+});
+
 test("the help page documents formulas, with or without an account", async ({ page, context }) => {
   await page.goto("/help");
   await expect(page.getByRole("heading", { name: "Help", exact: true })).toBeVisible();
