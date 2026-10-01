@@ -263,7 +263,7 @@ One server process is assumed. Live updates between sessions are announced in th
 | `pnpm format`        | Formats with Prettier                                                |
 | `pnpm screenshots`   | Retakes the screenshots in this file (`e2e/screenshots.ts`)          |
 
-Server tests run against PGlite in memory. Set `TEST_DATABASE_URL` to a Postgres server to run them against real Postgres instead; each test file creates and drops its own database. CI does this on every push.
+Server tests run against PGlite in memory. Set `TEST_DATABASE_URL` to a Postgres server to run them against real Postgres instead; each test file creates and drops its own database. CI does this on every push. `pnpm test:postgres` does it locally: it starts the Postgres server in `compose.yaml` with Docker and runs the server tests against it. The tests that need two database connections run only this way. `docker compose down` stops the server.
 
 ## License
 
