@@ -7,6 +7,8 @@ An open source, web-based spreadsheet modeled on rows.com. A spreadsheet holds p
 =BUTTON("Click me!", SEND_EMAIL(A1,A2,A3))
 ```
 
+![A page holding a table with named columns, a bar chart of it, and a text view that reports on it](docs/screenshots/editor.png)
+
 The first formula shows a button that writes the sum of A1 and A2 into A3. The second shows a button that sends an email built from three cells.
 
 `SEND_EMAIL` delivers through a mail server when `SMTP_URL` is set. Without one it writes the message to the server log and delivers nothing.
@@ -39,6 +41,12 @@ Use an `https` URL. The app calls `crypto.randomUUID`, which browsers provide ov
 A cell whose input starts with `=` is a formula. A leading apostrophe forces text: `'=not a formula`.
 
 The app has a help page at `/help` with the full reference. It lists every function with an example whose result the engine computes when the page loads.
+
+![The function reference on the help page](docs/screenshots/help.png)
+
+Typing a formula offers the functions and names that match, with what each function expects.
+
+![The completion list under a cell that holds =SUMI](docs/screenshots/completion.png)
 
 | Kind        | Supported                                                                                                                                                                                                                                                                                                             |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -121,11 +129,17 @@ We sold **{{ total }}** in all.
 {{ BAR_CHART(Sales!A2:B4, "Sales by person") }}
 ```
 
+<img src="docs/screenshots/text-view.png" alt="A text view being edited, with its source above the result" width="407">
+
 `{{ }}` shows one value in the sentence, a range as a table, and the result of `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, or `SCATTER_CHART` as a chart. A formula in a chart or text view is written on a page and not in a table, so it names the table of every cell it reads.
 
 ### Controls
 
 A control is a cell that shows an input bound to another cell. `CHECKBOX(cell, label)` and `DROPDOWN(choices, cell)` show that cell's value and write a change back to it.
+
+![A form whose dropdown and checkbox fill cells, and a button that appends them to a log table](docs/screenshots/form.png)
+
+The **Save order** button above appends the form's cells to the Log table and then empties the form.
 
 An action's arguments are evaluated when the button is clicked, not when the sheet recalculates. `=BUTTON("Add one", EXECUTE(A1+1, A1))` is a counter, not a circular reference.
 
@@ -193,6 +207,7 @@ One server process is assumed. Live updates between sessions are announced in th
 | `pnpm test:coverage` | The same with coverage. Fails if the engine drops below 90% of lines |
 | `pnpm e2e`           | End-to-end tests (Playwright). Starts its own servers on other ports |
 | `pnpm format`        | Formats with Prettier                                                |
+| `pnpm screenshots`   | Retakes the screenshots in this file (`e2e/screenshots.ts`)          |
 
 Server tests run against PGlite in memory. Set `TEST_DATABASE_URL` to a Postgres server to run them against real Postgres instead; each test file creates and drops its own database. CI does this on every push.
 
