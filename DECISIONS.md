@@ -2,6 +2,27 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: QUERY
+
+**Decision.** `QUERY(range, query, [headers])` runs a SQL-like query over a range, with the clauses Rows documented: `select`, `where`, `group by`, `having`, `pivot`, `order by`, `limit`, `offset`, `label`, and `as`.
+
+**How it works.** The query parser produces the formula engine's own expression nodes, with each column as a name bound per row. A query expression can therefore call any formula function (`MONTH(D)`, `UPPER(A)`, `TEXT(C, "0.00")`), and a new formula function is available in queries with no further work. The aggregates `sum`, `count`, `avg`, `min`, `max`, `median`, and a few more call the formula functions of the same names over a group's rows.
+
+**Choices.**
+
+- **Column letters count from the first column of the range.** In `QUERY(C1:E9, ...)`, `A` is column C. Google Sheets uses the sheet's own letters for a range and `Col1` for computed data. `QUERY` receives values and not a reference, so a single rule that also works for `QUERY(FILTER(...), ...)` seemed better than two. `Col1`, `Col2` also work.
+- **Columns can be named by header:** `select Amount`, or `` select `Sold on` `` for a header with spaces. Rows and Sheets do not offer this. A header that is also a column letter (a header `B` on column A) means the header.
+- **Header rows are guessed when the third argument is left out:** a first row of text above numbers or dates is a header. Rows documents the default as 0. Guessing matches Sheets, and a header row sorted into the data is the more annoying mistake.
+- **An empty cell passes no comparison,** as in SQL. A formula treats an empty cell as 0, which would make `where C < 5` keep rows with nothing in C.
+- **Text comparison ignores case,** as everywhere else in the app. `group by` also groups `Apple` with `apple`.
+- **Clauses may come in any order.** Rows documents an unusual fixed order with `having` near the end. Accepting any order takes both that and SQL's.
+- **Groups come out sorted by their group values** unless `order by` says otherwise.
+- **`matches` (regular expressions) is refused,** for the reason regex functions are held back. `like`, `contains`, `starts with`, and `ends with` cover the common cases.
+- **An error in `where` or `having` fails the whole query with that error.** An error in a selected value shows in its cell.
+- **`MAX(A, B)` with two arguments is the ordinary function,** applied row by row. With one argument it is the aggregate.
+
+**To change.** The parser is `packages/engine/src/query.ts`. Running a parsed query is `packages/engine/src/functions/query.ts`.
+
 ## 2026-09-30: Which Rows functions to add
 
 **Decision.** I read Rows' function index, which is still online, and sorted it in [docs/rows-functions.md](docs/rows-functions.md). I added the 50 ordinary functions that were missing and cheap: statistics (`STDEV`, `PERCENTILE`, `RANK`, `CORREL`, ...), math (`SUMPRODUCT`, `MROUND`, `LOG`, `GCD`, ...), text (`SPLIT`, `PROPER`, `JOIN`, `FIXED`, ...), dates (`DATEDIF`, `WORKDAY`, `NETWORKDAYS`, `WEEKNUM`, ...), lookups (`HLOOKUP`, `ROW`, `COLUMN`), and `IFNA`, `ISNA`, `ISERR`, `FLATTEN`.
@@ -14,7 +35,7 @@ Choices made without asking, for review. Each entry says what was decided, why, 
 - **`LOG10`.** `LOG10(5)` already means "call the function stored in cell LOG10", the same form as `=D1(21)`. `LOG(x)` uses base 10.
 - **Hashes.** Browser hashing is asynchronous and the engine is synchronous.
 
-**Next from that list:** `QUERY`, then `UPDATE` and `OVERWRITE`, then scheduled actions.
+**Next from that list:** `UPDATE` and `OVERWRITE`, then scheduled actions. `QUERY` has since been added.
 
 ## 2026-09-30: Charts and text views
 

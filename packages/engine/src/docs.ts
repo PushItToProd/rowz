@@ -1127,6 +1127,14 @@ const ENTRIES: readonly FunctionDoc[] = [
     summary: "Every cell of the ranges in one column, reading each range row by row.",
     example: "FLATTEN(A1:B2)",
   },
+  {
+    name: "QUERY",
+    category: "Arrays",
+    syntax: "QUERY(range, query, [headers])",
+    summary:
+      "Selects, filters, groups, and sorts the rows of a range with a query written like SQL. Columns are named by letter, counting from the first column of the range, or by their header. `headers` is how many rows at the top are headings.",
+    example: 'QUERY(A1:B3, "select B where A > 1 order by A desc")',
+  },
 ];
 
 /**

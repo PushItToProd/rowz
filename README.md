@@ -39,7 +39,7 @@ The app has a help page at `/help` with the full reference. It lists every funct
 | Text        | `CONCATENATE CONCAT TEXTJOIN JOIN SPLIT LEN UPPER LOWER PROPER TRIM LEFT RIGHT MID FIND SEARCH SUBSTITUTE REPT CHAR CODE ENCODEURL VALUE TEXT FIXED`                                                                                                        |
 | Dates       | `TODAY NOW DATE TIME DATEVALUE YEAR MONTH DAY HOUR MINUTE SECOND WEEKDAY WEEKNUM ISOWEEKNUM DAYS DATEDIF EDATE EOMONTH WORKDAY NETWORKDAYS`. A cell typed as `2026-09-30` is a date                                                                         |
 | Information | `ISBLANK ISNUMBER ISTEXT ISNONTEXT ISLOGICAL ISDATE ISERROR ISERR ISNA`                                                                                                                                                                                     |
-| Arrays      | `FILTER SORT UNIQUE SEQUENCE TRANSPOSE TAKE DROP HSTACK VSTACK FLATTEN ROWS COLUMNS MAP REDUCE BYROW BYCOL`. A result of several values fills the cells below and beside the formula                                                                        |
+| Arrays      | `FILTER SORT UNIQUE SEQUENCE TRANSPOSE TAKE DROP HSTACK VSTACK FLATTEN ROWS COLUMNS MAP REDUCE BYROW BYCOL QUERY`. A result of several values fills the cells below and beside the formula                                                                  |
 | Names       | `LET LAMBDA`. A function kept in a cell is called by the cell's address: `=D1(21)`                                                                                                                                                                          |
 | Errors      | `#DIV/0! #VALUE! #REF! #NAME? #N/A #SPILL! #CYCLE! #ERROR!`                                                                                                                                                                                                 |
 
@@ -57,6 +57,16 @@ An action is a function that describes a side effect. It does nothing until a bu
 | `APPEND_ROW(range, value, ...)`     | Writes the values into the first row of the range below its content, growing the table if needed |
 | `CLEAR(range)`                      | Empties the cells of the range.                                                                  |
 | `DO(action, ...)`                   | Runs several actions from one click.                                                             |
+
+### Queries
+
+`QUERY(range, query, [headers])` runs a query written like SQL over a range:
+
+```
+=QUERY(A1:D99, "select B, sum(C) where D >= date '2026-01-01' group by B order by sum(C) desc limit 5")
+```
+
+It supports `select`, `where`, `group by`, `having`, `pivot`, `order by`, `limit`, `offset`, and `label`. Columns are named by letter, counting from the first column of the range, or by header. A query expression can call any formula function.
 
 ### Charts and text views
 

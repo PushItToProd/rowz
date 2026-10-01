@@ -84,6 +84,7 @@ const SECTIONS = [
   ["functions", "Functions"],
   ["names", "Names and your own functions"],
   ["arrays", "Formulas that fill several cells"],
+  ["query", "Queries"],
   ["actions", "Buttons and actions"],
   ["controls", "Checkboxes and dropdowns"],
   ["charts", "Charts"],
@@ -121,6 +122,37 @@ const REFERENCES = [
   ["Sales!A1", "Cell A1 of the table named Sales on the formula's own page."],
   ["'Table 2'!A1:A9", "A table whose name has a space needs single quotes."],
   ["'Page 2'!Sales!A1", "Cell A1 of the table Sales on the page named Page 2."],
+] as const;
+
+const QUERY_CLAUSES = [
+  [
+    "select A, C * 2",
+    "Which columns to give, and values computed from them. `select *` gives every column.",
+  ],
+  ["select A as Name", "Names a result column."],
+  ["where C > 5 and B = 'Fruit'", "Keeps the rows that pass a test."],
+  [
+    "group by B",
+    "Makes one row for each value of B. Other columns must be inside `sum`, `count`, `avg`, `min`, `max`, or `median`.",
+  ],
+  ["having sum(C) > 10", "Keeps the groups that pass a test."],
+  ["pivot B", "Makes a column for each value of B."],
+  ["order by C desc, A", "Sorts the rows. `desc` sorts from the largest."],
+  ["limit 10 offset 5", "Gives at most 10 rows, after skipping 5."],
+  ["label C 'Units'", "Names a result column, as `as` does."],
+] as const;
+
+const QUERY_TESTS = [
+  ["= != < > <= >=", "Compare. An empty cell passes none of them."],
+  ["and, or, not", "Combine tests."],
+  ["A contains 'an'", "Text that holds other text. Also `starts with` and `ends with`."],
+  [
+    "A like 'b%'",
+    "Text that fits a pattern, where `%` is any run of characters and `_` is any one.",
+  ],
+  ["A in ('x', 'y')", "One of several values."],
+  ["C is null", "An empty cell. Also `is not null`."],
+  ["D >= date '2026-01-31'", "A date is written with the word `date` before it."],
 ] as const;
 
 const TEMPLATE_TAGS = [
@@ -483,6 +515,78 @@ const OPERATORS = [
           filling any cells: <code>=SUM(A1:A3 * B1:B3)</code>.
         </li>
         <li><code>EXECUTE</code> writes an array as a block of cells starting at its target.</li>
+      </ul>
+    </section>
+
+    <section id="query">
+      <h2>Queries</h2>
+      <p>
+        <code>QUERY</code> picks, filters, groups, and sorts the rows of a range with a query
+        written like SQL:
+      </p>
+      <pre><code>=QUERY(A1:D99, "select B, sum(C) where D >= date '2026-01-01' group by B order by sum(C) desc")</code></pre>
+      <p>
+        A column is named by its letter, counting from the first column of the range, so in
+        <code>QUERY(C1:E9, …)</code> column C is <code>A</code>. A column with a header can also be
+        named by it: <code>select Amount</code>. A header of several words goes in backticks:
+        <code>select `Sold on`</code>. Text in a query goes in single quotes.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Clause</th>
+            <th scope="col">What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="[clause, meaning] in QUERY_CLAUSES" :key="clause">
+            <td>
+              <code>{{ clause }}</code>
+            </td>
+            <td>
+              <template v-for="(part, index) in segments(meaning)" :key="index">
+                <code v-if="part.code">{{ part.text }}</code>
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Test</th>
+            <th scope="col">What it matches</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="[test, meaning] in QUERY_TESTS" :key="test">
+            <td>
+              <code>{{ test }}</code>
+            </td>
+            <td>
+              <template v-for="(part, index) in segments(meaning)" :key="index">
+                <code v-if="part.code">{{ part.text }}</code>
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <ul>
+        <li>
+          A query can call any function a formula can:
+          <code>select UPPER(A), MONTH(D) where LEN(A) > 3</code>.
+        </li>
+        <li>
+          A first row of text above numbers or dates is taken to be a header row, and the result
+          starts with a header row too. Give the number of header rows as a third argument to say
+          otherwise: <code>QUERY(A1:D99, "select A", 0)</code>.
+        </li>
+        <li>
+          The result fills cells like any other formula with several values, and a text view shows
+          it as a table.
+        </li>
       </ul>
     </section>
 
