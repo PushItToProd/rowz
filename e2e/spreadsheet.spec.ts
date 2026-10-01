@@ -409,6 +409,17 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await expect(text.locator(".text-view")).toContainText("We have 8 pieces.");
   await text.getByRole("button", { name: "Done" }).click();
   await expect(text.getByRole("listitem")).toHaveText(["apples: 3", "pears: 5"]);
+  await expect(text.getByLabel("Text view source")).toBeHidden();
+
+  // A double click on the text edits it too, and a click elsewhere saves it.
+  await text.getByRole("heading", { name: "Fruit" }).dblclick();
+  await expect(text.getByLabel("Text view source")).toBeFocused();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("\n## That is all");
+  await cell(page, "C4").click();
+  await expect(text.getByLabel("Text view source")).toBeHidden();
+  await expect(text.getByRole("button", { name: "Edit" })).toBeVisible();
+  await expect(text.getByRole("heading", { name: "That is all" })).toBeVisible();
 
   // Both follow a cell change.
   await enter(page, "B1", "15");

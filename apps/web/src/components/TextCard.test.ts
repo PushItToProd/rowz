@@ -168,15 +168,37 @@ describe("TextCard", () => {
     expect(shown().text()).toBe("new 2");
   });
 
-  it("saves when the editor loses focus, and not again on Done", async () => {
+  it("saves and stops editing when the editor loses focus", async () => {
+    await render("old");
+    await button("Edit").trigger("click");
+    const editor = wrapper.get<HTMLTextAreaElement>("textarea");
+    expect(document.activeElement).toBe(editor.element);
+    await editor.setValue("new");
+    editor.element.blur();
+    await flushPromises();
+    expect(server.updateView).toHaveBeenCalledExactlyOnceWith("v1", { source: "new" });
+    expect(wrapper.find("textarea").exists()).toBe(false);
+    expect(button("Edit").exists()).toBe(true);
+  });
+
+  it("goes on editing when it is the window that loses focus", async () => {
     await render("old");
     await button("Edit").trigger("click");
     await wrapper.get("textarea").setValue("new");
+    // The browser sends a blur and leaves the editor as the document's active element.
     await wrapper.get("textarea").trigger("blur");
     await flushPromises();
-    await button("Done").trigger("click");
-    await flushPromises();
-    expect(server.updateView).toHaveBeenCalledTimes(1);
+    expect(server.updateView).toHaveBeenCalledOnce();
+    expect(wrapper.find("textarea").exists()).toBe(true);
+  });
+
+  it("starts editing on a double click of the text", async () => {
+    await render("old");
+    await shown().trigger("dblclick");
+    const editor = wrapper.get<HTMLTextAreaElement>("textarea");
+    expect(editor.element.value).toBe("old");
+    expect(document.activeElement).toBe(editor.element);
+    expect(button("Done").exists()).toBe(true);
   });
 
   it("does not save when nothing changed", async () => {
@@ -201,5 +223,7 @@ describe("TextCard", () => {
     await render("hello", "viewer");
     expect(shown().text()).toBe("hello");
     expect(wrapper.find("button").exists()).toBe(false);
+    await shown().trigger("dblclick");
+    expect(wrapper.find("textarea").exists()).toBe(false);
   });
 });

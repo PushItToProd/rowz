@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatValue, renderTemplate } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import type { ViewRecord } from "../api/client";
 import { markdown } from "../markdown";
 import { useWorkbookStore } from "../stores/workbook";
@@ -26,9 +26,26 @@ function save(): void {
     void store.updateView(props.view.id, { source: draft.value });
 }
 
-function toggle(): void {
-  if (editing.value) save();
-  editing.value = !editing.value;
+const editor = ref<HTMLTextAreaElement>();
+
+/** Opens the source for editing, with the keyboard in it. */
+async function edit(): Promise<void> {
+  if (!store.canEdit || editing.value) return;
+  editing.value = true;
+  await nextTick();
+  editor.value?.focus();
+}
+
+function finish(): void {
+  save();
+  editing.value = false;
+}
+
+/** Leaving the source saves it and ends the edit. */
+function onBlur(): void {
+  save();
+  // The source still has the keyboard when it is the window that lost focus, and the edit goes on.
+  if (document.activeElement !== editor.value) editing.value = false;
 }
 
 function remove(): void {
@@ -57,23 +74,30 @@ const parts = computed(() =>
         />
       </h2>
       <div v-if="store.canEdit" class="view-card__actions">
-        <button type="button" @click="toggle">{{ editing ? "Done" : "Edit" }}</button>
+        <!-- A press on Done leaves the keyboard in the source, so the edit ends once, on the click. -->
+        <button v-if="editing" type="button" @mousedown.prevent @click="finish">Done</button>
+        <button v-else type="button" @click="edit">Edit</button>
         <button type="button" class="danger" @click="remove">Delete text</button>
       </div>
     </header>
 
     <textarea
       v-if="editing"
+      ref="editor"
       v-model="draft"
       class="text-view__source"
       aria-label="Text view source"
       rows="10"
       spellcheck="false"
       :maxlength="LIMITS.viewSourceLength"
-      @blur="save"
+      @blur="onBlur"
     ></textarea>
 
-    <div class="text-view">
+    <div
+      class="text-view"
+      :title="store.canEdit && !editing ? 'Double-click to edit' : undefined"
+      @dblclick="edit"
+    >
       <template v-for="(part, index) in parts" :key="index">
         <!-- eslint-disable-next-line vue/no-v-html -- markdown-it output with raw HTML disabled -->
         <div v-if="part.type === 'markdown'" class="text-view__markdown" v-html="part.html"></div>

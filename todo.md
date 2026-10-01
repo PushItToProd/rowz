@@ -119,7 +119,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
   - [ ] stacked bars
   - [ ] colors
 - [ ] **P10** show labels on charts on hover
-- [ ] **P2** allow editing markdown views by just double clicking on the text (instead of clicking "Edit"). save and exit edit mode when the user unfocuses the input (instead of requiring user to hit "Done")
+- [x] allow editing markdown views by just double clicking on the text (instead of clicking "Edit"). save and exit edit mode when the user unfocuses the input (instead of requiring user to hit "Done") (keep the "Edit" and "Done" buttons for user convenience)
 - [ ] **P2** duplicate the "Add table", "Add chart", "Add text" buttons at the top and between each item so you can insert them anywhere
 - [ ] **P3** add a new type of block (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side
 - [x] **P2** update user-facing docs to use "Block" nomenclature for tables/charts/text/etc.

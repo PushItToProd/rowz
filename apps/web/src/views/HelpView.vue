@@ -954,10 +954,11 @@ const OPERATORS = [
     <section id="text-views">
       <h2>Text views</h2>
       <p>
-        <strong>Add text</strong> puts a text view on a page. Choose <strong>Edit</strong> to write
-        it. The text is
+        <strong>Add text</strong> puts a text view on a page. Double-click the text, or choose
+        <strong>Edit</strong>, to write it. The text is
         <a href="https://commonmark.org/help/" target="_blank" rel="noreferrer">Markdown</a>, and
         tags put values from the spreadsheet into it. The view shows the result as you type.
+        Clicking anywhere else, or choosing <strong>Done</strong>, saves the text.
       </p>
       <table>
         <thead>
