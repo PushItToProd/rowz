@@ -9,6 +9,7 @@ import FormatBar from "../components/FormatBar.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
 import SharePanel from "../components/SharePanel.vue";
 import { useSessionStore } from "../stores/session";
+import { watchSpreadsheet } from "../api/live";
 import { download, fileName } from "../files/download";
 import TableCard from "../components/TableCard.vue";
 import TextCard from "../components/TextCard.vue";
@@ -64,6 +65,30 @@ watch(
       loadError.value =
         cause instanceof Error ? cause.message : "The spreadsheet could not be opened";
     }
+  },
+  { immediate: true },
+);
+
+// Changes made elsewhere arrive here. Several at once are read as one.
+const REFRESH_DELAY_MS = 250;
+let refreshTimer: number | undefined;
+watch(
+  () => props.spreadsheetId,
+  (spreadsheetId, _previous, onCleanup) => {
+    const stop = watchSpreadsheet(spreadsheetId, () => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        store.refresh().catch((cause: unknown) => {
+          // The spreadsheet was deleted, or is no longer shared with this person.
+          loadError.value =
+            cause instanceof Error ? cause.message : "The spreadsheet could not be read again";
+        });
+      }, REFRESH_DELAY_MS);
+    });
+    onCleanup(() => {
+      window.clearTimeout(refreshTimer);
+      stop();
+    });
   },
   { immediate: true },
 );

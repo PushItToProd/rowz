@@ -161,7 +161,7 @@ Server tests run against PGlite in memory. Set `TEST_DATABASE_URL` to a Postgres
 
 ## Not built yet
 
-- Live sync between sessions. Edits are saved over HTTP and the last write wins. Another session sees changes after a reload.
+- Merging of edits made at the same moment. Open sessions see each other's changes within a second, and the last write to a cell wins.
 - Inviting someone who has no account yet, and email verification. A spreadsheet can be shared only with an existing account.
 - Email delivery.
 - Column resizing.

@@ -795,8 +795,9 @@ const OPERATORS = [
           delete it. A person it is shared with can leave it.
         </li>
         <li>
-          A shared spreadsheet shows in the other person's list, marked as shared with them. They
-          see changes made by others after reloading the page.
+          A shared spreadsheet shows in the other person's list, marked as shared with them.
+          Everyone who has it open sees changes within a second. When two people change the same
+          cell, the later change stays.
         </li>
         <li>The person must sign up before the spreadsheet can be shared with them.</li>
       </ul>

@@ -77,7 +77,10 @@ async function done(request: Promise<Response>): Promise<void> {
   await check(await request);
 }
 
-const { api: routes } = hc<AppType>("/");
+/** Names this tab to the server, so that the tab can tell its own changes from other people's. */
+export const CLIENT_ID = crypto.randomUUID();
+
+const { api: routes } = hc<AppType>("/", { headers: { "x-client-id": CLIENT_ID } });
 
 /**
  * Tells the server what time it is here, so `TODAY` and `NOW` in an action it

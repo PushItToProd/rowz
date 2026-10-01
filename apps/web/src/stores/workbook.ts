@@ -183,6 +183,43 @@ export const useWorkbookStore = defineStore("workbook", () => {
   }
 
   /**
+   * Reads the spreadsheet again after someone else changed it, and keeps the
+   * selection where it still exists. Edits of this session can still be
+   * taken back unless the pages or tables changed.
+   */
+  async function refresh(): Promise<void> {
+    const open = spreadsheet.value;
+    if (!open) return;
+    // What was typed here is saved first, so that what comes back includes it.
+    const queued = saves;
+    await queued;
+    const snapshot = await api.getSnapshot(open.id);
+    // Something was typed while the spreadsheet was being read: read it again, with that in it.
+    if (saves !== queued) return refresh();
+    if (spreadsheet.value?.id !== open.id) return;
+
+    const structure = (value: { pages: unknown; tables: unknown }): string =>
+      JSON.stringify([value.pages, value.tables]);
+    const restructured =
+      structure(snapshot) !== structure({ pages: pages.value, tables: tables.value });
+    engine.value = createWorkbook(snapshot);
+    spreadsheet.value = { id: snapshot.id, name: snapshot.name, role: snapshot.role };
+    pages.value = snapshot.pages;
+    tables.value = snapshot.tables;
+    views.value = snapshot.views;
+    if (restructured) forgetEdits();
+
+    const selected = selection.value;
+    const table = snapshot.tables.find((candidate) => candidate.id === selected?.tableId);
+    const inside =
+      table && selected && selected.row < table.rowCount && selected.col < table.colCount;
+    if (!inside) {
+      selection.value = null;
+      selectionEnd.value = null;
+    }
+  }
+
+  /**
    * Evaluates a formula written on a page and not in a cell: a chart's data,
    * or an expression in a text view.
    */
@@ -779,6 +816,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     updateTable,
     editTable,
     deleteTable,
+    refresh,
     itemsOn,
     moveItem,
     canUndo,

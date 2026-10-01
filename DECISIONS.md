@@ -2,6 +2,23 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: Live updates between sessions
+
+**Decision.** You chose "no live sync" for the MVP. Sharing made that painful, so open sessions now follow each other's changes. This is not collaborative editing: there is no merging, no cursors, and the last write to a cell wins.
+
+**How it works.** The server keeps a stream open to each session (`GET /api/spreadsheets/:id/events`, server-sent events). When a request changes a spreadsheet, the server says so on that spreadsheet's streams after the request is answered. Each other session then reads the whole spreadsheet again. The session that made the change recognizes its own id and does nothing.
+
+**Choices.**
+
+- **A change is announced, not described.** Sessions re-read the spreadsheet instead of applying a description of the change. That reuses the one read path, cannot drift from the server, and costs a full read per remote change. For a large spreadsheet with a busy collaborator that is a lot of reading. The next step would be to send the changed cells with the event.
+- **Server-sent events, not WebSockets.** Changes still go up as ordinary requests, so only a one-way stream down is needed, and it passes through the dev proxy and through HTTP middleware unchanged.
+- **The feed is in the server's memory.** With more than one server process, a session hears only the changes made through its own process. Running several needs Postgres `LISTEN/NOTIFY` or similar behind `ChangeFeed`.
+- **A session's own typing is saved before it re-reads,** and the read is repeated if more was typed meanwhile, so a remote change does not wipe out a cell being saved. A cell that is open for editing keeps what is being typed.
+- **Undo survives a remote change to cells** and is emptied by a remote change to pages or tables.
+- **Losing access shows at once:** the page of someone whose share ended says the spreadsheet was not found.
+
+**To change.** Server: `apps/server/src/changes.ts`. Browser: `apps/web/src/api/live.ts` and `refresh` in the workbook store.
+
 ## 2026-10-01: Sharing
 
 **Decision.** A spreadsheet can be shared with another account as an editor or a viewer, from a Share panel in the editor. A share covers that one spreadsheet.
@@ -16,7 +33,7 @@ Choices made without asking, for review. Each entry says what was decided, why, 
 - **Three levels of access in the repository:** `read`, `write`, and `own`. Deleting a spreadsheet and managing shares need `own`. An editor could delete a spreadsheet before this change. An editor can still restore an old version.
 - **A guest can leave** a spreadsheet shared with them. Nobody but the owner can remove another person.
 - **New spreadsheets a guest makes go into the guest's own workspace,** including copies opened from a shared spreadsheet's history.
-- **No live sync.** Two people editing see each other's changes after a reload, and the last write to a cell wins. That was the original decision for the MVP and sharing makes it more visible.
+- **Live updates came with sharing.** See the next entry up.
 
 **Not done.** Transferring ownership, sharing by link, and workspace management (the workspace tables are still there and still honored).
 

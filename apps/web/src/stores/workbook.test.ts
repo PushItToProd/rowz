@@ -988,3 +988,93 @@ describe("undo and redo", () => {
     expect(server.setCells).not.toHaveBeenCalled();
   });
 });
+
+describe("refreshing after a change made elsewhere", () => {
+  it("shows the cells and views the server now has, and keeps the selection", async () => {
+    const store = await open({ A1: "1", B1: "=A1*2" });
+    store.selection = at("B1");
+    server.getSnapshot.mockResolvedValue({
+      ...snapshotWith({ A1: "5", B1: "=A1*2", C1: "new" }),
+      name: "Renamed elsewhere",
+      views: [
+        {
+          id: "v1",
+          pageId: "p1",
+          kind: "text",
+          name: "Text 1",
+          position: 1,
+          source: "hi",
+          chartType: null,
+        },
+      ],
+    });
+    await store.refresh();
+    expect(store.valueOf(at("B1"))).toBe(10);
+    expect(store.inputOf(at("C1"))).toBe("new");
+    expect(store.spreadsheet?.name).toBe("Renamed elsewhere");
+    expect(store.views).toHaveLength(1);
+    expect(store.selection).toEqual(at("B1"));
+  });
+
+  it("keeps what can be undone when only cells changed, and forgets it when a table did", async () => {
+    const store = await open({ A1: "1" });
+    await store.setCell(at("A1"), "2");
+    server.getSnapshot.mockResolvedValue(snapshotWith({ A1: "2", B1: "theirs" }));
+    await store.refresh();
+    expect(store.canUndo).toBe(true);
+
+    server.getSnapshot.mockResolvedValue({
+      ...snapshotWith({ A1: "2" }),
+      tables: [{ ...TABLE, name: "Renamed" }],
+    });
+    await store.refresh();
+    expect(store.canUndo).toBe(false);
+  });
+
+  it("drops a selection in a table or a row that is gone", async () => {
+    const store = await open();
+    store.selection = at("C4");
+    server.getSnapshot.mockResolvedValue({
+      ...snapshotWith(),
+      tables: [{ ...TABLE, rowCount: 2 }],
+    });
+    await store.refresh();
+    expect(store.selection).toBeNull();
+  });
+
+  it("follows a change of role", async () => {
+    const store = await open();
+    server.getSnapshot.mockResolvedValue(snapshotWith({}, "viewer"));
+    await store.refresh();
+    expect(store.canEdit).toBe(false);
+  });
+
+  it("waits for what was typed here to be saved before reading", async () => {
+    const store = await open();
+    const saving = deferred();
+    server.setCells.mockReturnValueOnce(saving.promise);
+    const typed = store.setCell(at("A1"), "mine");
+    server.getSnapshot.mockClear();
+    const refreshed = store.refresh();
+    await Promise.resolve();
+    expect(server.getSnapshot).not.toHaveBeenCalled();
+
+    server.getSnapshot.mockResolvedValue(snapshotWith({ A1: "mine", B1: "theirs" }));
+    saving.resolve();
+    await typed;
+    await refreshed;
+    expect(store.inputOf(at("A1"))).toBe("mine");
+    expect(store.inputOf(at("B1"))).toBe("theirs");
+  });
+
+  it("passes on the failure when the spreadsheet can no longer be read", async () => {
+    const store = await open();
+    server.getSnapshot.mockRejectedValue(new Error("Spreadsheet not found"));
+    await expect(store.refresh()).rejects.toThrow("Spreadsheet not found");
+  });
+
+  it("does nothing before a spreadsheet is open", async () => {
+    await useWorkbookStore().refresh();
+    expect(server.getSnapshot).not.toHaveBeenCalled();
+  });
+});

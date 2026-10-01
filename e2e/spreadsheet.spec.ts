@@ -732,12 +732,15 @@ test("a spreadsheet is shared with another account, which can edit it until the 
   await enter(guest, "B1", "from the guest");
   await expect(guest.getByRole("button", { name: "Delete table" })).toBeVisible();
 
-  // The owner sees the guest's edit after a reload, then makes the guest a viewer.
-  await page.reload();
+  // The owner sees the guest's edit without reloading, and the guest the owner's.
   await expect(cell(page, "B1")).toHaveText("from the guest");
+  await page.getByRole("button", { name: "Close sharing" }).click();
+  await enter(page, "C1", "=LEN(B1)");
+  await expect(cell(guest, "C1")).toHaveText("14");
+
+  // The owner makes the guest a viewer, which the guest's page shows at once.
   await page.getByRole("button", { name: "Share" }).click();
   await share.getByLabel("What Ada can do").nth(0).selectOption("viewer");
-  await guest.reload();
   await expect(guest.getByText("View only")).toBeVisible();
   await expect(guest.getByRole("button", { name: "Delete table" })).toHaveCount(0);
 
@@ -745,8 +748,7 @@ test("a spreadsheet is shared with another account, which can edit it until the 
   page.once("dialog", (dialog) => void dialog.accept());
   await share.getByRole("button", { name: "Stop sharing with Ada" }).click();
   await expect(share.locator(`[data-member="${guestEmail}"]`)).toHaveCount(0);
-  await guest.reload();
-  await expect(guest.getByRole("alert")).toBeVisible();
+  await expect(guest.getByRole("alert")).toContainText("not found");
   await guestContext.close();
 });
 
