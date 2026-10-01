@@ -87,6 +87,7 @@ describe("suggestionsAt", () => {
     expect(labels("=LET(total, SUM(A1:A3), rate, 2, t")).toEqual([
       "total",
       "TAKE",
+      "TEXT",
       "TEXTJOIN",
       "TODAY",
       "TRANSPOSE",

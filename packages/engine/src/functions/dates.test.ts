@@ -59,6 +59,13 @@ describe("date arithmetic", () => {
     ["=A1 > 999999", true],
     ['=A1 < "text"', true],
     ["=MAX(A1 - A3, 0) > 200", true],
+    ["=MAX(A1:A3) = A2", true],
+    ["=MIN(A1:A3) = A3", true],
+    ["=MIN(A1, A2) = A1", true],
+    ["=ISDATE(MAX(A1:A3))", true],
+    ['=TEXT(A1, "mmm d, yyyy")', "Sep 30, 2026"],
+    ['=TEXT(A2, "dddd h:mm AM/PM")', "Friday 12:00 PM"],
+    ['=TEXT(MAX(A1:A3), "yyyy-mm-dd")', "2026-10-02"],
   ])("%s is %j", (formula, expected) => {
     expect(evaluate(formula, cells)).toBe(expected);
   });
@@ -67,6 +74,8 @@ describe("date arithmetic", () => {
     ["=A1 + A2", "#VALUE!"],
     ["=IF(A1, 1, 2)", "#VALUE!"],
     ['=A1 + "x"', "#VALUE!"],
+    ["=MAX(A1:A3, 5)", "#VALUE!"],
+    ["=MIN(A1, 5)", "#VALUE!"],
   ])("%s is %s", (formula, code) => {
     expect(evaluate(formula, cells)).toMatchObject({ kind: "error", code });
   });

@@ -1,3 +1,5 @@
+import { isDate } from "../dates";
+import { formatDateAs, FormatError, formatNumber } from "../format";
 import { parseNumber, toText, type Scalar } from "../values";
 import { boolean, eager, fail, integer, items, scalar, text } from "./arguments";
 import type { FunctionDefinition } from "./registry";
@@ -61,6 +63,18 @@ export const textFunctions: Record<string, FunctionDefinition> = {
     return target === "" ? text(value) : text(value).replaceAll(target, text(replacement));
   }),
   REPT: eager(2, 2, (value, times) => text(value).repeat(count(times, "The count"))),
+  /** Writes a number or date as text in a chosen format. Text and TRUE or FALSE are returned as they are. */
+  TEXT: eager(2, 2, (value, format) => {
+    const given = scalar(value);
+    const pattern = text(format);
+    try {
+      if (isDate(given)) return formatDateAs(given, pattern);
+      return typeof given === "number" ? formatNumber(given, pattern) : toText(given);
+    } catch (cause) {
+      if (!(cause instanceof FormatError)) throw cause;
+      return fail("#VALUE!", cause.message);
+    }
+  }),
   /** Reads text as a number, the way a typed cell entry is read. */
   VALUE: eager(1, 1, (value) => {
     const given = scalar(value);

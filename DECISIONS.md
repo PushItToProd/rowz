@@ -22,7 +22,7 @@ Choices made without asking, for review. Each entry says what was decided, why, 
 
 - **No slice syntax.** `SORT(x, 2)[:10]` is written `TAKE(SORT(x, 2), 10)`. The formula language already has `TAKE` and `DROP`, and a second way to say it would exist only inside templates.
 - **Chart functions are ordinary functions:** `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, `SCATTER_CHART`. They work in a cell too, where they show as a chip, because a cell has no room to draw one. Function names ignore case, so `pie_chart(...)` works.
-- **`${{ amount }}` works** and shows a dollar sign followed by the value. There is no number formatting yet, so there is no way to ask for two decimals.
+- **`${{ amount }}` works** and shows a dollar sign followed by the value. For a fixed number of decimals, write `{{ TEXT(amount, "$#,##0.00") }}`.
 
 **Choices.**
 
@@ -37,7 +37,7 @@ Choices made without asking, for review. Each entry says what was decided, why, 
 - **A standalone chart item takes its kind from the dropdown.** If its data formula is itself a chart function, the dropdown still decides the kind.
 - **Views do not act.** A `BUTTON` in a text view shows its label as text. Buttons run from cells because the server derives an action from a stored cell.
 
-**Not done.** Dragging items to reorder them. Number formatting in templates. Data tables with named, typed columns are still on the todo list.
+**Not done.** Dragging items to reorder them. Data tables with named, typed columns are still on the todo list.
 
 **To change.** The template engine is `packages/engine/src/template.ts`. Rewriting of sources is `packages/engine/src/views.ts`. Drawing is `apps/web/src/components/ChartView.vue` with the arithmetic in `apps/web/src/charts/geometry.ts`.
 
@@ -55,7 +55,7 @@ Choices made without asking, for review. Each entry says what was decided, why, 
 - **`TODAY` and `NOW` use the viewer's clock.** In the browser that is the browser's local time. When the server runs a button, the browser sends its offset from UTC in a request header and the server uses it, so a row stamped by `NOW()` shows the time the person who clicked saw. Without the header the server uses UTC.
 - **`TODAY` and `NOW` are computed when the sheet loads or the formula's inputs change.** They do not tick while the page is open.
 - **Ordering between kinds:** number < date < text < TRUE/FALSE.
-- **`SUM`, `MIN`, and `MAX` skip dates in a range**, as they skip text. `MAX` of a date column is a reasonable thing to want and is listed in the todo file.
+- **`SUM` skips dates in a range**, as it skips text. `MIN` and `MAX` over dates give the earliest and latest date. `MIN` or `MAX` over numbers and dates together is `#VALUE!`, because there is no scale the two share.
 
 **To change.** `packages/engine/src/dates.ts` holds the value, parsing, and display. Arithmetic rules are in `dateArithmetic` in `evaluate.ts`.
 

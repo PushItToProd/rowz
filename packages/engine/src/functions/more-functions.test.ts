@@ -79,6 +79,12 @@ describe("text", () => {
     ['=VALUE("12.5")', 12.5],
     ['=VALUE(" 3 ")', 3],
     ["=VALUE(7)", 7],
+    ['=TEXT(1234.5, "#,##0.00")', "1,234.50"],
+    ['=TEXT(A1 / A3, "0.0%")', "33.3%"],
+    ['=TEXT(A2, "$0.00")', "$2.00"],
+    ['=TEXT("already text", "0.00")', "already text"],
+    ['=TEXT(TRUE, "0.00")', "TRUE"],
+    ['=TEXT(B9, "0.00")', ""],
   ])("%s is %j", (formula, expected) => {
     expect(evaluateFormula(formula, { A1: "1", A2: "2", A3: "3" })).toBe(expected);
   });
@@ -91,6 +97,8 @@ describe("text", () => {
     ['=REPT("a", -1)', "#VALUE!"],
     ['=VALUE("twelve")', "#VALUE!"],
     ["=VALUE(TRUE)", "#VALUE!"],
+    ['=TEXT(5, "no digits")', "#VALUE!"],
+    ['=TEXT(1/0, "0")', "#DIV/0!"],
     ['=TEXTJOIN(",", TRUE, 1/0)', "#DIV/0!"],
   ])("%s is %s", (formula, code) => {
     expectError(formula, code);

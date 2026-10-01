@@ -63,14 +63,14 @@ export const functionDocs: readonly FunctionDoc[] = [
     name: "MIN",
     category: "Math",
     syntax: "MIN(value, ...)",
-    summary: "The smallest number.",
+    summary: "The smallest number, or the earliest date when the values are dates.",
     example: "MIN(A1:A3)",
   },
   {
     name: "MAX",
     category: "Math",
     syntax: "MAX(value, ...)",
-    summary: "The largest number.",
+    summary: "The largest number, or the latest date when the values are dates.",
     example: "MAX(A1:A3, 10)",
   },
   {
@@ -383,6 +383,14 @@ export const functionDocs: readonly FunctionDoc[] = [
     syntax: "REPT(text, count)",
     summary: "Repeats the text.",
     example: 'REPT("ab", 3)',
+  },
+  {
+    name: "TEXT",
+    category: "Text",
+    syntax: "TEXT(value, format)",
+    summary:
+      'Writes a number or a date as text in a format. In a number format `0` always shows a digit, `#` shows one when needed, a comma groups thousands, and `%` shows a percentage: `"#,##0.00"`, `"0.0%"`, `"$0.00"`. A date format is built from `yyyy`, `mm`, `mmm`, `mmmm`, `dd`, `ddd`, `dddd`, `hh`, `mm`, `ss`, and `AM/PM`: `"mmm d, yyyy"`.',
+    example: 'TEXT(1234.5, "$#,##0.00")',
   },
   {
     name: "VALUE",

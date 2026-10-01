@@ -1,9 +1,25 @@
+import { dateFromMs, isDate } from "../dates";
 import type { Evaluated } from "../values";
 import { eager, fail, integer, items, number, numbers } from "./arguments";
 import type { FunctionDefinition } from "./registry";
 
 function aggregate(compute: (values: readonly number[]) => Evaluated): FunctionDefinition {
   return eager(1, Infinity, (...values) => compute(numbers(values)));
+}
+
+/**
+ * `MIN` or `MAX`. Over numbers the result is a number, and over dates it is a
+ * date. Numbers and dates together have no common scale to compare on.
+ */
+function extreme(name: string, pick: (...values: number[]) => number): FunctionDefinition {
+  return eager(1, Infinity, (...values) => {
+    const dates = items(values).flatMap(({ value }) => (isDate(value) ? [value.ms] : []));
+    // A date given directly would otherwise be counted as its number of days.
+    const found = numbers(values.filter((value) => !isDate(value)));
+    if (dates.length === 0) return found.length === 0 ? 0 : pick(...found);
+    if (found.length > 0) fail("#VALUE!", `${name} cannot compare dates with numbers`);
+    return dateFromMs(pick(...dates));
+  });
 }
 
 function sum(values: readonly number[]): number {
@@ -48,8 +64,8 @@ export const mathFunctions: Record<string, FunctionDefinition> = {
   AVERAGE: aggregate((values) =>
     values.length === 0 ? fail("#DIV/0!", "No numbers to average") : sum(values) / values.length,
   ),
-  MIN: aggregate((values) => (values.length === 0 ? 0 : Math.min(...values))),
-  MAX: aggregate((values) => (values.length === 0 ? 0 : Math.max(...values))),
+  MIN: extreme("MIN", Math.min),
+  MAX: extreme("MAX", Math.max),
   PRODUCT: aggregate((values) => values.reduce((product, value) => product * value, 1)),
   MEDIAN: aggregate((values) =>
     values.length === 0 ? fail("#VALUE!", "No numbers to take the median of") : median(values),
