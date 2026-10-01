@@ -26,6 +26,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] (Claude) MIN and MAX over a range of dates; a TEXT function to show a date or number in a chosen format
 - [x] (Claude) financial functions (`PMT`, `PV`, `FV`, `NPV`, `IRR`, `RATE`, `NPER`), trig, and line fitting
 - [ ] **P2** named functions and values at the workbook level, so `=double(5)` works instead of `=D1(5)`
+- [ ] **P2** support creating named ranges of one or more cells
 - [ ] functions that expect one value (IF, UPPER, ...) do not work cell by cell on a range; only operators do. MAP is the workaround. 
   - [ ] Related: `=UPPER(A:A)` could mean this row's cell, as `=A:A & ""` now does. -- that is, if e.g. D2 = `=UPPER(A:A)`, it should be equivalent to `=UPPER(A2)`
 - [ ] **P4** `MAP` doesn't take built-in function names as args - `MAP(A:A, UPPER)` should work but right now it errors with `#NAME?`
@@ -59,6 +60,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 
 - [x] bug: the formula bar doesn't save changes when it loses focus
 - [x] hitting enter with the formula bar focused should return focus to the cell -- you can type input and try to hit enter and it'll just stay focused instead of acting like you hit enter in the cell input (I suspect possibly b/c of a conflict with the suggestion behavior)
+- [ ] **P2** hitting tab with the formula bar focused should have the same effect as hitting tab with the cell itself selected
 
 - [ ] **P3** implement the handy tab+enter workflow from Excel and Sheets -- if you select a certain cell with the mouse or arrow keys, use tab to traverse multiple cells (optionally entering values into any or none of them), then input a value into a cell and submit that value by hitting enter, it'll drop to the next row in the column where you started
   - example: in a table, select C3. hit tab 3 times (optionally entering values in any cells in C3:E3 along the way) - now you're in F3. hit enter to focus the cell input (or just start typing), type anything (or nothing), and hit enter to submit. the selection should move to C4.
@@ -126,7 +128,17 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] allow editing markdown views by just double clicking on the text (instead of clicking "Edit"). save and exit edit mode when the user unfocuses the input (instead of requiring user to hit "Done") (keep the "Edit" and "Done" buttons for user convenience)
 - [ ] **P2** duplicate the "Add table", "Add chart", "Add text" buttons at the top and between each item so you can insert them anywhere
 - [ ] **P3** add a new type of block (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side
+- [ ] **P5** add an `assert` function that can be used for testing. if a sheet has any failing assertions, show a visible warning in the menu bar with a link the user can click to see the failing assertions
 - [x] **P2** update user-facing docs to use "Block" nomenclature for tables/charts/text/etc.
+- [ ] **P10** support nested pages
+- [ ] support reordering things by dragging and dropping
+  - [ ] **P5** pages
+  - [ ] **P4** rows and cols by dragging and dropping their headers (including when a range of them is selected) (but no need to handle dragging and dropping a selected range of cells - only do it if the user has specifically selected full rows or columns)
+  - [ ] **P5** blocks
+- [ ] add context menus for pages and blocks
+  - [ ] page actions: delete, move left/right
+  - [ ] block actions: whatever each block supports
+    - block context menu should appear when right clocking on the card around it but not the controls within it. keep a button in the upper right with a vertical ellipsis that I can click to show the same menu as well
 
 ## Formatting
 
@@ -169,6 +181,8 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [ ] **P2** create some sample/template sheets users can use - invoice, contacts list, to-do list, personal monthly budget, etc.
   - [ ] **P10** revise/augment the samples after we've added formatting, conditional formatting, etc.
 - [x] add screenshots to the README
+- [ ] use icons to make the toolbar denser
+- [ ] **P3** plan to add keyboard shortcuts
 
 ## Import and export
 
@@ -236,6 +250,13 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
   - support reusable function scripts that can be shared across sheets
 - support referencing tables/etc. from other documents
 - forms for submitting new rows to tables
+- programmatic construction of documents
+  - one approach:
+    - create new actions to support editing other documents programmatically (by default require the user's approval for access before the first time. after that the document gains permission to edit the other doc whenever)
+    - create new actions that allow creating new docs programmatically (in this case, by default, the doc that executed the creation action gets permission to edit the other doc)
+    - -> then it'd be possible to have a `DO` block that makes a copy of a document and edits it
+- expose a user-facing API to create, edit, read, etc. documents
+
 - (Claude) protected ranges: cells that only some people may change
 - (Claude) a layout for printing
 - (Claude) export to .xlsx
