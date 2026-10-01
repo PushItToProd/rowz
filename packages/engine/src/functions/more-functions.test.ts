@@ -289,3 +289,166 @@ describe("lookups", () => {
     expectError(formula, code, cells);
   });
 });
+
+describe("more math", () => {
+  const cells = { A1: "1", A2: "2", A3: "3", B1: "4", B2: "x", B3: "6", C1: "a", C2: "b", C3: "a" };
+
+  it.each<[string, CellValue]>([
+    ["=SUMPRODUCT(A1:A3, B1:B3)", 22],
+    ["=SUMPRODUCT(A1:A3)", 6],
+    ["=SUMPRODUCT(A1:A3, A1:A3, A1:A3)", 36],
+    ["=TRUNC(2.78)", 2],
+    ["=TRUNC(-2.78)", -2],
+    ["=TRUNC(2.78, 1)", 2.7],
+    ["=SIGN(-4)", -1],
+    ["=SIGN(0)", 0],
+    ["=MROUND(17, 5)", 15],
+    ["=MROUND(18, 5)", 20],
+    ["=MROUND(7.5, 5)", 10],
+    ["=MROUND(4, 0)", 0],
+    ["=QUOTIENT(7, 2)", 3],
+    ["=QUOTIENT(-7, 2)", -3],
+    ["=EXP(0)", 1],
+    ["=LN(EXP(2))", 2],
+    ["=LOG(1000)", 3],
+    ["=LOG(8, 2)", 3],
+    ["=ROUND(PI(), 5)", 3.14159],
+    ["=EVEN(3)", 4],
+    ["=EVEN(2)", 2],
+    ["=EVEN(-1.5)", -2],
+    ["=EVEN(0)", 0],
+    ["=ODD(4)", 5],
+    ["=ODD(3)", 3],
+    ["=ODD(-2)", -3],
+    ["=ODD(0)", 1],
+    ["=ISEVEN(4)", true],
+    ["=ISEVEN(-3)", false],
+    ["=ISEVEN(2.9)", true],
+    ["=ISODD(3)", true],
+    ["=ISODD(-3)", true],
+    ["=GCD(12, 18)", 6],
+    ["=GCD(A1:A3)", 1],
+    ["=GCD(0, 5)", 5],
+    ["=LCM(4, 6)", 12],
+    ["=LCM(A1:A3)", 6],
+    ["=LCM(3, 0)", 0],
+    ["=FACT(5)", 120],
+    ["=FACT(0)", 1],
+    ['=MAXIFS(A1:A3, C1:C3, "a")', 3],
+    ['=MINIFS(A1:A3, C1:C3, "a")', 1],
+    ['=MAXIFS(B1:B3, C1:C3, "a", A1:A3, "<3")', 4],
+    ['=MAXIFS(A1:A3, C1:C3, "none")', 0],
+    ['=MINIFS(A1:A3, C1:C3, "none")', 0],
+    ['=MAXIFS(0 - A1:A3, C1:C3, "a")', -1],
+  ])("%s is %j", (formula, expected) => {
+    expect(evaluateFormula(formula, cells)).toBe(expected);
+  });
+
+  it.each([
+    ["=SUMPRODUCT(A1:A3, B1:B2)", "#VALUE!"],
+    ["=QUOTIENT(1, 0)", "#DIV/0!"],
+    ["=LN(0)", "#VALUE!"],
+    ["=LOG(-1)", "#VALUE!"],
+    ["=LOG(8, 1)", "#VALUE!"],
+    ["=EXP(1000)", "#VALUE!"],
+    ["=GCD(-4, 2)", "#VALUE!"],
+    ["=FACT(-1)", "#VALUE!"],
+    ["=FACT(200)", "#VALUE!"],
+    ["=MAXIFS(A1:A3, C1:C3)", "#ERROR!"],
+  ])("%s is %s", (formula, code) => {
+    expectError(formula, code, cells);
+  });
+});
+
+describe("more text", () => {
+  it.each<[string, CellValue]>([
+    ['=CONCAT("a", 1, TRUE)', "a1TRUE"],
+    ['=JOIN("-", A1:A3)', "1-2-3"],
+    ['=JOIN(", ", "a", "", "b")', "a, , b"],
+    ['=PROPER("ada LOVELACE")', "Ada Lovelace"],
+    ['=PROPER("o\'neil-smith jr.")', "O'neil-Smith Jr."],
+    ['=PROPER("élan vital")', "Élan Vital"],
+    ['=PROPER("2nd place")', "2nd Place"],
+    ["=CHAR(65)", "A"],
+    ["=CHAR(128512)", "😀"],
+    ['=CODE("A")', 65],
+    ['=CODE("😀")', 128512],
+    ['=ENCODEURL("a b&c/d?")', "a%20b%26c%2Fd%3F"],
+    ["=FIXED(1234.567)", "1,234.57"],
+    ["=FIXED(1234.567, 0)", "1,235"],
+    ["=FIXED(1234.567, 1, TRUE)", "1234.6"],
+    ["=FIXED(-0.5, 3)", "-0.500"],
+    ['=INDEX(SPLIT("a,b,c", ","), 2)', "b"],
+    ['=SUM(SPLIT("1;2;3.5", ";"))', 6.5],
+    ['=COLUMNS(SPLIT("a--b--c", "--"))', 3],
+    ['=COLUMNS(SPLIT("abc", ","))', 1],
+  ])("%s is %j", (formula, expected) => {
+    expect(evaluateFormula(formula, { A1: "1", A2: "2", A3: "3" })).toBe(expected);
+  });
+
+  it.each([
+    ['=SPLIT("abc", "")', "#VALUE!"],
+    ["=CHAR(0)", "#VALUE!"],
+    ["=CHAR(1114112)", "#VALUE!"],
+    ['=CODE("")', "#VALUE!"],
+    ["=FIXED(1, -1)", "#VALUE!"],
+    ['=FIXED("x")', "#VALUE!"],
+  ])("%s is %s", (formula, code) => {
+    expectError(formula, code);
+  });
+});
+
+describe("more lookups and information", () => {
+  const cells = {
+    A1: "id",
+    B1: "name",
+    C1: "qty",
+    A2: "1",
+    B2: "apple",
+    C2: "5",
+    A3: "2",
+    B3: "pear",
+    C3: "7",
+  };
+
+  it.each<[string, CellValue]>([
+    ['=HLOOKUP("name", A1:C3, 2, FALSE)', "apple"],
+    ['=HLOOKUP("QTY", A1:C3, 3, FALSE)', 7],
+    ["=HLOOKUP(2, TRANSPOSE(A2:B3), 2)", "pear"],
+    ["=ROW(B3)", 3],
+    ["=COLUMN(B3)", 2],
+    ["=ROW(B2:C3)", 2],
+    ["=COLUMN(C:C)", 3],
+    ["=ROW()", 99],
+    ["=COLUMN()", 26],
+    ["=ROW($C$3) + COLUMN($C$3)", 6],
+    ['=IFNA(HLOOKUP("none", A1:C3, 2, FALSE), "missing")', "missing"],
+    ['=IFNA("fine", "missing")', "fine"],
+    ['=ISNA(HLOOKUP("none", A1:C3, 2, FALSE))', true],
+    ["=ISNA(1/0)", false],
+    ["=ISNA(1)", false],
+    ["=ISERR(1/0)", true],
+    ['=ISERR(HLOOKUP("none", A1:C3, 2, FALSE))', false],
+    ["=ISERR(1)", false],
+    ["=ISNONTEXT(A2)", true],
+    ["=ISNONTEXT(B2)", false],
+    ["=ISNONTEXT(Z1)", true],
+    ["=ROWS(FLATTEN(A1:C3))", 9],
+    ["=INDEX(FLATTEN(A1:C3), 4)", 1],
+    ["=INDEX(FLATTEN(A2:A3, C2:C3), 3)", 5],
+    ["=COLUMNS(FLATTEN(A1:C3))", 1],
+  ])("%s is %j", (formula, expected) => {
+    expect(evaluateFormula(formula, cells)).toBe(expected);
+  });
+
+  it.each([
+    ['=HLOOKUP("none", A1:C3, 2, FALSE)', "#N/A"],
+    ['=HLOOKUP("name", A1:C3, 4, FALSE)', "#REF!"],
+    ['=HLOOKUP("name", A1:C3, 0, FALSE)', "#VALUE!"],
+    ["=IFNA(1/0, 0)", "#DIV/0!"],
+    ["=ROW(5)", "#VALUE!"],
+    ["=ROW(Missing!A1)", "#REF!"],
+  ])("%s is %s", (formula, code) => {
+    expectError(formula, code, cells);
+  });
+});

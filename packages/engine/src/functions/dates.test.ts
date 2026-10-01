@@ -186,3 +186,63 @@ describe("dates written by actions", () => {
     });
   });
 });
+
+describe("working with spans of dates", () => {
+  // 2026-09-30 is a Wednesday.
+  const cells = { A1: "2026-09-30", A2: "2024-01-15", A3: "2026-10-02", A4: "not a date" };
+
+  it.each<[string, CellValue]>([
+    ['=DATEDIF(A2, A1, "Y")', 2],
+    ['=DATEDIF(A2, A1, "M")', 32],
+    ['=DATEDIF(A2, A1, "D")', 989],
+    ['=DATEDIF(A2, A1, "YM")', 8],
+    ['=DATEDIF(A2, A1, "MD")', 15],
+    ['=DATEDIF(A2, A1, "y")', 2],
+    ['=DATEDIF(A1, A1, "D")', 0],
+    ['=DATEDIF("2024-01-31", "2024-02-29", "M")', 1],
+    ['=DATEDIF("2024-01-31", "2024-02-28", "M")', 0],
+    ['=DATEDIF("2024-02-29", "2025-02-28", "Y")', 1],
+    ["=WEEKNUM(DATE(2026, 1, 1))", 1],
+    ["=WEEKNUM(DATE(2026, 1, 3))", 1],
+    ["=WEEKNUM(DATE(2026, 1, 4))", 2],
+    ["=WEEKNUM(A1)", 40],
+    ["=ISOWEEKNUM(A1)", 40],
+    ["=ISOWEEKNUM(DATE(2026, 1, 1))", 1],
+    ["=ISOWEEKNUM(DATE(2027, 1, 1))", 53],
+    ["=ISOWEEKNUM(DATE(2024, 12, 30))", 1],
+    ["=ISOWEEKNUM(DATE(2023, 1, 1))", 52],
+    ["=NETWORKDAYS(A1, A3)", 3],
+    ["=NETWORKDAYS(A3, A1)", -3],
+    ["=NETWORKDAYS(DATE(2026, 9, 1), A1)", 22],
+    ["=NETWORKDAYS(A1, A3, A3)", 2],
+    ["=NETWORKDAYS(A1, A3, A1:A4)", 1],
+    ["=NETWORKDAYS(DATE(2026, 10, 3), DATE(2026, 10, 4))", 0],
+    ["=TIME(12, 0, 0)", 0.5],
+    ["=TIME(0, 30, 0) * 48", 1],
+  ])("%s is %j", (formula, expected) => {
+    expect(evaluate(formula, cells)).toBe(expected);
+  });
+
+  it.each([
+    ["=WORKDAY(A1, 1)", "2026-10-01"],
+    ["=WORKDAY(A1, 3)", "2026-10-05"],
+    ["=WORKDAY(A1, 5)", "2026-10-07"],
+    ["=WORKDAY(A1, 0)", "2026-09-30"],
+    ["=WORKDAY(A1, -3)", "2026-09-25"],
+    ["=WORKDAY(A1, 3, A3)", "2026-10-06"],
+    ["=WORKDAY(DATE(2026, 10, 3), 1)", "2026-10-05"],
+    ["=A1 + TIME(14, 30, 0)", "2026-09-30 14:30"],
+  ])("%s shows %s", (formula, expected) => {
+    expect(shown(formula, cells)).toBe(expected);
+  });
+
+  it.each([
+    ['=DATEDIF(A1, A2, "D")', "#VALUE!"],
+    ['=DATEDIF(A2, A1, "W")', "#VALUE!"],
+    ['=DATEDIF(A4, A1, "D")', "#VALUE!"],
+    ["=WORKDAY(A1, 1000000)", "#VALUE!"],
+    ["=WEEKNUM(A4)", "#VALUE!"],
+  ])("%s is %s", (formula, code) => {
+    expect(evaluate(formula, cells)).toMatchObject({ kind: "error", code });
+  });
+});

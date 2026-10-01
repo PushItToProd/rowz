@@ -10,11 +10,13 @@ import { lookupFunctions } from "./lookup";
 import { mathFunctions } from "./math";
 import { nameFunctions } from "./names";
 import type { FunctionRegistry } from "./registry";
+import { statisticsFunctions } from "./statistics";
 import { textFunctions } from "./text";
 
 export const defaultFunctions: FunctionRegistry = new Map(
   Object.entries({
     ...mathFunctions,
+    ...statisticsFunctions,
     ...conditionalFunctions,
     ...logicFunctions,
     ...informationFunctions,

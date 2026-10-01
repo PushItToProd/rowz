@@ -18,4 +18,9 @@ export const informationFunctions: Record<string, FunctionDefinition> = {
   ISLOGICAL: check((value) => typeof value === "boolean"),
   ISDATE: check(isDate),
   ISERROR: check(isError),
+  /** Whether a value is the error `#N/A`, which a lookup gives when it finds nothing. */
+  ISNA: check((value) => isError(value) && value.code === "#N/A"),
+  /** Whether a value is an error other than `#N/A`. */
+  ISERR: check((value) => isError(value) && value.code !== "#N/A"),
+  ISNONTEXT: check((value) => typeof value !== "string"),
 };

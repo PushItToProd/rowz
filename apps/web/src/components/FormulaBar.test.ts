@@ -108,7 +108,7 @@ describe("FormulaBar", () => {
     const labels = [...document.querySelectorAll('.formula-assist [role="option"]')].map(
       (option) => option.querySelector(".formula-assist__label")?.textContent,
     );
-    expect(labels).toEqual(["MAP", "MATCH", "MAX"]);
+    expect(labels).toEqual(["MAP", "MATCH", "MAX", "MAXIFS"]);
 
     await field(wrapper).trigger("keydown", { key: "ArrowDown" });
     await field(wrapper).trigger("keydown", { key: "Tab" });

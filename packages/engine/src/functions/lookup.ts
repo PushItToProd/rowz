@@ -1,6 +1,25 @@
 import { compare, isScalar, kindOf, type CellValue, type Evaluated, type Scalar } from "../values";
+import type { CellRange } from "../address";
 import { boolean, eager, fail, grid, integer, lazy, scalar } from "./arguments";
 import type { FunctionDefinition } from "./registry";
+
+/** `ROW` or `COLUMN`: the position of a referenced cell, or of the formula's own cell. */
+function position(
+  name: string,
+  read: (place: CellRange | { row: number; col: number }) => number,
+): FunctionDefinition {
+  return {
+    kind: "special",
+    minArgs: 0,
+    maxArgs: 1,
+    evaluate([target], context) {
+      if (!target) return read(context.origin) + 1;
+      if (target.type !== "reference") fail("#VALUE!", `${name} takes a cell reference`);
+      const range = context.resolve(target.reference);
+      return range ? read(range) + 1 : fail("#REF!", "The table was not found");
+    },
+  };
+}
 
 /** The cells of a range that is one row or one column, in order. */
 function line(value: Evaluated, what: string): CellValue[] {
@@ -77,6 +96,23 @@ export const lookupFunctions: Record<string, FunctionDefinition> = {
     const row = found(boolean(sorted) ? nearest(wanted, keys) : exact(wanted, keys));
     return rows[row]?.[position - 1] ?? null;
   }),
+
+  /** `VLOOKUP` turned on its side: finds a key in the first row and gives the cell of that column in another row. */
+  HLOOKUP: eager(3, 4, (key, range, row, sorted = true) => {
+    const rows = grid(range);
+    const wantedRow = integer(row);
+    if (wantedRow < 1) fail("#VALUE!", "The row must be 1 or more");
+    if (wantedRow > rows.length) fail("#REF!", "The row is outside the range");
+    const keys = rows[0] ?? [];
+    const wanted = scalar(key);
+    const col = found(boolean(sorted) ? nearest(wanted, keys) : exact(wanted, keys));
+    return rows[wantedRow - 1]?.[col] ?? null;
+  }),
+
+  /** The row number of a cell, or of the formula's own cell. */
+  ROW: position("ROW", (place) => ("row" in place ? place.row : place.startRow)),
+  /** The column number of a cell, or of the formula's own cell. Column A is 1. */
+  COLUMN: position("COLUMN", (place) => ("col" in place ? place.col : place.startCol)),
 
   /**
    * Finds a key in one row or column and gives the cell at the same position

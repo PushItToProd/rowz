@@ -59,6 +59,16 @@ export const conditionalFunctions: Record<string, FunctionDefinition> = {
   AVERAGEIF: eager(2, 3, (range, test, averageRange = range) =>
     average(numbersAt(averageRange, matches(range, test))),
   ),
+  /** The largest number of `range` where every criterion is met, or 0 when none is. */
+  MAXIFS: eager(3, Infinity, (range, ...pairs) => {
+    const found = numbersAt(range, matchesAll(pairs, "MAXIFS"));
+    return found.length === 0 ? 0 : Math.max(...found);
+  }),
+  /** The smallest number of `range` where every criterion is met, or 0 when none is. */
+  MINIFS: eager(3, Infinity, (range, ...pairs) => {
+    const found = numbersAt(range, matchesAll(pairs, "MINIFS"));
+    return found.length === 0 ? 0 : Math.min(...found);
+  }),
   COUNTIFS: eager(2, Infinity, (...pairs) => matchesAll(pairs, "COUNTIFS").length),
   SUMIFS: eager(3, Infinity, (sumRange, ...pairs) =>
     sum(numbersAt(sumRange, matchesAll(pairs, "SUMIFS"))),

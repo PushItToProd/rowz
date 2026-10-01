@@ -3,6 +3,7 @@ import type { ErrorCode } from "./values";
 /** In the order the help page shows them. */
 export const FUNCTION_CATEGORIES = [
   "Math",
+  "Statistics",
   "Logic",
   "Lookup",
   "Text",
@@ -40,11 +41,8 @@ export const EXAMPLE_CELLS = {
   B3: "cherry",
 } as const;
 
-/**
- * One entry per function in the default registry, in the order the help page
- * lists them. A test fails when a function has no entry or an example breaks.
- */
-export const functionDocs: readonly FunctionDoc[] = [
+/** One entry per function. Within a category, entries are shown in the order written here. */
+const ENTRIES: readonly FunctionDoc[] = [
   {
     name: "SUM",
     category: "Math",
@@ -761,7 +759,383 @@ export const functionDocs: readonly FunctionDoc[] = [
       "Runs several actions from one click. Each action reads the cells as they were before the click.",
     example: 'BUTTON("Move", DO(EXECUTE(A1, C1), CLEAR(A1)))',
   },
+  {
+    name: "SUMPRODUCT",
+    category: "Math",
+    syntax: "SUMPRODUCT(range, ...)",
+    summary: "Multiplies ranges of one size cell by cell and adds the products.",
+    example: "SUMPRODUCT(A1:A3, A1:A3)",
+  },
+  {
+    name: "TRUNC",
+    category: "Math",
+    syntax: "TRUNC(number, [places])",
+    summary: "Cuts a number off at a number of decimal places without rounding.",
+    example: "TRUNC(2.78, 1)",
+  },
+  {
+    name: "MROUND",
+    category: "Math",
+    syntax: "MROUND(number, multiple)",
+    summary: "Rounds to the nearest multiple.",
+    example: "MROUND(17, 5)",
+  },
+  {
+    name: "QUOTIENT",
+    category: "Math",
+    syntax: "QUOTIENT(dividend, divisor)",
+    summary: "The whole-number part of a division.",
+    example: "QUOTIENT(7, 2)",
+  },
+  {
+    name: "SIGN",
+    category: "Math",
+    syntax: "SIGN(number)",
+    summary: "1 for a positive number, -1 for a negative one, and 0 for zero.",
+    example: "SIGN(-4)",
+  },
+  {
+    name: "EXP",
+    category: "Math",
+    syntax: "EXP(number)",
+    summary: "The constant e raised to a power.",
+    example: "ROUND(EXP(1), 3)",
+  },
+  {
+    name: "LN",
+    category: "Math",
+    syntax: "LN(number)",
+    summary: "The natural logarithm.",
+    example: "ROUND(LN(10), 3)",
+  },
+  {
+    name: "LOG",
+    category: "Math",
+    syntax: "LOG(number, [base])",
+    summary: "The logarithm to a base, which is 10 unless given.",
+    example: "LOG(8, 2)",
+  },
+  {
+    name: "PI",
+    category: "Math",
+    syntax: "PI()",
+    summary: "The ratio of a circle's circumference to its diameter.",
+    example: "ROUND(PI(), 4)",
+  },
+  {
+    name: "EVEN",
+    category: "Math",
+    syntax: "EVEN(number)",
+    summary: "Rounds away from zero to the next even number.",
+    example: "EVEN(3)",
+  },
+  {
+    name: "ODD",
+    category: "Math",
+    syntax: "ODD(number)",
+    summary: "Rounds away from zero to the next odd number.",
+    example: "ODD(4)",
+  },
+  {
+    name: "ISEVEN",
+    category: "Math",
+    syntax: "ISEVEN(number)",
+    summary: "Whether a number is even.",
+    example: "ISEVEN(A2)",
+  },
+  {
+    name: "ISODD",
+    category: "Math",
+    syntax: "ISODD(number)",
+    summary: "Whether a number is odd.",
+    example: "ISODD(A2)",
+  },
+  {
+    name: "GCD",
+    category: "Math",
+    syntax: "GCD(number, ...)",
+    summary: "The largest whole number that divides every value.",
+    example: "GCD(12, 18)",
+  },
+  {
+    name: "LCM",
+    category: "Math",
+    syntax: "LCM(number, ...)",
+    summary: "The smallest whole number that every value divides.",
+    example: "LCM(4, 6)",
+  },
+  {
+    name: "FACT",
+    category: "Math",
+    syntax: "FACT(number)",
+    summary: "The product of the whole numbers from 1 to the number.",
+    example: "FACT(5)",
+  },
+  {
+    name: "MAXIFS",
+    category: "Math",
+    syntax: "MAXIFS(range, criteria_range, criterion, ...)",
+    summary: "The largest number of the range in the rows that meet every criterion.",
+    example: 'MAXIFS(A1:A3, B1:B3, "<>cherry")',
+  },
+  {
+    name: "MINIFS",
+    category: "Math",
+    syntax: "MINIFS(range, criteria_range, criterion, ...)",
+    summary: "The smallest number of the range in the rows that meet every criterion.",
+    example: 'MINIFS(A1:A3, A1:A3, ">1")',
+  },
+  {
+    name: "MODE",
+    category: "Statistics",
+    syntax: "MODE(value, ...)",
+    summary: "The number that occurs most often.",
+    example: "MODE(1, 2, 2, 3)",
+  },
+  {
+    name: "STDEV",
+    category: "Statistics",
+    syntax: "STDEV(value, ...)",
+    summary:
+      "The standard deviation of a sample: how far the numbers typically are from their average.",
+    example: "STDEV(A1:A3)",
+  },
+  {
+    name: "STDEVP",
+    category: "Statistics",
+    syntax: "STDEVP(value, ...)",
+    summary:
+      "The standard deviation when the numbers are the whole population and not a sample of it.",
+    example: "ROUND(STDEVP(A1:A3), 3)",
+  },
+  {
+    name: "VAR_S",
+    category: "Statistics",
+    syntax: "VAR_S(value, ...)",
+    summary: "The variance of a sample, which is the standard deviation squared.",
+    example: "VAR_S(A1:A3)",
+  },
+  {
+    name: "VAR_P",
+    category: "Statistics",
+    syntax: "VAR_P(value, ...)",
+    summary: "The variance of a whole population.",
+    example: "ROUND(VAR_P(A1:A3), 3)",
+  },
+  {
+    name: "PERCENTILE",
+    category: "Statistics",
+    syntax: "PERCENTILE(range, fraction)",
+    summary: "The value a fraction of the way through the numbers in order. 0.5 is the median.",
+    example: "PERCENTILE(A1:A3, 0.75)",
+  },
+  {
+    name: "QUARTILE",
+    category: "Statistics",
+    syntax: "QUARTILE(range, quarter)",
+    summary:
+      "The value at a quarter of the way through the numbers in order: 0 is the smallest, 2 the median, and 4 the largest.",
+    example: "QUARTILE(A1:A3, 1)",
+  },
+  {
+    name: "RANK",
+    category: "Statistics",
+    syntax: "RANK(number, range, [ascending])",
+    summary:
+      "The position of a number among the numbers of a range, counting from the largest. With `ascending` TRUE it counts from the smallest.",
+    example: "RANK(3, A1:A3)",
+  },
+  {
+    name: "CORREL",
+    category: "Statistics",
+    syntax: "CORREL(range, range)",
+    summary: "How closely two ranges move together, from -1 to 1.",
+    example: "CORREL(A1:A3, A1:A3 * 2)",
+  },
+  {
+    name: "COUNTUNIQUE",
+    category: "Statistics",
+    syntax: "COUNTUNIQUE(value, ...)",
+    summary: "How many different values there are, not counting empty cells.",
+    example: 'COUNTUNIQUE(A1:A3, 1, "x")',
+  },
+  {
+    name: "COUNTBLANK",
+    category: "Statistics",
+    syntax: "COUNTBLANK(range, ...)",
+    summary: "How many cells are empty.",
+    example: "COUNTBLANK(A1:C3)",
+  },
+  {
+    name: "IFNA",
+    category: "Logic",
+    syntax: "IFNA(value, fallback)",
+    summary:
+      "The value, or the fallback when the value is `#N/A`. Other errors are kept, so a lookup that finds nothing does not hide a mistake.",
+    example: 'IFNA(MATCH("kiwi", B1:B3, 0), "none")',
+  },
+  {
+    name: "HLOOKUP",
+    category: "Lookup",
+    syntax: "HLOOKUP(key, range, row, [sorted])",
+    summary:
+      "`VLOOKUP` on its side: finds the key in the first row of the range and gives the cell of that column in another row. Pass FALSE as `sorted` for an exact match.",
+    example: "HLOOKUP(2, TRANSPOSE(A1:B3), 2, FALSE)",
+  },
+  {
+    name: "ROW",
+    category: "Lookup",
+    syntax: "ROW([cell])",
+    summary: "The row number of a cell. Without a cell, the row of the formula itself.",
+    example: "ROW(B3)",
+  },
+  {
+    name: "COLUMN",
+    category: "Lookup",
+    syntax: "COLUMN([cell])",
+    summary:
+      "The column number of a cell, where A is 1. Without a cell, the column of the formula itself.",
+    example: "COLUMN(B3)",
+  },
+  {
+    name: "CONCAT",
+    category: "Text",
+    syntax: "CONCAT(value, ...)",
+    summary: "The same as `CONCATENATE`.",
+    example: 'CONCAT(B1, "-", A1)',
+  },
+  {
+    name: "JOIN",
+    category: "Text",
+    syntax: "JOIN(delimiter, value, ...)",
+    summary: "Joins values with a delimiter between them.",
+    example: 'JOIN(", ", B1:B3)',
+  },
+  {
+    name: "SPLIT",
+    category: "Text",
+    syntax: "SPLIT(text, delimiter)",
+    summary: "Cuts text at a delimiter into cells across a row.",
+    example: 'SPLIT("a,b,c", ",")',
+  },
+  {
+    name: "PROPER",
+    category: "Text",
+    syntax: "PROPER(text)",
+    summary: "Capitalizes the first letter of each word.",
+    example: 'PROPER("ada LOVELACE")',
+  },
+  {
+    name: "CHAR",
+    category: "Text",
+    syntax: "CHAR(number)",
+    summary: "The character with a Unicode number.",
+    example: "CHAR(65)",
+  },
+  {
+    name: "CODE",
+    category: "Text",
+    syntax: "CODE(text)",
+    summary: "The Unicode number of the first character.",
+    example: 'CODE("A")',
+  },
+  {
+    name: "ENCODEURL",
+    category: "Text",
+    syntax: "ENCODEURL(text)",
+    summary: "Writes text so it can be part of a web address.",
+    example: 'ENCODEURL("a b&c")',
+  },
+  {
+    name: "FIXED",
+    category: "Text",
+    syntax: "FIXED(number, [decimals], [no_commas])",
+    summary:
+      "Writes a number as text with a fixed number of decimals, 2 unless given. Thousands are grouped unless `no_commas` is TRUE.",
+    example: "FIXED(1234.567, 1)",
+  },
+  {
+    name: "TIME",
+    category: "Dates",
+    syntax: "TIME(hour, minute, second)",
+    summary: "A time of day as a fraction of a day. Add it to a date to set the time.",
+    example: "DATE(2026, 9, 30) + TIME(14, 30, 0)",
+  },
+  {
+    name: "DATEDIF",
+    category: "Dates",
+    syntax: "DATEDIF(start, end, unit)",
+    summary:
+      'The whole years (`"Y"`), months (`"M"`), or days (`"D"`) from one date to a later one. `"YM"` gives the months left after the whole years, and `"MD"` the days left after the whole months.',
+    example: 'DATEDIF(DATE(2024, 1, 15), DATE(2026, 9, 30), "Y")',
+  },
+  {
+    name: "WEEKNUM",
+    category: "Dates",
+    syntax: "WEEKNUM(date)",
+    summary: "The week of the year, where weeks start on Sunday and January 1 is in week 1.",
+    example: "WEEKNUM(DATE(2026, 9, 30))",
+  },
+  {
+    name: "ISOWEEKNUM",
+    category: "Dates",
+    syntax: "ISOWEEKNUM(date)",
+    summary:
+      "The ISO week of the year, where weeks start on Monday and week 1 holds the year's first Thursday.",
+    example: "ISOWEEKNUM(DATE(2026, 9, 30))",
+  },
+  {
+    name: "WORKDAY",
+    category: "Dates",
+    syntax: "WORKDAY(start, days, [holidays])",
+    summary:
+      "The date a number of working days after a date. Saturdays, Sundays, and the dates in `holidays` are skipped.",
+    example: "WORKDAY(DATE(2026, 9, 30), 5)",
+  },
+  {
+    name: "NETWORKDAYS",
+    category: "Dates",
+    syntax: "NETWORKDAYS(start, end, [holidays])",
+    summary: "How many working days there are from one date to another, counting both.",
+    example: "NETWORKDAYS(DATE(2026, 9, 1), DATE(2026, 9, 30))",
+  },
+  {
+    name: "ISNA",
+    category: "Information",
+    syntax: "ISNA(value)",
+    summary: "Whether a value is the error `#N/A`.",
+    example: 'ISNA(MATCH("kiwi", B1:B3, 0))',
+  },
+  {
+    name: "ISERR",
+    category: "Information",
+    syntax: "ISERR(value)",
+    summary: "Whether a value is an error other than `#N/A`.",
+    example: "ISERR(1/0)",
+  },
+  {
+    name: "ISNONTEXT",
+    category: "Information",
+    syntax: "ISNONTEXT(value)",
+    summary: "Whether a value is anything but text. An empty cell is not text.",
+    example: "ISNONTEXT(A1)",
+  },
+  {
+    name: "FLATTEN",
+    category: "Arrays",
+    syntax: "FLATTEN(range, ...)",
+    summary: "Every cell of the ranges in one column, reading each range row by row.",
+    example: "FLATTEN(A1:B2)",
+  },
 ];
+
+/**
+ * One entry per function in the default registry, in the order the help page
+ * lists them. A test fails when a function has no entry or an example breaks.
+ */
+export const functionDocs: readonly FunctionDoc[] = FUNCTION_CATEGORIES.flatMap((category) =>
+  ENTRIES.filter((doc) => doc.category === category),
+);
 
 /** Why a cell shows each error. Typed by `ErrorCode`, so a new code cannot be left out. */
 export const errorDocs: Record<ErrorCode, string> = {

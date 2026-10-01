@@ -27,14 +27,7 @@ function labels(marked: string): string[] {
 
 describe("suggestionsAt", () => {
   it("offers functions that start with the typed letters, ignoring case, in alphabetical order", () => {
-    expect(labels("=co")).toEqual([
-      "COLUMNS",
-      "CONCATENATE",
-      "COUNT",
-      "COUNTA",
-      "COUNTIF",
-      "COUNTIFS",
-    ]);
+    expect(labels("=round")).toEqual(["ROUND", "ROUNDDOWN", "ROUNDUP"]);
     expect(labels("=1+ROUNDD")).toEqual(["ROUNDDOWN"]);
     expect(suggest("=su").items[1]).toEqual({
       kind: "function",
@@ -45,7 +38,7 @@ describe("suggestionsAt", () => {
   });
 
   it("lists functions before tables and pages", () => {
-    expect(labels("=su")).toEqual(["SUBSTITUTE", "SUM", "SUMIF", "SUMIFS", "Summary"]);
+    expect(labels("=sum")).toEqual(["SUM", "SUMIF", "SUMIFS", "SUMPRODUCT", "Summary"]);
   });
 
   it("offers at most eight", () => {
@@ -84,33 +77,18 @@ describe("suggestionsAt", () => {
   });
 
   it("offers names the formula already uses, before functions", () => {
-    expect(labels("=LET(total, SUM(A1:A3), rate, 2, t")).toEqual([
-      "total",
-      "TAKE",
-      "TEXT",
-      "TEXTJOIN",
-      "TODAY",
-      "TRANSPOSE",
-      "TRIM",
-    ]);
-    expect(labels("=LAMBDA(price, qty, pr")).toEqual(["price", "PRODUCT"]);
+    expect(labels("=LET(total, SUM(A1:A3), rate, 2, to")).toEqual(["total", "TODAY"]);
+    expect(labels("=LAMBDA(price, qty, pr")).toEqual(["price", "PRODUCT", "PROPER"]);
   });
 
   it("does not offer the word being typed as a name, a cell address, or a function name used as one", () => {
     expect(labels("=LET(tot")).toEqual([]);
     expect(labels("=A1 + ab")).toEqual(["ABS"]);
-    expect(labels("=LET(x, sum, su")).toEqual(["SUBSTITUTE", "SUM", "SUMIF", "SUMIFS", "Summary"]);
+    expect(labels("=LET(x, sum, sum")).toEqual(["SUM", "SUMIF", "SUMIFS", "SUMPRODUCT", "Summary"]);
   });
 
   it("uses the word that ends at the caret, wherever the caret is", () => {
-    expect(labels("=CO|UNT(A1)")).toEqual([
-      "COLUMNS",
-      "CONCATENATE",
-      "COUNT",
-      "COUNTA",
-      "COUNTIF",
-      "COUNTIFS",
-    ]);
+    expect(labels("=ROUND|UP(A1)")).toEqual(["ROUND", "ROUNDDOWN", "ROUNDUP"]);
     expect(suggest("=1+ab|").from).toBe(3);
     expect(labels("=SUM(|A1)")).toEqual([]);
   });

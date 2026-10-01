@@ -2,6 +2,20 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-09-30: Which Rows functions to add
+
+**Decision.** I read Rows' function index, which is still online, and sorted it in [docs/rows-functions.md](docs/rows-functions.md). I added the 50 ordinary functions that were missing and cheap: statistics (`STDEV`, `PERCENTILE`, `RANK`, `CORREL`, ...), math (`SUMPRODUCT`, `MROUND`, `LOG`, `GCD`, ...), text (`SPLIT`, `PROPER`, `JOIN`, `FIXED`, ...), dates (`DATEDIF`, `WORKDAY`, `NETWORKDAYS`, `WEEKNUM`, ...), lookups (`HLOOKUP`, `ROW`, `COLUMN`), and `IFNA`, `ISNA`, `ISERR`, `FLATTEN`.
+
+**Held back, with reasons in that document.**
+
+- **Regular expression functions.** A slow pattern would stall the server for every user, because the server evaluates formulas when a button is clicked. They need a regex engine with a time bound.
+- **`RAND` and `RANDBETWEEN`.** The browser and the server evaluate separately and would each get a different number.
+- **`OFFSET` and `INDIRECT`.** They produce references the dependency graph cannot see in advance.
+- **`LOG10`.** `LOG10(5)` already means "call the function stored in cell LOG10", the same form as `=D1(21)`. `LOG(x)` uses base 10.
+- **Hashes.** Browser hashing is asynchronous and the engine is synchronous.
+
+**Next from that list:** `QUERY`, then `UPDATE` and `OVERWRITE`, then scheduled actions.
+
 ## 2026-09-30: Charts and text views
 
 **Decision.** A page holds three kinds of item: tables, charts, and text views. A chart or text view is a row in a `views` table with a `source`: the data formula for a chart, the Markdown template for a text view. Views and tables share one ordering on the page.

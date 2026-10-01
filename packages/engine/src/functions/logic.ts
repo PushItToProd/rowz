@@ -36,6 +36,11 @@ export const logicFunctions: Record<string, FunctionDefinition> = {
     const result = value?.() ?? null;
     return isError(result) ? (fallback?.() ?? null) : result;
   }),
+  /** Like `IFERROR`, but only for `#N/A`. Other errors pass through, so a lookup that finds nothing does not hide a mistake. */
+  IFNA: lazy(2, 2, ([value, fallback]): Evaluated => {
+    const result = value?.() ?? null;
+    return isError(result) && result.code === "#N/A" ? (fallback?.() ?? null) : result;
+  }),
   AND: combine((values) => values.every(Boolean)),
   OR: combine((values) => values.some(Boolean)),
   NOT: eager(1, 1, (value) => !boolean(value)),

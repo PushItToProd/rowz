@@ -1,6 +1,6 @@
 import { dateFromMs, isDate } from "../dates";
 import type { Evaluated } from "../values";
-import { eager, fail, integer, items, number, numbers } from "./arguments";
+import { eager, fail, grid, integer, items, number, numbers } from "./arguments";
 import type { FunctionDefinition } from "./registry";
 
 function aggregate(compute: (values: readonly number[]) => Evaluated): FunctionDefinition {
@@ -55,11 +55,99 @@ function toMultiple(rounding: Rounding): FunctionDefinition {
   });
 }
 
+/** A whole number that is not negative, for functions defined only on those. */
+function natural(value: Evaluated, name: string): number {
+  const whole = integer(value);
+  return whole < 0 ? fail("#VALUE!", `${name} needs numbers that are not negative`) : whole;
+}
+
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+/** Rounds away from zero to the next even number, or with `odd` the next odd one. */
+function toParity(value: number, odd: boolean): number {
+  const up = Math.ceil(Math.abs(value));
+  const matches = (up % 2 === 1) === odd;
+  return (Math.sign(value) || 1) * (matches ? up : up + 1);
+}
+
+function logarithm(value: Evaluated, base: number): number {
+  const given = number(value);
+  if (given <= 0) fail("#VALUE!", "A logarithm needs a number above 0");
+  if (base <= 0 || base === 1) fail("#VALUE!", "The base must be above 0 and not 1");
+  // The dedicated functions are exact where the ratio of two logarithms is not: log10(1000) is 3.
+  if (base === 10) return Math.log10(given);
+  if (base === 2) return Math.log2(given);
+  return base === Math.E ? Math.log(given) : Math.log(given) / Math.log(base);
+}
+
 function finite(value: number): number {
   return Number.isFinite(value) ? value : fail("#VALUE!", "The result is not a number");
 }
 
 export const mathFunctions: Record<string, FunctionDefinition> = {
+  /** Multiplies ranges of one size cell by cell and adds the products. A cell that is not a number counts as 0. */
+  SUMPRODUCT: eager(1, Infinity, (...ranges) => {
+    const grids = ranges.map((range) => grid(range).flat());
+    const [first = []] = grids;
+    if (grids.some((cells) => cells.length !== first.length)) {
+      fail("#VALUE!", "The ranges must all be the same size");
+    }
+    return first.reduce<number>(
+      (total, _, index) =>
+        total +
+        grids.reduce((product, cells) => {
+          const cell = cells[index];
+          return product * (typeof cell === "number" ? cell : 0);
+        }, 1),
+      0,
+    );
+  }),
+  TRUNC: atPlaces(Math.trunc),
+  SIGN: eager(1, 1, (value) => Math.sign(number(value))),
+  /** Rounds to the nearest multiple. */
+  MROUND: eager(2, 2, (value, multiple) => {
+    const step = number(multiple);
+    return step === 0 ? 0 : halfAwayFromZero(number(value) / step) * step;
+  }),
+  /** The whole-number part of a division. */
+  QUOTIENT: eager(2, 2, (dividend, divisor) => {
+    const by = number(divisor);
+    return by === 0 ? fail("#DIV/0!") : Math.trunc(number(dividend) / by);
+  }),
+  EXP: eager(1, 1, (value) => finite(Math.exp(number(value)))),
+  LN: eager(1, 1, (value) => logarithm(value, Math.E)),
+  LOG: eager(1, 2, (value, base = 10) => logarithm(value, number(base))),
+  PI: eager(0, 0, () => Math.PI),
+  EVEN: eager(1, 1, (value) => toParity(number(value), false)),
+  ODD: eager(1, 1, (value) => toParity(number(value), true)),
+  ISEVEN: eager(1, 1, (value) => integer(value) % 2 === 0),
+  ISODD: eager(1, 1, (value) => integer(value) % 2 !== 0),
+  /** The largest whole number that divides every value. */
+  GCD: eager(1, Infinity, (...values) =>
+    numbers(values)
+      .map((value) => natural(value, "GCD"))
+      .reduce(gcd, 0),
+  ),
+  /** The smallest whole number that every value divides. */
+  LCM: eager(1, Infinity, (...values) =>
+    finite(
+      numbers(values)
+        .map((value) => natural(value, "LCM"))
+        .reduce(
+          (multiple, value) => (value === 0 ? 0 : (multiple / gcd(multiple, value)) * value),
+          1,
+        ),
+    ),
+  ),
+  /** The product of the whole numbers from 1 to the value. */
+  FACT: eager(1, 1, (value) => {
+    let product = 1;
+    for (let factor = natural(value, "FACT"); factor > 1; factor -= 1) product *= factor;
+    return finite(product);
+  }),
+
   SUM: aggregate(sum),
   AVERAGE: aggregate((values) =>
     values.length === 0 ? fail("#DIV/0!", "No numbers to average") : sum(values) / values.length,

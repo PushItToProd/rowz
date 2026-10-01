@@ -184,6 +184,14 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
     );
   }),
 
+  /** Every cell of the ranges in one column, reading each range row by row. */
+  FLATTEN: eager(1, Infinity, (...sources) =>
+    result(
+      sources.flatMap((source) => grid(source).flat()).map((cell) => [cell]),
+      "There are no cells to list",
+    ),
+  ),
+
   ROWS: eager(1, 1, (source) => grid(source).length),
   COLUMNS: eager(1, 1, (source) => width(grid(source))),
 

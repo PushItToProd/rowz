@@ -1,12 +1,15 @@
 import { isDate } from "../dates";
 import { formatDateAs, FormatError, formatNumber } from "../format";
 import { parseNumber, toText, type Scalar } from "../values";
-import { boolean, eager, fail, integer, items, scalar, text } from "./arguments";
+import { array, boolean, eager, fail, integer, items, number, scalar, text } from "./arguments";
 import type { FunctionDefinition } from "./registry";
 
 function textFunction(compute: (value: string) => Scalar): FunctionDefinition {
   return eager(1, 1, (value) => compute(text(value)));
 }
+
+/** More decimals than a number can hold. */
+const MAX_DECIMALS = 20;
 
 /** A count of characters, which cannot be negative. */
 function count(value: Parameters<typeof integer>[0], what: string): number {
@@ -21,12 +24,57 @@ function find(needle: string, haystack: string, from: number): number {
   return index === -1 ? fail("#VALUE!", `"${needle}" was not found`) : index + 1;
 }
 
+const concatenate: FunctionDefinition = eager(1, Infinity, (...values) =>
+  items(values)
+    .map(({ value }) => text(value))
+    .join(""),
+);
+
 export const textFunctions: Record<string, FunctionDefinition> = {
-  CONCATENATE: eager(1, Infinity, (...values) =>
+  CONCATENATE: concatenate,
+  CONCAT: concatenate,
+  /** Joins values with a delimiter between them. */
+  JOIN: eager(2, Infinity, (delimiter, ...values) =>
     items(values)
       .map(({ value }) => text(value))
-      .join(""),
+      .join(text(delimiter)),
   ),
+  /** Cuts text at a delimiter into cells across a row. A piece that reads as a number becomes one. */
+  SPLIT: eager(2, 2, (value, delimiter) => {
+    const at = text(delimiter);
+    if (at === "") fail("#VALUE!", "The delimiter cannot be empty");
+    return array([
+      text(value)
+        .split(at)
+        .map((piece) => parseNumber(piece) ?? piece),
+    ]);
+  }),
+  /** Capitalizes the first letter of each word and puts the rest in lower case. */
+  PROPER: textFunction((value) =>
+    value
+      .toLowerCase()
+      .replace(
+        /(^|[^\p{L}\p{N}'])(\p{L})/gu,
+        (_, before: string, letter: string) => before + letter.toUpperCase(),
+      ),
+  ),
+  /** The character with a Unicode number. */
+  CHAR: eager(1, 1, (value) => {
+    const code = integer(value);
+    return code < 1 || code > 0x10ffff
+      ? fail("#VALUE!", `${String(code)} is not the number of a character`)
+      : String.fromCodePoint(code);
+  }),
+  /** The Unicode number of the first character of text. */
+  CODE: textFunction((value) => value.codePointAt(0) ?? fail("#VALUE!", "The text is empty")),
+  /** Writes text so it can be part of a web address. */
+  ENCODEURL: textFunction(encodeURIComponent),
+  /** Writes a number as text with a fixed number of decimals, grouping thousands unless told not to. */
+  FIXED: eager(1, 3, (value, decimals = 2, plain = false) => {
+    const places = Math.min(count(decimals, "The number of decimals"), MAX_DECIMALS);
+    const whole = boolean(plain) ? "0" : "#,##0";
+    return formatNumber(number(value), places === 0 ? whole : `${whole}.${"0".repeat(places)}`);
+  }),
   /** Joins values with a delimiter between them, optionally skipping empty ones. */
   TEXTJOIN: eager(3, Infinity, (delimiter, skipEmpty, ...values) => {
     const skip = boolean(skipEmpty);
