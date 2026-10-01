@@ -1,9 +1,9 @@
-import type { CellId } from "./address";
-import { formatReference, type Reference } from "./ast";
+import { cellKey } from "./address";
+import { formatReference, type Reference, type ReferenceCell } from "./ast";
 import { parseFormulaWithReferences, type LocatedReference } from "./parser";
 import { FormulaSyntaxError } from "./tokenizer";
 import { isFormulaInput } from "./values";
-import type { WorkbookData } from "./workbook";
+import { TableResolver, type StoredInput, type WorkbookData } from "./structure";
 
 /** What to write in place of a reference: a new reference, or `#REF!` when its target is gone. */
 export type Replacement = Reference | "#REF!";
@@ -41,10 +41,15 @@ export function rewriteReferences(
 export type Rename =
   { kind: "page"; pageId: string; name: string } | { kind: "table"; tableId: string; name: string };
 
-export type StoredInput = CellId & { input: string };
-
-function sameName(a: string, b: string): boolean {
-  return a.toLowerCase() === b.toLowerCase();
+/** Rewrites every cell's references and returns the cells whose input changed. */
+function rewriteCells(
+  data: WorkbookData,
+  replaceFor: (originTableId: string) => (reference: Reference) => Replacement | undefined,
+): StoredInput[] {
+  return data.cells.flatMap(({ input, ...cell }) => {
+    const rewritten = rewriteReferences(input, replaceFor(cell.tableId));
+    return rewritten === input ? [] : [{ ...cell, input: rewritten }];
+  });
 }
 
 /**
@@ -52,34 +57,123 @@ function sameName(a: string, b: string): boolean {
  * the new name written in. `data` is the workbook before the rename.
  */
 export function inputsAfterRename(data: WorkbookData, rename: Rename): StoredInput[] {
-  const pageOfTable = new Map(data.tables.map((table) => [table.id, table.pageId]));
-  const pageName = new Map(data.pages.map((page) => [page.id, page.name]));
-  const renamedTable =
-    rename.kind === "table" ? data.tables.find((table) => table.id === rename.tableId) : undefined;
-  const oldPageName = rename.kind === "page" ? pageName.get(rename.pageId) : undefined;
-
-  /** Decides, for a formula in `originTableId`, whether a reference names what is being renamed. */
-  const replace =
-    (originTableId: string) =>
-    (reference: Reference): Replacement | undefined => {
-      if (rename.kind === "page") {
-        const named = reference.page !== undefined && oldPageName !== undefined;
-        return named && sameName(reference.page ?? "", oldPageName)
-          ? { ...reference, page: rename.name }
-          : undefined;
-      }
-      if (!renamedTable || reference.table === undefined) return undefined;
-      if (!sameName(reference.table, renamedTable.name)) return undefined;
-      // Without a page qualifier, a table name refers to the formula's own page.
-      const referencedPage =
-        reference.page === undefined
-          ? pageOfTable.get(originTableId) === renamedTable.pageId
-          : sameName(reference.page, pageName.get(renamedTable.pageId) ?? "");
-      return referencedPage ? { ...reference, table: rename.name } : undefined;
-    };
-
-  return data.cells.flatMap(({ input, ...cell }) => {
-    const rewritten = rewriteReferences(input, replace(cell.tableId));
-    return rewritten === input ? [] : [{ ...cell, input: rewritten }];
+  const resolver = new TableResolver(data);
+  return rewriteCells(data, (originTableId) => (reference) => {
+    if (rename.kind === "page") {
+      // The page qualifier is rewritten even when the table it names does not exist.
+      return reference.page !== undefined && resolver.isPage(reference.page, rename.pageId)
+        ? { ...reference, page: rename.name }
+        : undefined;
+    }
+    // A reference with no table name follows its formula's table and needs no rewrite.
+    const names = reference.table !== undefined;
+    return names && resolver.find(reference, originTableId)?.id === rename.tableId
+      ? { ...reference, table: rename.name }
+      : undefined;
   });
+}
+
+/** Inserting or deleting one row or column of a table. */
+export interface StructuralEdit {
+  tableId: string;
+  axis: "row" | "col";
+  kind: "insert" | "delete";
+  /** For an insert, the new row or column takes this index and those from here on move by one. */
+  index: number;
+}
+
+/** Where a row or column index ends up after the edit, or `undefined` if it is deleted. */
+function moveIndex(index: number, edit: StructuralEdit): number | undefined {
+  if (edit.kind === "insert") return index >= edit.index ? index + 1 : index;
+  if (index === edit.index) return undefined;
+  return index > edit.index ? index - 1 : index;
+}
+
+/**
+ * Where the two ends of a range end up along the edited axis. `null` is an
+ * open side. A range keeps covering the rows or columns it covered: it shrinks
+ * when one inside it is deleted, grows when one is inserted inside it, and
+ * becomes `undefined` when the only one it covered is deleted.
+ */
+function moveSpan(
+  start: number | null,
+  end: number | null,
+  edit: StructuralEdit,
+): [start: number | null, end: number | null] | undefined {
+  if (start === null && end === null) return [start, end];
+  const first = start === null ? 0 : end === null ? start : Math.min(start, end);
+  const last = end === null ? Infinity : start === null ? end : Math.max(start, end);
+
+  let [newFirst, newLast] = [first, last];
+  if (edit.kind === "insert") {
+    if (first >= edit.index) newFirst += 1;
+    if (last >= edit.index) newLast += 1;
+  } else {
+    if (first === last && first === edit.index) return undefined;
+    if (first > edit.index) newFirst -= 1;
+    if (last >= edit.index) newLast -= 1;
+  }
+
+  // Write the new ends back to whichever corner held them, keeping open sides open.
+  if (start === null) return [null, newLast];
+  if (end === null) return [newFirst, null];
+  return start <= end ? [newFirst, newLast] : [newLast, newFirst];
+}
+
+/** How a reference into the edited table must be written after the edit. */
+function moveReference(reference: Reference, edit: StructuralEdit): Replacement | undefined {
+  const { axis } = edit;
+  const withAxis = (cell: ReferenceCell, value: number | null): ReferenceCell => ({
+    ...cell,
+    [axis]: value,
+  });
+
+  const { start, end } = reference;
+  if (!end) {
+    const index = start[axis];
+    if (index === null) return undefined;
+    const moved = moveIndex(index, edit);
+    if (moved === undefined) return "#REF!";
+    return moved === index ? undefined : { ...reference, start: withAxis(start, moved) };
+  }
+
+  const moved = moveSpan(start[axis], end[axis], edit);
+  if (!moved) return "#REF!";
+  if (moved[0] === start[axis] && moved[1] === end[axis]) return undefined;
+  return { ...reference, start: withAxis(start, moved[0]), end: withAxis(end, moved[1]) };
+}
+
+/**
+ * The cell writes that carry out inserting or deleting a row or column: cells
+ * past the edit move by one, and formulas anywhere in the workbook that read
+ * the table are rewritten to keep reading the same cells. A reference to a
+ * deleted cell becomes `#REF!`. An empty input in the result clears that cell.
+ * `data` is the workbook before the edit.
+ */
+export function inputsAfterEdit(data: WorkbookData, edit: StructuralEdit): StoredInput[] {
+  const resolver = new TableResolver(data);
+  const before = new Map(data.cells.map((cell) => [cellKey(cell), cell.input]));
+  const after = new Map<string, StoredInput>();
+
+  for (const cell of data.cells) {
+    const input = rewriteReferences(cell.input, (reference) =>
+      resolver.find(reference, cell.tableId)?.id === edit.tableId
+        ? moveReference(reference, edit)
+        : undefined,
+    );
+    if (cell.tableId !== edit.tableId) {
+      after.set(cellKey(cell), { ...cell, input });
+      continue;
+    }
+    const moved = moveIndex(cell[edit.axis], edit);
+    if (moved === undefined) continue;
+    const target = { ...cell, [edit.axis]: moved, input };
+    after.set(cellKey(target), target);
+  }
+
+  const written = [...after.values()].filter((cell) => before.get(cellKey(cell)) !== cell.input);
+  const cleared = data.cells
+    .filter((cell) => !after.has(cellKey(cell)))
+    .map(({ tableId, row, col }) => ({ tableId, row, col, input: "" }));
+  return [...written, ...cleared];
 }

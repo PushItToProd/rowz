@@ -1,6 +1,7 @@
 import { parseAddress, type CellId } from "./address";
 import type { CellValue } from "./values";
-import { Workbook, type WorkbookStructure } from "./workbook";
+import type { WorkbookStructure } from "./structure";
+import { Workbook } from "./workbook";
 
 /** Two tables on the first page and one on the second, enough to exercise every reference form. */
 export const STRUCTURE: WorkbookStructure = {

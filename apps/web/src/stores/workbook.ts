@@ -6,6 +6,7 @@ import {
   type CellId,
   type CellValue,
 } from "@spreadsheet-app/engine";
+import type { StructuralEditBody } from "@spreadsheet-app/shared";
 import { defineStore } from "pinia";
 import { computed, reactive, ref, shallowRef, triggerRef } from "vue";
 import { api, type ClickResult, type PageRecord, type TableRecord } from "../api/client";
@@ -208,6 +209,27 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }, "The table could not be changed");
   }
 
+  /** Inserts or deletes a row or column, and shows the cells the server moved and rewrote. */
+  function editTable(tableId: string, edit: StructuralEditBody): Promise<boolean> {
+    return attempt(async () => {
+      // The server shifts stored cells, so pending edits must be stored first.
+      await saves;
+      const { table: updated, cells } = await api.editTable(tableId, edit);
+      tables.value = tables.value.map((table) => (table.id === tableId ? updated : table));
+      syncStructure();
+      for (const cell of cells) apply(cell, cell.input);
+
+      const selected = selection.value;
+      if (selected?.tableId === tableId) {
+        selection.value = {
+          tableId,
+          row: Math.min(selected.row, updated.rowCount - 1),
+          col: Math.min(selected.col, updated.colCount - 1),
+        };
+      }
+    }, "The table could not be changed");
+  }
+
   function deleteTable(tableId: string): Promise<boolean> {
     return attempt(async () => {
       await api.deleteTable(tableId);
@@ -236,6 +258,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     deletePage,
     addTable,
     updateTable,
+    editTable,
     deleteTable,
   };
 });

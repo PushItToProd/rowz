@@ -359,6 +359,143 @@ describe("renaming rewrites formulas", () => {
   });
 });
 
+describe("inserting and deleting rows and columns", () => {
+  async function tableWith(inputs: Record<string, string>) {
+    const snapshot = await createSpreadsheet(user);
+    const { page, table } = first(snapshot);
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody(inputs), 204);
+    const edit = (body: object, status = 200) =>
+      user.json<{ table: TableRecord; cells: object[] }>(
+        "POST",
+        `/tables/${table.id}/edits`,
+        body,
+        status,
+      );
+    const stored = () => storedInputs(user, snapshot.id, table.id);
+    return { snapshot, page, table, edit, stored };
+  }
+
+  it("deletes a row: moves the rows below up, rewrites formulas, and shrinks the table", async () => {
+    const { table, edit, stored } = await tableWith({
+      A1: "1",
+      A2: "gone",
+      A3: "3",
+      B1: "=SUM(A1:A3)",
+      B4: "=A3*2",
+      C1: "=A2",
+    });
+
+    const result = await edit({ axis: "row", kind: "delete", index: 1 });
+    expect(result.table).toMatchObject({ rowCount: DEFAULT_TABLE_SIZE.rowCount - 1 });
+    expect(result.cells).toEqual(
+      expect.arrayContaining([
+        { tableId: table.id, row: 1, col: 0, input: "3" },
+        { tableId: table.id, row: 2, col: 0, input: "" },
+        { tableId: table.id, row: 0, col: 1, input: "=SUM(A1:A2)" },
+        { tableId: table.id, row: 2, col: 1, input: "=A2*2" },
+        { tableId: table.id, row: 3, col: 1, input: "" },
+        { tableId: table.id, row: 0, col: 2, input: "=#REF!" },
+      ]),
+    );
+    expect(result.cells).toHaveLength(6);
+    expect(await stored()).toEqual({
+      "0:0": "1",
+      "1:0": "3",
+      "0:1": "=SUM(A1:A2)",
+      "2:1": "=A2*2",
+      "0:2": "=#REF!",
+    });
+  });
+
+  it("inserts a column: moves the columns from there right and grows the table", async () => {
+    const { edit, stored } = await tableWith({ A1: "a", B1: "b", C1: "=A1&B1" });
+    const result = await edit({ axis: "col", kind: "insert", index: 1 });
+    expect(result.table).toMatchObject({ colCount: DEFAULT_TABLE_SIZE.colCount + 1 });
+    expect(await stored()).toEqual({ "0:0": "a", "0:2": "b", "0:3": "=A1&C1" });
+  });
+
+  it("rewrites formulas in other tables and on other pages", async () => {
+    const { snapshot, page, edit } = await tableWith({ A5: "5" });
+    const sibling = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
+    const other = await user.json<{ table: TableRecord }>(
+      "POST",
+      `/spreadsheets/${snapshot.id}/pages`,
+      {},
+      201,
+    );
+    await user.json("PUT", `/tables/${sibling.id}/cells`, cellsBody({ A1: "='Table 1'!A5" }), 204);
+    await user.json(
+      "PUT",
+      `/tables/${other.table.id}/cells`,
+      cellsBody({
+        A1: "=SUM('Page 1'!'Table 1'!A:A) + 'Page 1'!'Table 1'!A5",
+        A2: "='Table 1'!A5",
+      }),
+      204,
+    );
+
+    await edit({ axis: "row", kind: "insert", index: 0 });
+    expect(await storedInputs(user, snapshot.id, sibling.id)).toEqual({ "0:0": "='Table 1'!A6" });
+    // On page 2, an unqualified 'Table 1' is page 2's own table, which was not edited.
+    expect(await storedInputs(user, snapshot.id, other.table.id)).toEqual({
+      "0:0": "=SUM('Page 1'!'Table 1'!A:A) + 'Page 1'!'Table 1'!A6",
+      "1:0": "='Table 1'!A5",
+    });
+  });
+
+  it("refuses to delete the last row or column, or one the table does not have", async () => {
+    const { table, edit, stored } = await tableWith({ A1: "kept" });
+    await user.json("PATCH", `/tables/${table.id}`, { rowCount: 1, colCount: 1 });
+
+    expect(await edit({ axis: "row", kind: "delete", index: 0 }, 422)).toEqual({
+      error: { code: "last_one", message: "A table needs at least one row" },
+    });
+    expect(await edit({ axis: "col", kind: "delete", index: 0 }, 422)).toEqual({
+      error: { code: "last_one", message: "A table needs at least one column" },
+    });
+    expect(await edit({ axis: "row", kind: "delete", index: 1 }, 422)).toEqual({
+      error: { code: "out_of_bounds", message: "Table 1 has no row 2" },
+    });
+    expect(await edit({ axis: "col", kind: "delete", index: 3 }, 422)).toEqual({
+      error: { code: "out_of_bounds", message: "Table 1 has no column D" },
+    });
+    expect(await edit({ axis: "row", kind: "insert", index: 2 }, 422)).toEqual({
+      error: { code: "out_of_bounds", message: "Table 1 has only 1 row" },
+    });
+    expect(await stored()).toEqual({ "0:0": "kept" });
+  });
+
+  it("refuses to insert into a table that is already at the size limit", async () => {
+    const { table, edit } = await tableWith({ A1: "x" });
+    await user.json("PATCH", `/tables/${table.id}`, { colCount: LIMITS.tableCols });
+    expect(await edit({ axis: "col", kind: "insert", index: 0 }, 422)).toEqual({
+      error: {
+        code: "table_full",
+        message: `A table can have at most ${String(LIMITS.tableCols)} columns`,
+      },
+    });
+  });
+
+  it.each([
+    {},
+    { axis: "diagonal", kind: "insert", index: 0 },
+    { axis: "row", kind: "insert", index: -1 },
+  ])("rejects the malformed edit %j", async (body) => {
+    const { edit } = await tableWith({ A1: "x" });
+    await edit(body, 400);
+  });
+
+  it("inserting at the end adds an empty row", async () => {
+    const { edit, stored } = await tableWith({ A1: "x" });
+    const result = await edit({ axis: "row", kind: "insert", index: DEFAULT_TABLE_SIZE.rowCount });
+    expect(result).toMatchObject({
+      table: { rowCount: DEFAULT_TABLE_SIZE.rowCount + 1 },
+      cells: [],
+    });
+    expect(await stored()).toEqual({ "0:0": "x" });
+  });
+});
+
 describe("cells", () => {
   it("stores, overwrites, and clears cell inputs", async () => {
     const snapshot = await createSpreadsheet(user);

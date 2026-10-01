@@ -30,6 +30,14 @@ export const updateTableBody = z
 
 const cellIndex = z.int().min(0);
 
+/** Inserting or deleting one row or column. An insert puts the new one at `index`. */
+export const structuralEditBody = z.object({
+  axis: z.enum(["row", "col"]),
+  kind: z.enum(["insert", "delete"]),
+  index: cellIndex,
+});
+export type StructuralEditBody = z.infer<typeof structuralEditBody>;
+
 export const cellInput = z.object({
   row: cellIndex,
   col: cellIndex,

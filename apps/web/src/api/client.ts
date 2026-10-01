@@ -6,7 +6,7 @@ import type {
   SpreadsheetSummary,
   TableRecord,
 } from "@spreadsheet-app/server";
-import type { ApiError, CellInput, StoredCell } from "@spreadsheet-app/shared";
+import type { ApiError, CellInput, StoredCell, StructuralEditBody } from "@spreadsheet-app/shared";
 import type { CellId } from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
@@ -96,6 +96,13 @@ export const api = {
     changes: { name?: string; rowCount?: number; colCount?: number },
   ): Promise<{ table: TableRecord; cells: StoredCell[] }> =>
     body(routes.tables[":tableId"].$patch({ param: { tableId }, json: changes })),
+
+  /** Inserts or deletes a row or column. Resolves to the resized table and every cell that changed. */
+  editTable: (
+    tableId: string,
+    edit: StructuralEditBody,
+  ): Promise<{ table: TableRecord; cells: StoredCell[] }> =>
+    body(routes.tables[":tableId"].edits.$post({ param: { tableId }, json: edit })),
 
   deleteTable: (tableId: string): Promise<void> =>
     done(routes.tables[":tableId"].$delete({ param: { tableId } })),

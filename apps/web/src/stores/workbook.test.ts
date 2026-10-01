@@ -291,6 +291,49 @@ describe("structure", () => {
     expect(store.valueOf(at("B1"))).toBe(5);
   });
 
+  it("applies a row deletion: resizes the table, moves cells, and keeps the selection inside", async () => {
+    const store = await open({ A1: "1", A2: "2", A4: "=A1+A2" });
+    store.selection = at("C4");
+    server.editTable.mockResolvedValue({
+      table: { ...TABLE, rowCount: 3 },
+      cells: [
+        { ...at("A1"), input: "2" },
+        { ...at("A2"), input: "" },
+        { ...at("A3"), input: "=#REF!+A1" },
+        { ...at("A4"), input: "" },
+      ],
+    });
+
+    expect(await store.editTable("t1", { axis: "row", kind: "delete", index: 0 })).toBe(true);
+    expect(store.tables[0]?.rowCount).toBe(3);
+    expect(store.inputOf(at("A1"))).toBe("2");
+    expect(store.inputOf(at("A2"))).toBe("");
+    expect(store.valueOf(at("A3"))).toMatchObject({ code: "#REF!" });
+    expect(store.selection).toEqual(at("C3"));
+  });
+
+  it("stores pending cell edits before asking the server to move cells", async () => {
+    const store = await open({ A1: "1" });
+    const save = deferred();
+    server.setCells.mockReturnValue(save.promise);
+    server.editTable.mockResolvedValue({ table: TABLE, cells: [] });
+
+    void store.setCell(at("A1"), "5");
+    const edited = store.editTable("t1", { axis: "row", kind: "insert", index: 0 });
+    await Promise.resolve();
+    expect(server.editTable).not.toHaveBeenCalled();
+    save.resolve();
+    await edited;
+    expect(server.editTable).toHaveBeenCalledOnce();
+  });
+
+  it("reports a refused row or column edit", async () => {
+    const store = await open();
+    server.editTable.mockRejectedValue(new Error("A table needs at least one row"));
+    expect(await store.editTable("t1", { axis: "row", kind: "delete", index: 0 })).toBe(false);
+    expect(store.notice).toEqual({ kind: "error", text: "A table needs at least one row" });
+  });
+
   it("adds a table to a page", async () => {
     const store = await open();
     server.createTable.mockResolvedValue({ ...TABLE, id: "t2", name: "Table 2", position: 1 });

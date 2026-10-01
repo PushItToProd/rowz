@@ -175,6 +175,11 @@ const OPERATORS = [
           <strong>Add column</strong> to grow a spreadsheet. A table can have up to
           {{ LIMITS.tableRows }} rows and {{ LIMITS.tableCols }} columns.
         </li>
+        <li>
+          Select a cell to insert a row above it or a column to its left, or to delete its row or
+          column. Formulas that read the table are rewritten to keep reading the same cells. A
+          formula that named a deleted cell shows <code>#REF!</code>.
+        </li>
         <li>Double-click the name of a spreadsheet, page, or table to rename it.</li>
         <li>
           Two pages in a spreadsheet cannot share a name, and neither can two tables on a page.

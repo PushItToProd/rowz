@@ -6,6 +6,7 @@ import { defaultFunctions } from "./functions";
 import type { FunctionRegistry } from "./functions/registry";
 import { DependencyIndex, evaluationOrder } from "./graph";
 import { parseFormula } from "./parser";
+import { TableResolver, type WorkbookData, type WorkbookStructure } from "./structure";
 import { FormulaSyntaxError } from "./tokenizer";
 import {
   error,
@@ -18,33 +19,6 @@ import {
   type ErrorValue,
   type Scalar,
 } from "./values";
-
-export interface PageDefinition {
-  id: string;
-  name: string;
-}
-
-export interface TableDefinition {
-  id: string;
-  pageId: string;
-  name: string;
-  /**
-   * The table's size. A range with an open side, such as `A:A`, stops here.
-   * Without a size it stops at the last row and column that hold a cell.
-   */
-  rowCount?: number;
-  colCount?: number;
-}
-
-export interface WorkbookStructure {
-  pages: readonly PageDefinition[];
-  tables: readonly TableDefinition[];
-}
-
-/** Everything needed to build a workbook: its structure and the non-empty cells. */
-export interface WorkbookData extends WorkbookStructure {
-  cells: readonly (CellId & { input: string })[];
-}
 
 export type ActionPlan = { ok: true; effects: Effect[] } | { ok: false; error: ErrorValue };
 
@@ -82,10 +56,6 @@ function span(start: number | null, end: number | null): [first: number, last: n
   return [Math.min(start, end), Math.max(start, end)];
 }
 
-function sameName(a: string, b: string): boolean {
-  return a.toLowerCase() === b.toLowerCase();
-}
-
 /**
  * The cells of one spreadsheet and their computed values.
  *
@@ -95,8 +65,7 @@ function sameName(a: string, b: string): boolean {
  * descriptions, which `planAction` turns into effects for the caller to apply.
  */
 export class Workbook {
-  private pages: readonly PageDefinition[] = [];
-  private readonly tables = new Map<string, TableDefinition>();
+  private tables = new TableResolver({ pages: [], tables: [] });
   private readonly cells = new Map<string, Map<string, CellRecord>>();
   /** Computed values of formula cells. */
   private readonly cache = new Map<string, CellValue>();
@@ -108,15 +77,13 @@ export class Workbook {
    * Replaces the pages and tables. Cells of tables that still exist are kept.
    * References are matched to tables by name, so every formula is re-resolved.
    */
-  setStructure({ pages, tables }: WorkbookStructure): void {
-    this.pages = pages;
-    this.tables.clear();
-    for (const table of tables) {
-      this.tables.set(table.id, table);
+  setStructure(structure: WorkbookStructure): void {
+    this.tables = new TableResolver(structure);
+    for (const table of structure.tables) {
       if (!this.cells.has(table.id)) this.cells.set(table.id, new Map());
     }
     for (const tableId of this.cells.keys()) {
-      if (!this.tables.has(tableId)) this.cells.delete(tableId);
+      if (!this.tables.table(tableId)) this.cells.delete(tableId);
     }
 
     this.cache.clear();
@@ -198,7 +165,7 @@ export class Workbook {
   }
 
   private resolve(reference: Reference, originTableId: string): CellRange | undefined {
-    const table = this.findTable(reference, originTableId);
+    const table = this.tables.find(reference, originTableId);
     if (!table) return undefined;
     const { start, end = start } = reference;
     const [startRow, endRow] = span(start.row, end.row);
@@ -207,7 +174,7 @@ export class Workbook {
   }
 
   private extent(tableId: string): { rows: number; cols: number } {
-    const table = this.tables.get(tableId);
+    const table = this.tables.table(tableId);
     if (table?.rowCount !== undefined && table.colCount !== undefined) {
       return { rows: table.rowCount, cols: table.colCount };
     }
@@ -218,21 +185,6 @@ export class Workbook {
       cols = Math.max(cols, id.col + 1);
     }
     return { rows: table?.rowCount ?? rows, cols: table?.colCount ?? cols };
-  }
-
-  private findTable(reference: Reference, originTableId: string): TableDefinition | undefined {
-    const origin = this.tables.get(originTableId);
-    const tableName = reference.table;
-    if (tableName === undefined) return origin;
-
-    const pageName = reference.page;
-    const pageId =
-      pageName === undefined
-        ? origin?.pageId
-        : this.pages.find((page) => sameName(page.name, pageName))?.id;
-    return [...this.tables.values()].find(
-      (table) => table.pageId === pageId && sameName(table.name, tableName),
-    );
   }
 
   private context(origin: CellId): EvaluationContext {

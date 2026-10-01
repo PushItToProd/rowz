@@ -48,6 +48,7 @@ export function mockApi(): MockedApi {
     deletePage: vi.fn().mockResolvedValue(undefined),
     createTable: vi.fn(),
     updateTable: vi.fn(),
+    editTable: vi.fn(),
     deleteTable: vi.fn().mockResolvedValue(undefined),
     setCells: vi.fn().mockResolvedValue(undefined),
     click: vi.fn().mockResolvedValue(clickResult()),

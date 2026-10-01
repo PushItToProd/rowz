@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { Reference } from "./ast";
-import { inputsAfterRename, rewriteReferences, type Rename } from "./rewrite";
+import { cellKey, formatAddress } from "./address";
+import {
+  inputsAfterEdit,
+  inputsAfterRename,
+  rewriteReferences,
+  type Rename,
+  type StructuralEdit,
+} from "./rewrite";
 import { at, STRUCTURE } from "./testing";
-import type { WorkbookData } from "./workbook";
+import type { WorkbookData } from "./structure";
 
 /** Renames every table qualifier to `Renamed` and leaves unqualified references alone. */
 const renameTables = (reference: Reference): Reference | undefined =>
@@ -141,5 +148,201 @@ describe("inputsAfterRename", () => {
     const cells = { t1: { A1: "='Other Table'!A1 + Archive!Table1!A1" } };
     expect(after(cells, { kind: "table", tableId: "missing", name: "x" })).toEqual([]);
     expect(after(cells, { kind: "page", pageId: "missing", name: "x" })).toEqual([]);
+  });
+});
+
+describe("inputsAfterEdit", () => {
+  const deleteRow = (index: number): StructuralEdit => ({
+    tableId: "t1",
+    axis: "row",
+    kind: "delete",
+    index,
+  });
+  const insertRow = (index: number): StructuralEdit => ({
+    tableId: "t1",
+    axis: "row",
+    kind: "insert",
+    index,
+  });
+  const deleteCol = (index: number): StructuralEdit => ({
+    tableId: "t1",
+    axis: "col",
+    kind: "delete",
+    index,
+  });
+  const insertCol = (index: number): StructuralEdit => ({
+    tableId: "t1",
+    axis: "col",
+    kind: "insert",
+    index,
+  });
+
+  function data(cells: Record<string, Record<string, string>>): WorkbookData {
+    return {
+      ...STRUCTURE,
+      cells: Object.entries(cells).flatMap(([tableId, inputs]) =>
+        Object.entries(inputs).map(([address, input]) => ({ ...at(address, tableId), input })),
+      ),
+    };
+  }
+
+  /** The writes for an edit, as `table address input` lines sorted for comparison. */
+  function writes(cells: Record<string, Record<string, string>>, edit: StructuralEdit): string[] {
+    return inputsAfterEdit(data(cells), edit)
+      .map((cell) => `${cell.tableId} ${formatAddress(cell)} ${cell.input || "(cleared)"}`)
+      .sort();
+  }
+
+  /** How a formula in another table, reading Table1, is written after an edit to Table1. */
+  function rewritten(formula: string, edit: StructuralEdit): string {
+    const result = inputsAfterEdit(data({ t2: { A1: formula } }), edit);
+    return result[0]?.input ?? formula;
+  }
+
+  describe("moving cells", () => {
+    it("deletes a row: its cells go and the rows below move up", () => {
+      expect(
+        writes({ t1: { A1: "one", A2: "two", A3: "three", B4: "four" } }, deleteRow(1)),
+      ).toEqual(["t1 A2 three", "t1 A3 (cleared)", "t1 B3 four", "t1 B4 (cleared)"]);
+    });
+
+    it("inserts a row: the rows from there down move down", () => {
+      expect(writes({ t1: { A1: "one", A2: "two", A3: "three" } }, insertRow(1))).toEqual([
+        "t1 A2 (cleared)",
+        "t1 A3 two",
+        "t1 A4 three",
+      ]);
+    });
+
+    it("deletes and inserts a column the same way", () => {
+      const cells = { t1: { A1: "a", B1: "b", C1: "c" } };
+      expect(writes(cells, deleteCol(0))).toEqual(["t1 A1 b", "t1 B1 c", "t1 C1 (cleared)"]);
+      expect(writes(cells, insertCol(0))).toEqual([
+        "t1 A1 (cleared)",
+        "t1 B1 a",
+        "t1 C1 b",
+        "t1 D1 c",
+      ]);
+    });
+
+    it("writes nothing for cells that keep their place and content", () => {
+      expect(writes({ t1: { A1: "same", A2: "same", A3: "same" } }, deleteRow(1))).toEqual([
+        "t1 A3 (cleared)",
+      ]);
+      expect(writes({ t1: { A1: "above" }, t2: { A5: "elsewhere" } }, deleteRow(3))).toEqual([]);
+    });
+
+    it("leaves cells of other tables where they are", () => {
+      expect(writes({ t1: { A2: "x" }, t2: { A2: "y", A3: "z" } }, deleteRow(0))).toEqual([
+        "t1 A1 x",
+        "t1 A2 (cleared)",
+      ]);
+    });
+
+    it("moves a formula and rewrites its references in one step", () => {
+      expect(writes({ t1: { A1: "1", A2: "2", A3: "=A1+A2", A4: "=A3*2" } }, insertRow(0))).toEqual(
+        ["t1 A1 (cleared)", "t1 A2 1", "t1 A3 2", "t1 A4 =A2+A3", "t1 A5 =A4*2"],
+      );
+    });
+  });
+
+  describe("rewriting references after deleting row 3", () => {
+    it.each([
+      ["=Table1!A2", "=Table1!A2"],
+      ["=Table1!A3", "=#REF!"],
+      ["=Table1!A4", "=Table1!A3"],
+      ["=SUM(Table1!A1:A2)", "=SUM(Table1!A1:A2)"],
+      ["=SUM(Table1!A1:A3)", "=SUM(Table1!A1:A2)"],
+      ["=SUM(Table1!A1:A5)", "=SUM(Table1!A1:A4)"],
+      ["=SUM(Table1!A3:A5)", "=SUM(Table1!A3:A4)"],
+      ["=SUM(Table1!A4:A5)", "=SUM(Table1!A3:A4)"],
+      ["=SUM(Table1!A3:B3)", "=SUM(#REF!)"],
+      ["=SUM(Table1!A5:A1)", "=SUM(Table1!A4:A1)"],
+      ["=SUM(Table1!$A$4:$A$5)", "=SUM(Table1!$A$3:$A$4)"],
+      ["=SUM(Table1!A:A)", "=SUM(Table1!A:A)"],
+      ["=SUM(Table1!2:5)", "=SUM(Table1!2:4)"],
+      ["=SUM(Table1!3:3)", "=SUM(#REF!)"],
+      ["=SUM(Table1!A2:A)", "=SUM(Table1!A2:A)"],
+      ["=SUM(Table1!A3:A)", "=SUM(Table1!A3:A)"],
+      ["=SUM(Table1!A4:A)", "=SUM(Table1!A3:A)"],
+      ["=SUM(Table1!A:A5)", "=SUM(Table1!A:A4)"],
+      ["=SUM(Table1!A1:4)", "=SUM(Table1!A1:3)"],
+    ])("%s becomes %s", (formula, expected) => {
+      expect(rewritten(formula, deleteRow(2))).toBe(expected);
+    });
+  });
+
+  describe("rewriting references after inserting a row at row 3", () => {
+    it.each([
+      ["=Table1!A2", "=Table1!A2"],
+      ["=Table1!A3", "=Table1!A4"],
+      ["=SUM(Table1!A1:A2)", "=SUM(Table1!A1:A2)"],
+      ["=SUM(Table1!A1:A3)", "=SUM(Table1!A1:A4)"],
+      ["=SUM(Table1!A3:A5)", "=SUM(Table1!A4:A6)"],
+      ["=SUM(Table1!A5:A1)", "=SUM(Table1!A6:A1)"],
+      ["=SUM(Table1!A:A)", "=SUM(Table1!A:A)"],
+      ["=SUM(Table1!2:5)", "=SUM(Table1!2:6)"],
+      ["=SUM(Table1!A3:A)", "=SUM(Table1!A4:A)"],
+      ["=SUM(Table1!A:A5)", "=SUM(Table1!A:A6)"],
+    ])("%s becomes %s", (formula, expected) => {
+      expect(rewritten(formula, insertRow(2))).toBe(expected);
+    });
+  });
+
+  describe("rewriting references after editing column B", () => {
+    it.each([
+      ["=Table1!A1", "=Table1!A1", "=Table1!A1"],
+      ["=Table1!B1", "=#REF!", "=Table1!C1"],
+      ["=Table1!C1", "=Table1!B1", "=Table1!D1"],
+      ["=SUM(Table1!A1:C1)", "=SUM(Table1!A1:B1)", "=SUM(Table1!A1:D1)"],
+      ["=SUM(Table1!B:B)", "=SUM(#REF!)", "=SUM(Table1!C:C)"],
+      ["=SUM(Table1!A:C)", "=SUM(Table1!A:B)", "=SUM(Table1!A:D)"],
+      ["=SUM(Table1!2:2)", "=SUM(Table1!2:2)", "=SUM(Table1!2:2)"],
+      ["=SUM(Table1!B2:5)", "=SUM(Table1!B2:5)", "=SUM(Table1!C2:5)"],
+      ["=SUM(Table1!C2:5)", "=SUM(Table1!B2:5)", "=SUM(Table1!D2:5)"],
+    ])("%s: delete gives %s, insert gives %s", (formula, afterDelete, afterInsert) => {
+      expect(rewritten(formula, deleteCol(1))).toBe(afterDelete);
+      expect(rewritten(formula, insertCol(1))).toBe(afterInsert);
+    });
+  });
+
+  it("rewrites only references that resolve to the edited table", () => {
+    // t3 is also named Table1, on the Archive page.
+    expect(
+      writes(
+        {
+          t2: { A1: "=Table1!A5", A2: "=Archive!Table1!A5", A3: "=A5", A4: "='Page 1'!Table1!A5" },
+          t3: { A1: "=Table1!A5", A2: "='Page 1'!Table1!A5" },
+        },
+        deleteRow(0),
+      ),
+    ).toEqual(["t2 A1 =Table1!A4", "t2 A4 ='Page 1'!Table1!A4", "t3 A2 ='Page 1'!Table1!A4"]);
+  });
+
+  it("rewrites references inside action arguments", () => {
+    expect(rewritten('=BUTTON("Add", EXECUTE(Table1!A4+1, Table1!A4))', deleteRow(0))).toBe(
+      '=BUTTON("Add", EXECUTE(Table1!A3+1, Table1!A3))',
+    );
+  });
+
+  it("restores every input when an inserted row is deleted again", () => {
+    const original = data({
+      t1: { A1: "1", A2: "2", A3: "=SUM(A1:A2)", B1: "=A3*2", B3: "=SUM(A:A)" },
+      t2: { A1: "=Table1!B1 + SUM(Table1!2:3)" },
+    });
+    const apply = (state: WorkbookData, edit: StructuralEdit): WorkbookData => {
+      const cells = new Map(state.cells.map((cell) => [cellKey(cell), cell]));
+      for (const write of inputsAfterEdit(state, edit)) {
+        if (write.input === "") cells.delete(cellKey(write));
+        else cells.set(cellKey(write), write);
+      }
+      return { ...state, cells: [...cells.values()] };
+    };
+    const inputs = (state: WorkbookData): string[] =>
+      state.cells.map((cell) => `${cell.tableId} ${formatAddress(cell)} ${cell.input}`).sort();
+
+    const inserted = apply(original, insertRow(1));
+    expect(inputs(inserted)).not.toEqual(inputs(original));
+    expect(inputs(apply(inserted, deleteRow(1)))).toEqual(inputs(original));
   });
 });

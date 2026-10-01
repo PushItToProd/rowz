@@ -1,5 +1,11 @@
 import { zValidator } from "@hono/zod-validator";
-import { cellParam, setCellsBody, tableParam, updateTableBody } from "@spreadsheet-app/shared";
+import {
+  cellParam,
+  setCellsBody,
+  structuralEditBody,
+  tableParam,
+  updateTableBody,
+} from "@spreadsheet-app/shared";
 import { Hono } from "hono";
 import { runButton, type ActionDependencies } from "../actions/run";
 import { onInvalid, type Env } from "../http";
@@ -19,6 +25,15 @@ export function tableRoutes(dependencies: ActionDependencies) {
       await c.var.repository.deleteTable(c.req.valid("param").tableId);
       return c.body(null, 204);
     })
+    .post(
+      "/:tableId/edits",
+      zValidator("param", tableParam, onInvalid),
+      zValidator("json", structuralEditBody, onInvalid),
+      async (c) => {
+        const { tableId } = c.req.valid("param");
+        return c.json(await c.var.repository.editStructure(tableId, c.req.valid("json")));
+      },
+    )
     .put(
       "/:tableId/cells",
       zValidator("param", tableParam, onInvalid),

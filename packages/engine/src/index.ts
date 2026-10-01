@@ -27,11 +27,12 @@ export type {
 } from "./functions/registry";
 export { parseFormula, parseFormulaWithReferences, type LocatedReference } from "./parser";
 export {
+  inputsAfterEdit,
   inputsAfterRename,
   rewriteReferences,
   type Rename,
   type Replacement,
-  type StoredInput,
+  type StructuralEdit,
 } from "./rewrite";
 export { FormulaSyntaxError } from "./tokenizer";
 export {
@@ -49,11 +50,11 @@ export {
   type Scalar,
 } from "./values";
 export {
-  createWorkbook,
-  Workbook,
-  type ActionPlan,
+  TableResolver,
   type PageDefinition,
+  type StoredInput,
   type TableDefinition,
   type WorkbookData,
   type WorkbookStructure,
-} from "./workbook";
+} from "./structure";
+export { createWorkbook, Workbook, type ActionPlan } from "./workbook";

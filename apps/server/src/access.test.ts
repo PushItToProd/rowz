@@ -46,6 +46,8 @@ function writeRoutes(): Route[] {
     ["POST", `/pages/${page}/tables`, {}],
     ["PATCH", `/tables/${table}`, { name: "Taken over" }],
     ["PUT", `/tables/${table}/cells`, cellsBody({ C3: "written" })],
+    // Below the button in A1, so the click that follows still finds it.
+    ["POST", `/tables/${table}/edits`, { axis: "row", kind: "insert", index: 5 }],
     ["POST", `/tables/${table}/cells/0/0/click`],
     ["DELETE", `/tables/${table}`],
     ["DELETE", `/pages/${page}`],
@@ -135,7 +137,7 @@ describe("an editor", () => {
     });
     // The page delete is refused because it is the last page, not for lack of access.
     expect(await statuses(editor, writeRoutes())).toEqual([
-      204, 201, 200, 201, 200, 204, 200, 204, 204, 204,
+      204, 201, 200, 201, 200, 204, 200, 200, 204, 204, 204,
     ]);
     await owner.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);
   });

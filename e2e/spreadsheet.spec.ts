@@ -134,6 +134,36 @@ test("renaming a table or page rewrites the formulas that name it", async ({ pag
   await expect(pages.locator('[aria-current="page"]')).toHaveText(/Summary/);
 });
 
+test("rows and columns can be inserted and deleted, and formulas follow", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "1");
+  await enter(page, "A2", "2");
+  await enter(page, "A3", "3");
+  await enter(page, "B1", "=SUM(A1:A3)");
+  await enter(page, "C1", "=A2*10");
+  await expect(cell(page, "B1")).toHaveText("6");
+
+  // Delete row 2: the sum shrinks, and the formula that named A2 loses its target.
+  await cell(page, "A2").click();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "Delete row" }).click();
+  await expect(cell(page, "A2")).toHaveText("3");
+  await expect(cell(page, "B1")).toHaveText("4");
+  await expect(cell(page, "C1")).toHaveText("#REF!");
+
+  // Insert a column left of B: the formulas move right and still read column A.
+  await cell(page, "B1").click();
+  await page.getByRole("button", { name: "Insert column left" }).click();
+  await expect(cell(page, "B1")).toHaveText("");
+  await expect(cell(page, "C1")).toHaveText("4");
+  await cell(page, "C1").click();
+  await expect(page.getByLabel("Formula")).toHaveValue("=SUM(A1:A2)");
+
+  await page.reload();
+  await expect(cell(page, "C1")).toHaveText("4");
+  await expect(cell(page, "A2")).toHaveText("3");
+});
+
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "=1/0");

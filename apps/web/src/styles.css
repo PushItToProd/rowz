@@ -553,3 +553,29 @@ input.editable-name--editing {
 .help li + li {
   margin-top: 4px;
 }
+
+/* Actions on the selected cell's row and column. */
+.table-card__lines {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 20px;
+  min-height: 26px;
+  margin-bottom: 10px;
+  font-size: 0.92rem;
+}
+
+.table-card__lines [role="group"] {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.table-card__line {
+  min-width: 5.5em;
+  color: var(--muted);
+}
+
+.table-card__lines button {
+  padding: 2px 8px;
+}

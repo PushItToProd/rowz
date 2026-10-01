@@ -1,5 +1,17 @@
-import { formatAddress, inputsAfterRename, type Rename } from "@spreadsheet-app/engine";
-import { DEFAULT_TABLE_SIZE, type CellInput, type StoredCell } from "@spreadsheet-app/shared";
+import {
+  columnLabel,
+  formatAddress,
+  inputsAfterEdit,
+  inputsAfterRename,
+  type Rename,
+} from "@spreadsheet-app/engine";
+import {
+  DEFAULT_TABLE_SIZE,
+  LIMITS,
+  type CellInput,
+  type StoredCell,
+  type StructuralEditBody,
+} from "@spreadsheet-app/shared";
 import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
@@ -292,21 +304,65 @@ export class SpreadsheetRepository {
 
     // One statement cannot update the same row twice, so keep the last entry per cell.
     const latest = [...new Map(inputs.map((cell) => [formatAddress(cell), cell])).values()];
-    const filled = latest.filter((cell) => cell.input !== "");
-    const cleared = latest.filter((cell) => cell.input === "");
 
     await this.db.transaction(async (tx) => {
-      await this.upsertCells(
+      await this.storeCells(
         tx,
-        filled.map((cell) => ({ tableId, ...cell })),
+        latest.map((cell) => ({ tableId, ...cell })),
       );
-      if (cleared.length > 0) {
-        const targets = cleared.map((cell) =>
-          and(eq(cells.row, cell.row), eq(cells.col, cell.col)),
-        );
-        await tx.delete(cells).where(and(eq(cells.tableId, tableId), or(...targets)));
-      }
       await touch(tx, table.spreadsheetId);
+    });
+  }
+
+  /**
+   * Inserts or deletes one row or column. Cells past it move by one, and
+   * formulas anywhere in the spreadsheet that read the table are rewritten to
+   * keep reading the same cells. `cells` lists every cell that changed, with
+   * an empty input for a cell that is now empty.
+   */
+  async editStructure(
+    tableId: string,
+    edit: StructuralEditBody,
+  ): Promise<{ table: TableRecord; cells: StoredCell[] }> {
+    const { spreadsheetId } = await this.findTable(tableId, "write");
+    return this.db.transaction(async (tx) => {
+      // The edit is computed from a snapshot, so nothing may change under it.
+      await lockSpreadsheet(tx, spreadsheetId);
+      const snapshot = await new SpreadsheetRepository(tx, this.userId).getSnapshot(spreadsheetId);
+      const table = snapshot.tables.find((candidate) => candidate.id === tableId);
+      if (!table) throw notFound("Table");
+
+      const rows = edit.axis === "row";
+      const noun = rows ? "row" : "column";
+      const count = rows ? table.rowCount : table.colCount;
+      const limit = rows ? LIMITS.tableRows : LIMITS.tableCols;
+      if (edit.kind === "delete") {
+        if (edit.index >= count) {
+          const label = rows ? String(edit.index + 1) : columnLabel(edit.index);
+          throw unprocessable("out_of_bounds", `${table.name} has no ${noun} ${label}`);
+        }
+        if (count <= 1) throw unprocessable("last_one", `A table needs at least one ${noun}`);
+      } else {
+        if (edit.index > count) {
+          const counted = `${String(count)} ${noun}${count === 1 ? "" : "s"}`;
+          throw unprocessable("out_of_bounds", `${table.name} has only ${counted}`);
+        }
+        if (count >= limit) {
+          throw unprocessable("table_full", `A table can have at most ${String(limit)} ${noun}s`);
+        }
+      }
+
+      const written = inputsAfterEdit(snapshot, { tableId, ...edit });
+      await this.storeCells(tx, written);
+      const newCount = count + (edit.kind === "insert" ? 1 : -1);
+      const [updated] = await tx
+        .update(tables)
+        .set(rows ? { rowCount: newCount } : { colCount: newCount })
+        .where(eq(tables.id, tableId))
+        .returning(tableColumns);
+      if (!updated) throw notFound("Table");
+      await touch(tx, spreadsheetId);
+      return { table: updated, cells: written };
     });
   }
 
@@ -387,18 +443,23 @@ export class SpreadsheetRepository {
     await lockSpreadsheet(tx, spreadsheetId);
     const snapshot = await new SpreadsheetRepository(tx, this.userId).getSnapshot(spreadsheetId);
     const rewritten = inputsAfterRename(snapshot, rename);
-    await this.upsertCells(tx, rewritten);
+    await this.storeCells(tx, rewritten);
     return rewritten;
   }
 
-  private async upsertCells(db: Database, inputs: readonly StoredCell[]): Promise<void> {
-    // Each row binds four parameters, and Postgres accepts 65535 per statement.
+  /**
+   * Stores cell inputs in any tables of a spreadsheet the caller has already
+   * authorized. An empty input deletes the cell. No cell may appear twice.
+   */
+  private async storeCells(db: Database, inputs: readonly StoredCell[]): Promise<void> {
+    // A statement binds a few parameters per cell, and Postgres accepts 65535.
     const BATCH = 5000;
-    for (let start = 0; start < inputs.length; start += BATCH) {
+    const filled = inputs.filter((cell) => cell.input !== "");
+    for (let start = 0; start < filled.length; start += BATCH) {
       await db
         .insert(cells)
         .values(
-          inputs.slice(start, start + BATCH).map((cell) => ({ ...cell, updatedBy: this.userId })),
+          filled.slice(start, start + BATCH).map((cell) => ({ ...cell, updatedBy: this.userId })),
         )
         .onConflictDoUpdate({
           target: [cells.tableId, cells.row, cells.col],
@@ -408,6 +469,16 @@ export class SpreadsheetRepository {
             updatedAt: sql`now()`,
           },
         });
+    }
+
+    const cleared = inputs.filter((cell) => cell.input === "");
+    for (let start = 0; start < cleared.length; start += BATCH) {
+      const targets = cleared
+        .slice(start, start + BATCH)
+        .map((cell) =>
+          and(eq(cells.tableId, cell.tableId), eq(cells.row, cell.row), eq(cells.col, cell.col)),
+        );
+      await db.delete(cells).where(or(...targets));
     }
   }
 
