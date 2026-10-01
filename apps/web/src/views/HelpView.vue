@@ -329,8 +329,9 @@ const OPERATORS = [
     <section id="structure">
       <h2>Pages and tables</h2>
       <p>
-        A spreadsheet holds pages, shown as tabs. A page holds one or more tables. Each table is its
-        own grid, with its own column letters and row numbers, so every table has a cell A1.
+        A spreadsheet holds pages, shown as tabs. A page holds blocks: tables, charts, and text
+        views. Each table is its own grid, with its own column letters and row numbers, so every
+        table has a cell A1.
       </p>
       <ul>
         <li>
@@ -349,7 +350,7 @@ const OPERATORS = [
           move to the name with Tab and press Enter. A page's name is also the link that opens the
           page, so there Enter opens the page and F2 renames it.
         </li>
-        <li>The arrows beside a table, chart, or text view move it up or down its page.</li>
+        <li>The arrows beside a block move it up or down its page.</li>
         <li>
           Two pages in a spreadsheet cannot share a name, and neither can two tables on a page.
           Names are compared without regard to letter case.
@@ -603,7 +604,7 @@ const OPERATORS = [
           A function that takes a range also takes an array, so results can be combined without
           filling any cells: <code>=SUM(A1:A3 * B1:B3)</code>.
         </li>
-        <li><code>EXECUTE</code> writes an array as a block of cells starting at its target.</li>
+        <li><code>EXECUTE</code> writes an array into the cells starting at its target.</li>
       </ul>
     </section>
 
@@ -709,12 +710,11 @@ const OPERATORS = [
           <code>=BUTTON("Save", DO(APPEND_ROW(Log!A:B, A1, A2), CLEAR(A1:A2)))</code>.
         </li>
         <li>
-          Three actions move whole blocks of rows. <code>INSERT(data, range)</code> adds every row
-          of the data below what the range holds.
-          <code>UPDATE(data, key_columns, range)</code> writes each row over the row with the same
-          key and adds the rows with new keys, so running it twice does not add anything twice.
-          <code>OVERWRITE(data, range)</code> empties the range first. The data can be a range or a
-          formula:
+          Three actions move many rows at once. <code>INSERT(data, range)</code> adds every row of
+          the data below what the range holds. <code>UPDATE(data, key_columns, range)</code> writes
+          each row over the row with the same key and adds the rows with new keys, so running it
+          twice does not add anything twice. <code>OVERWRITE(data, range)</code> empties the range
+          first. The data can be a range or a formula:
           <code>=BUTTON("Archive", INSERT(FILTER(A2:C99, C2:C99 = "done"), Archive!A:C))</code>.
         </li>
         <li>
@@ -854,9 +854,9 @@ const OPERATORS = [
       <ul>
         <li>
           <strong>Export</strong>, at the top of a spreadsheet, saves the whole spreadsheet as a
-          file: its pages, tables, charts, text views, and everything typed into cells, formulas
-          included. <strong>Import</strong>, on the list of spreadsheets, makes a new spreadsheet
-          from such a file.
+          file: its pages, the blocks on them, and everything typed into cells, formulas included.
+          <strong>Import</strong>, on the list of spreadsheets, makes a new spreadsheet from such a
+          file.
         </li>
         <li>
           <strong>Export CSV</strong> saves one table as a CSV file that other spreadsheet apps
@@ -906,8 +906,8 @@ const OPERATORS = [
     <section id="text-views">
       <h2>Text views</h2>
       <p>
-        <strong>Add text</strong> puts a block of text on a page. Choose <strong>Edit</strong> to
-        write it. The text is
+        <strong>Add text</strong> puts a text view on a page. Choose <strong>Edit</strong> to write
+        it. The text is
         <a href="https://commonmark.org/help/" target="_blank" rel="noreferrer">Markdown</a>, and
         tags put values from the spreadsheet into it. The view shows the result as you type.
       </p>

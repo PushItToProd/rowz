@@ -104,13 +104,13 @@ The server keeps versions of a spreadsheet: before anything is deleted, before a
 
 ### Files
 
-**Export** in the editor saves a spreadsheet as a JSON file holding its pages, tables, charts, text views, and cell inputs. **Import** on the spreadsheet list creates a spreadsheet from one. A spreadsheet holds at most 50 pages, 50 tables, charts, and text views on a page, and 100,000 filled cells, which are also the most a file may hold. The format is the `spreadsheetFile` schema in `packages/shared/src/index.ts`. It identifies things by name and order, with no ids.
+**Export** in the editor saves a spreadsheet as a JSON file holding its pages, their blocks (tables, charts, and text views), and cell inputs. **Import** on the spreadsheet list creates a spreadsheet from one. A spreadsheet holds at most 50 pages, 50 blocks on a page, and 100,000 filled cells, which are also the most a file may hold. The format is the `spreadsheetFile` schema in `packages/shared/src/index.ts`. It identifies things by name and order, with no ids.
 
 Each table also exports to CSV (the values shown) and imports from CSV.
 
 ### Charts and text views
 
-A page holds charts and text views next to its tables.
+A page holds blocks: tables, charts, and text views.
 
 A chart draws a range as bars, lines, a pie, or a scatter. Its data is a formula such as `Sales!A1:C9`. The first column labels the points and each other column is a series.
 

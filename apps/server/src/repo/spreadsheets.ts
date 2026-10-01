@@ -1418,7 +1418,7 @@ export class SpreadsheetRepository {
     if (blocks.length >= FILE_LIMITS.blocksPerPage) {
       throw unprocessable(
         "page_full",
-        `A page can have at most ${String(FILE_LIMITS.blocksPerPage)} tables, charts, and text views`,
+        `A page can have at most ${String(FILE_LIMITS.blocksPerPage)} blocks`,
       );
     }
     return Math.max(-1, ...blocks.map((block) => block.position)) + 1;

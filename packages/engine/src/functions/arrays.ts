@@ -126,7 +126,7 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
     );
   }),
 
-  /** A block of counting numbers, filled row by row. */
+  /** A grid of counting numbers, filled row by row. */
   SEQUENCE: eager(1, 4, (rowCount, colCount = 1, start = 1, step = 1) => {
     const [height, wide] = [integer(rowCount), integer(colCount)];
     if (height < 1 || wide < 1) fail("#VALUE!", "SEQUENCE needs at least one row and one column");
