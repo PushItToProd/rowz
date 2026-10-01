@@ -214,7 +214,8 @@ function endDrag(): void {
   drag.value = null;
   fillPreview.value = null;
   if (finished?.kind !== "fill" || !target) return;
-  void store.fill(props.table.id, finished.source, target);
+  // Dragging continues a series such as 1, 2. Ctrl+D and Ctrl+R copy exactly.
+  void store.fill(props.table.id, finished.source, target, true);
   // Leave the filled cells selected, so the fill can be continued or undone by hand.
   store.selection = cell(target.startRow, target.startCol);
   store.extendSelection({ row: target.endRow, col: target.endCol });

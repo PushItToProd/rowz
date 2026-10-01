@@ -219,7 +219,7 @@ Your todo item gave `'Table 1'[Column Name]`. I added the bare `[Price]` form fo
 
 **Choices.**
 
-- **No series guessing.** Filling `1, 2` gives `1, 2, 1, 2`, not `3, 4`. Excel and Sheets extend number and date series. Use `=A1+1` and fill that instead. Worth adding later.
+- **Dragging continues a series; Ctrl+D and Ctrl+R copy exactly.** Two or more numbers or dates an even step apart continue by that step, one date counts up by days, and text ending in a number (`Week 1`) counts up. A single number repeats, as in Excel. Month-end and weekday series are not recognized.
 - **Copy puts shown values on the clipboard**, so pasting into another app gives results, not formula text. The app remembers what it last copied, and pasting that same text back pastes the formulas.
 - **Paste grows the table** to fit, up to its size limit, and says so when part of the paste did not fit.
 - **Cut clears at once** and then behaves like copy. It does not wait for the paste, and the formulas' references move as with copy. Excel moves cut formulas without changing them.

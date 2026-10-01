@@ -273,9 +273,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
   }
 
   /** Fills `target` with the pattern of the cells in `source`, moving formula references. */
-  function fill(tableId: string, source: Block, target: Block): Promise<void> {
+  function fill(tableId: string, source: Block, target: Block, series = false): Promise<void> {
     const inputAt = (cell: CellAddress): string => engine.value.getInput({ tableId, ...cell });
-    return setCells(tableId, fillWrites(source, target, inputAt));
+    return setCells(tableId, fillWrites(source, target, inputAt, series));
   }
 
   /** Empties the selected cells. */

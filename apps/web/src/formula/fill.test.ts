@@ -192,3 +192,92 @@ describe("clipboard text", () => {
     expect(fromClipboardText(text)).toEqual(rows);
   });
 });
+
+describe("continuing a series", () => {
+  const values = (source: string, target: string, cells: Record<string, string>): string[] =>
+    fillWrites(block(source), block(target), sheet(cells), true).map((write) => write.input);
+
+  it.each<[string, Record<string, string>, string, string, string[]]>([
+    ["numbers an even step apart", { A1: "1", A2: "2" }, "A1:A2", "A1:A5", ["3", "4", "5"]],
+    ["a step other than 1", { A1: "10", A2: "7.5" }, "A1:A2", "A1:A4", ["5", "2.5"]],
+    ["decimal steps without noise", { A1: "0.1", A2: "0.2" }, "A1:A2", "A1:A4", ["0.3", "0.4"]],
+    ["three numbers", { A1: "2", A2: "4", A3: "6" }, "A1:A3", "A1:A5", ["8", "10"]],
+    ["numbers across a row", { A1: "5", B1: "10" }, "A1:B1", "A1:D1", ["15", "20"]],
+    ["a series upward", { A3: "5", A4: "6" }, "A3:A4", "A1:A4", ["3", "4"]],
+    ["a series leftward", { C1: "1", D1: "3" }, "C1:D1", "A1:D1", ["-3", "-1"]],
+    [
+      "one date, by a day",
+      { A1: "2026-09-29" },
+      "A1",
+      "A1:A4",
+      ["2026-09-30", "2026-10-01", "2026-10-02"],
+    ],
+    [
+      "dates a week apart",
+      { A1: "2026-09-01", A2: "2026-09-08" },
+      "A1:A2",
+      "A1:A4",
+      ["2026-09-15", "2026-09-22"],
+    ],
+    [
+      "dates with times",
+      { A1: "2026-09-30 08:00", A2: "2026-09-30 08:30" },
+      "A1:A2",
+      "A1:A3",
+      ["2026-09-30 09:00"],
+    ],
+    ["a date upward", { A3: "2026-01-01" }, "A3", "A1:A3", ["2025-12-30", "2025-12-31"]],
+    ["text ending in a number", { A1: "Week 1" }, "A1", "A1:A3", ["Week 2", "Week 3"]],
+    ["numbered text with a step", { A1: "Q1", A2: "Q3" }, "A1:A2", "A1:A4", ["Q5", "Q7"]],
+  ])("continues %s", (_, cells, source, target, expected) => {
+    expect(values(source, target, cells)).toEqual(expected);
+  });
+
+  it.each<[string, Record<string, string>, string, string, string[]]>([
+    ["one number", { A1: "5" }, "A1", "A1:A3", ["5", "5"]],
+    ["numbers an uneven step apart", { A1: "1", A2: "2", A3: "4" }, "A1:A3", "A1:A5", ["1", "2"]],
+    [
+      "dates an uneven step apart",
+      { A1: "2026-01-01", A2: "2026-01-02", A3: "2026-01-05" },
+      "A1:A3",
+      "A1:A4",
+      ["2026-01-01"],
+    ],
+    ["plain text", { A1: "a", A2: "b" }, "A1:A2", "A1:A4", ["a", "b"]],
+    [
+      "numbered text with different names",
+      { A1: "Week 1", A2: "Day 2" },
+      "A1:A2",
+      "A1:A4",
+      ["Week 1", "Day 2"],
+    ],
+    ["a number and text", { A1: "1", A2: "x" }, "A1:A2", "A1:A4", ["1", "x"]],
+    ["empty cells", {}, "A1:A2", "A1:A4", ["", ""]],
+  ])("repeats %s", (_, cells, source, target, expected) => {
+    expect(values(source, target, cells)).toEqual(expected);
+  });
+
+  it("still moves the references of formulas, even ones that end in a number", () => {
+    expect(values("A1:A2", "A1:A3", { A1: "=B1", A2: "=B2" })).toEqual(["=B3"]);
+    expect(values("A1", "A1:A3", { A1: "=B1*10" })).toEqual(["=B2*10", "=B3*10"]);
+  });
+
+  it("decides for each column of the source on its own", () => {
+    const writes = fillWrites(
+      block("A1:B2"),
+      block("A1:B4"),
+      sheet({ A1: "1", A2: "2", B1: "x", B2: "y" }),
+      true,
+    );
+    expect(byAddress(writes)).toEqual({ A3: "3", B3: "x", A4: "4", B4: "y" });
+  });
+
+  it("repeats numbered text where counting down would go below zero", () => {
+    expect(values("A3", "A1:A3", { A3: "Item 1" })).toEqual(["Item 1", "Item 0"]);
+  });
+
+  it("repeats without the series flag, as Ctrl+D does", () => {
+    const writes = fillWrites(block("A1:A2"), block("A1:A4"), sheet({ A1: "1", A2: "2" }));
+    expect(writes.map((write) => write.input)).toEqual(["1", "2"]);
+  });
+});

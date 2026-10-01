@@ -306,7 +306,12 @@ const OPERATORS = [
           Click a row number or a column letter to select the whole row or column. Ctrl+A selects
           the whole table.
         </li>
-        <li>A selection of several cells repeats as a pattern when it is filled.</li>
+        <li>
+          Dragging the handle continues a series: <code>1, 2</code> goes on to <code>3, 4</code>,
+          dates an even step apart keep that step, a single date counts up by days, and
+          <code>Week 1</code> goes on to <code>Week 2</code>. Anything else repeats as a pattern.
+          Ctrl+D and Ctrl+R copy exactly and continue nothing.
+        </li>
         <li>
           Copying puts the values the cells show on the clipboard, which is what other apps can use.
           Pasting them back here pastes the formulas. Text copied from another spreadsheet app is
