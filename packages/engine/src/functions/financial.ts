@@ -8,10 +8,6 @@ import type { FunctionDefinition } from "./registry";
  * 0 when payments fall at the end of each period and 1 when at the start.
  */
 
-function finite(value: number): number {
-  return Number.isFinite(value) ? value : fail("#VALUE!", "The result is not a number");
-}
-
 /** 1 for payments at the start of each period, 0 for the end. */
 function timing(type: Evaluated | undefined): number {
   return type !== undefined && number(type) !== 0 ? 1 : 0;
@@ -77,14 +73,12 @@ export const financialFunctions: Record<string, FunctionDefinition> = {
     if (n === 0) fail("#VALUE!", "The number of periods cannot be 0");
     if (r === 0) return -(pv + fv) / n;
     const growth = (1 + r) ** n;
-    return finite(-(r * (pv * growth + fv)) / ((1 + r * due) * (growth - 1)));
+    return -(r * (pv * growth + fv)) / ((1 + r * due) * (growth - 1));
   }),
 
   /** What savings or a loan will be worth after a number of periods. */
   FV: eager(3, 5, (rate, periods, payment, present = 0, type) =>
-    finite(
-      futureValue(number(rate), number(periods), number(payment), number(present), timing(type)),
-    ),
+    futureValue(number(rate), number(periods), number(payment), number(present), timing(type)),
   ),
 
   /** What a series of future payments is worth today. */
@@ -98,7 +92,7 @@ export const financialFunctions: Record<string, FunctionDefinition> = {
     ];
     if (r === 0) return -(fv + pmt * n);
     const growth = (1 + r) ** n;
-    return finite(-(fv + (pmt * (1 + r * due) * (growth - 1)) / r) / growth);
+    return -(fv + (pmt * (1 + r * due) * (growth - 1)) / r) / growth;
   }),
 
   /** How many periods it takes to pay off a loan or reach a savings goal. */
@@ -114,7 +108,7 @@ export const financialFunctions: Record<string, FunctionDefinition> = {
     const adjusted = pmt * (1 + r * due);
     const ratio = (adjusted - fv * r) / (adjusted + pv * r);
     if (!(ratio > 0)) fail("#VALUE!", "These payments never reach the goal");
-    return finite(Math.log(ratio) / Math.log(1 + r));
+    return Math.log(ratio) / Math.log(1 + r);
   }),
 
   /** The interest rate per period of a loan or an investment. */
@@ -134,7 +128,7 @@ export const financialFunctions: Record<string, FunctionDefinition> = {
   NPV: eager(2, Infinity, (rate, ...flows) => {
     const r = number(rate);
     if (r === -1) fail("#DIV/0!");
-    return finite(netPresentValue(r, numbers(flows), 1));
+    return netPresentValue(r, numbers(flows), 1);
   }),
 
   /** The rate of return of a series of cash flows: the discount rate at which they are worth nothing today. */

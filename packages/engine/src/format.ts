@@ -30,6 +30,9 @@ const MONTHS = [
 ];
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+/** The most decimals a number can be written with. */
+const MAX_DECIMALS = 100;
+
 /** The first of the private-use characters that stand for quoted text while a number format is read. */
 const HOLDER = 0xe000;
 
@@ -58,13 +61,20 @@ export function formatNumber(value: number, format: string): string {
 
   const [whole = "", fraction = ""] = found[0].split(".");
   const maxDecimals = fraction.length;
+  if (maxDecimals > MAX_DECIMALS) {
+    throw new FormatError(`A format can show at most ${String(MAX_DECIMALS)} decimals`);
+  }
   const minDecimals = fraction.lastIndexOf("0") + 1;
   const minWhole = whole.replaceAll(/[#,]/g, "").length;
 
   const scaled = (before + after).includes("%") ? value * 100 : value;
-  const factor = 10 ** maxDecimals;
-  // Half away from zero, as ROUND does.
-  const rounded = Math.round(Math.abs(scaled) * factor) / factor;
+  if (!Number.isFinite(scaled))
+    throw new FormatError("The number is too large to show as a percentage");
+  const shifted = Math.abs(scaled) * 10 ** maxDecimals;
+  // Half away from zero, as ROUND does. A number too large to shift has no decimals to round.
+  const rounded = Number.isFinite(shifted)
+    ? Math.round(shifted) / 10 ** maxDecimals
+    : Math.abs(scaled);
   const [digits = "0", decimals = ""] = rounded.toFixed(maxDecimals).split(".");
 
   const trimmed = decimals.replace(/0+$/, "").padEnd(minDecimals, "0");

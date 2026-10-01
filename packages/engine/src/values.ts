@@ -2,25 +2,9 @@ import type { CellId } from "./address";
 import type { Node } from "./ast";
 import { DAY_MS, formatDate, isDate, parseDate, type DateValue } from "./dates";
 import type { EvaluationContext } from "./evaluate";
+import { error, type ErrorValue } from "./errors";
 
-/** `#ERROR!` means the formula text could not be parsed, or a function got the wrong number of arguments. */
-export const ERROR_CODES = [
-  "#DIV/0!",
-  "#VALUE!",
-  "#REF!",
-  "#NAME?",
-  "#N/A",
-  "#SPILL!",
-  "#CYCLE!",
-  "#ERROR!",
-] as const;
-export type ErrorCode = (typeof ERROR_CODES)[number];
-
-export interface ErrorValue {
-  kind: "error";
-  code: ErrorCode;
-  message?: string;
-}
+export { ERROR_CODES, error, type ErrorCode, type ErrorValue } from "./errors";
 
 /**
  * A side effect described as data. Evaluating an action function such as
@@ -112,10 +96,6 @@ export interface RangeValue {
  * the first value in its own cell and the rest in the cells around it.
  */
 export type Evaluated = CellValue | RangeValue;
-
-export function error(code: ErrorCode, message?: string): ErrorValue {
-  return message === undefined ? { kind: "error", code } : { kind: "error", code, message };
-}
 
 function hasKind(value: unknown, kind: string): boolean {
   return typeof value === "object" && value !== null && "kind" in value && value.kind === kind;
@@ -230,6 +210,18 @@ const DISPLAY_PRECISION = 15;
 
 export function formatNumber(value: number): string {
   return String(Number(value.toPrecision(DISPLAY_PRECISION)));
+}
+
+/**
+ * A key that two values of one kind share exactly when `compare` finds them
+ * equal. Text ignores letter case. The text a number shows would not do,
+ * because it rounds: two numbers that differ in the last digit show the same.
+ */
+export function identityOf(value: Scalar): string {
+  if (isDate(value)) return `date:${String(value.ms)}`;
+  // Adding 0 turns -0, which compares equal to 0, into 0.
+  if (typeof value === "number") return `number:${String(value + 0)}`;
+  return `${kindOf(value)}:${toText(value).toLowerCase()}`;
 }
 
 /** The text a cell shows for a value. Buttons show their label. */

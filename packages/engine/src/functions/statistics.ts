@@ -1,4 +1,4 @@
-import { kindOf, toText, type Evaluated } from "../values";
+import { identityOf, type Evaluated } from "../values";
 import { boolean, eager, fail, grid, items, number, numbers, scalar } from "./arguments";
 import type { FunctionDefinition } from "./registry";
 
@@ -135,7 +135,7 @@ export const statisticsFunctions: Record<string, FunctionDefinition> = {
     const seen = new Set<string>();
     for (const { value } of items(values)) {
       const single = scalar(value);
-      if (single !== null) seen.add(`${kindOf(single)}:${toText(single).toLowerCase()}`);
+      if (single !== null) seen.add(identityOf(single));
     }
     return seen.size;
   }),

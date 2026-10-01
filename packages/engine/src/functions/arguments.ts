@@ -1,5 +1,4 @@
 import {
-  error,
   isError,
   isLambda,
   isRange,
@@ -8,7 +7,6 @@ import {
   toNumber,
   toText,
   type CellValue,
-  type ErrorCode,
   type ErrorValue,
   type Evaluated,
   type LambdaValue,
@@ -16,23 +14,10 @@ import {
   type Scalar,
 } from "../values";
 import { isDate, parseDate, type DateValue } from "../dates";
+import { fail, Failure } from "../errors";
 import type { PureFunction } from "./registry";
 
-/**
- * Thrown inside a function to make the call evaluate to an error. The
- * evaluator catches it where it calls the function, so function bodies can
- * convert arguments without checking each result.
- */
-export class Failure extends Error {
-  constructor(readonly error: ErrorValue) {
-    super(error.message ?? error.code);
-    this.name = "Failure";
-  }
-}
-
-export function fail(code: ErrorCode, message?: string): never {
-  throw new Failure(error(code, message));
-}
+export { fail, Failure } from "../errors";
 
 function unwrap<T>(value: T | ErrorValue): T {
   if (isError(value)) throw new Failure(value);

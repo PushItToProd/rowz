@@ -8,11 +8,11 @@ import {
   type Reference,
 } from "./ast";
 import { DAY_MS, dateFromMs, isDate } from "./dates";
-import { array, element, fail, Failure, number, scalar } from "./functions/arguments";
+import { error, fail, Failure, finite } from "./errors";
+import { array, element, number, scalar } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
 import {
   compare,
-  error,
   isError,
   isLambda,
   isRange,
@@ -75,7 +75,7 @@ function arithmetic(operator: "+" | "-" | "*" | "/" | "^", left: Scalar, right: 
   const b = number(right);
   if (operator === "/" && b === 0) fail("#DIV/0!", "Division by zero");
   const result = { "+": a + b, "-": a - b, "*": a * b, "/": a / b, "^": a ** b }[operator];
-  return Number.isFinite(result) ? result : fail("#VALUE!", "The result is not a number");
+  return finite(result);
 }
 
 function binary(operator: BinaryOperator, left: Scalar, right: Scalar): Scalar {
@@ -239,6 +239,18 @@ function applyValue(
   );
 }
 
+/**
+ * What a function returned, with any number that is not finite made an error.
+ * Checking here means no function has to check its own result.
+ */
+function returned(result: Evaluated): Evaluated {
+  if (typeof result === "number") return finite(result);
+  if (!isRange(result)) return result;
+  const unfit = (cell: CellValue): boolean => typeof cell === "number" && !Number.isFinite(cell);
+  if (!result.rows.some((cells) => cells.some(unfit))) return result;
+  return array(result.rows.map((cells) => cells.map((cell) => element(() => returned(cell)))));
+}
+
 function call(name: string, args: readonly Node[], context: EvaluationContext): Evaluated {
   // A name bound by LET or LAMBDA comes before a built-in function of the same name.
   const bound = context.names?.get(name.toLowerCase());
@@ -255,9 +267,11 @@ function call(name: string, args: readonly Node[], context: EvaluationContext): 
     case "special":
       return definition.evaluate(args, context);
     case "pure":
-      return definition.call(
-        args.map((arg) => () => evaluate(arg, context)),
-        context,
+      return returned(
+        definition.call(
+          args.map((arg) => () => evaluate(arg, context)),
+          context,
+        ),
       );
   }
 }
@@ -303,8 +317,13 @@ export function evaluate(node: Node, context: EvaluationContext): Evaluated {
   try {
     return compute(node, context);
   } catch (cause) {
-    // A function reports a bad argument by throwing Failure. Anything else is a bug.
+    // A function reports a bad argument by throwing Failure.
     if (cause instanceof Failure) return cause.error;
+    // JavaScript reports a limit of its own this way: text longer than a string
+    // can be, or calls nested deeper than the stack. A formula can ask for
+    // either, and one cell's error must not stop the rest from calculating.
+    if (cause instanceof RangeError) return error("#VALUE!", "The result is too large to compute");
+    // Anything else is a bug.
     throw cause;
   }
 }

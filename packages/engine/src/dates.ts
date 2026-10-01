@@ -1,3 +1,5 @@
+import { fail } from "./errors";
+
 /**
  * A date, with or without a time of day. It is a moment on a clock on the
  * wall, in no time zone: the date and time are stored as written, counted in
@@ -11,8 +13,19 @@ export interface DateValue {
 export const DAY_MS = 86_400_000;
 const SECOND_MS = 1000;
 
+// The calendar runs from year 0 through year 9999: the years `formatDate`
+// writes and `parseDate` reads back.
+const FIRST_MS = -62_167_219_200_000;
+const END_MS = 253_402_300_800_000;
+
+/** Makes a date, and fails for a moment outside the calendar, so that every `DateValue` has calendar parts. */
 export function dateFromMs(ms: number): DateValue {
-  return { kind: "date", ms: Math.round(ms) };
+  const rounded = Math.round(ms);
+  // Written so that a moment that is not a number fails too.
+  if (!(rounded >= FIRST_MS && rounded < END_MS)) {
+    fail("#VALUE!", "The date is outside the years 0 to 9999");
+  }
+  return { kind: "date", ms: rounded };
 }
 
 export function isDate(value: unknown): value is DateValue {
@@ -45,6 +58,21 @@ export function dateParts({ ms }: DateValue): DateParts {
   };
 }
 
+function msFromParts(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+): number {
+  const clock = new Date(0);
+  // setUTCFullYear takes years below 100 as written. Date.UTC would read them as 19xx.
+  clock.setUTCFullYear(year, month - 1, day);
+  clock.setUTCHours(hour, minute, second, 0);
+  return clock.getTime();
+}
+
 /**
  * Builds a date from calendar parts. A part outside its usual range carries
  * over, so month 13 is January of the next year and day 0 is the last day of
@@ -58,11 +86,7 @@ export function dateFromParts(
   minute = 0,
   second = 0,
 ): DateValue {
-  const clock = new Date(0);
-  // setUTCFullYear takes years below 100 as written. Date.UTC would read them as 19xx.
-  clock.setUTCFullYear(year, month - 1, day);
-  clock.setUTCHours(hour, minute, second, 0);
-  return dateFromMs(clock.getTime());
+  return dateFromMs(msFromParts(year, month, day, hour, minute, second));
 }
 
 const DATE_TEXT = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/;
@@ -79,9 +103,9 @@ export function parseDate(text: string): DateValue | undefined {
     .slice(1)
     // The time parts are missing from the match when no time was written.
     .map((part: string | undefined) => Number(part ?? 0));
-  const value = dateFromParts(year, month, day, hour, minute, second);
+  const ms = msFromParts(year, month, day, hour, minute, second);
   // A date that does not exist, such as February 30, would have carried over into another.
-  const read = dateParts(value);
+  const read = dateParts({ kind: "date", ms });
   const exists =
     read.year === year &&
     read.month === month &&
@@ -89,7 +113,7 @@ export function parseDate(text: string): DateValue | undefined {
     read.hour === hour &&
     read.minute === minute &&
     read.second === second;
-  return exists ? value : undefined;
+  return exists ? dateFromMs(ms) : undefined;
 }
 
 function pad(value: number, width = 2): string {

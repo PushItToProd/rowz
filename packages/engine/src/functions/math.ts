@@ -61,6 +61,13 @@ function natural(value: Evaluated, name: string): number {
   return whole < 0 ? fail("#VALUE!", `${name} needs numbers that are not negative`) : whole;
 }
 
+/**
+ * The largest number whose factorial a number can hold. The limit also bounds
+ * the loop: counting down from a number too large to hold every whole number
+ * would never reach 1.
+ */
+const MAX_FACTORIAL = 170;
+
 function gcd(a: number, b: number): number {
   return b === 0 ? a : gcd(b, a % b);
 }
@@ -84,7 +91,7 @@ function logarithm(value: Evaluated, base: number): number {
 
 /** A function of one number, such as a trigonometric function of an angle in radians. */
 function angle(compute: (value: number) => number): FunctionDefinition {
-  return eager(1, 1, (value) => finite(compute(number(value))));
+  return eager(1, 1, (value) => compute(number(value)));
 }
 
 /** An inverse trigonometric function, which is defined only from -1 to 1. */
@@ -95,10 +102,6 @@ function unit(name: string, compute: (value: number) => number): FunctionDefinit
       ? fail("#VALUE!", `${name} needs a number from -1 to 1`)
       : compute(given);
   });
-}
-
-function finite(value: number): number {
-  return Number.isFinite(value) ? value : fail("#VALUE!", "The result is not a number");
 }
 
 export const mathFunctions: Record<string, FunctionDefinition> = {
@@ -131,7 +134,7 @@ export const mathFunctions: Record<string, FunctionDefinition> = {
     const by = number(divisor);
     return by === 0 ? fail("#DIV/0!") : Math.trunc(number(dividend) / by);
   }),
-  EXP: eager(1, 1, (value) => finite(Math.exp(number(value)))),
+  EXP: eager(1, 1, (value) => Math.exp(number(value))),
   LN: eager(1, 1, (value) => logarithm(value, Math.E)),
   LOG: eager(1, 2, (value, base = 10) => logarithm(value, number(base))),
   PI: eager(0, 0, () => Math.PI),
@@ -160,20 +163,22 @@ export const mathFunctions: Record<string, FunctionDefinition> = {
   ),
   /** The smallest whole number that every value divides. */
   LCM: eager(1, Infinity, (...values) =>
-    finite(
-      numbers(values)
-        .map((value) => natural(value, "LCM"))
-        .reduce(
-          (multiple, value) => (value === 0 ? 0 : (multiple / gcd(multiple, value)) * value),
-          1,
-        ),
-    ),
+    numbers(values)
+      .map((value) => natural(value, "LCM"))
+      .reduce(
+        (multiple, value) => (value === 0 ? 0 : (multiple / gcd(multiple, value)) * value),
+        1,
+      ),
   ),
   /** The product of the whole numbers from 1 to the value. */
   FACT: eager(1, 1, (value) => {
+    const count = natural(value, "FACT");
+    if (count > MAX_FACTORIAL) {
+      fail("#VALUE!", `FACT needs a number up to ${String(MAX_FACTORIAL)}`);
+    }
     let product = 1;
-    for (let factor = natural(value, "FACT"); factor > 1; factor -= 1) product *= factor;
-    return finite(product);
+    for (let factor = count; factor > 1; factor -= 1) product *= factor;
+    return product;
   }),
 
   SUM: aggregate(sum),
@@ -207,8 +212,8 @@ export const mathFunctions: Record<string, FunctionDefinition> = {
   CEILING: toMultiple(Math.ceil),
   INT: eager(1, 1, (value) => Math.floor(number(value))),
   ABS: eager(1, 1, (value) => Math.abs(number(value))),
-  SQRT: eager(1, 1, (value) => finite(Math.sqrt(number(value)))),
-  POWER: eager(2, 2, (base, exponent) => finite(number(base) ** number(exponent))),
+  SQRT: eager(1, 1, (value) => Math.sqrt(number(value))),
+  POWER: eager(2, 2, (base, exponent) => number(base) ** number(exponent)),
   /** The remainder, with the sign of the divisor: `MOD(-1, 3)` is 2. */
   MOD: eager(2, 2, (value, divisor) => {
     const by = number(divisor);
