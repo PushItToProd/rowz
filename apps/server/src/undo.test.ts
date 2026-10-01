@@ -142,6 +142,22 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "rename a page that a formula and a chart on another page name",
+    async prepare({ id, pageId, tableId }) {
+      const { page, table } = await createPage(owner, id);
+      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "1" }), 204);
+      await owner.json(
+        "PUT",
+        `/tables/${table.id}/cells`,
+        cellsBody({ A1: "='Page 1'!'Table 1'!A1" }),
+        204,
+      );
+      const view = await createView(owner, page.id, "chart");
+      await owner.json("PATCH", `/views/${view.id}`, { source: "'Page 1'!'Table 1'!A1:B2" });
+      return { method: "PATCH", path: `/pages/${pageId}`, body: { name: "Renamed" }, status: 200 };
+    },
+  },
+  {
     name: "reorder blocks",
     async prepare({ pageId, tableId }) {
       const view = await createView(owner, pageId);
@@ -227,6 +243,61 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "delete a row that formulas and formats cover",
+    async prepare({ tableId }) {
+      await owner.json(
+        "PUT",
+        `/tables/${tableId}/cells`,
+        cellsBody({ A1: "1", A2: "2", A3: "3", B1: "=A2+A3", B4: "=SUM(A1:A3)" }),
+        204,
+      );
+      await owner.json("POST", `/tables/${tableId}/formats`, {
+        range: { startRow: 1, endRow: 2, startCol: 0, endCol: 0 },
+        format: { bold: true },
+      });
+      return {
+        method: "POST",
+        path: `/tables/${tableId}/edits`,
+        body: { axis: "row", kind: "delete", index: 1 },
+        status: 200,
+      };
+    },
+  },
+  {
+    name: "delete a column that a formula column reads",
+    async prepare({ tableId }) {
+      await owner.json("POST", `/tables/${tableId}/columns`, { headerRow: false });
+      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "1", B1: "2" }), 204);
+      await owner.json("PATCH", `/tables/${tableId}/columns/2`, {
+        type: "formula",
+        formula: "=[Column 1]+[Column 2]",
+      });
+      return {
+        method: "POST",
+        path: `/tables/${tableId}/edits`,
+        body: { axis: "col", kind: "delete", index: 1 },
+        status: 200,
+      };
+    },
+  },
+  {
+    name: "shrink a table that holds cells and formulas",
+    async prepare({ tableId }) {
+      await owner.json(
+        "PUT",
+        `/tables/${tableId}/cells`,
+        cellsBody({ A1: "1", A5: "5", B1: "=SUM(A1:A5)", C3: "c" }),
+        204,
+      );
+      return {
+        method: "PATCH",
+        path: `/tables/${tableId}`,
+        body: { rowCount: 3, colCount: 2 },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "run button action and group its table growth with its cell write",
     async prepare({ tableId }) {
       await owner.json(
@@ -273,6 +344,23 @@ const routeCases: Route[] = [
         method: "POST",
         path: `/tables/${tableId}/columns`,
         body: { headerRow: false },
+        status: 200,
+      };
+    },
+  },
+  {
+    name: "name columns from the first row",
+    async prepare({ tableId }) {
+      await owner.json(
+        "PUT",
+        `/tables/${tableId}/cells`,
+        cellsBody({ A1: "Name", B1: "Amount", A2: "x", B2: "=A2" }),
+        204,
+      );
+      return {
+        method: "POST",
+        path: `/tables/${tableId}/columns`,
+        body: { headerRow: true },
         status: 200,
       };
     },
