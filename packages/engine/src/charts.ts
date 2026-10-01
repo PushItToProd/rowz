@@ -30,8 +30,11 @@ function plotted(cell: CellValue): number | null {
  * The first column holds the labels and each other column is a series. A
  * single column is one series, labeled by position. The first row names the
  * series when none of its series cells is a number and a later row has one.
+ * Rows with nothing in them are left out.
  */
-export function chartData(rows: readonly (readonly CellValue[])[]): ChartData {
+export function chartData(given: readonly (readonly CellValue[])[]): ChartData {
+  // A whole column, such as `A:B` or `Sales[Total]`, brings the table's empty rows with it.
+  const rows = given.filter((cells) => cells.some((cell) => cell !== null && cell !== ""));
   const width = Math.max(0, ...rows.map((cells) => cells.length));
   const seriesColumns = Array.from({ length: Math.max(width - 1, 1) }, (_, index) =>
     width === 1 ? 0 : index + 1,

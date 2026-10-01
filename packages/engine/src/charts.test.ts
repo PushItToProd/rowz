@@ -5,6 +5,19 @@ import { at, STRUCTURE, workbookWith } from "./testing";
 import { error, formatValue, isChart, type CellValue } from "./values";
 
 describe("chartData", () => {
+  it("leaves out rows with nothing in them, as a whole column has at its end", () => {
+    const data = chartData([
+      ["apple", 5],
+      [null, null],
+      ["", null],
+      ["pear", null],
+      [null, 7],
+      [null, null],
+    ]);
+    expect(data.labels).toEqual(["apple", "pear", ""]);
+    expect(data.series[0]?.values).toEqual([5, null, 7]);
+  });
+
   it("reads the first column as labels and each other column as a series", () => {
     expect(
       chartData([
