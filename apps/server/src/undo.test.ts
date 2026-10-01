@@ -586,6 +586,67 @@ describe("refused history operations", () => {
     });
   });
 
+  it("refuses a cell whose table another tab deleted, then exposes the previous step", async () => {
+    const fixture = await fresh();
+    const added = await owner.json<{ id: string }>(
+      "POST",
+      `/pages/${fixture.pageId}/tables`,
+      {},
+      201,
+    );
+    await owner.json("PUT", `/tables/${added.id}/cells`, cellsBody({ A1: "typed" }), 204);
+    const first = withClientId(owner);
+    const second = withClientId(owner);
+    await first.request("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ A1: "older" }));
+    // The cell is empty before and after the table goes, so only the missing table stops the undo.
+    await first.request("PUT", `/tables/${added.id}/cells`, cellsBody({ A1: "" }));
+    await second.json("DELETE", `/tables/${added.id}`, undefined, 204);
+
+    expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
+      outcome: "refused",
+      error: "This change belongs to a page or table that has since been deleted",
+      undoable: true,
+    });
+    expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
+      outcome: "done",
+      undoable: false,
+    });
+  });
+
+  it("refuses a cell whose page another tab deleted", async () => {
+    const fixture = await fresh();
+    const { page, table } = await createPage(owner, fixture.id);
+    await owner.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "typed" }), 204);
+    const first = withClientId(owner);
+    const second = withClientId(owner);
+    await first.request("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "" }));
+    await second.json("DELETE", `/pages/${page.id}`, undefined, 204);
+
+    expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
+      outcome: "refused",
+      undoable: false,
+    });
+  });
+
+  it("refuses a cell that another tab's formula column now computes", async () => {
+    const fixture = await fresh();
+    await owner.json("POST", `/tables/${fixture.tableId}/columns`, { headerRow: false });
+    await owner.json("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ B1: "typed" }), 204);
+    const first = withClientId(owner);
+    const second = withClientId(owner);
+    await first.request("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ B1: "" }));
+    await second.json("PATCH", `/tables/${fixture.tableId}/columns/1`, {
+      type: "formula",
+      formula: "=[Column 1]",
+    });
+
+    expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
+      outcome: "refused",
+      error: "This change would store a value in a formula column",
+    });
+    expect((await snapshot(owner, fixture.id)).cells).toEqual([]);
+  });
+
   it("does not touch a spreadsheet or publish a change for a refused undo", async () => {
     const fixture = await fresh();
     const first = withClientId(owner);

@@ -67,6 +67,7 @@ import {
 import {
   conflict,
   forbidden,
+  isForeignKeyViolation,
   isUniqueViolation,
   notFound,
   ownerOnly,
@@ -1639,12 +1640,17 @@ export class SpreadsheetRepository {
         ...(await this.stackState(tx, spreadsheetId, clientId)),
       };
     } catch (error) {
-      if (!(error instanceof UndoRefusal) && !isUniqueViolation(error)) throw error;
-      await tx.update(journal).set({ clientId: null }).where(group);
+      // The nested transaction has rolled back whatever the apply wrote.
       const message =
         error instanceof UndoRefusal
           ? error.message
-          : "This change would create a duplicate name and cannot be restored";
+          : isUniqueViolation(error)
+            ? "This change would create a duplicate name and cannot be restored"
+            : isForeignKeyViolation(error)
+              ? "This change belongs to a page or table that has since been deleted"
+              : undefined;
+      if (message === undefined) throw error;
+      await tx.update(journal).set({ clientId: null }).where(group);
       return {
         outcome: "refused",
         label: latest.label,

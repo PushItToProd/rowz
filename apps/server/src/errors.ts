@@ -33,11 +33,22 @@ export const unprocessable = (code: string, message: string): ApiFailure =>
   new ApiFailure(422, code, message);
 
 const UNIQUE_VIOLATION = "23505";
+const FOREIGN_KEY_VIOLATION = "23503";
 
-/** Whether a database error, possibly wrapped by the query builder, is a unique constraint violation. */
-export function isUniqueViolation(cause: unknown): boolean {
+/** Whether a database error, possibly wrapped by the query builder, has a Postgres error code. */
+function hasCode(cause: unknown, code: string): boolean {
   for (let error = cause; error instanceof Error; error = error.cause) {
-    if ("code" in error && error.code === UNIQUE_VIOLATION) return true;
+    if ("code" in error && error.code === code) return true;
   }
   return false;
+}
+
+/** Whether a database error is a unique constraint violation. */
+export function isUniqueViolation(cause: unknown): boolean {
+  return hasCode(cause, UNIQUE_VIOLATION);
+}
+
+/** Whether a database error is a write that names a row that does not exist. */
+export function isForeignKeyViolation(cause: unknown): boolean {
+  return hasCode(cause, FOREIGN_KEY_VIOLATION);
 }
