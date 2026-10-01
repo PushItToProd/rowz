@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatAddress } from "@spreadsheet-app/engine";
+import { formatAddress, type CellId } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
 import { computed, ref, watch } from "vue";
 import { useFormulaAssist } from "../formula/useFormulaAssist";
@@ -27,10 +27,17 @@ const placeholder = computed(() => {
     : "Select a cell, then type a value or a formula such as =SUM(A1:A3)";
 });
 
+/**
+ * The cell the field is editing: the one selected when it took focus. A
+ * click on another cell selects that cell before the field loses focus, and
+ * what was typed belongs to this one.
+ */
+let editing: CellId | null = null;
+
 function commit(): void {
-  if (store.selection && draft.value !== stored.value) {
-    void store.setCell(store.selection, draft.value);
-  }
+  const target = editing ?? store.selection;
+  if (!target || !store.tables.some((table) => table.id === target.tableId)) return;
+  if (draft.value !== store.inputOf(target)) void store.setCell(target, draft.value);
 }
 
 const field = ref<HTMLInputElement>();
@@ -55,9 +62,17 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+function onFocus(): void {
+  focused.value = true;
+  editing = store.selection;
+}
+
 function onBlur(): void {
   focused.value = false;
   commit();
+  editing = null;
+  // The draft may be of the cell just left. Show the selected cell's input.
+  draft.value = stored.value;
 }
 </script>
 
@@ -76,7 +91,7 @@ function onBlur(): void {
       @input="assist.track"
       @keyup="assist.track"
       @click="assist.track"
-      @focus="focused = true"
+      @focus="onFocus"
       @blur="onBlur"
     />
     <FormulaAssist

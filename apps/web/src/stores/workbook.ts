@@ -104,6 +104,21 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   // Saves run one at a time so the server applies edits in the order typed.
   let saves: Promise<void> = Promise.resolve();
+  /** How many saves have failed, which `stored` compares across a wait. */
+  let failedSaves = 0;
+
+  /** Waits for the edits made so far to be saved. Resolves to whether every one of them was. */
+  async function stored(): Promise<boolean> {
+    const before = failedSaves;
+    await saves;
+    return failedSaves === before;
+  }
+
+  // The server answers reads in any order. Each read takes a number, and one
+  // that ends after a later read began is dropped, so the editor ends on the
+  // newest. A refresh is also dropped when a load began after it did.
+  let loads = 0;
+  let refreshes = 0;
 
   const canEdit = computed(() => spreadsheet.value !== null && spreadsheet.value.role !== "viewer");
 
@@ -171,7 +186,13 @@ export const useWorkbookStore = defineStore("workbook", () => {
   }
 
   async function load(spreadsheetId: string): Promise<void> {
-    const snapshot = await api.getSnapshot(spreadsheetId);
+    const turn = ++loads;
+    const snapshot = await api.getSnapshot(spreadsheetId).catch((cause: unknown) => {
+      // A spreadsheet the editor has moved on from is not one to report on.
+      if (turn === loads) throw cause;
+      return undefined;
+    });
+    if (!snapshot || turn !== loads) return;
     engine.value = createWorkbook(snapshot);
     spreadsheet.value = { id: snapshot.id, name: snapshot.name, role: snapshot.role };
     pages.value = snapshot.pages;
@@ -191,12 +212,13 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const open = spreadsheet.value;
     if (!open) return;
     // What was typed here is saved first, so that what comes back includes it.
+    const [turn, loaded] = [++refreshes, loads];
     const queued = saves;
     await queued;
     const snapshot = await api.getSnapshot(open.id);
+    if (turn !== refreshes || loaded !== loads || spreadsheet.value?.id !== open.id) return;
     // Something was typed while the spreadsheet was being read: read it again, with that in it.
     if (saves !== queued) return refresh();
-    if (spreadsheet.value?.id !== open.id) return;
 
     const structure = (value: { pages: unknown; tables: unknown }): string =>
       JSON.stringify([value.pages, value.tables]);
@@ -359,6 +381,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
             apply({ tableId, row, col }, previous);
           }
         }
+        failedSaves += 1;
         fail(cause, "The change could not be saved");
       }
     });
@@ -521,7 +544,6 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return { kind: "success", text: `Updated ${written}` };
   }
 
-  /** Asks the server to run the button in a cell, then shows the cells it wrote. */
   /**
    * Sends a request that makes the server run what a cell asks for, then
    * shows the tables it resized and the cells it wrote.
@@ -534,8 +556,10 @@ export const useWorkbookStore = defineStore("workbook", () => {
     if (running.has(key) || !canEdit.value) return undefined;
     running.add(key);
     try {
-      // The server evaluates stored inputs, so pending edits must be stored first.
-      await saves;
+      // The server evaluates stored inputs, so pending edits must be stored first. When one
+      // could not be, the action would run on something other than what was typed, so it
+      // does not run. The failed save has said why.
+      if (!(await stored())) return undefined;
       const result = await request();
       if (result.tables.length > 0) {
         const resized = new Map(result.tables.map((table) => [table.id, table]));

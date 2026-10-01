@@ -2,6 +2,27 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: Fixes from a code review
+
+A review listed 20 findings. All were addressed. These are the places where the fix involved a choice.
+
+- **One change to a spreadsheet at a time.** Every change to what a spreadsheet holds runs through `SpreadsheetRepository.change`, which locks the spreadsheet's row and reads the table, page, or view again under the lock. Two people typing in one spreadsheet now wait for each other for the length of one save. I chose this over finer locks because one rule covers every mutation, including ones not written yet. A whole-spreadsheet read (`getSnapshot`) does not take the lock. It runs in a repeatable-read transaction instead, so readers do not wait for writers.
+- **A save still names a cell by its row and column.** If someone else inserts a row above while a save is on its way, the save goes to the row and column it named, which now hold a different cell. The server only refuses a save that is outside the table or in a formula column as the table now is. Fixing the rest needs the client to say which version of the table it saw.
+- **The email limit counts recipients, and the variable is renamed.** `EMAIL_RUNS_PER_HOUR` (default 20, counting clicks) became `EMAILS_PER_HOUR` (default 50, counting each recipient of each message). One message to 200 addresses is 200 emails to whoever receives them, so messages alone would not bound abuse. The old variable is no longer read. A click that asks for more than is left sends nothing. Messages that went out before a later one failed count, and a send that failed entirely does not.
+- **Changes are refused from other origins.** A request other than GET, HEAD, or OPTIONS whose `Origin` header is not the origin of `BASE_URL` gets a 403. A request with no `Origin` header is allowed, because browsers send one on every such request and scripts and tests do not. `BASE_URL` must therefore be the exact URL people open, which sign-in already required.
+- **Sharing with an unconfirmed account is refused only when `REQUIRE_EMAIL_VERIFICATION` is on.** With it off no account is ever confirmed, so the check would end sharing. The default stays off and the risk in the Sharing entry below stands for such an instance.
+- **A spreadsheet is held to the limits of a file:** 50 pages, 50 items on a page, and 100,000 filled cells. Before, only import checked them, so the API could build a spreadsheet whose export could not be imported. A spreadsheet already past 100,000 cells can only have cells emptied until it is back under. The 32 MB size of a file is not enforced as cells are typed, because that would mean summing the text of every cell on each save. Export warns when the file it wrote is too large to import.
+- **A date is limited to the years 0 to 9999,** the years the app can write and read back. `DATE(10000, 1, 1)` and a date plus a huge number are now `#VALUE!`.
+- **A formula that hits a limit of JavaScript is an error in its cell.** The evaluator turns a `RangeError` (text longer than a string can be, a number format with more than 100 decimals, calls nested past the stack) into `#VALUE!`. Before, it stopped the whole recalculation. Every function result is also checked for infinity and NaN in one place.
+- **The stream of changes no longer names who made a change.** A session names itself when it opens the stream and the server leaves its own changes out. Before, every listener was sent every other session's id, and a write sent under someone else's id was hidden from them.
+- **Shutdown ends the streams and gives other requests ten seconds.** Connections still open after that are closed.
+- **A page's name is a link.** That makes pages reachable with Tab and Enter. Renaming from the keyboard is F2 on a page and Enter on other names.
+- **A button does not run when a pending save failed.** The save's error stays on screen and the click is dropped. Structure changes (inserting a row, renaming a column) still go ahead after a failed save, because the failed cells have already been put back to what the server holds.
+
+**Not verified here.** The server tests ran on PGlite, which runs one transaction at a time, so they prove the order of events with a stand-in that makes one request overtake another. The locking has not been run against Postgres with real concurrent connections, and the Playwright tests were not run: neither works in this sandbox.
+
+**To change.** `change` in `apps/server/src/repo/spreadsheets.ts`, `requireTrustedOrigin` in `apps/server/src/http.ts`, the limit in `runCell` in `apps/server/src/actions/run.ts`, and `returned` and `evaluate` in `packages/engine/src/evaluate.ts`.
+
 ## 2026-10-01: Running in production, and real email
 
 **Decision.** The server can serve the built web app and send email through a mail server, so the app can be deployed as one process.
@@ -9,7 +30,7 @@ Choices made without asking, for review. Each entry says what was decided, why, 
 - **`pnpm build` then `NODE_ENV=production pnpm start`.** In production the server serves `apps/web/dist` next to the API, with the app's page as the answer for any address the web app's router owns. I started it this way and checked the page, a deep link, an asset, the API, and sign-up.
 - **The server still runs from TypeScript source through `tsx`.** A compiled or bundled server would start faster and drop a dependency, and nothing else needs it yet.
 - **No Dockerfile.** I could not build or run one here, and an untested Dockerfile is worse than none. The README gives the commands.
-- **Email goes through `SMTP_URL` when it is set** (nodemailer). Without it messages are logged as before. The body is sent as plain text. The existing limit on email per user per hour still applies.
+- **Email goes through `SMTP_URL` when it is set** (nodemailer). Without it messages are logged as before. The body is sent as plain text. The limit on email per user per hour still applies.
 - **One process is assumed.** The change feed for live updates is in memory.
 
 **Before putting this on the public internet.** Set `REQUIRE_EMAIL_VERIFICATION=true` (see Sharing), set `AUTH_SECRET` to a random value, and configure better-auth's trusted proxy headers: without the client's address its sign-in rate limit is one shared bucket, which the server logs a warning about at start.

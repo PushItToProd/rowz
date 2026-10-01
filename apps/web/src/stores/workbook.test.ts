@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ColumnDefinition } from "@spreadsheet-app/engine";
 import { computed } from "vue";
-import { api, type ViewRecord } from "../api/client";
+import { api, type Snapshot, type ViewRecord } from "../api/client";
 import { at, clickResult, snapshotWith, TABLE, type MockedApi } from "../testing";
 import { useWorkbookStore } from "./workbook";
 
@@ -57,6 +57,35 @@ describe("loading", () => {
 
   it("marks a viewer as unable to edit", async () => {
     expect((await open({}, "viewer")).canEdit).toBe(false);
+  });
+
+  it("shows the spreadsheet asked for last, whichever answer arrives last", async () => {
+    const store = useWorkbookStore();
+    const answers = new Map<string, (snapshot: Snapshot) => void>();
+    server.getSnapshot.mockImplementation(
+      (id) => new Promise<Snapshot>((resolve) => answers.set(id, resolve)),
+    );
+    const [first, second] = [store.load("s1"), store.load("s2")];
+    answers.get("s2")?.({ ...snapshotWith({ A1: "new" }), id: "s2", name: "Second" });
+    answers.get("s1")?.(snapshotWith({ A1: "old" }));
+    await Promise.all([first, second]);
+    expect(store.spreadsheet).toMatchObject({ id: "s2", name: "Second" });
+    expect(store.inputOf(at("A1"))).toBe("new");
+  });
+
+  it("does not report a failure to read a spreadsheet it has moved on from", async () => {
+    const store = useWorkbookStore();
+    const gone = deferred();
+    server.getSnapshot.mockImplementationOnce(async () => {
+      await gone.promise;
+      return snapshotWith();
+    });
+    const first = store.load("s1");
+    server.getSnapshot.mockResolvedValue({ ...snapshotWith(), id: "s2" });
+    await store.load("s2");
+    gone.reject(new Error("Spreadsheet not found"));
+    await expect(first).resolves.toBeUndefined();
+    expect(store.spreadsheet?.id).toBe("s2");
   });
 });
 
@@ -378,6 +407,24 @@ describe("click", () => {
 
     save.resolve();
     await clicked;
+    expect(server.click).toHaveBeenCalledOnce();
+  });
+
+  it("does not run when a pending save fails, and leaves the save's error showing", async () => {
+    const store = await open({ A1: "1", B1: BUTTON });
+    const save = deferred();
+    server.setCells.mockReturnValue(save.promise);
+
+    void store.setCell(at("A1"), "5");
+    const clicked = store.click(at("B1"));
+    save.reject(new Error("A1 could not be saved"));
+    await clicked;
+    expect(server.click).not.toHaveBeenCalled();
+    expect(store.notice).toEqual({ kind: "error", text: "A1 could not be saved" });
+    expect(store.running.size).toBe(0);
+
+    // The failed save is behind it now, so the button runs.
+    await store.click(at("B1"));
     expect(server.click).toHaveBeenCalledOnce();
   });
 
@@ -990,6 +1037,39 @@ describe("undo and redo", () => {
 });
 
 describe("refreshing after a change made elsewhere", () => {
+  it("keeps the newer of two overlapping reads, whichever answer arrives last", async () => {
+    const store = await open({ A1: "start" });
+    const answers: ((snapshot: Snapshot) => void)[] = [];
+    server.getSnapshot.mockImplementation(
+      () => new Promise<Snapshot>((resolve) => answers.push(resolve)),
+    );
+    const [older, newer] = [store.refresh(), store.refresh()];
+    await vi.waitFor(() => {
+      expect(answers).toHaveLength(2);
+    });
+    answers[1]?.(snapshotWith({ A1: "newer" }));
+    answers[0]?.(snapshotWith({ A1: "older" }));
+    await Promise.all([older, newer]);
+    expect(store.inputOf(at("A1"))).toBe("newer");
+  });
+
+  it("gives way to a load that began after it", async () => {
+    const store = await open({ A1: "start" });
+    const answers: ((snapshot: Snapshot) => void)[] = [];
+    server.getSnapshot.mockImplementation(
+      () => new Promise<Snapshot>((resolve) => answers.push(resolve)),
+    );
+    const refreshed = store.refresh();
+    await vi.waitFor(() => {
+      expect(answers).toHaveLength(1);
+    });
+    const loaded = store.load("s1");
+    answers[1]?.(snapshotWith({ A1: "loaded" }));
+    answers[0]?.(snapshotWith({ A1: "refreshed" }));
+    await Promise.all([refreshed, loaded]);
+    expect(store.inputOf(at("A1"))).toBe("loaded");
+  });
+
   it("shows the cells and views the server now has, and keeps the selection", async () => {
     const store = await open({ A1: "1", B1: "=A1*2" });
     store.selection = at("B1");

@@ -2,7 +2,7 @@ import { mount, type VueWrapper } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import EditableName from "./EditableName.vue";
 
-function render(props: { disabled?: boolean } = {}): VueWrapper {
+function render(props: { disabled?: boolean; href?: string } = {}): VueWrapper {
   return mount(EditableName, {
     props: { value: "Table 1", label: "Table name", ...props },
     attachTo: document.body,
@@ -63,7 +63,43 @@ describe("EditableName", () => {
   it("cannot be edited when disabled", async () => {
     const wrapper = render({ disabled: true });
     await wrapper.get("span").trigger("dblclick");
+    await wrapper.get("span").trigger("keydown", { key: "Enter" });
     expect(wrapper.find("input").exists()).toBe(false);
     expect(wrapper.get("span").attributes("title")).toBeUndefined();
+    expect(wrapper.get("span").attributes("tabindex")).toBeUndefined();
+  });
+
+  it.each(["Enter", "F2"])("can be reached with the keyboard and renamed with %s", async (key) => {
+    const wrapper = render();
+    expect(wrapper.get("span").attributes()).toMatchObject({ tabindex: "0", role: "button" });
+    await wrapper.get("span").trigger("keydown", { key });
+    const input = wrapper.get<HTMLInputElement>("input");
+    expect(document.activeElement).toBe(input.element);
+
+    await input.setValue("Sales");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(wrapper.emitted("rename")).toEqual([["Sales"]]);
+    // The keyboard is back on the name, not lost to the page.
+    expect(document.activeElement).toBe(wrapper.get("span").element);
+  });
+
+  it("puts the keyboard back on the name after Escape", async () => {
+    const wrapper = render();
+    await wrapper.get("span").trigger("keydown", { key: "Enter" });
+    await wrapper.get("input").trigger("keydown", { key: "Escape" });
+    expect(wrapper.emitted("rename")).toBeUndefined();
+    expect(document.activeElement).toBe(wrapper.get("span").element);
+  });
+
+  it("is a link when it leads somewhere: Enter is left to the link, and F2 renames", async () => {
+    const wrapper = render({ href: "/s/1/p/2" });
+    const link = wrapper.get("a");
+    expect(link.attributes("href")).toBe("/s/1/p/2");
+    expect(link.attributes("role")).toBeUndefined();
+
+    await link.trigger("keydown", { key: "Enter" });
+    expect(wrapper.find("input").exists()).toBe(false);
+    await link.trigger("keydown", { key: "F2" });
+    expect(wrapper.find("input").exists()).toBe(true);
   });
 });

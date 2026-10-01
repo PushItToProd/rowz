@@ -341,7 +341,11 @@ const OPERATORS = [
           same for the selected cell. Formulas that read the table are rewritten to keep reading the
           same cells. A formula that named a deleted cell shows <code>#REF!</code>.
         </li>
-        <li>Double-click the name of a spreadsheet, page, or table to rename it.</li>
+        <li>
+          Double-click the name of a spreadsheet, page, or table to rename it. From the keyboard,
+          move to the name with Tab and press Enter. A page's name is also the link that opens the
+          page, so there Enter opens the page and F2 renames it.
+        </li>
         <li>The arrows beside a table, chart, or text view move it up or down its page.</li>
         <li>
           Two pages in a spreadsheet cannot share a name, and neither can two tables on a page.

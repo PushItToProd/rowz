@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PageRecord, TableRecord, ViewRecord } from "../api/client";
-import { readSpreadsheetFile, toSpreadsheetFile } from "./spreadsheetFile";
+import { FILE_LIMITS } from "@spreadsheet-app/shared";
+import { fitsImport, readSpreadsheetFile, toSpreadsheetFile } from "./spreadsheetFile";
 
 const PAGES: PageRecord[] = [
   { id: "p2", name: "Report", position: 1 },
@@ -99,5 +100,17 @@ describe("readSpreadsheetFile", () => {
     );
     const broken = { ...file(), pages: [{ name: "P", items: [{ type: "table", name: "T" }] }] };
     expect(() => readSpreadsheetFile(JSON.stringify(broken))).toThrow(/pages\.0\.items\.0\./);
+  });
+});
+
+describe("fitsImport", () => {
+  const withText = (length: number) =>
+    toSpreadsheetFile("Big", PAGES, TABLES, [], (table) =>
+      table.id === "t1" ? [{ row: 0, col: 0, input: "x".repeat(length) }] : [],
+    );
+
+  it("accepts a file the server would read, and refuses one past the size it reads", () => {
+    expect(fitsImport(withText(10))).toBe(true);
+    expect(fitsImport(withText(FILE_LIMITS.bytes))).toBe(false);
   });
 });

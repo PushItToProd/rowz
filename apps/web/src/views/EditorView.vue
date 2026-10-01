@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { FILE_LIMITS } from "@spreadsheet-app/shared";
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import EditableName from "../components/EditableName.vue";
@@ -11,6 +12,7 @@ import SharePanel from "../components/SharePanel.vue";
 import { useSessionStore } from "../stores/session";
 import { watchSpreadsheet } from "../api/live";
 import { download, fileName } from "../files/download";
+import { fitsImport } from "../files/spreadsheetFile";
 import TableCard from "../components/TableCard.vue";
 import TextCard from "../components/TextCard.vue";
 import { useWorkbookStore } from "../stores/workbook";
@@ -24,8 +26,15 @@ const loadError = ref<string | null>(null);
 /** Saves the spreadsheet, formulas included, as a file that can be imported again. */
 function exportFile(): void {
   const file = store.toFile();
-  if (file)
-    download(fileName(file.name, "json"), JSON.stringify(file, null, 1), "application/json");
+  if (!file) return;
+  download(fileName(file.name, "json"), JSON.stringify(file, null, 1), "application/json");
+  if (!fitsImport(file)) {
+    const megabytes = String(FILE_LIMITS.bytes / 1024 / 1024);
+    store.notice = {
+      kind: "error",
+      text: `The file was saved, but it is larger than ${megabytes} MB, the most that can be imported`,
+    };
+  }
 }
 
 const historyOpen = ref(false);

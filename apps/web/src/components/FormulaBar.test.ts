@@ -73,6 +73,22 @@ describe("FormulaBar", () => {
     expect(server.setCells).toHaveBeenCalledOnce();
   });
 
+  it("saves what was typed to the cell it was typed for when another cell is clicked", async () => {
+    const wrapper = await render({ A1: "2", B1: "2" });
+    await select(wrapper, "A1");
+    await field(wrapper).trigger("focus");
+    await field(wrapper).setValue("typed for A1");
+    // A click on a cell selects it on mousedown, before the field loses focus.
+    useWorkbookStore().selection = at("B1");
+    await field(wrapper).trigger("blur");
+
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
+      { row: 0, col: 0, input: "typed for A1" },
+    ]);
+    expect(useWorkbookStore().inputOf(at("B1"))).toBe("2");
+    expect(field(wrapper).element.value).toBe("2");
+  });
+
   it("restores the stored input on Escape", async () => {
     const wrapper = await render({ A1: "2" });
     await select(wrapper, "A1");

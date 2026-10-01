@@ -8,8 +8,12 @@ const props = defineProps<{ spreadsheetId: string; activePageId: string }>();
 const store = useWorkbookStore();
 const router = useRouter();
 
+function route(pageId: string) {
+  return { name: "editor", params: { spreadsheetId: props.spreadsheetId, pageId } };
+}
+
 function open(pageId: string): Promise<unknown> {
-  return router.push({ name: "editor", params: { spreadsheetId: props.spreadsheetId, pageId } });
+  return router.push(route(pageId));
 }
 
 async function add(): Promise<void> {
@@ -36,10 +40,13 @@ async function remove(page: PageRecord): Promise<void> {
       :aria-current="page.id === activePageId ? 'page' : undefined"
       @click="open(page.id)"
     >
+      <!-- The name is a link, so the keyboard reaches each page. The tab around it takes the click. -->
       <EditableName
         :value="page.name"
         label="Page name"
+        :href="router.resolve(route(page.id)).href"
         :disabled="!store.canEdit"
+        @click.prevent
         @rename="store.renamePage(page.id, $event)"
       />
       <button
