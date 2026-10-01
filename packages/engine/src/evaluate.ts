@@ -1,10 +1,12 @@
 import type { CellId, CellRange } from "./address";
 import type { BinaryOperator, Node, Reference } from "./ast";
-import { asScalar } from "./functions/arguments";
+import { Failure } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
 import {
+  compare,
   error,
   isError,
+  isScalar,
   toNumber,
   toText,
   type CellValue,
@@ -29,33 +31,6 @@ function arity(name: string, min: number, max: number): string {
   if (max === Infinity) return `${name} takes at least ${count(min)}`;
   if (min === max) return `${name} takes ${count(min)}`;
   return `${name} takes ${String(min)} to ${count(max)}`;
-}
-
-// Values of different types order as number < text < boolean.
-const TYPE_RANK = { number: 0, string: 1, boolean: 2 } as const;
-
-/** An empty cell compares as the empty value of the other side's type. */
-function fillEmpty(value: Scalar, other: Scalar): number | string | boolean {
-  if (value !== null) return value;
-  if (typeof other === "string") return "";
-  if (typeof other === "boolean") return false;
-  return 0;
-}
-
-function compare(leftValue: Scalar, rightValue: Scalar): number {
-  const left = fillEmpty(leftValue, rightValue);
-  const right = fillEmpty(rightValue, leftValue);
-  if (typeof left === "number" && typeof right === "number") return left - right;
-  if (typeof left === "string" && typeof right === "string") {
-    // Text comparison ignores case.
-    const [a, b] = [left.toLowerCase(), right.toLowerCase()];
-    return a < b ? -1 : Number(a > b);
-  }
-  if (typeof left === "boolean" && typeof right === "boolean") return Number(left) - Number(right);
-  return (
-    TYPE_RANK[typeof left as keyof typeof TYPE_RANK] -
-    TYPE_RANK[typeof right as keyof typeof TYPE_RANK]
-  );
 }
 
 function arithmetic(
@@ -125,7 +100,19 @@ function call(name: string, args: Node[], context: EvaluationContext): Evaluated
     return error("#ERROR!", arity(name, definition.minArgs, definition.maxArgs));
   }
   if (definition.kind === "action") return { kind: "action", name, args, origin: context.origin };
-  return definition.call(args.map((arg) => () => evaluate(arg, context)));
+  try {
+    return definition.call(args.map((arg) => () => evaluate(arg, context)));
+  } catch (cause) {
+    // A function reports a bad argument by throwing. Anything else is a bug and keeps propagating.
+    if (cause instanceof Failure) return cause.error;
+    throw cause;
+  }
+}
+
+/** Narrows an operand to a single value. Ranges, actions, and buttons are `#VALUE!`. */
+function asScalar(value: Evaluated): Scalar | ErrorValue {
+  if (isScalar(value) || isError(value)) return value;
+  return error("#VALUE!", "Expected a single value");
 }
 
 /** Evaluates an AST. Reads cell values through `context` and has no side effects. */

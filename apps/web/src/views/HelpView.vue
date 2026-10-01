@@ -4,6 +4,7 @@ import {
   errorDocs,
   EXAMPLE_CELLS,
   formatValue,
+  FUNCTION_CATEGORIES,
   functionDocs,
   isButton,
   parseAddress,
@@ -41,8 +42,7 @@ const exampleCells = Object.entries(EXAMPLE_CELLS)
   .map(([address, input]) => `${address} holds ${input}`)
   .join(", ");
 
-const CATEGORIES: readonly FunctionCategory[] = ["Math", "Logic", "Text", "Actions"];
-const byCategory = CATEGORIES.map((category) => ({
+const byCategory = FUNCTION_CATEGORIES.map((category: FunctionCategory) => ({
   category,
   docs: functionDocs.filter((doc: FunctionDoc) => doc.category === category),
 }));
@@ -262,6 +262,15 @@ const OPERATORS = [
       <p>
         Function names can be typed in any letter case. A parameter in square brackets may be left
         out. In the examples, {{ exampleCells }}.
+      </p>
+      <p class="help__jump">
+        <a
+          v-for="{ category } in byCategory"
+          :key="category"
+          :href="`#functions-${category.toLowerCase()}`"
+        >
+          {{ category }}
+        </a>
       </p>
       <template v-for="{ category, docs } in byCategory" :key="category">
         <h3 :id="`functions-${category.toLowerCase()}`">{{ category }}</h3>

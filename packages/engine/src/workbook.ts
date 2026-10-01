@@ -3,6 +3,7 @@ import type { Node, Reference } from "./ast";
 import type { Effect } from "./effects";
 import { evaluate, referencesOf, type EvaluationContext } from "./evaluate";
 import { defaultFunctions } from "./functions";
+import { Failure } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
 import { DependencyIndex, evaluationOrder } from "./graph";
 import { parseFormula } from "./parser";
@@ -10,7 +11,6 @@ import { TableResolver, type WorkbookData, type WorkbookStructure } from "./stru
 import { FormulaSyntaxError } from "./tokenizer";
 import {
   error,
-  isError,
   isFormulaInput,
   isRange,
   parseLiteralInput,
@@ -141,12 +141,17 @@ export class Workbook {
       return { ok: false, error: error("#NAME?", `Unknown action ${action.name}`) };
     }
     const context = this.context(action.origin);
-    const result = definition.plan(action.args, {
-      origin: action.origin,
-      evaluate: (node) => evaluate(node, context),
-      resolve: (reference) => context.resolve(reference),
-    });
-    return isError(result) ? { ok: false, error: result } : { ok: true, effects: result };
+    try {
+      const effects = definition.plan(action.args, {
+        origin: action.origin,
+        evaluate: (node) => evaluate(node, context),
+        resolve: (reference) => context.resolve(reference),
+      });
+      return { ok: true, effects };
+    } catch (cause) {
+      if (cause instanceof Failure) return { ok: false, error: cause.error };
+      throw cause;
+    }
   }
 
   private record(id: CellId): CellRecord | undefined {

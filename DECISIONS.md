@@ -2,6 +2,20 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-09-30: The first batch of added functions
+
+**Decision.** Added 35 functions that other spreadsheets have and that return a single value: the `SUMIF` family, `VLOOKUP`, `XLOOKUP`, `MATCH`, `INDEX`, more math and text functions, the `IS` checks, `IFS`, and `SWITCH`. The help page lists them all.
+
+**Choices that differ between spreadsheets or that I had to pick.**
+
+- `VLOOKUP` and `MATCH` default to the nearest match in sorted data, as in Excel and Google Sheets. Pass `FALSE` or `0` for an exact match. Formulas pasted from those apps behave the same here.
+- `XLOOKUP` only does exact matches, and both of its ranges must be a single row or column. Its other match modes can come later.
+- A criterion such as `">5"` only matches cells of its own kind: it matches numbers above 5 and never text. An empty criterion `""` matches empty cells, and `"<>"` matches non-empty ones.
+- A lookup that finds nothing gives `#N/A`. That error code is back for this purpose.
+- `HLOOKUP` is left out. `XLOOKUP` and `INDEX` with `MATCH` cover it.
+- Functions that return several values (`FILTER`, `SORT`, `UNIQUE`) wait for array results.
+- Dates are not started. There is no date value yet, so `TODAY` and date arithmetic need their own design.
+
 ## 2026-09-30: Deleting and inserting rows and columns
 
 **Decision.** A row or column anywhere in a table can be deleted, and one can be inserted before any row or column. The todo item asked only for deleting. Inserting uses the same code, so both shipped.

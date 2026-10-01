@@ -12,6 +12,7 @@ export { formatReference, printNode, type Node, type Reference } from "./ast";
 export {
   errorDocs,
   EXAMPLE_CELLS,
+  FUNCTION_CATEGORIES,
   functionDocs,
   type FunctionCategory,
   type FunctionDoc,

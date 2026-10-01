@@ -1,6 +1,15 @@
 import type { ErrorCode } from "./values";
 
-export type FunctionCategory = "Math" | "Logic" | "Text" | "Actions";
+/** In the order the help page shows them. */
+export const FUNCTION_CATEGORIES = [
+  "Math",
+  "Logic",
+  "Lookup",
+  "Text",
+  "Information",
+  "Actions",
+] as const;
+export type FunctionCategory = (typeof FUNCTION_CATEGORIES)[number];
 
 /** What the help page shows for one function. */
 export interface FunctionDoc {
@@ -10,14 +19,21 @@ export interface FunctionDoc {
   syntax: string;
   summary: string;
   /**
-   * A formula without the leading `=`. It may read A1, A2, and A3, which the
-   * help page fills with `EXAMPLE_CELLS`, and it must evaluate without an error.
+   * A formula without the leading `=`. It may read the cells in
+   * `EXAMPLE_CELLS`, and it must evaluate without an error.
    */
   example: string;
 }
 
 /** The cells every example can read. The help page states them next to the examples. */
-export const EXAMPLE_CELLS = { A1: "1", A2: "2", A3: "3" } as const;
+export const EXAMPLE_CELLS = {
+  A1: "1",
+  A2: "2",
+  A3: "3",
+  B1: "apple",
+  B2: "banana",
+  B3: "cherry",
+} as const;
 
 /**
  * One entry per function in the default registry, in the order the help page
@@ -81,6 +97,113 @@ export const functionDocs: readonly FunctionDoc[] = [
     example: "ABS(-4)",
   },
   {
+    name: "PRODUCT",
+    category: "Math",
+    syntax: "PRODUCT(value, ...)",
+    summary: "Multiplies numbers. Text and empty cells inside a range are skipped.",
+    example: "PRODUCT(A1:A3, 10)",
+  },
+  {
+    name: "MEDIAN",
+    category: "Math",
+    syntax: "MEDIAN(value, ...)",
+    summary: "The middle number, or the mean of the two middle numbers.",
+    example: "MEDIAN(A1:A3, 10)",
+  },
+  {
+    name: "COUNTIF",
+    category: "Math",
+    syntax: "COUNTIF(range, criterion)",
+    summary:
+      'How many cells of the range meet the criterion. A criterion is a value to equal, or text starting with a comparison such as ">1" or "<>apple". Text criteria ignore letter case and may use * for any characters and ? for one.',
+    example: 'COUNTIF(A1:A3, ">1")',
+  },
+  {
+    name: "COUNTIFS",
+    category: "Math",
+    syntax: "COUNTIFS(range, criterion, ...)",
+    summary: "How many positions meet every criterion, each tested in its own range.",
+    example: 'COUNTIFS(A1:A3, ">1", B1:B3, "*an*")',
+  },
+  {
+    name: "SUMIF",
+    category: "Math",
+    syntax: "SUMIF(range, criterion, [sum_range])",
+    summary:
+      "Adds the numbers of `sum_range` at the positions where `range` meets the criterion. Without `sum_range` it adds `range` itself.",
+    example: 'SUMIF(B1:B3, "<>banana", A1:A3)',
+  },
+  {
+    name: "SUMIFS",
+    category: "Math",
+    syntax: "SUMIFS(sum_range, range, criterion, ...)",
+    summary: "Adds the numbers of `sum_range` at the positions that meet every criterion.",
+    example: 'SUMIFS(A1:A3, A1:A3, ">1", B1:B3, "c*")',
+  },
+  {
+    name: "AVERAGEIF",
+    category: "Math",
+    syntax: "AVERAGEIF(range, criterion, [average_range])",
+    summary: "The mean of the numbers at the positions where `range` meets the criterion.",
+    example: 'AVERAGEIF(A1:A3, ">=2")',
+  },
+  {
+    name: "ROUNDUP",
+    category: "Math",
+    syntax: "ROUNDUP(number, [digits])",
+    summary: "Rounds away from zero to a number of decimal places.",
+    example: "ROUNDUP(3.141, 2)",
+  },
+  {
+    name: "ROUNDDOWN",
+    category: "Math",
+    syntax: "ROUNDDOWN(number, [digits])",
+    summary: "Rounds toward zero to a number of decimal places.",
+    example: "ROUNDDOWN(3.149, 2)",
+  },
+  {
+    name: "FLOOR",
+    category: "Math",
+    syntax: "FLOOR(number, [multiple])",
+    summary: "Rounds down to a multiple, 1 if not given.",
+    example: "FLOOR(17, 5)",
+  },
+  {
+    name: "CEILING",
+    category: "Math",
+    syntax: "CEILING(number, [multiple])",
+    summary: "Rounds up to a multiple, 1 if not given.",
+    example: "CEILING(17, 5)",
+  },
+  {
+    name: "INT",
+    category: "Math",
+    syntax: "INT(number)",
+    summary: "Rounds down to a whole number.",
+    example: "INT(-2.5)",
+  },
+  {
+    name: "SQRT",
+    category: "Math",
+    syntax: "SQRT(number)",
+    summary: "The square root.",
+    example: "SQRT(16)",
+  },
+  {
+    name: "POWER",
+    category: "Math",
+    syntax: "POWER(base, exponent)",
+    summary: "The base raised to the exponent, as the ^ operator does.",
+    example: "POWER(2, 10)",
+  },
+  {
+    name: "MOD",
+    category: "Math",
+    syntax: "MOD(number, divisor)",
+    summary: "The remainder of a division. It has the sign of the divisor.",
+    example: "MOD(7, 3)",
+  },
+  {
     name: "IF",
     category: "Logic",
     syntax: "IF(condition, then, [else])",
@@ -115,6 +238,54 @@ export const functionDocs: readonly FunctionDoc[] = [
     syntax: "NOT(value)",
     summary: "TRUE when the value is false, and FALSE when it is true.",
     example: "NOT(A1 = 2)",
+  },
+  {
+    name: "IFS",
+    category: "Logic",
+    syntax: "IFS(condition, value, ...)",
+    summary:
+      "Gives the value that follows the first true condition. Later pairs are not evaluated.",
+    example: 'IFS(A1 > 2, "big", A1 > 0, "small")',
+  },
+  {
+    name: "SWITCH",
+    category: "Logic",
+    syntax: "SWITCH(value, case, result, ..., [default])",
+    summary:
+      "Gives the result that follows the first case equal to the value, or the default when none is.",
+    example: 'SWITCH(A2, 1, "one", 2, "two", "many")',
+  },
+  {
+    name: "VLOOKUP",
+    category: "Lookup",
+    syntax: "VLOOKUP(key, range, column, [sorted])",
+    summary:
+      "Finds the key in the first column of the range and gives the cell of that row in the numbered column. With `sorted` FALSE the match is exact. Otherwise the range must be sorted by its first column, and the nearest key at or below the given one is used.",
+    example: "VLOOKUP(2, A1:B3, 2, FALSE)",
+  },
+  {
+    name: "XLOOKUP",
+    category: "Lookup",
+    syntax: "XLOOKUP(key, lookup_range, result_range, [if_not_found])",
+    summary:
+      "Finds the key in one row or column and gives the cell at the same position of another. The match is exact.",
+    example: 'XLOOKUP("cherry", B1:B3, A1:A3, 0)',
+  },
+  {
+    name: "MATCH",
+    category: "Lookup",
+    syntax: "MATCH(key, range, [type])",
+    summary:
+      "The position of the key in a row or column, counting from 1. Type 0 is an exact match. Type 1, the default, is the nearest value at or below the key in ascending data, and -1 the nearest at or above it in descending data.",
+    example: 'MATCH("banana", B1:B3, 0)',
+  },
+  {
+    name: "INDEX",
+    category: "Lookup",
+    syntax: "INDEX(range, row, [column])",
+    summary:
+      "The cell at a row and column of the range, counting from 1. A single row or column needs only one position.",
+    example: "INDEX(B1:B3, 3)",
   },
   {
     name: "CONCATENATE",
@@ -152,6 +323,105 @@ export const functionDocs: readonly FunctionDoc[] = [
     example: 'TRIM("  two   words  ")',
   },
   {
+    name: "TEXTJOIN",
+    category: "Text",
+    syntax: "TEXTJOIN(delimiter, skip_empty, value, ...)",
+    summary:
+      "Joins values with the delimiter between them. With `skip_empty` TRUE, empty values are left out.",
+    example: 'TEXTJOIN(", ", TRUE, B1:B3)',
+  },
+  {
+    name: "LEFT",
+    category: "Text",
+    syntax: "LEFT(text, [count])",
+    summary: "The first characters of the text, 1 if no count is given.",
+    example: 'LEFT("hello", 2)',
+  },
+  {
+    name: "RIGHT",
+    category: "Text",
+    syntax: "RIGHT(text, [count])",
+    summary: "The last characters of the text, 1 if no count is given.",
+    example: 'RIGHT("hello", 2)',
+  },
+  {
+    name: "MID",
+    category: "Text",
+    syntax: "MID(text, start, count)",
+    summary: "Characters from the middle of the text, starting at a position counted from 1.",
+    example: 'MID("hello", 2, 3)',
+  },
+  {
+    name: "FIND",
+    category: "Text",
+    syntax: "FIND(search, text, [start])",
+    summary: "The position of one text inside another, counting from 1 and matching letter case.",
+    example: 'FIND("l", "hello")',
+  },
+  {
+    name: "SEARCH",
+    category: "Text",
+    syntax: "SEARCH(search, text, [start])",
+    summary: "The position of one text inside another, ignoring letter case.",
+    example: 'SEARCH("L", "hello")',
+  },
+  {
+    name: "SUBSTITUTE",
+    category: "Text",
+    syntax: "SUBSTITUTE(text, old, new)",
+    summary: "Replaces every occurrence of `old` with `new`.",
+    example: 'SUBSTITUTE("a-b-c", "-", "+")',
+  },
+  {
+    name: "REPT",
+    category: "Text",
+    syntax: "REPT(text, count)",
+    summary: "Repeats the text.",
+    example: 'REPT("ab", 3)',
+  },
+  {
+    name: "VALUE",
+    category: "Text",
+    syntax: "VALUE(text)",
+    summary: "Reads text as a number.",
+    example: 'VALUE("12.5") + 1',
+  },
+  {
+    name: "ISBLANK",
+    category: "Information",
+    syntax: "ISBLANK(value)",
+    summary: "TRUE when the cell is empty.",
+    example: "ISBLANK(C1)",
+  },
+  {
+    name: "ISNUMBER",
+    category: "Information",
+    syntax: "ISNUMBER(value)",
+    summary: "TRUE when the value is a number.",
+    example: "ISNUMBER(A1)",
+  },
+  {
+    name: "ISTEXT",
+    category: "Information",
+    syntax: "ISTEXT(value)",
+    summary: "TRUE when the value is text.",
+    example: "ISTEXT(A1)",
+  },
+  {
+    name: "ISLOGICAL",
+    category: "Information",
+    syntax: "ISLOGICAL(value)",
+    summary: "TRUE when the value is TRUE or FALSE.",
+    example: "ISLOGICAL(A1 > 0)",
+  },
+  {
+    name: "ISERROR",
+    category: "Information",
+    syntax: "ISERROR(value)",
+    summary: "TRUE when the value is an error.",
+    example: "ISERROR(1/0)",
+  },
+  {
     name: "BUTTON",
     category: "Actions",
     syntax: "BUTTON(label, action)",
@@ -183,6 +453,7 @@ export const errorDocs: Record<ErrorCode, string> = {
     "A value is the wrong kind: text where a number is needed, or a range where a single value is needed.",
   "#REF!": "The formula names a page or table that does not exist.",
   "#NAME?": "The formula uses a function or a word that is not known.",
+  "#N/A": "A lookup found no match, or no case of IFS or SWITCH applied.",
   "#CYCLE!": "The formula depends on its own cell, directly or through other cells.",
   "#ERROR!": "The formula could not be read, or a function was given the wrong number of values.",
 };

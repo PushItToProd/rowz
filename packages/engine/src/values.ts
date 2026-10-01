@@ -2,7 +2,15 @@ import type { CellId } from "./address";
 import type { Node } from "./ast";
 
 /** `#ERROR!` means the formula text could not be parsed, or a function got the wrong number of arguments. */
-export const ERROR_CODES = ["#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#CYCLE!", "#ERROR!"] as const;
+export const ERROR_CODES = [
+  "#DIV/0!",
+  "#VALUE!",
+  "#REF!",
+  "#NAME?",
+  "#N/A",
+  "#CYCLE!",
+  "#ERROR!",
+] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
 export interface ErrorValue {
@@ -173,4 +181,36 @@ export function literalInput(value: Scalar): string {
   if (typeof value === "number") return String(value);
   const readsBackAsText = !isFormulaInput(value) && parseLiteralInput(value) === value;
   return readsBackAsText ? value : TEXT_PREFIX + value;
+}
+
+// Values of different types order as number < text < boolean.
+const TYPE_RANK = { number: 0, string: 1, boolean: 2 } as const;
+
+/** An empty cell compares as the empty value of the other side's type. */
+function fillEmpty(value: Scalar, other: Scalar): number | string | boolean {
+  if (value !== null) return value;
+  if (typeof other === "string") return "";
+  if (typeof other === "boolean") return false;
+  return 0;
+}
+
+/**
+ * Orders two values the way the comparison operators do: negative when the
+ * left is smaller, zero when they are equal. Text is compared without regard
+ * to letter case.
+ */
+export function compare(leftValue: Scalar, rightValue: Scalar): number {
+  const left = fillEmpty(leftValue, rightValue);
+  const right = fillEmpty(rightValue, leftValue);
+  if (typeof left === "number" && typeof right === "number") return left - right;
+  if (typeof left === "string" && typeof right === "string") {
+    // Text comparison ignores case.
+    const [a, b] = [left.toLowerCase(), right.toLowerCase()];
+    return a < b ? -1 : Number(a > b);
+  }
+  if (typeof left === "boolean" && typeof right === "boolean") return Number(left) - Number(right);
+  return (
+    TYPE_RANK[typeof left as keyof typeof TYPE_RANK] -
+    TYPE_RANK[typeof right as keyof typeof TYPE_RANK]
+  );
 }

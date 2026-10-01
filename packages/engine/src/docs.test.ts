@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { errorDocs, EXAMPLE_CELLS, functionDocs } from "./docs";
+import { errorDocs, EXAMPLE_CELLS, FUNCTION_CATEGORIES, functionDocs } from "./docs";
 import { defaultFunctions } from "./functions";
 import { parseFormula } from "./parser";
 import { at, workbookWith } from "./testing";
-import { formatValue, isButton, isError } from "./values";
+import { ERROR_CODES, formatValue, isButton, isError } from "./values";
 
 function evaluateExample(example: string) {
   const workbook = workbookWith({ t1: { ...EXAMPLE_CELLS, Z99: `=${example}` } });
@@ -13,6 +13,12 @@ function evaluateExample(example: string) {
 describe("functionDocs", () => {
   it("documents every function in the default registry, and nothing else", () => {
     expect(functionDocs.map((doc) => doc.name).sort()).toEqual([...defaultFunctions.keys()].sort());
+  });
+
+  it("lists functions by category, in the order the categories are shown", () => {
+    const order = functionDocs.map((doc) => FUNCTION_CATEGORIES.indexOf(doc.category));
+    expect(order).toEqual(order.toSorted((a, b) => a - b));
+    expect(new Set(order).size).toBe(FUNCTION_CATEGORIES.length);
   });
 
   it("writes each syntax as a call to the function it documents", () => {
@@ -43,6 +49,20 @@ describe("functionDocs", () => {
     ["OR", true],
     ["CONCATENATE", "Total: 3"],
     ["TRIM", "two words"],
+    ["COUNTIF", 2],
+    ["COUNTIFS", 1],
+    ["SUMIF", 4],
+    ["SUMIFS", 3],
+    ["AVERAGEIF", 2.5],
+    ["MEDIAN", 2.5],
+    ["VLOOKUP", "banana"],
+    ["XLOOKUP", 3],
+    ["MATCH", 2],
+    ["INDEX", "cherry"],
+    ["TEXTJOIN", "apple, banana, cherry"],
+    ["SWITCH", "two"],
+    ["IFS", "small"],
+    ["ISBLANK", true],
   ])("the %s example gives %j", (name, expected) => {
     const doc = functionDocs.find((candidate) => candidate.name === name);
     expect(evaluateExample(doc!.example).value).toBe(expected);
@@ -52,7 +72,7 @@ describe("functionDocs", () => {
 describe("errorDocs", () => {
   it("explains every error code in a sentence", () => {
     for (const [code, explanation] of Object.entries(errorDocs)) {
-      expect(code).toMatch(/^#.+[!?]$/);
+      expect(ERROR_CODES).toContain(code);
       expect(explanation).toMatch(/^[A-Z].+\.$/);
     }
   });

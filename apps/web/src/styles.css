@@ -545,6 +545,12 @@ input.editable-name--editing {
   width: 30%;
 }
 
+.help__jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
 .help__result {
   display: block;
   color: var(--muted);
