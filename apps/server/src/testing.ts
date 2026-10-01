@@ -28,6 +28,8 @@ export interface TestClient {
     path: string,
     body?: unknown,
     headers?: Record<string, string>,
+    /** Ends the request, which is how a test stops reading a stream. */
+    signal?: AbortSignal,
   ): Promise<Response>;
   /** Sends a request, asserts the status, and returns the parsed JSON body. */
   json<T>(method: string, path: string, body?: unknown, status?: number): Promise<T>;
@@ -124,9 +126,10 @@ export async function startTestServer(
   });
 
   const client = (cookie: string | undefined): TestClient => {
-    const request: TestClient["request"] = async (method, path, body, headers = {}) =>
+    const request: TestClient["request"] = async (method, path, body, headers = {}, signal) =>
       app.request(`/api${path}`, {
         method,
+        ...(signal ? { signal } : {}),
         headers: {
           origin: BASE_URL,
           ...(cookie === undefined ? {} : { cookie }),

@@ -9,9 +9,14 @@ import {
   versionParam,
 } from "@spreadsheet-app/shared";
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
+import type { ChangeFeed } from "../changes";
 import { onInvalid, type Env } from "../http";
 
-export function spreadsheetRoutes() {
+/** How long an open stream of changes goes without a word, at most. Proxies drop a connection that says nothing. */
+const HEARTBEAT_MS = 25_000;
+
+export function spreadsheetRoutes(changes: ChangeFeed) {
   return (
     new Hono<Env>()
       .get("/", async (c) => c.json(await c.var.repository.listSpreadsheets()))
@@ -41,6 +46,55 @@ export function spreadsheetRoutes() {
         await c.var.repository.deleteSpreadsheet(c.req.valid("param").spreadsheetId);
         return c.body(null, 204);
       })
+      /**
+       * A stream of the changes made to a spreadsheet, for the sessions that
+       * have it open. Each `change` event carries the id of the client that
+       * made the change, so that client can ignore it.
+       */
+      .get(
+        "/:spreadsheetId/events",
+        zValidator("param", spreadsheetParam, onInvalid),
+        async (c) => {
+          const { spreadsheetId } = c.req.valid("param");
+          await c.var.repository.findSpreadsheet(spreadsheetId, "read");
+          return streamSSE(c, async (stream) => {
+            const origins: string[] = [];
+            let closed = false;
+            // Asked through a function, because the abort handler changes the answer between two awaits.
+            const isOpen = (): boolean => !closed;
+            let wake = (): void => undefined;
+            const unsubscribe = changes.subscribe(spreadsheetId, (origin) => {
+              origins.push(origin);
+              wake();
+            });
+            stream.onAbort(() => {
+              closed = true;
+              unsubscribe();
+              wake();
+            });
+
+            await stream.writeSSE({ event: "ready", data: "" });
+            while (isOpen()) {
+              if (origins.length === 0) {
+                await new Promise<void>((resolve) => {
+                  const timer = setTimeout(resolve, HEARTBEAT_MS);
+                  wake = () => {
+                    clearTimeout(timer);
+                    resolve();
+                  };
+                });
+              }
+              if (!isOpen()) break;
+              const origin = origins.shift();
+              await stream.writeSSE(
+                origin === undefined
+                  ? { event: "ping", data: "" }
+                  : { event: "change", data: origin },
+              );
+            }
+          });
+        },
+      )
       // Everyone who can open the spreadsheet.
       .get("/:spreadsheetId/members", zValidator("param", spreadsheetParam, onInvalid), async (c) =>
         c.json(await c.var.repository.listMembers(c.req.valid("param").spreadsheetId)),

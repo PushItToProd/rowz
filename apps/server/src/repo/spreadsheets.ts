@@ -30,6 +30,7 @@ import {
   type StructuralEditBody,
 } from "@spreadsheet-app/shared";
 import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
+import { noteChange } from "../changes";
 import type { Database } from "../db/client";
 import {
   actionRuns,
@@ -339,6 +340,8 @@ export class SpreadsheetRepository {
     if (members.some((member) => member.userId === user.id && !member.shared)) {
       throw conflict(`${email} already has this spreadsheet through its workspace`);
     }
+    // A guest whose role changes sees it without reloading.
+    noteChange(spreadsheetId);
     await this.db
       .insert(spreadsheetMembers)
       .values({ spreadsheetId, userId: user.id, role })
@@ -361,6 +364,7 @@ export class SpreadsheetRepository {
       )
       .returning({ userId: spreadsheetMembers.userId });
     if (removed.length === 0) throw notFound("Share");
+    noteChange(spreadsheetId);
   }
 
   /** Creates a spreadsheet with one page holding one empty table. */
@@ -565,6 +569,7 @@ export class SpreadsheetRepository {
    * one is kept of the spreadsheet as the change leaves it.
    */
   private async touch(db: Database, spreadsheetId: string): Promise<void> {
+    noteChange(spreadsheetId);
     await db
       .update(spreadsheets)
       // The clock, not the start of the transaction: a version kept earlier in
@@ -612,6 +617,7 @@ export class SpreadsheetRepository {
 
   async renameSpreadsheet(spreadsheetId: string, name: string): Promise<void> {
     await this.findSpreadsheet(spreadsheetId, "write");
+    noteChange(spreadsheetId);
     await this.db
       .update(spreadsheets)
       .set({ name, updatedAt: sql`now()` })
@@ -620,6 +626,8 @@ export class SpreadsheetRepository {
 
   async deleteSpreadsheet(spreadsheetId: string): Promise<void> {
     await this.findSpreadsheet(spreadsheetId, "own");
+    // Sessions that have it open learn that it is gone.
+    noteChange(spreadsheetId);
     await this.db.delete(spreadsheets).where(eq(spreadsheets.id, spreadsheetId));
   }
 

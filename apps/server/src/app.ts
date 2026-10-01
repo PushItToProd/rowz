@@ -1,6 +1,7 @@
 import { FILE_LIMITS, type ApiError } from "@spreadsheet-app/shared";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { announceChanges, ChangeFeed } from "./changes";
 import { onError, requireSession, type AppDependencies, type Env } from "./http";
 import { pageRoutes } from "./routes/pages";
 import { spreadsheetRoutes } from "./routes/spreadsheets";
@@ -21,6 +22,7 @@ export type {
 } from "./repo/spreadsheets";
 
 export function createApp(dependencies: AppDependencies) {
+  const changes = new ChangeFeed();
   const api = new Hono<Env>()
     // No request needs more than an imported file does, and without a bound a body is read whole into memory.
     .use(
@@ -36,7 +38,8 @@ export function createApp(dependencies: AppDependencies) {
     .on(["GET", "POST"], "/auth/*", (c) => dependencies.auth.handler(c.req.raw))
     // Everything registered after this line requires a session.
     .use(requireSession(dependencies))
-    .route("/spreadsheets", spreadsheetRoutes())
+    .use(announceChanges(changes))
+    .route("/spreadsheets", spreadsheetRoutes(changes))
     .route("/pages", pageRoutes())
     .route("/tables", tableRoutes(dependencies))
     .route("/views", viewRoutes());
