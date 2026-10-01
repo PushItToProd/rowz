@@ -52,14 +52,17 @@ Page, table, and column names in references ignore case. Names with spaces need 
 
 An action is a function that describes a side effect. It does nothing until a button runs it.
 
-| Function                            | Effect                                                                                           |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `BUTTON(label, action)`             | Shows a button. Clicking it runs the action.                                                     |
-| `EXECUTE(expression, target)`       | Writes the value of `expression` into the cell `target`.                                         |
-| `SEND_EMAIL(to, subject, body, cc)` | Sends an email. `cc` is optional. `to` and `cc` take addresses separated by commas or semicolons |
-| `APPEND_ROW(range, value, ...)`     | Writes the values into the first row of the range below its content, growing the table if needed |
-| `CLEAR(range)`                      | Empties the cells of the range.                                                                  |
-| `DO(action, ...)`                   | Runs several actions from one click.                                                             |
+| Function                            | Effect                                                                                                   |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `BUTTON(label, action)`             | Shows a button. Clicking it runs the action.                                                             |
+| `EXECUTE(expression, target)`       | Writes the value of `expression` into the cell `target`.                                                 |
+| `SEND_EMAIL(to, subject, body, cc)` | Sends an email. `cc` is optional. `to` and `cc` take addresses separated by commas or semicolons         |
+| `APPEND_ROW(range, value, ...)`     | Writes the values into the first row of the range below its content, growing the table if needed         |
+| `INSERT(data, range)`               | Adds every row of the data below the content of the range                                                |
+| `UPDATE(data, key_columns, range)`  | Writes each row of the data over the row of the range with the same key, and adds the rows with new keys |
+| `OVERWRITE(data, range)`            | Empties the range and writes the data from its first row                                                 |
+| `CLEAR(range)`                      | Empties the cells of the range.                                                                          |
+| `DO(action, ...)`                   | Runs several actions from one click.                                                                     |
 
 ### Queries
 

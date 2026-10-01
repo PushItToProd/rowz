@@ -702,6 +702,15 @@ const OPERATORS = [
           <code>=BUTTON("Save", DO(APPEND_ROW(Log!A:B, A1, A2), CLEAR(A1:A2)))</code>.
         </li>
         <li>
+          Three actions move whole blocks of rows. <code>INSERT(data, range)</code> adds every row
+          of the data below what the range holds.
+          <code>UPDATE(data, key_columns, range)</code> writes each row over the row with the same
+          key and adds the rows with new keys, so running it twice does not add anything twice.
+          <code>OVERWRITE(data, range)</code> empties the range first. The data can be a range or a
+          formula:
+          <code>=BUTTON("Archive", INSERT(FILTER(A2:C99, C2:C99 = "done"), Archive!A:C))</code>.
+        </li>
+        <li>
           When an action cannot run, a message says why and nothing is changed. Examples are a
           recipient that is not an email address, and a target cell outside its table.
         </li>

@@ -117,7 +117,7 @@ describe("suggestionsAt", () => {
   });
 
   it("offers again after quoted text ends", () => {
-    expect(labels('="su" & up')).toEqual(["UPPER"]);
+    expect(labels('="su" & upp')).toEqual(["UPPER"]);
   });
 });
 

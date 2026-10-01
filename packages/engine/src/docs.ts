@@ -1309,6 +1309,29 @@ const ENTRIES: readonly FunctionDoc[] = [
     summary: "The rate of return of a series of cash flows, starting with the amount paid out.",
     example: "ROUND(IRR(VSTACK(-100, 60, 60)), 4)",
   },
+  {
+    name: "INSERT",
+    category: "Actions",
+    syntax: "INSERT(data, range)",
+    summary:
+      "Adds every row of the data after the last row of the range with content. The table grows to hold them.",
+    example: 'BUTTON("Copy", INSERT(A1:B3, D:E))',
+  },
+  {
+    name: "UPDATE",
+    category: "Actions",
+    syntax: "UPDATE(data, key_columns, range)",
+    summary:
+      "Writes each row of the data over the row of the range with the same values in the key columns, and adds the rows that match none. Key columns are counted from 1. Give several as `VSTACK(1, 2)`.",
+    example: 'BUTTON("Sync", UPDATE(A1:B3, 1, D:E))',
+  },
+  {
+    name: "OVERWRITE",
+    category: "Actions",
+    syntax: "OVERWRITE(data, range)",
+    summary: "Empties the range and writes the data from its first row.",
+    example: 'BUTTON("Replace", OVERWRITE(A1:B3, D:E))',
+  },
 ];
 
 /**

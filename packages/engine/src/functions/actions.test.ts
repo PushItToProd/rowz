@@ -393,3 +393,127 @@ describe("DO", () => {
     expect(clickFormula(`=BUTTON("x", ${action})`)).toEqual({ kind: "error", code, message });
   });
 });
+
+describe("INSERT, UPDATE, and OVERWRITE", () => {
+  // The data to write is in A:B, and the range written to is D:E.
+  const DATA = { A1: "ann", B1: "1", A2: "bob", B2: "2" };
+  const set = (address: string, input: string) => ({ type: "setCell", ...at(address), input });
+  const grow = (rowCount: number) => ({ type: "ensureRows", tableId: "t1", rowCount });
+
+  it("INSERT adds every row of the data after the content of the range", () => {
+    expect(
+      clickFormula('=BUTTON("Go", INSERT(A1:B2, D:E))', {
+        ...DATA,
+        D1: "name",
+        E1: "n",
+        D2: "zed",
+        E2: "9",
+      }),
+    ).toEqual([grow(4), set("D3", "ann"), set("E3", "1"), set("D4", "bob"), set("E4", "2")]);
+  });
+
+  it("INSERT starts at the top of an empty range, and skips empty rows of the data", () => {
+    expect(clickFormula('=BUTTON("Go", INSERT(A:B, D:E))', DATA)).toEqual([
+      grow(2),
+      set("D1", "ann"),
+      set("E1", "1"),
+      set("D2", "bob"),
+      set("E2", "2"),
+    ]);
+    expect(clickFormula('=BUTTON("Go", INSERT(A5:B9, D:E))', DATA)).toEqual([]);
+  });
+
+  it("UPDATE writes over the row with the same key, and adds the rows with new keys", () => {
+    const effects = clickFormula('=BUTTON("Go", UPDATE(A1:B2, 1, D:E))', {
+      ...DATA,
+      D1: "name",
+      E1: "n",
+      D2: "BOB",
+      E2: "old",
+    });
+    expect(effects).toEqual([
+      set("D2", "bob"),
+      set("E2", "2"),
+      grow(3),
+      set("D3", "ann"),
+      set("E3", "1"),
+    ]);
+  });
+
+  it("UPDATE matches on several key columns together", () => {
+    const effects = clickFormula('=BUTTON("Go", UPDATE(A1:B2, VSTACK(1, 2), D:E))', {
+      ...DATA,
+      D1: "ann",
+      E1: "1",
+      D2: "bob",
+      E2: "7",
+    });
+    // ann/1 is there already and is written over with the same values. bob/2 is new.
+    expect(effects).toEqual([
+      set("D1", "ann"),
+      set("E1", "1"),
+      grow(3),
+      set("D3", "bob"),
+      set("E3", "2"),
+    ]);
+  });
+
+  it("UPDATE keeps the last of two data rows with one key, and never matches an empty key", () => {
+    expect(
+      clickFormula('=BUTTON("Go", UPDATE(A1:B3, 1, D:E))', {
+        A1: "ann",
+        B1: "1",
+        A2: "ann",
+        B2: "2",
+        B3: "3",
+      }),
+    ).toEqual([grow(2), set("D1", "ann"), set("E1", "2"), set("D2", ""), set("E2", "3")]);
+  });
+
+  it("OVERWRITE empties the range and writes the data from its first row", () => {
+    const effects = clickFormula('=BUTTON("Go", OVERWRITE(A1:B2, D:E))', {
+      ...DATA,
+      D1: "old",
+      D3: "old too",
+      E5: "and this",
+    });
+    expect(effects).toEqual([
+      set("D3", ""),
+      set("E5", ""),
+      grow(2),
+      set("D1", "ann"),
+      set("E1", "1"),
+      set("D2", "bob"),
+      set("E2", "2"),
+    ]);
+  });
+
+  it("OVERWRITE with no data only empties the range", () => {
+    expect(clickFormula('=BUTTON("Go", OVERWRITE(A5:B9, D:E))', { D1: "old" })).toEqual([
+      set("D1", ""),
+    ]);
+  });
+
+  it("write the result of a formula, such as a query", () => {
+    expect(clickFormula('=BUTTON("Go", INSERT(FILTER(A1:B2, B1:B2 > 1), D:E))', DATA)).toEqual([
+      grow(1),
+      set("D1", "bob"),
+      set("E1", "2"),
+    ]);
+  });
+
+  it.each([
+    ['=BUTTON("Go", INSERT(A1:C2, D:E))', "#VALUE!", "INSERT was given 3 columns for a range of 2"],
+    ['=BUTTON("Go", INSERT(A1:B2, 5))', "#VALUE!", "INSERT needs a range to write to"],
+    ['=BUTTON("Go", INSERT(A1:B2, Missing!A:B))', "#REF!", "The range to write to does not exist"],
+    ['=BUTTON("Go", INSERT(A1:B2, D1:E1))', "#VALUE!", "The range has too few empty rows left"],
+    ['=BUTTON("Go", UPDATE(A1:B2, 3, D:E))', "#VALUE!", "The key columns must be between 1 and 2"],
+    ['=BUTTON("Go", UPDATE(A1:B2, 0, D:E))', "#VALUE!", "The key columns must be between 1 and 2"],
+    ['=BUTTON("Go", OVERWRITE(1/0, D:E))', "#DIV/0!", undefined],
+  ])("%s fails with %s", (formula, code, message) => {
+    expect(clickFormula(formula, { ...DATA, C1: "x" })).toMatchObject({
+      code,
+      ...(message === undefined ? {} : { message }),
+    });
+  });
+});

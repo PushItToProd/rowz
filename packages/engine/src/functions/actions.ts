@@ -1,7 +1,18 @@
 import { isSingleCell, type Node } from "../ast";
 import type { Effect } from "../effects";
-import { isAction, isError, literalInput, type Evaluated } from "../values";
-import { fail, Failure, grid, lazy, scalar, text } from "./arguments";
+import type { CellRange } from "../address";
+import {
+  compare,
+  isAction,
+  isError,
+  isScalar,
+  kindOf,
+  literalInput,
+  type CellValue,
+  type Evaluated,
+  type Scalar,
+} from "../values";
+import { fail, Failure, grid, integer, lazy, scalar, text } from "./arguments";
 import type { FunctionDefinition, PlanContext } from "./registry";
 
 const ADDRESS_SEPARATOR = /[,;]/;
@@ -22,6 +33,81 @@ function addressList(node: Node | undefined, context: PlanContext): string[] {
   const invalid = addresses.find((address) => !EMAIL_ADDRESS.test(address));
   if (invalid !== undefined) fail("#VALUE!", `"${invalid}" is not an email address`);
   return addresses;
+}
+
+function filled(cells: readonly CellValue[]): boolean {
+  return cells.some((cell) => cell !== null && cell !== "");
+}
+
+/** The range an action writes rows into, with what it holds now. */
+interface Destination {
+  range: CellRange;
+  /** The rows of the range through the last one that holds anything. */
+  rows: CellValue[][];
+  width: number;
+}
+
+function destination(target: Node | undefined, context: PlanContext, name: string): Destination {
+  if (target?.type !== "reference") fail("#VALUE!", `${name} needs a range to write to`);
+  const range = context.resolve(target.reference);
+  if (!range) fail("#REF!", "The range to write to does not exist");
+  const rows = grid(context.evaluate(target));
+  // Cells an array formula fills count as content.
+  return {
+    range,
+    rows: rows.slice(0, rows.findLastIndex(filled) + 1),
+    width: range.endCol - range.startCol + 1,
+  };
+}
+
+/** The rows of an action's data that hold something, checked against the width they must fit. */
+function dataRows(
+  node: Node | undefined,
+  context: PlanContext,
+  width: number,
+  name: string,
+): Scalar[][] {
+  const rows = grid(argument(node, context))
+    .filter(filled)
+    .map((cells) => cells.map(scalar));
+  const widest = Math.max(0, ...rows.map((cells) => cells.length));
+  if (widest > width) {
+    fail("#VALUE!", `${name} was given ${String(widest)} columns for a range of ${String(width)}`);
+  }
+  return rows;
+}
+
+/** The effects that write one row of values into a row of the range. */
+function writeRow(
+  { tableId, startCol }: CellRange,
+  row: number,
+  values: readonly Scalar[],
+): Effect[] {
+  return values.map((value, offset) => ({
+    type: "setCell" as const,
+    tableId,
+    row,
+    col: startCol + offset,
+    input: literalInput(value),
+  }));
+}
+
+/** The effects that add rows after `used` rows of the range, growing the table to hold them. */
+function appendRows({ range }: Destination, used: number, rows: readonly Scalar[][]): Effect[] {
+  if (rows.length === 0) return [];
+  const first = range.startRow + used;
+  if (first + rows.length - 1 > range.endRow)
+    fail("#VALUE!", "The range has too few empty rows left");
+  return [
+    { type: "ensureRows", tableId: range.tableId, rowCount: first + rows.length },
+    ...rows.flatMap((values, index) => writeRow(range, first + index, values)),
+  ];
+}
+
+/** Whether two cells hold the same value, as a lookup would judge it. An empty cell matches nothing. */
+function sameKey(a: CellValue, b: CellValue): boolean {
+  if (a === null || b === null || !isScalar(a) || !isScalar(b)) return false;
+  return kindOf(a) === kindOf(b) && compare(a, b) === 0;
 }
 
 export const actionFunctions: Record<string, FunctionDefinition> = {
@@ -100,6 +186,87 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
           input: literalInput(value),
         })),
       ];
+    },
+  },
+
+  /**
+   * `INSERT(data, range)` adds every row of the data after the last row of
+   * the range that holds anything. It is `APPEND_ROW` for many rows at once.
+   */
+  INSERT: {
+    kind: "action",
+    minArgs: 2,
+    maxArgs: 2,
+    plan([data, target], context): Effect[] {
+      const into = destination(target, context, "INSERT");
+      return appendRows(into, into.rows.length, dataRows(data, context, into.width, "INSERT"));
+    },
+  },
+
+  /**
+   * `UPDATE(data, key_columns, range)` writes each row of the data over the
+   * row of the range that has the same values in the key columns, and adds
+   * the rows that match none. Key columns are counted from 1.
+   */
+  UPDATE: {
+    kind: "action",
+    minArgs: 3,
+    maxArgs: 3,
+    plan([data, keyNode, target], context): Effect[] {
+      const into = destination(target, context, "UPDATE");
+      const keys = grid(argument(keyNode, context))
+        .flat()
+        .map((key) => integer(key) - 1);
+      if (keys.length === 0 || keys.some((key) => key < 0 || key >= into.width)) {
+        fail("#VALUE!", `The key columns must be between 1 and ${String(into.width)}`);
+      }
+      // Rows added by this update can be matched by later rows of the same data.
+      const existing: CellValue[][] = into.rows.map((cells) => [...cells]);
+      const effects: Effect[] = [];
+      const added: Scalar[][] = [];
+      for (const values of dataRows(data, context, into.width, "UPDATE")) {
+        const found = existing.findIndex((cells) =>
+          keys.every((key) => sameKey(cells[key] ?? null, values[key] ?? null)),
+        );
+        if (found === -1) {
+          existing.push(values);
+          added.push(values);
+        } else if (found >= into.rows.length) {
+          // The row it matches is one this update is adding: the later values win.
+          added[found - into.rows.length] = values;
+          existing[found] = values;
+        } else {
+          effects.push(...writeRow(into.range, into.range.startRow + found, values));
+        }
+      }
+      return [...effects, ...appendRows(into, into.rows.length, added)];
+    },
+  },
+
+  /** `OVERWRITE(data, range)` empties the range and writes the data from its first row. */
+  OVERWRITE: {
+    kind: "action",
+    minArgs: 2,
+    maxArgs: 2,
+    plan([data, target], context): Effect[] {
+      const into = destination(target, context, "OVERWRITE");
+      const written = appendRows(into, 0, dataRows(data, context, into.width, "OVERWRITE"));
+      const kept = new Set(
+        written.flatMap((effect) =>
+          effect.type === "setCell" ? [`${String(effect.row)}:${String(effect.col)}`] : [],
+        ),
+      );
+      const cleared = context
+        .inputsIn(into.range)
+        .filter(({ row, col }) => !kept.has(`${String(row)}:${String(col)}`))
+        .map(({ tableId, row, col }) => ({
+          type: "setCell" as const,
+          tableId,
+          row,
+          col,
+          input: "",
+        }));
+      return [...cleared, ...written];
     },
   },
 
