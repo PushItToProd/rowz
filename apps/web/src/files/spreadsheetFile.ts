@@ -27,6 +27,7 @@ export function toSpreadsheetFile(
           rowCount: table.rowCount,
           colCount: table.colCount,
           ...(table.columns ? { columns: table.columns } : {}),
+          ...(table.formats.length > 0 ? { formats: table.formats } : {}),
           cells: cellsOf(table),
         } satisfies FileItem,
       })),

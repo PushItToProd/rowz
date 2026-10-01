@@ -556,6 +556,48 @@ test("a table with named columns has typed columns, a formula column, and column
   await expect(cell(page, "A1", "Table 2")).toHaveText("46");
 });
 
+test("cells are formatted from the toolbar, and the formats follow their cells", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "Total");
+  await enter(page, "B1", "1234.5");
+  await enter(page, "B2", "0.256");
+  const bar = page.getByRole("toolbar", { name: "Format" });
+
+  await cell(page, "A1").click();
+  await bar.getByRole("button", { name: "Bold" }).click();
+  await expect(bar.getByRole("button", { name: "Bold" })).toHaveAttribute("aria-pressed", "true");
+  await expect(cell(page, "A1").locator(".cell-value")).toHaveCSS("font-weight", "700");
+
+  await cell(page, "B1").click();
+  await bar.getByLabel("Number format").selectOption("$#,##0.00");
+  await expect(cell(page, "B1")).toHaveText("$1,234.50");
+  await bar.getByLabel("Fill color").selectOption("yellow");
+  await expect(cell(page, "B1")).toHaveCSS("background-color", "rgb(255, 243, 184)");
+  // The value is unchanged: the bar above still shows what was typed.
+  await expect(page.getByLabel("Formula")).toHaveValue("1234.5");
+
+  await cell(page, "B2").click();
+  await bar.getByLabel("Number format").selectOption("0%");
+  await expect(cell(page, "B2")).toHaveText("26%");
+
+  // A format moves with its cell when a row is inserted above it.
+  await cell(page, "A1").click();
+  await page.getByRole("button", { name: "Insert row above" }).click();
+  await expect(cell(page, "B2")).toHaveText("$1,234.50");
+  await expect(cell(page, "B1")).not.toHaveCSS("background-color", "rgb(255, 243, 184)");
+
+  await page.reload();
+  await expect(cell(page, "B2")).toHaveText("$1,234.50");
+  await expect(cell(page, "B3")).toHaveText("26%");
+  await expect(cell(page, "A2").locator(".cell-value")).toHaveCSS("font-weight", "700");
+
+  await cell(page, "B2").click();
+  await bar.getByRole("button", { name: "Clear format" }).click();
+  await expect(cell(page, "B2")).toHaveText("1234.5");
+});
+
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "=1/0");

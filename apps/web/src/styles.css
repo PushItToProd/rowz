@@ -386,7 +386,7 @@ input.editable-name--editing {
   /* Dragging across cells selects a range of them, not their text. */
   user-select: none;
   /* Room for the pinned toolbar when a cell is scrolled into view. */
-  scroll-margin-top: 150px;
+  scroll-margin-top: 195px;
   position: relative;
   width: 120px;
   min-width: 120px;
@@ -1132,4 +1132,53 @@ select.cell-control--dropdown {
 
 .cell-control--column {
   justify-content: center;
+}
+
+/* Format bar */
+
+.format-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.format-bar select {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font: inherit;
+}
+
+.format-bar__toggle {
+  min-width: 30px;
+}
+
+.format-bar__toggle[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.format-bar__bold {
+  font-weight: 700;
+}
+
+.format-bar__italic {
+  font-style: italic;
+}
+
+@media (max-width: 640px) {
+  .format-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 6px 12px;
+  }
+
+  .format-bar > * {
+    flex-shrink: 0;
+  }
 }

@@ -88,6 +88,7 @@ const SECTIONS = [
   ["query", "Queries"],
   ["actions", "Buttons and actions"],
   ["controls", "Checkboxes and dropdowns"],
+  ["formats", "Formats"],
   ["files", "Files"],
   ["charts", "Charts"],
   ["text-views", "Text views"],
@@ -736,6 +737,35 @@ const OPERATORS = [
           Formulas read the bound cell, not the control: <code>=IF(B1, "thanks", "waiting")</code>.
         </li>
         <li>A control cannot be bound to its own cell.</li>
+      </ul>
+    </section>
+
+    <section id="formats">
+      <h2>Formats</h2>
+      <p>
+        The row of controls under the bar changes how the selected cells look: bold, italic,
+        alignment, a number format, the color of the text, and the color of the cell. A format
+        changes only how a cell is shown. Its value, and what formulas read from it, stay the same.
+      </p>
+      <ul>
+        <li>
+          A number format applies to numbers and dates. <code>1,234.50</code> groups thousands and
+          shows two decimals, <code>50%</code> shows a fraction as a percentage, and
+          <code>Sep 30, 2026</code> writes a date with the month's name.
+        </li>
+        <li>
+          Formatting a whole row or column also covers the cells added to it later. Click a row
+          number or a column letter to select one.
+        </li>
+        <li>
+          A format stays with its cell when rows or columns are inserted or deleted. It is not
+          copied when the cell is copied, filled, or pasted.
+        </li>
+        <li><strong>Clear format</strong> removes every format from the selected cells.</li>
+        <li>
+          For a formatted value as text inside a formula, use
+          <code>TEXT(A1, "#,##0.00")</code>.
+        </li>
       </ul>
     </section>
 

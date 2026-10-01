@@ -20,6 +20,7 @@ import {
 } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
+import { cellStyle } from "../formatStyle";
 import { contains, fillTarget, type Block } from "../formula/fill";
 import { useFormulaAssist } from "../formula/useFormulaAssist";
 import CellView from "./CellView.vue";
@@ -419,6 +420,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               'grid__cell--filled': store.filledBy(cell(row - 1, col - 1)) !== undefined,
               'grid__cell--computed': columnAt(col - 1)?.type === 'formula',
             }"
+            :style="cellStyle(store.formatOf(cell(row - 1, col - 1)))"
             @pointerdown="onCellPointerdown($event, row - 1, col - 1)"
             @mousedown="onCellMousedown($event, row - 1, col - 1)"
             @click="onCellClick"
@@ -445,6 +447,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               :running="store.running.has(cellKey(cell(row - 1, col - 1)))"
               :can-run="store.canEdit"
               :checkbox="columnAt(col - 1)?.type === 'checkbox'"
+              :format="store.formatOf(cell(row - 1, col - 1))"
               @toggle="store.setCell(cell(row - 1, col - 1), $event ? 'TRUE' : 'FALSE')"
               @run="run(row - 1, col - 1)"
               @choose="store.input(cell(row - 1, col - 1), $event)"

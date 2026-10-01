@@ -14,7 +14,13 @@ import type {
   SpreadsheetFile,
   StructuralEditBody,
 } from "@spreadsheet-app/shared";
-import type { CellId, ChartType, ColumnType } from "@spreadsheet-app/engine";
+import type {
+  CellId,
+  ChartType,
+  ColumnType,
+  FormatPatch,
+  FormatRule,
+} from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
 export type { ClickResult, PageRecord, Rewritten, Snapshot, TableRecord, ViewRecord };
@@ -125,6 +131,20 @@ export const api = {
     edit: StructuralEditBody,
   ): Promise<Rewritten & { table: TableRecord }> =>
     body(routes.tables[":tableId"].edits.$post({ param: { tableId }, json: edit })),
+
+  /** Changes how a block of cells is shown. With `reset`, the cells first lose every format they had. */
+  formatCells: (
+    tableId: string,
+    range: Pick<FormatRule, "startRow" | "endRow" | "startCol" | "endCol">,
+    format: FormatPatch,
+    reset = false,
+  ): Promise<TableRecord> =>
+    body(
+      routes.tables[":tableId"].formats.$post({
+        param: { tableId },
+        json: { range, format, ...(reset ? { reset } : {}) },
+      }),
+    ),
 
   /** Names a table's columns, which makes it a data table. With `headerRow`, the first row supplies the names. */
   nameColumns: (tableId: string, headerRow: boolean): Promise<Rewritten & { table: TableRecord }> =>

@@ -9,10 +9,12 @@ import {
   isError,
   isLambda,
   isMarkdown,
+  type CellFormat,
   type CellValue,
   type Scalar,
 } from "@spreadsheet-app/engine";
 import { computed } from "vue";
+import { formattedText, textStyle } from "../formatStyle";
 import { markdown } from "../markdown";
 
 const props = defineProps<{
@@ -23,10 +25,21 @@ const props = defineProps<{
   canRun: boolean;
   /** Whether the cell is in a checkbox column, where TRUE, FALSE, and empty show as a checkbox. */
   checkbox?: boolean;
+  /** How the cell is shown: bold, color, a number format, and so on. */
+  format?: CellFormat;
 }>();
 const emit = defineEmits<{ run: []; choose: [value: Scalar]; toggle: [checked: boolean] }>();
 
-const text = computed(() => formatValue(props.value));
+const text = computed(
+  () => formattedText(props.value, props.format ?? {}) ?? formatValue(props.value),
+);
+const style = computed(() => {
+  if (!props.format) return undefined;
+  const styles = textStyle(props.format);
+  // An error stays in the color of errors, whatever color the cell's text is given.
+  if (isError(props.value)) Reflect.deleteProperty(styles, "color");
+  return styles;
+});
 const kind = computed(() => {
   const { value } = props;
   if (isButton(value)) return "button";
@@ -127,8 +140,11 @@ function onChoice(event: Event): void {
   <span
     v-else-if="kind === 'markdown'"
     class="cell-value cell-value--markdown"
+    :style="style"
     v-html="formatted"
   ></span>
   <!-- eslint-enable vue/no-v-html -->
-  <span v-else class="cell-value" :class="`cell-value--${kind}`" :title="hint">{{ text }}</span>
+  <span v-else class="cell-value" :class="`cell-value--${kind}`" :style="style" :title="hint">{{
+    text
+  }}</span>
 </template>

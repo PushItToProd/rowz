@@ -2,6 +2,26 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: Cell formatting
+
+**Decision.** Cells can be bold, italic, aligned, colored (text and fill), and given a number format. A toolbar under the formula bar applies a format to the selection.
+
+**Formats are rules over ranges, stored on the table.** A table has a list of rules such as "rows 1 to 3 of column B: bold". A cell is shown with every rule that covers it, later rules over earlier ones. The alternative was a format per cell. Rules make "format column C" one small record instead of a thousand, they let a rule with no last row cover rows added later, and empty cells can be formatted without storing a cell for each.
+
+**Choices.**
+
+- **Number formats use the notation `TEXT` takes** (`#,##0.00`, `0%`, `mmm d, yyyy`). The toolbar offers eleven by example. Other formats can arrive in an imported file and are shown and kept.
+- **Seven named colors,** not a color picker. The file and the database store names (`red`, `green`), and the web app decides the shades. This keeps formats readable if a dark theme is added.
+- **A format changes display only.** Formulas read the underlying value, and CSV export writes it unformatted.
+- **Formats follow cells through inserted and deleted rows and columns.** They are not copied by copy, fill, or paste. That needs the clipboard to carry formats and is listed in the todo file.
+- **A selection that reaches the last row or column is stored as open-ended,** so selecting a whole column by its header formats rows added later too.
+- **At most 500 rules per table.** A new rule replaces older ones it fully overrides, so the count grows with the number of differently formatted regions, not with the number of clicks. Past 500 the server asks for some formatting to be cleared.
+- **An error keeps its red color** whatever text color the cell has.
+
+**Not done.** Column widths and row heights, borders, font size, conditional formatting, and number formats per column of a data table (format the column's cells instead).
+
+**To change.** Rules: `packages/engine/src/formats.ts`. Display: `apps/web/src/formatStyle.ts` and `FormatBar.vue`.
+
 ## 2026-10-01: Data tables: named, typed, and formula columns
 
 **Decision.** A data table is an ordinary table whose columns have been given names. It is not a separate kind of page item. **Name columns** converts a table, optionally taking the names from its first row, and **Remove column names** converts it back. Everything a table could already do still works: cell addresses, fill, paste, CSV, charts.

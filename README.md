@@ -70,6 +70,10 @@ An action is a function that describes a side effect. It does nothing until a bu
 
 It supports `select`, `where`, `group by`, `having`, `pivot`, `order by`, `limit`, `offset`, and `label`. Columns are named by letter, counting from the first column of the range, or by header. A query expression can call any formula function.
 
+### Formats
+
+The toolbar under the formula bar gives the selected cells bold, italic, an alignment, a number format, a text color, or a fill color. Formats are stored per table as rules over ranges, so a whole column is one rule.
+
 ### Files
 
 **Export** in the editor saves a spreadsheet as a JSON file holding its pages, tables, charts, text views, and cell inputs. **Import** on the spreadsheet list creates a spreadsheet from one. The format is the `spreadsheetFile` schema in `packages/shared/src/index.ts`. It identifies things by name and order, with no ids.
@@ -155,7 +159,7 @@ Server tests run against PGlite in memory. Set `TEST_DATABASE_URL` to a Postgres
 - Live sync between sessions. Edits are saved over HTTP and the last write wins. Another session sees changes after a reload.
 - Sharing. The data model has workspaces and roles, and the server enforces them, but there is no way to invite someone.
 - Email delivery.
-- Undo, cell formatting, column resizing.
+- Undo, column resizing.
 - A production build of the server and static serving of the web app. The server runs from TypeScript source through `tsx`.
 
 ## License

@@ -3,17 +3,20 @@ import {
   createWorkbook,
   formatAddress,
   formatDate,
+  formatAt,
   formatValue,
   isFormulaInput,
   isDate,
   Workbook,
   type CellAddress,
   type CellId,
+  type CellFormat,
   type CellValue,
   type ChartType,
   type ColumnDefinition,
   type ColumnType,
   type Evaluated,
+  type FormatPatch,
   type Scalar,
 } from "@spreadsheet-app/engine";
 import {
@@ -51,6 +54,8 @@ export interface Notice {
 
 /** A notice names the cells an action wrote, up to this many. Past that it gives the count. */
 const MAX_NAMED_CELLS = 3;
+/** The format of every cell that has none. One object, so a cell that renders it sees no change. */
+const NO_FORMAT: CellFormat = Object.freeze({});
 
 function messageOf(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message !== "" ? cause.message : fallback;
@@ -164,6 +169,35 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   function inputOf(id: CellId): string {
     return engine.value.getInput(id);
+  }
+
+  /** How a cell is shown: the formats its table gives it. */
+  function formatOf(id: CellId): CellFormat {
+    const rules = tables.value.find((table) => table.id === id.tableId)?.formats ?? [];
+    return rules.length === 0 ? NO_FORMAT : formatAt(rules, id.row, id.col);
+  }
+
+  /**
+   * Changes how the selected cells are shown. A selection that reaches the
+   * last row or column is taken to mean the rest of the table, so rows and
+   * columns added later are shown the same way.
+   */
+  function formatSelection(patch: FormatPatch, reset = false): Promise<boolean> {
+    const block = selectedBlock.value;
+    const table = tables.value.find((candidate) => candidate.id === selection.value?.tableId);
+    if (!block || !table || !canEdit.value) return Promise.resolve(false);
+    const wholeRows = block.startRow === 0 && block.endRow >= table.rowCount - 1;
+    const wholeCols = block.startCol === 0 && block.endCol >= table.colCount - 1;
+    const range = {
+      startRow: block.startRow,
+      endRow: wholeRows ? null : block.endRow,
+      startCol: block.startCol,
+      endCol: wholeCols ? null : block.endCol,
+    };
+    return attempt(async () => {
+      const updated = await api.formatCells(table.id, range, patch, reset);
+      tables.value = tables.value.map((other) => (other.id === updated.id ? updated : other));
+    }, "The format could not be changed");
   }
 
   /** The column a cell is in, when its table has named columns. */
@@ -635,6 +669,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     editTable,
     deleteTable,
     columnOf,
+    formatOf,
+    formatSelection,
     nameColumns,
     dropColumns,
     updateColumn,

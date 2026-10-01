@@ -5,6 +5,7 @@ import EditableName from "../components/EditableName.vue";
 import FormulaBar from "../components/FormulaBar.vue";
 import PageTabs from "../components/PageTabs.vue";
 import ChartCard from "../components/ChartCard.vue";
+import FormatBar from "../components/FormatBar.vue";
 import { download, fileName } from "../files/download";
 import TableCard from "../components/TableCard.vue";
 import TextCard from "../components/TextCard.vue";
@@ -103,6 +104,7 @@ watch(
       </header>
       <template v-if="loaded && page">
         <FormulaBar />
+        <FormatBar v-if="store.canEdit" />
         <PageTabs :spreadsheet-id="spreadsheetId" :active-page-id="page.id" />
       </template>
     </div>

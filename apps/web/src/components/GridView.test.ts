@@ -990,3 +990,40 @@ describe("a data table", () => {
     expect(cellAt("B1").get("input").attributes("disabled")).toBeDefined();
   });
 });
+
+describe("formats", () => {
+  it("shows cells with the formats their table gives them", async () => {
+    const formats = [
+      {
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: null,
+        format: { bold: true, fill: "yellow" as const },
+      },
+      {
+        startRow: 0,
+        endRow: null,
+        startCol: 1,
+        endCol: 1,
+        format: { numberFormat: "0.00", color: "green" as const },
+      },
+    ];
+    server.getSnapshot.mockResolvedValue({
+      ...snapshotWith({ A1: "x", B1: "2", B2: "=1/0", B3: "3.14159" }),
+      tables: [{ ...TABLE, formats }],
+    });
+    await useWorkbookStore().load("s1");
+    wrapper = mount(GridView, { props: { table: { ...TABLE, formats } }, attachTo: document.body });
+
+    expect(cellAt("A1").attributes("style")).toContain("background");
+    expect(cellAt("A1").get(".cell-value").attributes("style")).toContain("font-weight: 700");
+    expect(cellAt("A2").attributes("style")).toBeUndefined();
+    expect(cellAt("B1").text()).toBe("2.00");
+    expect(cellAt("B3").text()).toBe("3.14");
+    expect(cellAt("B3").get(".cell-value").attributes("style")).toContain("color");
+    // An error keeps the color of errors.
+    expect(cellAt("B2").text()).toBe("#DIV/0!");
+    expect(cellAt("B2").get(".cell-value").attributes("style") ?? "").not.toContain("color");
+  });
+});
