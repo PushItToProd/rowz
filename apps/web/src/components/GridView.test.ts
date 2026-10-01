@@ -201,13 +201,31 @@ describe("editing", () => {
     expect(server.setCells).not.toHaveBeenCalled();
   });
 
-  it("does not move the selection with arrow keys while editing", async () => {
+  it.each(["ArrowLeft", "ArrowRight"])(
+    "keeps editing on %s, which moves the caret",
+    async (key) => {
+      await mountGrid();
+      await select("B2");
+      await press("9");
+      await press(key);
+      expect(selectedAddress()).toBe("B2");
+      expect(wrapper.find(".grid__editor").exists()).toBe(true);
+      expect(server.setCells).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["ArrowDown", "B3"],
+    ["ArrowUp", "B1"],
+  ])("saves and moves to the next row on %s while editing", async (key, expected) => {
     await mountGrid();
-    await select("A1");
+    await select("B2");
     await press("9");
-    await press("ArrowRight");
-    expect(selectedAddress()).toBe("A1");
-    expect(wrapper.find(".grid__editor").exists()).toBe(true);
+    await press(key);
+    expect(cellAt("B2").text()).toBe("9");
+    expect(selectedAddress()).toBe(expected);
+    expect(wrapper.find(".grid__editor").exists()).toBe(false);
+    expect(document.activeElement).toBe(wrapper.get(".grid").element);
   });
 
   it.each(["Delete", "Backspace"])("clears the selected cell with %s", async (key) => {

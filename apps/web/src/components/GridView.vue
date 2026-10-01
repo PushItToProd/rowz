@@ -114,7 +114,10 @@ function onGridKeydown(event: KeyboardEvent): void {
 }
 
 function onEditorKeydown(event: KeyboardEvent): void {
-  if (event.key === "Enter") void finish(1, 0);
+  // Up and down save and move, as Enter does. Left and right stay with the
+  // editor, where they move the caret through the text.
+  if (event.key === "Enter" || event.key === "ArrowDown") void finish(1, 0);
+  else if (event.key === "ArrowUp") void finish(-1, 0);
   else if (event.key === "Tab") void finish(0, event.shiftKey ? -1 : 1);
   else if (event.key === "Escape") void cancel();
   else return;
