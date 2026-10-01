@@ -748,7 +748,10 @@ export class SpreadsheetRepository {
     const snapshot = await this.within(db).getSnapshot(spreadsheetId);
     const cellsOf = new Map<string, CellInput[]>();
     for (const { tableId, ...cell } of snapshot.cells) {
-      cellsOf.set(tableId, [...(cellsOf.get(tableId) ?? []), cell]);
+      const held = cellsOf.get(tableId);
+      // Added in place: copying the list for each cell takes seconds for a full table.
+      if (held) held.push(cell);
+      else cellsOf.set(tableId, [cell]);
     }
     const data = toSpreadsheetFile(
       snapshot.name,
