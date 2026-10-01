@@ -357,8 +357,9 @@ const OPERATORS = [
           rows and columns.
         </li>
         <li>
-          Click a row number or a column letter to select the whole row or column. Ctrl+A selects
-          the whole table.
+          Click a row number or a column letter to select the whole row or column. Drag across
+          several, or hold Shift and click another, to select them all. Ctrl+A selects the whole
+          table.
         </li>
         <li>
           Dragging the handle continues a series: <code>1, 2</code> goes on to <code>3, 4</code>,
@@ -383,15 +384,19 @@ const OPERATORS = [
       </p>
       <ul>
         <li>
-          Use <strong>Add page</strong>, <strong>Add table</strong>, <strong>Add row</strong>, and
-          <strong>Add column</strong> to grow a spreadsheet. A table can have up to
-          {{ LIMITS.tableRows }} rows and {{ LIMITS.tableCols }} columns.
+          Use <strong>Add page</strong> and <strong>Add table</strong> to grow a spreadsheet. The
+          strip marked <strong>+</strong> under a table adds a row, and the one along its right edge
+          adds a column. A table can have up to {{ LIMITS.tableRows }} rows and
+          {{ LIMITS.tableCols }} columns.
         </li>
         <li>
           Right-click a cell to insert a row or column next to it, or to delete its row or column.
-          Shift+F10 opens the same menu from the keyboard, and the buttons above the table do the
-          same for the selected cell. Formulas that read the table are rewritten to keep reading the
-          same cells. A formula that named a deleted cell shows <code>#REF!</code>.
+          With several cells selected, the menu inserts as many rows or columns as the selection
+          spans, and deletes the ones it spans. Right-click a row number or a column letter for the
+          row or column actions alone. Shift+F10 opens the menu from the keyboard, and the buttons
+          above the table insert and delete at the selected cell. Formulas that read the table are
+          rewritten to keep reading the same cells. A formula that named a deleted cell shows
+          <code>#REF!</code>.
         </li>
         <li>
           Double-click the name of a spreadsheet, page, or table to rename it. From the keyboard,

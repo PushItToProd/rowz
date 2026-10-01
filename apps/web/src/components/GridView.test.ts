@@ -841,7 +841,7 @@ describe("row and column headers, and the menu", () => {
     await select("A1");
     await cellAt("B3").trigger("contextmenu", { clientX: 120, clientY: 80 });
     expect(selectedAddress()).toBe("B3");
-    expect(wrapper.emitted("menu")).toEqual([[{ x: 120, y: 80 }]]);
+    expect(wrapper.emitted("menu")).toEqual([[{ x: 120, y: 80, scope: "cells" }]]);
   });
 
   it("keeps a selected range when the right-click is inside it", async () => {
@@ -857,7 +857,67 @@ describe("row and column headers, and the menu", () => {
     await mountGrid();
     await wrapper.findAll("tbody th")[2]!.trigger("contextmenu", { clientX: 5, clientY: 6 });
     expect(range()).toEqual({ startRow: 2, endRow: 2, startCol: 0, endCol: 2 });
-    expect(wrapper.emitted("menu")).toEqual([[{ x: 5, y: 6 }]]);
+    expect(wrapper.emitted("menu")).toEqual([[{ x: 5, y: 6, scope: "row" }]]);
+    await wrapper.findAll("thead th")[1]!.trigger("contextmenu", { clientX: 7, clientY: 8 });
+    expect(range()).toEqual({ startRow: 0, endRow: 3, startCol: 0, endCol: 0 });
+    expect(wrapper.emitted("menu")?.[1]).toEqual([{ x: 7, y: 8, scope: "col" }]);
+  });
+
+  const release = (): boolean => window.dispatchEvent(new MouseEvent("mouseup"));
+
+  it("selects several rows or columns when the mouse is dragged over their headers", async () => {
+    await mountGrid();
+    const rows = wrapper.findAll("tbody th");
+    await rows[1]!.trigger("mousedown");
+    await rows[2]!.trigger("mouseenter");
+    await rows[3]!.trigger("mouseenter");
+    expect(range()).toEqual({ startRow: 1, endRow: 3, startCol: 0, endCol: 2 });
+    // Back over fewer rows, and into the cells: the drag still selects whole rows.
+    await cellAt("B3").trigger("mouseenter");
+    expect(range()).toEqual({ startRow: 1, endRow: 2, startCol: 0, endCol: 2 });
+    expect(rows.map((row) => row.classes("grid__header--selected"))).toEqual([
+      false,
+      true,
+      true,
+      false,
+    ]);
+    release();
+    await rows[0]!.trigger("mouseenter");
+    expect(range()).toEqual({ startRow: 1, endRow: 2, startCol: 0, endCol: 2 });
+
+    const columns = wrapper.findAll("thead th");
+    await columns[3]!.trigger("mousedown");
+    await columns[1]!.trigger("mouseenter");
+    // A column drag pays no attention to the row headers it crosses.
+    await rows[2]!.trigger("mouseenter");
+    release();
+    expect(range()).toEqual({ startRow: 0, endRow: 3, startCol: 0, endCol: 2 });
+  });
+
+  it("selects from the selected cell's row or column to a header clicked with Shift", async () => {
+    await mountGrid();
+    await select("B2");
+    await wrapper.findAll("tbody th")[3]!.trigger("mousedown", { shiftKey: true });
+    expect(range()).toEqual({ startRow: 1, endRow: 3, startCol: 0, endCol: 2 });
+    release();
+    await select("C1");
+    await wrapper.findAll("thead th")[1]!.trigger("mousedown", { shiftKey: true });
+    expect(range()).toEqual({ startRow: 0, endRow: 3, startCol: 0, endCol: 2 });
+  });
+
+  it("keeps several selected rows when the right-click is on one of their headers", async () => {
+    await mountGrid();
+    const rows = wrapper.findAll("tbody th");
+    await rows[1]!.trigger("mousedown");
+    await rows[2]!.trigger("mouseenter");
+    release();
+    await rows[2]!.trigger("contextmenu");
+    expect(range()).toEqual({ startRow: 1, endRow: 2, startCol: 0, endCol: 2 });
+    // A header outside them selects its own row, as does a column header.
+    await rows[0]!.trigger("contextmenu");
+    expect(range()).toEqual({ startRow: 0, endRow: 0, startCol: 0, endCol: 2 });
+    await wrapper.findAll("thead th")[1]!.trigger("contextmenu");
+    expect(range()).toEqual({ startRow: 0, endRow: 3, startCol: 0, endCol: 0 });
   });
 
   it.each([

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { columnLabel, type ColumnType } from "@spreadsheet-app/engine";
+import { columnLabel, formatAddress, type ColumnType } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
 import { computed, ref } from "vue";
 import { parseCsv, toCsv } from "../files/csv";
@@ -9,7 +9,7 @@ import { useWorkbookStore } from "../stores/workbook";
 import ContextMenu from "./ContextMenu.vue";
 import EditableName from "./EditableName.vue";
 import GridView from "./GridView.vue";
-import type { MenuItem } from "./menu";
+import type { MenuItem, MenuScope } from "./menu";
 
 const props = defineProps<{ table: TableRecord }>();
 const store = useWorkbookStore();
@@ -46,23 +46,49 @@ async function importCsv(event: Event): Promise<void> {
   await store.importRows(props.table.id, rows);
 }
 
-/** Whether any cell of a row or column holds something. */
-function holdsContent(axis: "row" | "col", index: number): boolean {
-  const length = axis === "row" ? props.table.colCount : props.table.rowCount;
-  return Array.from({ length }, (_, other) =>
-    axis === "row" ? { row: index, col: other } : { row: other, col: index },
-  ).some((cell) => store.inputOf({ tableId: props.table.id, ...cell }) !== "");
+type Axis = "row" | "col";
+
+/** Rows or columns that sit next to each other: `count` of them from `first`. */
+interface Lines {
+  axis: Axis;
+  first: number;
+  count: number;
 }
 
-function insert(axis: "row" | "col", index: number): void {
-  void store.editTable(props.table.id, { axis, kind: "insert", index });
+/** "row 3", "rows 3-6", "column C", or "columns C-E". */
+function describeLines({ axis, first, count }: Lines): string {
+  const label = (index: number): string =>
+    axis === "row" ? String(index + 1) : columnLabel(index);
+  const noun = axis === "row" ? "row" : "column";
+  return count === 1
+    ? `${noun} ${label(first)}`
+    : `${noun}s ${label(first)}-${label(first + count - 1)}`;
 }
 
-/** Deletes a row or column, asking first when that would discard content. */
-function removeLine(axis: "row" | "col", index: number): void {
-  const name = axis === "row" ? `row ${String(index + 1)}` : `column ${columnLabel(index)}`;
-  if (holdsContent(axis, index) && !window.confirm(`Delete ${name} and what it holds?`)) return;
-  void store.editTable(props.table.id, { axis, kind: "delete", index });
+/** Whether any cell of the rows or columns holds something. */
+function holdContent({ axis, first, count }: Lines): boolean {
+  const { id, rowCount, colCount } = props.table;
+  const across = axis === "row" ? colCount : rowCount;
+  for (let index = first; index < first + count; index += 1) {
+    for (let other = 0; other < across; other += 1) {
+      const cell = axis === "row" ? { row: index, col: other } : { row: other, col: index };
+      if (store.inputOf({ tableId: id, ...cell }) !== "") return true;
+    }
+  }
+  return false;
+}
+
+/** Inserts `count` rows or columns, the first of them at `index`. */
+function insert(axis: Axis, index: number, count = 1): void {
+  void store.editTable(props.table.id, { axis, kind: "insert", index, count });
+}
+
+/** Deletes rows or columns, asking first when that would discard content. */
+function removeLines(lines: Lines): void {
+  const held = lines.count === 1 ? "what it holds" : "what they hold";
+  if (holdContent(lines) && !window.confirm(`Delete ${describeLines(lines)} and ${held}?`)) return;
+  const { axis, first: index, count } = lines;
+  void store.editTable(props.table.id, { axis, kind: "delete", index, count });
 }
 
 /** Where the menu that offers the two ways to name columns is open, if it is. */
@@ -110,9 +136,8 @@ function columnItems(col: number): MenuItem[] {
   if (!column) return [];
   const { id } = props.table;
   return [
-    ...COLUMN_TYPES.map(({ type, label }, index) => ({
+    ...COLUMN_TYPES.map(({ type, label }) => ({
       label: `${column.type === type ? "✓ " : ""}Column holds: ${label}`,
-      separated: index === 0,
       run: () => {
         void store.updateColumn(id, col, { type });
       },
@@ -132,63 +157,84 @@ function columnItems(col: number): MenuItem[] {
   ];
 }
 
-/** Where the menu of row, column, and cell actions is open, if it is. */
-const menuAt = ref<{ x: number; y: number } | null>(null);
+/** Where the menu of row, column, and cell actions is open, if it is, and what it acts on. */
+const menuAt = ref<{ x: number; y: number; scope: MenuScope } | null>(null);
 
-/** The actions for the selected cell. Each one acts on that cell's row or column. */
-const menuItems = computed((): MenuItem[] => {
-  const cell = selected.value;
-  if (!cell) return [];
-  const { row, col } = cell;
+/** The items that insert and delete the selected rows, or the selected columns. */
+function lineItems(lines: Lines): MenuItem[] {
+  const { axis, first, count } = lines;
+  const rows = axis === "row";
+  const size = rows ? props.table.rowCount : props.table.colCount;
+  const full = size + count > (rows ? LIMITS.tableRows : LIMITS.tableCols);
+  const noun = rows ? "row" : "column";
+  const counted = count === 1 ? noun : `${String(count)} ${noun}s`;
   return [
     {
-      label: "Insert row above",
-      disabled: rowsFull.value,
+      label: `Insert ${counted} ${rows ? "above" : "left"}`,
+      disabled: full,
       run: () => {
-        insert("row", row);
+        insert(axis, first, count);
       },
     },
     {
-      label: "Insert row below",
-      disabled: rowsFull.value,
+      label: `Insert ${counted} ${rows ? "below" : "right"}`,
+      disabled: full,
       run: () => {
-        insert("row", row + 1);
+        insert(axis, first + count, count);
       },
     },
     {
-      label: `Delete row ${String(row + 1)}`,
+      label: `Delete ${describeLines(lines)}`,
       danger: true,
-      disabled: props.table.rowCount <= 1,
+      // A table keeps at least one row and one column.
+      disabled: count >= size,
       run: () => {
-        removeLine("row", row);
+        removeLines(lines);
       },
     },
-    {
-      label: "Insert column left",
-      separated: true,
-      disabled: colsFull.value,
-      run: () => {
-        insert("col", col);
-      },
-    },
-    {
-      label: "Insert column right",
-      disabled: colsFull.value,
-      run: () => {
-        insert("col", col + 1);
-      },
-    },
-    {
-      label: `Delete column ${columnLabel(col)}`,
-      danger: true,
-      disabled: props.table.colCount <= 1,
-      run: () => {
-        removeLine("col", col);
-      },
-    },
-    ...columnItems(col),
-    { label: "Clear cells", separated: true, run: () => void store.clearSelection() },
   ];
+}
+
+/**
+ * The actions for the selected cells. They insert as many rows or columns as
+ * the selection spans, and delete the ones it spans. A menu opened from a row
+ * header has no column actions, and one opened from a column header no row actions.
+ */
+const menuItems = computed((): MenuItem[] => {
+  const range = selected.value ? store.selectedRange : null;
+  const scope = menuAt.value?.scope;
+  if (!range || !scope) return [];
+  const rows: Lines = {
+    axis: "row",
+    first: range.startRow,
+    count: range.endRow - range.startRow + 1,
+  };
+  const cols: Lines = {
+    axis: "col",
+    first: range.startCol,
+    count: range.endCol - range.startCol + 1,
+  };
+  const groups: MenuItem[][] = [
+    scope === "col" ? [] : lineItems(rows),
+    scope === "row" ? [] : lineItems(cols),
+    // What a column holds is set one column at a time.
+    scope === "row" || cols.count > 1 ? [] : columnItems(cols.first),
+    [{ label: "Clear cells", run: () => void store.clearSelection() }],
+  ];
+  return groups
+    .filter((group) => group.length > 0)
+    .flatMap((group, index) =>
+      group.map((item, position) => ({ ...item, separated: index > 0 && position === 0 })),
+    );
+});
+
+/** What the open menu acts on, for its accessible name. */
+const menuLabel = computed(() => {
+  const range = selected.value ? store.selectedRange : null;
+  if (!range) return "";
+  const start = formatAddress({ row: range.startRow, col: range.startCol });
+  const end = formatAddress({ row: range.endRow, col: range.endCol });
+  return `Actions for ${start === end ? start : `${start}:${end}`}`;
 });
 </script>
 
@@ -204,20 +250,6 @@ const menuItems = computed((): MenuItem[] => {
         />
       </h2>
       <div v-if="store.canEdit" class="table-card__actions">
-        <button
-          type="button"
-          :disabled="rowsFull"
-          @click="store.updateTable(table.id, { rowCount: table.rowCount + 1 })"
-        >
-          Add row
-        </button>
-        <button
-          type="button"
-          :disabled="colsFull"
-          @click="store.updateTable(table.id, { colCount: table.colCount + 1 })"
-        >
-          Add column
-        </button>
         <button v-if="table.columns" type="button" @click="dropColumns">Remove column names</button>
         <button v-else type="button" aria-haspopup="menu" @click="openNaming">Name columns</button>
         <label class="file-button">
@@ -246,7 +278,7 @@ const menuItems = computed((): MenuItem[] => {
           type="button"
           class="danger"
           :disabled="table.rowCount <= 1"
-          @click="removeLine('row', selected.row)"
+          @click="removeLines({ axis: 'row', first: selected.row, count: 1 })"
         >
           Delete row
         </button>
@@ -260,14 +292,39 @@ const menuItems = computed((): MenuItem[] => {
           type="button"
           class="danger"
           :disabled="table.colCount <= 1"
-          @click="removeLine('col', selected.col)"
+          @click="removeLines({ axis: 'col', first: selected.col, count: 1 })"
         >
           Delete column
         </button>
       </span>
     </div>
 
-    <GridView :table="table" @menu="menuAt = $event" />
+    <!-- A strip along the right edge adds a column, and one along the bottom edge adds a row. -->
+    <div class="table-card__grid">
+      <GridView :table="table" @menu="menuAt = $event" />
+      <template v-if="store.canEdit">
+        <button
+          type="button"
+          class="table-card__grow table-card__grow--col"
+          aria-label="Add column"
+          title="Add column"
+          :disabled="colsFull"
+          @click="store.updateTable(table.id, { colCount: table.colCount + 1 })"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          class="table-card__grow table-card__grow--row"
+          aria-label="Add row"
+          title="Add row"
+          :disabled="rowsFull"
+          @click="store.updateTable(table.id, { rowCount: table.rowCount + 1 })"
+        >
+          +
+        </button>
+      </template>
+    </div>
     <ContextMenu
       v-if="namingAt"
       :x="namingAt.x"
@@ -280,7 +337,7 @@ const menuItems = computed((): MenuItem[] => {
       v-if="menuAt && selected"
       :x="menuAt.x"
       :y="menuAt.y"
-      :label="`Actions for ${columnLabel(selected.col)}${selected.row + 1}`"
+      :label="menuLabel"
       :items="menuItems"
       @close="menuAt = null"
     />

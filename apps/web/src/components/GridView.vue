@@ -22,14 +22,19 @@ import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import { cellStyle } from "../formatStyle";
 import { contains, fillTarget, type GridRange } from "../formula/fill";
+import type { MenuScope } from "./menu";
 import { useFormulaAssist } from "../formula/useFormulaAssist";
 import CellView from "./CellView.vue";
 import EditableName from "./EditableName.vue";
 import FormulaAssist from "./FormulaAssist.vue";
 
 const props = defineProps<{ table: TableRecord }>();
-/** Asks for the menu of row, column, and cell actions at a place on screen. */
-const emit = defineEmits<{ menu: [at: { x: number; y: number }] }>();
+/**
+ * Asks for the menu of row, column, and cell actions at a place on screen.
+ * `scope` is what the menu was asked for: the selected cells, or the selected
+ * rows or columns when it was asked for from one of their headers.
+ */
+const emit = defineEmits<{ menu: [at: { x: number; y: number; scope: MenuScope }] }>();
 const store = useWorkbookStore();
 
 const grid = ref<HTMLElement>();
@@ -81,22 +86,54 @@ function columnAt(col: number): ColumnDefinition | undefined {
   return props.table.columns?.[col];
 }
 
+type Axis = "row" | "col";
+
 /** A press on a column header selects the column, unless it is in the box where the column is being renamed. */
 function onColumnMousedown(event: MouseEvent, col: number): void {
   if (event.target instanceof HTMLInputElement) return;
   event.preventDefault();
-  selectLine("col", col);
+  onHeaderMousedown(event, "col", col);
 }
 
-/** Selects a whole row or column, from its header. */
-function selectLine(axis: "row" | "col", index: number): void {
+/**
+ * A press on a header selects its row or column, and a drag from there
+ * selects the rows or columns it crosses. With Shift, the press selects from
+ * the selected cell's row or column to this one.
+ */
+function onHeaderMousedown(event: MouseEvent, axis: Axis, index: number): void {
+  const from = event.shiftKey && selected.value ? selected.value[axis] : index;
+  selectLines(axis, from, index);
+  drag.value = { kind: "lines", axis, from };
+  window.addEventListener("mouseup", endDrag, { once: true });
+}
+
+function onHeaderMouseenter(axis: Axis, index: number): void {
+  if (drag.value?.kind === "lines" && drag.value.axis === axis) {
+    selectLines(axis, drag.value.from, index);
+  }
+}
+
+/** Selects whole rows or columns: every one from `from` to `to`. */
+function selectLines(axis: Axis, from: number, to: number): void {
   commit();
   const last = { row: props.table.rowCount - 1, col: props.table.colCount - 1 };
-  store.selection = axis === "row" ? cell(index, 0) : cell(0, index);
-  store.extendSelection(
-    axis === "row" ? { row: index, col: last.col } : { row: last.row, col: index },
-  );
+  store.selection = axis === "row" ? cell(from, 0) : cell(0, from);
+  store.extendSelection(axis === "row" ? { row: to, col: last.col } : { row: last.row, col: to });
   focusGrid();
+}
+
+/** Whether a row or column is selected whole, alone or among others. */
+function isLineSelected(axis: Axis, index: number): boolean {
+  const { rowCount, colCount } = props.table;
+  const whole = range.value;
+  if (!whole) return false;
+  return axis === "row"
+    ? whole.startCol === 0 &&
+        whole.endCol === colCount - 1 &&
+        contains(whole, { row: index, col: 0 })
+    : whole.startRow === 0 &&
+        whole.endRow === rowCount - 1 &&
+        contains(whole, { row: 0, col: index });
 }
 
 function selectAll(): void {
@@ -114,14 +151,18 @@ function onCellContextMenu(event: MouseEvent, row: number, col: number): void {
   event.preventDefault();
   if (!inRange(row, col)) select(row, col);
   focusGrid();
-  emit("menu", { x: event.clientX, y: event.clientY });
+  emit("menu", { x: event.clientX, y: event.clientY, scope: "cells" });
 }
 
-function onHeaderContextMenu(event: MouseEvent, axis: "row" | "col", index: number): void {
+/**
+ * Opens the menu for a right-clicked header. A row or column outside the
+ * rows or columns selected whole is selected first.
+ */
+function onHeaderContextMenu(event: MouseEvent, axis: Axis, index: number): void {
   if (!store.canEdit) return;
   event.preventDefault();
-  selectLine(axis, index);
-  emit("menu", { x: event.clientX, y: event.clientY });
+  if (!isLineSelected(axis, index)) selectLines(axis, index, index);
+  emit("menu", { x: event.clientX, y: event.clientY, scope: axis });
 }
 
 /** Opens the menu from the keyboard, under the selected cell. */
@@ -130,7 +171,7 @@ function openMenuAtSelection(): void {
   const box = grid.value
     ?.querySelector(`[data-cell="${formatAddress(selected.value)}"]`)
     ?.getBoundingClientRect();
-  if (box) emit("menu", { x: box.left, y: box.bottom });
+  if (box) emit("menu", { x: box.left, y: box.bottom, scope: "cells" });
 }
 
 /** Keeps a position inside the table. */
@@ -154,8 +195,16 @@ function extend(rows: number, cols: number): void {
   if (corner) store.extendSelection(clamp({ row: corner.row + rows, col: corner.col + cols }));
 }
 
-/** What a mouse drag in the grid is doing: selecting a range, or filling from the fill handle. */
-const drag = ref<{ kind: "select" } | { kind: "fill"; source: GridRange } | null>(null);
+/**
+ * What a mouse drag in the grid is doing: selecting a range, selecting whole
+ * rows or columns from the header where it began, or filling from the fill handle.
+ */
+const drag = ref<
+  | { kind: "select" }
+  | { kind: "lines"; axis: Axis; from: number }
+  | { kind: "fill"; source: GridRange }
+  | null
+>(null);
 /** The cells a fill in progress would cover. */
 const fillPreview = ref<GridRange | null>(null);
 
@@ -197,6 +246,9 @@ function onCellMousedown(event: MouseEvent, row: number, col: number): void {
 
 function onCellMouseenter(row: number, col: number): void {
   if (drag.value?.kind === "select") store.extendSelection({ row, col });
+  // A drag that began on a header and strays into the cells still selects whole rows or columns.
+  else if (drag.value?.kind === "lines")
+    onHeaderMouseenter(drag.value.axis, { row, col }[drag.value.axis]);
   else if (drag.value?.kind === "fill")
     fillPreview.value = fillTarget(drag.value.source, { row, col });
 }
@@ -388,9 +440,13 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             v-for="col in table.colCount"
             :key="col"
             scope="col"
-            :class="{ 'grid__column--named': columnAt(col - 1) }"
+            :class="{
+              'grid__column--named': columnAt(col - 1),
+              'grid__header--selected': isLineSelected('col', col - 1),
+            }"
             :data-column="columnAt(col - 1)?.name"
             @mousedown.left="onColumnMousedown($event, col - 1)"
+            @mouseenter="onHeaderMouseenter('col', col - 1)"
             @contextmenu="onHeaderContextMenu($event, 'col', col - 1)"
           >
             <template v-if="columnAt(col - 1)">
@@ -413,7 +469,9 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
         <tr v-for="row in table.rowCount" :key="row" role="row">
           <th
             scope="row"
-            @mousedown.left.prevent="selectLine('row', row - 1)"
+            :class="{ 'grid__header--selected': isLineSelected('row', row - 1) }"
+            @mousedown.left.prevent="onHeaderMousedown($event, 'row', row - 1)"
+            @mouseenter="onHeaderMouseenter('row', row - 1)"
             @contextmenu="onHeaderContextMenu($event, 'row', row - 1)"
           >
             {{ row }}

@@ -772,13 +772,15 @@ export const useWorkbookStore = defineStore("workbook", () => {
       syncStructure();
       applyRewritten(rewritten);
 
-      const selected = selection.value;
+      // The selection stays where it was, as far as the table still reaches.
+      const [selected, end] = [selection.value, selectionEnd.value];
       if (selected?.tableId === tableId) {
-        selection.value = {
-          tableId,
-          row: Math.min(selected.row, updated.rowCount - 1),
-          col: Math.min(selected.col, updated.colCount - 1),
-        };
+        const inside = ({ row, col }: CellAddress): CellAddress => ({
+          row: Math.min(row, updated.rowCount - 1),
+          col: Math.min(col, updated.colCount - 1),
+        });
+        selection.value = { tableId, ...inside(selected) };
+        if (end) extendSelection(inside(end));
       }
     }, "The table could not be changed");
   }

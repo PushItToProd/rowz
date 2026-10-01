@@ -7,3 +7,10 @@ export interface MenuItem {
   separated?: boolean;
   run(): void;
 }
+
+/**
+ * What a table's menu of row, column, and cell actions acts on: the selected
+ * cells with their rows and columns, or only the selected rows, or only the
+ * selected columns.
+ */
+export type MenuScope = "cells" | "row" | "col";

@@ -63,20 +63,20 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [ ] **P3** implement the handy tab+enter workflow from Excel and Sheets -- if you select a certain cell with the mouse or arrow keys, use tab to traverse multiple cells (optionally entering values into any or none of them), then input a value into a cell and submit that value by hitting enter, it'll drop to the next row in the column where you started
   - example: in a table, select C3. hit tab 3 times (optionally entering values in any cells in C3:E3 along the way) - now you're in F3. hit enter to focus the cell input (or just start typing), type anything (or nothing), and hit enter to submit. the selection should move to C4.
 
-- [ ] **P2** add a long thin "+" button along the full width/height of the bottom/right side of each table for adding rows/cols. this way I can just click anywhere along the range
+- [x] add a long thin "+" button along the full width/height of the bottom/right side of each table for adding rows/cols. this way I can just click anywhere along the range
 - [ ] **P2** support resizing a whole table by just setting its width and height in cols/rows (warn the user and show a confirmation prompt if resizing will delete data)
-- [ ] **P2** dragging over col/row headers should select multiple full columns/rows
-- [ ] **P2** when multiple rows/columns are selected (either via row/col selection or by selecting specific cells), the context menu's "insert [row/column]" actions should become "insert N [rows/columns]", where `N` is the number of selected rows and cols as appropriate
+- [x] dragging over col/row headers should select multiple full columns/rows
+- [x] when multiple rows/columns are selected (either via row/col selection or by selecting specific cells), the context menu's "insert [row/column]" actions should become "insert N [rows/columns]", where `N` is the number of selected rows and cols as appropriate
   - if I select C:E using the column headers and right click, I should see "Insert 3 columns left" and "Insert 3 columns right"
-- [ ] **P2** don't show "Insert row" actions in a column header's context menu and don't show "Insert column" actions in a row header's context menu
+- [x] don't show "Insert row" actions in a column header's context menu and don't show "Insert column" actions in a row header's context menu
 - [ ] **P1** when a row/col is inserted into a range used in a formula, the formula's range should be auto-updated to include the range.
   - e.g. if we have A1 = 1, A2 = 2, A3 = 3, A4 = `SUM(A1:A3)` and the user right clicks and inserts a row above or below A2, the range should be updated to `A1:A4`
 - [ ] **P3** allow resizing rows/cols
   - [ ] by clicking and dragging on the borders of the row/col headers
   - [ ] by a "resize [row/column]" ctx menu item shown when right clicking on row/col headers
-- [ ] **P2** when multiple cells/cols/rows are selected, allow deleting the columns or rows containing them from the context menu
-  - [ ] if I select C:E, give me a "Delete columns C-E" option. likewise for rows.
-  - [ ] if I select C3:E6 and right click on the selected range, show me both "Delete columns C-E" and "Delete rows 3-6"
+- [x] when multiple cells/cols/rows are selected, allow deleting the columns or rows containing them from the context menu
+  - [x] if I select C:E, give me a "Delete columns C-E" option. likewise for rows.
+  - [x] if I select C3:E6 and right click on the selected range, show me both "Delete columns C-E" and "Delete rows 3-6"
 - [ ] **P4** merge cells across selection - support merging multiple cells across one or more rows and one or more columns
 
 ## Tables, pages, charts, and text views

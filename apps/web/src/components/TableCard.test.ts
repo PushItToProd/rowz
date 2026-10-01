@@ -61,10 +61,10 @@ describe("row and column actions", () => {
   });
 
   it.each([
-    ["Insert row above", { axis: "row", kind: "insert", index: 2 }],
-    ["Delete row", { axis: "row", kind: "delete", index: 2 }],
-    ["Insert column left", { axis: "col", kind: "insert", index: 1 }],
-    ["Delete column", { axis: "col", kind: "delete", index: 1 }],
+    ["Insert row above", { axis: "row", kind: "insert", index: 2, count: 1 }],
+    ["Delete row", { axis: "row", kind: "delete", index: 2, count: 1 }],
+    ["Insert column left", { axis: "col", kind: "insert", index: 1, count: 1 }],
+    ["Delete column", { axis: "col", kind: "delete", index: 1, count: 1 }],
   ])("%s edits the selected cell's row or column", async (name, edit) => {
     await render();
     await select("B3");
@@ -108,15 +108,20 @@ describe("row and column actions", () => {
 });
 
 describe("table actions", () => {
-  it("adds a row and a column at the end", async () => {
+  it("adds a row from the strip under the grid, and a column from the strip beside it", async () => {
     await render();
     server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
-    await button("Add row").trigger("click");
-    await button("Add column").trigger("click");
+    await wrapper.get('button[aria-label="Add row"]').trigger("click");
+    await wrapper.get('button[aria-label="Add column"]').trigger("click");
     expect(server.updateTable.mock.calls).toEqual([
       ["t1", { rowCount: 5 }],
       ["t1", { colCount: 4 }],
     ]);
+  });
+
+  it("has no strips for a viewer", async () => {
+    await render({}, "viewer");
+    expect(wrapper.find(".table-card__grow").exists()).toBe(false);
   });
 
   it("deletes the table after confirmation", async () => {
@@ -163,17 +168,106 @@ describe("the menu of row, column, and cell actions", () => {
   });
 
   it.each([
-    ["Insert row above", { axis: "row", kind: "insert", index: 1 }],
-    ["Insert row below", { axis: "row", kind: "insert", index: 2 }],
-    ["Insert column left", { axis: "col", kind: "insert", index: 1 }],
-    ["Insert column right", { axis: "col", kind: "insert", index: 2 }],
-    ["Delete column B", { axis: "col", kind: "delete", index: 1 }],
-    ["Delete row 2", { axis: "row", kind: "delete", index: 1 }],
+    ["Insert row above", { axis: "row", kind: "insert", index: 1, count: 1 }],
+    ["Insert row below", { axis: "row", kind: "insert", index: 2, count: 1 }],
+    ["Insert column left", { axis: "col", kind: "insert", index: 1, count: 1 }],
+    ["Insert column right", { axis: "col", kind: "insert", index: 2, count: 1 }],
+    ["Delete column B", { axis: "col", kind: "delete", index: 1, count: 1 }],
+    ["Delete row 2", { axis: "row", kind: "delete", index: 1, count: 1 }],
   ])("%s edits the table and closes the menu", async (name, edit) => {
     await open("B2");
     await item(name).trigger("click");
     expect(server.editTable).toHaveBeenCalledWith("t1", edit);
     expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+  });
+
+  const labels = (): string[] => wrapper.findAll('[role="menuitem"]').map((entry) => entry.text());
+
+  /** Opens the menu on `address` with the cells from `from` to `to` selected. */
+  async function openOnRange(from: string, to: string, address = to) {
+    await render({ A1: "x", B2: "y" });
+    await wrapper.get(`[data-cell="${from}"]`).trigger("mousedown");
+    await wrapper.get(`[data-cell="${to}"]`).trigger("mousedown", { shiftKey: true });
+    await wrapper.get(`[data-cell="${address}"]`).trigger("contextmenu");
+    return wrapper.get('[role="menu"]');
+  }
+
+  it("acts on every row and column of a selected range, and says how many", async () => {
+    const menu = await openOnRange("B2", "C4");
+    expect(menu.attributes("aria-label")).toBe("Actions for B2:C4");
+    expect(labels()).toEqual([
+      "Insert 3 rows above",
+      "Insert 3 rows below",
+      "Delete rows 2-4",
+      "Insert 2 columns left",
+      "Insert 2 columns right",
+      "Delete columns B-C",
+      "Clear cells",
+    ]);
+  });
+
+  it.each([
+    ["Insert 3 rows above", { axis: "row", kind: "insert", index: 1, count: 3 }],
+    ["Insert 3 rows below", { axis: "row", kind: "insert", index: 4, count: 3 }],
+    ["Delete rows 2-4", { axis: "row", kind: "delete", index: 1, count: 3 }],
+    ["Insert 2 columns left", { axis: "col", kind: "insert", index: 1, count: 2 }],
+    ["Insert 2 columns right", { axis: "col", kind: "insert", index: 3, count: 2 }],
+    ["Delete columns B-C", { axis: "col", kind: "delete", index: 1, count: 2 }],
+  ])("%s edits that many rows or columns in one request", async (name, edit) => {
+    await openOnRange("C4", "B2", "B3");
+    await item(name).trigger("click");
+    expect(server.editTable).toHaveBeenCalledExactlyOnceWith("t1", edit);
+  });
+
+  it("asks before deleting several rows or columns when one of them holds content", async () => {
+    await openOnRange("B2", "C4");
+    confirm.mockReturnValue(false);
+    await item("Delete columns B-C").trigger("click");
+    expect(confirm).toHaveBeenCalledExactlyOnceWith("Delete columns B-C and what they hold?");
+    expect(server.editTable).not.toHaveBeenCalled();
+  });
+
+  it("does not offer to delete every row or every column", async () => {
+    await openOnRange("A1", "C4");
+    expect(item("Delete rows 1-4").attributes("disabled")).toBeDefined();
+    expect(item("Delete columns A-C").attributes("disabled")).toBeDefined();
+    expect(item("Insert 4 rows above").attributes("disabled")).toBeUndefined();
+  });
+
+  it("has only column actions when opened from a column header, and only row actions from a row header", async () => {
+    await render();
+    await wrapper.findAll("thead th")[2]!.trigger("contextmenu");
+    expect(labels()).toEqual([
+      "Insert column left",
+      "Insert column right",
+      "Delete column B",
+      "Clear cells",
+    ]);
+    await wrapper.get('[role="menu"]').trigger("keydown", { key: "Escape" });
+
+    await wrapper.findAll("tbody th")[2]!.trigger("contextmenu");
+    expect(labels()).toEqual([
+      "Insert row above",
+      "Insert row below",
+      "Delete row 3",
+      "Clear cells",
+    ]);
+  });
+
+  it("acts on every column selected by dragging over the headers", async () => {
+    await render();
+    const headers = wrapper.findAll("thead th");
+    await headers[2]!.trigger("mousedown");
+    await headers[3]!.trigger("mouseenter");
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await headers[3]!.trigger("contextmenu");
+    expect(wrapper.get('[role="menu"]').attributes("aria-label")).toBe("Actions for B1:C4");
+    expect(labels()).toEqual([
+      "Insert 2 columns left",
+      "Insert 2 columns right",
+      "Delete columns B-C",
+      "Clear cells",
+    ]);
   });
 
   it("clears the selected cells", async () => {

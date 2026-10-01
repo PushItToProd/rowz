@@ -373,11 +373,47 @@ input.editable-name--editing {
   gap: 6px;
 }
 
+/* The grid, with a strip along its right edge and one along its bottom edge that add a column or a row. */
+.table-card__grid {
+  display: grid;
+  /* The grid is as wide as its table, up to the room the card has. Past that it scrolls. */
+  grid-template-columns: minmax(0, max-content) auto;
+  gap: 3px;
+  justify-content: start;
+}
+
+.table-card__grow {
+  padding: 0;
+  border: 1px dashed var(--line);
+  background: var(--canvas);
+  color: var(--muted);
+  line-height: 1;
+}
+
+.table-card__grow:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.table-card__grow--col {
+  width: 18px;
+}
+
+.table-card__grow--row {
+  height: 18px;
+}
+
 /* Grid */
 
 .grid {
   max-width: 100%;
   overflow: auto;
+}
+
+.grid .grid__header--selected {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .grid table {

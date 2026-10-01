@@ -530,6 +530,20 @@ describe("structure", () => {
     expect(store.selection).toEqual(at("C3"));
   });
 
+  it("keeps a selected range selected after an edit, as far as the table still reaches", async () => {
+    const store = await open();
+    store.selection = at("A2");
+    store.extendSelection(at("C4"));
+    server.editTable.mockResolvedValue({
+      table: { ...TABLE, rowCount: 3 },
+      cells: [],
+      views: [],
+      tables: [],
+    });
+    await store.editTable("t1", { axis: "row", kind: "delete", index: 0 });
+    expect(store.selectedRange).toEqual({ startRow: 1, endRow: 2, startCol: 0, endCol: 2 });
+  });
+
   it("stores pending cell edits before asking the server to move cells", async () => {
     const store = await open({ A1: "1" });
     const save = deferred();

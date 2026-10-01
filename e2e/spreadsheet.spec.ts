@@ -180,6 +180,33 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
   await expect(page.getByRole("menu")).toHaveCount(0);
   await page.keyboard.press("Delete");
   await expect(cell(page, "A3")).toHaveText("");
+
+  // Dragging over row headers selects the rows, and the menu then acts on all of them.
+  await enter(page, "A3", "10");
+  await enter(page, "A4", "=SUM(A1:A3)");
+  const rowHeaders = page.locator('[data-table="Table 1"] tbody th');
+  await rowHeaders.nth(1).hover();
+  await page.mouse.down();
+  await rowHeaders.nth(2).hover();
+  await page.mouse.up();
+  await rowHeaders.nth(2).click({ button: "right" });
+  const rowMenu = page.getByRole("menu", { name: "Actions for A2:I3" });
+  await expect(rowMenu.getByRole("menuitem", { name: /column/ })).toHaveCount(0);
+  await rowMenu.getByRole("menuitem", { name: "Insert 2 rows above" }).click();
+  await expect(cell(page, "A4")).toHaveText("3");
+  await expect(cell(page, "A6")).toHaveText("14");
+  await rowHeaders.nth(2).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Delete rows 2-3" }).click();
+  await expect(cell(page, "A2")).toHaveText("3");
+  await expect(cell(page, "A4")).toHaveText("14");
+
+  // The strips along the bottom and right edges add a row and a column.
+  const table = page.locator('[data-table="Table 1"]');
+  await expect(table.locator("tbody tr")).toHaveCount(20);
+  await table.getByRole("button", { name: "Add row" }).click();
+  await expect(table.locator("tbody tr")).toHaveCount(21);
+  await table.getByRole("button", { name: "Add column" }).click();
+  await expect(cell(page, "J1")).toBeVisible();
 });
 
 test("a formula with several results fills the cells around it", async ({ page }) => {
