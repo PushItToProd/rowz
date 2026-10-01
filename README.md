@@ -26,6 +26,8 @@ Open http://localhost:5173 and create an account. Development needs no database 
 
 A cell whose input starts with `=` is a formula. A leading apostrophe forces text: `'=not a formula`.
 
+The app has a help page at `/help` with the full reference. It lists every function with an example whose result the engine computes when the page loads.
+
 | Kind       | Supported                                                                                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Operators  | `+ - * / ^`, `&` for joining text, `= <> < > <= >=`                                                                     |
@@ -33,7 +35,7 @@ A cell whose input starts with `=` is a formula. A leading apostrophe forces tex
 | Math       | `SUM AVERAGE MIN MAX COUNT COUNTA ROUND ABS`                                                                            |
 | Logic      | `IF AND OR NOT IFERROR`                                                                                                 |
 | Text       | `CONCATENATE LEN UPPER LOWER TRIM`                                                                                      |
-| Errors     | `#DIV/0! #VALUE! #REF! #NAME? #N/A #CYCLE! #ERROR!`                                                                     |
+| Errors     | `#DIV/0! #VALUE! #REF! #NAME? #CYCLE! #ERROR!`                                                                          |
 
 Page and table names in references ignore case. Names with spaces need single quotes.
 

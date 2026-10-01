@@ -53,6 +53,7 @@ onMounted(refresh);
   <div class="list">
     <header class="list__header">
       <h1>Spreadsheets</h1>
+      <RouterLink :to="{ name: 'help' }">Help</RouterLink>
       <span class="list__user">{{ session.user?.email }}</span>
       <button type="button" @click="signOut">Sign out</button>
     </header>

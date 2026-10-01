@@ -6,7 +6,6 @@ export type ErrorCode =
   | "#VALUE!"
   | "#REF!"
   | "#NAME?"
-  | "#N/A"
   | "#CYCLE!"
   /** The formula text could not be parsed, or a function got the wrong number of arguments. */
   | "#ERROR!";

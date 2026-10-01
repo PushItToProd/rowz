@@ -177,3 +177,21 @@ test("spreadsheets are private to the account that made them", async ({ page }) 
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("link", { name: "Untitled spreadsheet" })).toBeVisible();
 });
+
+test("the help page documents formulas, with or without an account", async ({ page, context }) => {
+  await page.goto("/help");
+  await expect(page.getByRole("heading", { name: "Help", exact: true })).toBeVisible();
+  await expect(page.locator('[data-function="SUM"]')).toContainText("gives 16");
+
+  await page.getByRole("navigation", { name: "Contents" }).getByText("Errors").click();
+  await expect(page).toHaveURL(/\/help#errors$/);
+  await expect(page.locator('[data-error="#CYCLE!"]')).toBeInViewport();
+
+  await newSpreadsheet(page);
+  const opened = context.waitForEvent("page");
+  await page.getByRole("link", { name: "Help" }).click();
+  const help = await opened;
+  await expect(help.getByRole("heading", { name: "Buttons and actions" })).toBeVisible();
+  // The editor is still open in the first tab.
+  await expect(cell(page, "A1")).toBeVisible();
+});

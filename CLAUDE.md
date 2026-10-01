@@ -14,6 +14,7 @@ TypeScript is pinned to 6.0 because typescript-eslint and vue-tsc need its JavaS
 ## Design rules
 
 - **The engine stays pure.** `packages/engine` performs no I/O and has no dependencies. A new side effect is a new variant of `Effect`, an action function that returns it from `plan`, and a handler on the server in `apps/server/src/actions/run.ts`.
+- **Every function has a help entry.** `packages/engine/src/docs.ts` holds the syntax, summary, and example the help page shows. A test fails when a function in the default registry has no entry or its example evaluates to an error.
 - **Recalculation never runs an action.** Action functions evaluate to an `ActionValue` and their arguments are not evaluated until `Workbook.planAction`. Their arguments are also left out of the dependency graph, which is why a counter button is not a cycle.
 - **Authorization lives in `SpreadsheetRepository`.** Route handlers reach spreadsheet data only through `c.var.repository`. A new query starts from `findSpreadsheet`, `findPage`, or `findTable`. `apps/server/src/access.test.ts` lists every route and must gain a line for each new one.
 - **The client names a cell; the server decides the effect.** The click endpoint takes an address and derives the action from stored inputs.

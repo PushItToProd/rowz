@@ -9,6 +9,13 @@ export {
   type CellRange,
 } from "./address";
 export { printNode, type Node, type Reference } from "./ast";
+export {
+  errorDocs,
+  EXAMPLE_CELLS,
+  functionDocs,
+  type FunctionCategory,
+  type FunctionDoc,
+} from "./docs";
 export type { Effect, SendEmailEffect, SetCellEffect } from "./effects";
 export { defaultFunctions } from "./functions";
 export type {

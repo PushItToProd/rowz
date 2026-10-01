@@ -75,6 +75,8 @@ watch(
           />
         </h1>
         <span v-if="loaded && !store.canEdit" class="badge">View only</span>
+        <!-- A new tab, so reading about a formula does not take the user away from the sheet. -->
+        <RouterLink :to="{ name: 'help' }" target="_blank" class="editor__help">Help</RouterLink>
       </header>
       <template v-if="loaded && page">
         <FormulaBar />

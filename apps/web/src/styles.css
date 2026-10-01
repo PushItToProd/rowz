@@ -229,8 +229,13 @@ input {
   background: var(--surface);
 }
 
-.editor__back {
+.editor__back,
+.editor__help {
   text-decoration: none;
+}
+
+.editor__help {
+  margin-left: auto;
 }
 
 .editor__loading,
@@ -442,4 +447,109 @@ input.editable-name--editing {
   line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Help */
+
+.help {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  line-height: 1.55;
+}
+
+.help__header {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+}
+
+.help__header a {
+  text-decoration: none;
+}
+
+.help__contents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 16px 0 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.help section {
+  /* Space above a section reached by a contents link. */
+  scroll-margin-top: 12px;
+}
+
+.help h2 {
+  margin: 32px 0 8px;
+  font-size: 1.2rem;
+}
+
+.help h3 {
+  margin: 20px 0 6px;
+  font-size: 1rem;
+}
+
+.help table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+}
+
+.help th,
+.help td {
+  /* Long formulas wrap inside their cell on a narrow screen. */
+  overflow-wrap: anywhere;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.help thead th {
+  background: var(--canvas);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.help tbody th {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.help code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.help pre {
+  margin: 12px 0;
+  padding: 10px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+/* Fixed widths, so the columns line up from one category's table to the next. */
+.help__functions {
+  table-layout: fixed;
+}
+
+.help__functions th:nth-child(1),
+.help__functions th:nth-child(3) {
+  width: 30%;
+}
+
+.help__result {
+  display: block;
+  color: var(--muted);
+}
+
+.help li + li {
+  margin-top: 4px;
 }

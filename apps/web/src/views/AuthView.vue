@@ -66,5 +66,6 @@ async function submit(): Promise<void> {
       Already have an account? <RouterLink :to="{ name: 'login' }">Sign in</RouterLink>
     </p>
     <p v-else>New here? <RouterLink :to="{ name: 'signup' }">Create an account</RouterLink></p>
+    <p><RouterLink :to="{ name: 'help' }">How formulas and buttons work</RouterLink></p>
   </main>
 </template>
