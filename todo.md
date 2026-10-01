@@ -167,8 +167,9 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 
 - [x] import and export (to files on disk): a JSON file for a whole spreadsheet, and CSV for a table
 - [ ] (Claude) import from .xlsx
-- [ ] CSV export - two modes: rowz-compatible and other-spreadsheet-compatible
-  - [ ] rowz-compatible: keep verbatim formulas (so the user can reupload it and have their behavior )
+- [ ] CSV export - two modes: rowz-compatible and data export (selected from a dropdown on the "Export CSV" button)
+  - [ ] rowz-compatible: keep verbatim formulas (so the user can reupload it and have their rowz behavior stay the same).
+  - [ ] data export: the output is an export that has all calculations materialized so it can be used with any tool that supports reading CSVs
 
 ## Undo and collaboration
 
@@ -200,6 +201,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] (Claude) run `pnpm e2e` and the server tests against Postgres (`TEST_DATABASE_URL`) after the review fixes: neither runs in the sandbox
   - (author) e2e run and full CI run are passing as of `87b20ea`
 - [ ] **P3** a limit on the length of text a formula builds: `REPT("x", 5e8)` is under JavaScript's string limit and still takes half a gigabyte, on the server too when a button runs
+- [ ] **P3** limits on per-block and overall document size (make sure to enforce on upload as well) to avoid gigantic docs
 
 ## To organize
 
