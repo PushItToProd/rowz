@@ -186,6 +186,7 @@ describe("setCells", () => {
       table: { ...TABLE, rowCount: 1000, colCount: 3 },
       cells: [],
       views: [],
+      tables: [],
     });
     await store.updateTable("t1", { rowCount: 1000 });
     const writes = Array.from({ length: 1500 }, (_, index) => ({
@@ -240,6 +241,7 @@ describe("selection", () => {
       table: { ...TABLE, colCount: 100 },
       cells: [],
       views: [],
+      tables: [],
     });
     store.selection = at("A1");
     await store.paste(cols);
@@ -425,6 +427,7 @@ describe("structure", () => {
       table: { ...TABLE, name: "Sales" },
       cells: [],
       views: [],
+      tables: [],
     });
     expect(await store.updateTable("t1", { name: "Sales" })).toBe(true);
     expect(store.tables[0]?.name).toBe("Sales");
@@ -437,6 +440,7 @@ describe("structure", () => {
       table: { ...TABLE, name: "Sales" },
       cells: [{ ...at("B1"), input: "=Sales!A1" }],
       views: [],
+      tables: [],
     });
     await store.updateTable("t1", { name: "Sales" });
     expect(store.inputOf(at("B1"))).toBe("=Sales!A1");
@@ -448,6 +452,7 @@ describe("structure", () => {
     server.renamePage.mockResolvedValue({
       cells: [{ ...at("B1"), input: "=Summary!'Table 1'!A1" }],
       views: [],
+      tables: [],
     });
     await store.renamePage("p1", "Summary");
     expect(store.inputOf(at("B1"))).toBe("=Summary!'Table 1'!A1");
@@ -466,6 +471,7 @@ describe("structure", () => {
         { ...at("A4"), input: "" },
       ],
       views: [],
+      tables: [],
     });
 
     expect(await store.editTable("t1", { axis: "row", kind: "delete", index: 0 })).toBe(true);
@@ -480,7 +486,7 @@ describe("structure", () => {
     const store = await open({ A1: "1" });
     const save = deferred();
     server.setCells.mockReturnValue(save.promise);
-    server.editTable.mockResolvedValue({ table: TABLE, cells: [], views: [] });
+    server.editTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
 
     void store.setCell(at("A1"), "5");
     const edited = store.editTable("t1", { axis: "row", kind: "insert", index: 0 });
@@ -631,6 +637,7 @@ describe("views", () => {
     server.renamePage.mockResolvedValue({
       cells: [],
       views: [{ id: "v1", source: "Data!'Table 1'!A1:B2" }],
+      tables: [],
     });
     await store.renamePage("p1", "Data");
     expect(store.views.map((view) => view.source)).toEqual(["Data!'Table 1'!A1:B2", "plain"]);

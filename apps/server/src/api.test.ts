@@ -39,6 +39,7 @@ describe("spreadsheets", () => {
         name: "Table 1",
         position: 0,
         ...DEFAULT_TABLE_SIZE,
+        columns: null,
       },
     ]);
   });
@@ -159,6 +160,7 @@ describe("pages", () => {
     expect(await user.json("PATCH", `/pages/${page.id}`, { name: "Archive" })).toEqual({
       cells: [],
       views: [],
+      tables: [],
     });
     await user.json("PATCH", `/pages/${page.id}`, { name: "page 1" }, 409);
     const after = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
@@ -335,6 +337,7 @@ describe("renaming rewrites formulas", () => {
     expect(await user.json("PATCH", `/pages/${page.id}`, { name: "Summary" })).toEqual({
       cells: [{ tableId: table.id, row: 0, col: 0, input: "=Summary!'Table 1'!B1" }],
       views: [],
+      tables: [],
     });
     expect(await storedInputs(user, snapshot.id, table.id)).toEqual({
       "0:0": "=Summary!'Table 1'!B1",

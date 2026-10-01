@@ -1,4 +1,4 @@
-import type { ChartType, Effect } from "@spreadsheet-app/engine";
+import type { ChartType, ColumnDefinition, Effect } from "@spreadsheet-app/engine";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -137,6 +137,8 @@ export const tables = pgTable(
     position: integer("position").notNull(),
     rowCount: integer("row_count").notNull(),
     colCount: integer("col_count").notNull(),
+    /** The named columns of a data table, one for each column. Null for a plain table. */
+    columns: jsonb("columns").$type<ColumnDefinition[]>(),
   },
   (table) => [uniqueIndex("tables_name").on(table.pageId, sql`lower(${table.name})`)],
 );

@@ -510,6 +510,7 @@ describe("copy and paste", () => {
       table: { ...TABLE, rowCount: 6 },
       cells: [],
       views: [],
+      tables: [],
     });
     await focusAndSelect("C4");
     clipboard("paste", "one\ntwo\nthree");

@@ -38,7 +38,7 @@ beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
   confirm.mockReturnValue(true);
-  server.editTable.mockResolvedValue({ table: TABLE, cells: [], views: [] });
+  server.editTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
 });
 afterEach(() => {
   wrapper.unmount();
@@ -110,7 +110,7 @@ describe("row and column actions", () => {
 describe("table actions", () => {
   it("adds a row and a column at the end", async () => {
     await render();
-    server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [] });
+    server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
     await button("Add row").trigger("click");
     await button("Add column").trigger("click");
     expect(server.updateTable.mock.calls).toEqual([
@@ -233,6 +233,7 @@ describe("files", () => {
       table: { ...TABLE, rowCount: 6, colCount: 5 },
       cells: [],
       views: [],
+      tables: [],
     });
     await choose("data.csv", Array.from({ length: 6 }, () => "1,2,3,4,5").join("\n"));
     expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", { rowCount: 6, colCount: 5 });

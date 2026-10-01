@@ -130,6 +130,7 @@ describe("ChartCard", () => {
       table: { ...store.tables[0]!, name: "Fruit" },
       cells: [],
       views: [{ id: "v1", source: "Fruit!A1:B3" }],
+      tables: [],
     });
     await store.updateTable("t1", { name: "Fruit" });
     await flushPromises();

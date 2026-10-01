@@ -1,11 +1,18 @@
 import {
+  columnFormulasAfterEdit,
+  columnFormulasAfterRename,
   columnLabel,
   formatAddress,
   inputsAfterEdit,
   inputsAfterRename,
+  isFormulaInput,
+  sameColumnName,
   viewsAfterEdit,
   viewsAfterRename,
   type ChartType,
+  type ColumnDefinition,
+  type ColumnFormula,
+  type ColumnType,
   type Rename,
 } from "@spreadsheet-app/engine";
 import {
@@ -55,6 +62,8 @@ export interface TableRecord {
   position: number;
   rowCount: number;
   colCount: number;
+  /** The named columns of a data table, one for each column. `null` for a plain table. */
+  columns: ColumnDefinition[] | null;
 }
 
 export interface ViewRecord {
@@ -74,6 +83,8 @@ export interface Rewritten {
   cells: StoredCell[];
   /** Charts and text views whose sources changed. */
   views: { id: string; source: string }[];
+  /** Tables whose formula columns changed. */
+  tables: TableRecord[];
 }
 
 /** A whole spreadsheet: everything the editor and the formula engine need. */
@@ -95,6 +106,7 @@ const tableColumns = {
   position: tables.position,
   rowCount: tables.rowCount,
   colCount: tables.colCount,
+  columns: tables.columns,
 };
 
 const viewColumns = {
@@ -143,7 +155,20 @@ function checkFile(file: SpreadsheetFile): void {
     const fileTables = items.filter((item) => item.type === "table");
     const table = repeated(fileTables.map(({ name }) => name));
     if (table !== undefined) invalid(`Two tables on ${pageName} are named ${table}`);
-    for (const { name, rowCount, colCount, cells: fileCells } of fileTables) {
+    for (const { name, rowCount, colCount, cells: fileCells, columns } of fileTables) {
+      if (columns) {
+        if (columns.length !== colCount) {
+          invalid(
+            `The table ${name} names ${String(columns.length)} of its ${String(colCount)} columns`,
+          );
+        }
+        const column = repeated(columns.map((definition) => definition.name.trim()));
+        if (column !== undefined) invalid(`Two columns of ${name} are named ${column}`);
+        const empty = columns.find(
+          ({ type, formula = "" }) => type === "formula" && ["", "="].includes(formula.trim()),
+        );
+        if (empty) invalid(`The formula column ${empty.name} of ${name} has no formula`);
+      }
       const seen = new Set<string>();
       for (const { row, col } of fileCells) {
         const address = formatAddress({ row, col });
@@ -232,12 +257,16 @@ export class SpreadsheetRepository {
             });
             continue;
           }
+          const columns = item.columns?.map(normalized) ?? null;
           const [table] = await tx
             .insert(tables)
-            .values({ ...placed, rowCount: item.rowCount, colCount: item.colCount })
+            .values({ ...placed, rowCount: item.rowCount, colCount: item.colCount, columns })
             .returning({ id: tables.id });
           if (!table) throw new Error("Insert returned no table");
-          const filled = item.cells.filter((cell) => cell.input !== "");
+          // A formula column computes its cells, so none are stored for it.
+          const filled = item.cells.filter(
+            (cell) => cell.input !== "" && columns?.[cell.col]?.type !== "formula",
+          );
           for (let from = 0; from < filled.length; from += INSERT_BATCH) {
             await tx.insert(cells).values(
               filled.slice(from, from + INSERT_BATCH).map((cell) => ({
@@ -403,15 +432,20 @@ export class SpreadsheetRepository {
     return this.db.transaction(async (tx) => {
       const rewritten =
         changes.name === undefined
-          ? { cells: [], views: [] }
+          ? { cells: [], views: [], tables: [] }
           : await this.rewriteFormulas(tx, table.spreadsheetId, {
               kind: "table",
               tableId,
               name: changes.name,
             });
+      // The rename may have rewritten this table's own formula columns.
+      const current =
+        rewritten.tables.find((candidate) => candidate.id === tableId)?.columns ?? table.columns;
+      const columns =
+        current && changes.colCount !== undefined ? resized(current, changes.colCount) : current;
       const [updated] = await tx
         .update(tables)
-        .set(changes)
+        .set({ ...changes, columns })
         .where(eq(tables.id, tableId))
         .returning(tableColumns)
         .catch(rethrowDuplicate("table", changes.name ?? ""));
@@ -425,7 +459,137 @@ export class SpreadsheetRepository {
           ),
         );
       await touch(tx, table.spreadsheetId);
-      return { table: updated, ...rewritten };
+      return {
+        table: updated,
+        ...rewritten,
+        tables: rewritten.tables.filter((candidate) => candidate.id !== tableId),
+      };
+    });
+  }
+
+  /**
+   * Gives a plain table named columns, which makes it a data table. With
+   * `headerRow`, the first row supplies the names and is removed from the
+   * data. Otherwise the columns are named Column 1, Column 2, and so on.
+   */
+  async nameColumns(
+    tableId: string,
+    headerRow: boolean,
+  ): Promise<Rewritten & { table: TableRecord }> {
+    const table = await this.findTable(tableId, "write");
+    if (table.columns) throw conflict(`${table.name} already has named columns`);
+    return this.db.transaction(async (tx) => {
+      const inner = new SpreadsheetRepository(tx, this.userId);
+      const header = headerRow
+        ? await tx
+            .select({ col: cells.col, input: cells.input })
+            .from(cells)
+            .where(and(eq(cells.tableId, tableId), eq(cells.row, 0)))
+        : [];
+      // Taking the header row out moves every cell up, and formulas follow as for any deleted row.
+      let rewritten: Rewritten = { cells: [], views: [], tables: [] };
+      if (headerRow && table.rowCount > 1) {
+        rewritten = await inner.editStructure(tableId, { axis: "row", kind: "delete", index: 0 });
+      } else if (headerRow) {
+        rewritten.cells = header.map(({ col }) => ({ tableId, row: 0, col, input: "" }));
+        await this.storeCells(tx, rewritten.cells);
+      }
+      const typed = new Map(header.map(({ col, input }) => [col, input]));
+      const names: string[] = [];
+      for (let col = 0; col < table.colCount; col += 1)
+        names.push(columnNameFrom(typed.get(col), names));
+      const [updated] = await tx
+        .update(tables)
+        .set({ columns: names.map((name) => ({ name, type: "any" as const })) })
+        .where(eq(tables.id, tableId))
+        .returning(tableColumns);
+      if (!updated) throw notFound("Table");
+      await touch(tx, table.spreadsheetId);
+      return { ...rewritten, table: updated };
+    });
+  }
+
+  /** Makes a data table a plain table again. Its formula columns stop computing. */
+  async dropColumns(tableId: string): Promise<TableRecord> {
+    const table = await this.findTable(tableId, "write");
+    const [updated] = await this.db
+      .update(tables)
+      .set({ columns: null })
+      .where(eq(tables.id, tableId))
+      .returning(tableColumns);
+    if (!updated) throw notFound("Table");
+    await touch(this.db, table.spreadsheetId);
+    return updated;
+  }
+
+  /**
+   * Changes a column's name, type, or formula. A rename rewrites the formulas
+   * that name the column. A column that becomes a formula column loses what
+   * was typed into it.
+   */
+  async updateColumn(
+    tableId: string,
+    col: number,
+    changes: {
+      name?: string | undefined;
+      type?: ColumnType | undefined;
+      formula?: string | undefined;
+    },
+  ): Promise<Rewritten & { table: TableRecord }> {
+    const found = await this.findTable(tableId, "write");
+    const before = found.columns?.[col];
+    if (!found.columns)
+      throw unprocessable("not_a_data_table", `${found.name} has no named columns`);
+    if (!before)
+      throw unprocessable("out_of_bounds", `${found.name} has no column ${columnLabel(col)}`);
+
+    const name = changes.name ?? before.name;
+    const taken = found.columns.some(
+      (other, index) => index !== col && sameColumnName(other.name, name),
+    );
+    if (taken) throw conflict(`A column named ${name} already exists`);
+    const type = changes.type ?? before.type;
+    const given = (changes.formula ?? before.formula ?? "").trim();
+    if (type === "formula" && (given === "" || given === "=")) {
+      throw unprocessable("formula_required", "A formula column needs a formula");
+    }
+    const column = normalized({ name, type, formula: given });
+
+    return this.db.transaction(async (tx) => {
+      const renamed = !sameColumnName(before.name, name) || before.name !== name;
+      const rewritten = renamed
+        ? await this.rewriteFormulas(tx, found.spreadsheetId, {
+            kind: "column",
+            tableId,
+            from: before.name,
+            name,
+          })
+        : { cells: [], views: [], tables: [] };
+      // The rename may have rewritten the other formula columns of this table.
+      const current =
+        rewritten.tables.find((candidate) => candidate.id === tableId)?.columns ?? found.columns;
+      // A formula column's own formula is taken from the request when it gives one, and
+      // otherwise from the rewrite, which has the new name written into it.
+      const kept = current?.[col];
+      const next =
+        type === "formula" && changes.formula === undefined && kept?.formula !== undefined
+          ? { ...column, formula: kept.formula }
+          : column;
+      const [updated] = await tx
+        .update(tables)
+        .set({ columns: (current ?? []).with(col, next) })
+        .where(eq(tables.id, tableId))
+        .returning(tableColumns);
+      if (!updated) throw notFound("Table");
+      if (type === "formula") {
+        await tx.delete(cells).where(and(eq(cells.tableId, tableId), eq(cells.col, col)));
+      }
+      await touch(tx, found.spreadsheetId);
+      return {
+        table: updated,
+        ...rewritten,
+        tables: rewritten.tables.filter((candidate) => candidate.id !== tableId),
+      };
     });
   }
 
@@ -495,6 +659,16 @@ export class SpreadsheetRepository {
       throw unprocessable(
         "cell_out_of_bounds",
         `${formatAddress(outside)} is outside the table ${table.name}`,
+      );
+    }
+
+    const computed = inputs
+      .map((cell) => table.columns?.[cell.col])
+      .find((column) => column?.type === "formula");
+    if (computed) {
+      throw unprocessable(
+        "formula_column",
+        `${computed.name} is a formula column. Change the column's formula instead`,
       );
     }
 
@@ -572,15 +746,34 @@ export class SpreadsheetRepository {
       await this.storeCells(tx, written);
       const rewrittenViews = viewsAfterEdit(snapshot, snapshot.views, { tableId, ...edit });
       await this.storeViewSources(tx, rewrittenViews);
+      const changed = await this.storeColumnFormulas(
+        tx,
+        snapshot.tables,
+        columnFormulasAfterEdit(snapshot, { tableId, ...edit }),
+      );
+      // The formulas were rewritten at the positions the columns had before the edit.
+      const current =
+        changed.find((candidate) => candidate.id === tableId)?.columns ?? table.columns;
+      const columns =
+        current && !rows
+          ? edit.kind === "insert"
+            ? current.toSpliced(edit.index, 0, { name: nextColumnName(current), type: "any" })
+            : current.toSpliced(edit.index, 1)
+          : current;
       const newCount = count + (edit.kind === "insert" ? 1 : -1);
       const [updated] = await tx
         .update(tables)
-        .set(rows ? { rowCount: newCount } : { colCount: newCount })
+        .set(rows ? { rowCount: newCount } : { colCount: newCount, columns })
         .where(eq(tables.id, tableId))
         .returning(tableColumns);
       if (!updated) throw notFound("Table");
       await touch(tx, spreadsheetId);
-      return { table: updated, cells: written, views: rewrittenViews };
+      return {
+        table: updated,
+        cells: written,
+        views: rewrittenViews,
+        tables: changed.filter((candidate) => candidate.id !== tableId),
+      };
     });
   }
 
@@ -666,7 +859,39 @@ export class SpreadsheetRepository {
     };
     await this.storeCells(tx, rewritten.cells);
     await this.storeViewSources(tx, rewritten.views);
-    return rewritten;
+    const changed = await this.storeColumnFormulas(
+      tx,
+      snapshot.tables,
+      columnFormulasAfterRename(snapshot, rename),
+    );
+    return { ...rewritten, tables: changed };
+  }
+
+  /** Stores rewritten formulas of formula columns, and returns the tables they belong to as they now are. */
+  private async storeColumnFormulas(
+    db: Database,
+    before: readonly TableRecord[],
+    changed: readonly ColumnFormula[],
+  ): Promise<TableRecord[]> {
+    const columnsOf = new Map<string, ColumnDefinition[]>();
+    for (const { tableId, col, formula } of changed) {
+      const columns = columnsOf.get(tableId) ?? [
+        ...(before.find((table) => table.id === tableId)?.columns ?? []),
+      ];
+      const column = columns[col];
+      if (column) columns[col] = { ...column, formula };
+      columnsOf.set(tableId, columns);
+    }
+    const stored: TableRecord[] = [];
+    for (const [tableId, columns] of columnsOf) {
+      const [updated] = await db
+        .update(tables)
+        .set({ columns })
+        .where(eq(tables.id, tableId))
+        .returning(tableColumns);
+      if (updated) stored.push(updated);
+    }
+    return stored;
   }
 
   private async storeViewSources(
@@ -797,6 +1022,41 @@ async function lockSpreadsheet(db: Database, spreadsheetId: string): Promise<voi
     .from(spreadsheets)
     .where(eq(spreadsheets.id, spreadsheetId))
     .for("update");
+}
+
+/** A column definition as it is stored: a formula only on a formula column, and starting with `=`. */
+function normalized({ name, type, formula = "" }: ColumnDefinition): ColumnDefinition {
+  if (type !== "formula") return { name, type };
+  const trimmed = formula.trim();
+  return { name, type, formula: isFormulaInput(trimmed) ? trimmed : `=${trimmed}` };
+}
+
+/** The first of `Column 1`, `Column 2`, ... that no column has. */
+function nextColumnName(columns: readonly ColumnDefinition[]): string {
+  return nextName(
+    "Column",
+    columns.map((column) => column.name),
+  );
+}
+
+/** A table's columns after its width changes: new ones at the end, or fewer. */
+function resized(columns: readonly ColumnDefinition[], colCount: number): ColumnDefinition[] {
+  const result = columns.slice(0, colCount);
+  while (result.length < colCount) result.push({ name: nextColumnName(result), type: "any" });
+  return result;
+}
+
+/**
+ * A column name made from what a header cell holds. A cell that is empty,
+ * holds a formula, or repeats an earlier name gets the next free name.
+ */
+function columnNameFrom(input: string | undefined, taken: readonly string[]): string {
+  const cleaned = (input ?? "").replaceAll(/[[\]]/g, "").trim().slice(0, LIMITS.nameLength);
+  const usable =
+    cleaned !== "" &&
+    !isFormulaInput(input ?? "") &&
+    !taken.some((name) => sameColumnName(name, cleaned));
+  return usable ? cleaned : nextName("Column", taken);
 }
 
 /** For `.catch()`: turns a unique-name violation into a 409 and rethrows anything else. */

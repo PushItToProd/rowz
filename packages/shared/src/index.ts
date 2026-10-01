@@ -32,6 +32,33 @@ export const updateTableBody = z
 
 const cellIndex = z.int().min(0);
 
+/** A column name goes between square brackets in a formula, so it cannot hold one. */
+const columnName = name.refine((value) => !/[[\]]/.test(value), {
+  message: "A column name cannot contain [ or ]",
+});
+
+export const COLUMN_TYPES = ["any", "text", "number", "date", "checkbox", "formula"] as const;
+
+/** A named column of a data table. A formula column has the formula every row computes. */
+export const columnDefinition = z.object({
+  name: columnName,
+  type: z.enum(COLUMN_TYPES),
+  formula: z.string().max(LIMITS.inputLength).optional(),
+});
+
+/** Turning a plain table into a data table. With `headerRow`, its first row becomes the column names. */
+export const makeColumnsBody = z.object({ headerRow: z.boolean() });
+
+export const updateColumnBody = z
+  .object({
+    name: columnName.optional(),
+    type: z.enum(COLUMN_TYPES).optional(),
+    formula: z.string().max(LIMITS.inputLength).optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "Give at least one of name, type, formula",
+  });
+
 /** Inserting or deleting one row or column. An insert puts the new one at `index`. */
 export const structuralEditBody = z.object({
   axis: z.enum(["row", "col"]),
@@ -87,7 +114,9 @@ const fileTable = z.object({
   name,
   rowCount: z.int().min(1).max(LIMITS.tableRows),
   colCount: z.int().min(1).max(LIMITS.tableCols),
-  /** Cells that hold something. Empty cells are left out. */
+  /** The named columns of a data table, one for each column. Left out for a plain table. */
+  columns: z.array(columnDefinition).max(LIMITS.tableCols).optional(),
+  /** Cells that hold something. Empty cells and the cells of formula columns are left out. */
   cells: z.array(cellInput).max(FILE_LIMITS.cells),
 });
 
@@ -131,6 +160,10 @@ export type SpreadsheetFile = z.infer<typeof spreadsheetFile>;
 export const spreadsheetParam = z.object({ spreadsheetId: z.uuid() });
 export const pageParam = z.object({ pageId: z.uuid() });
 export const tableParam = z.object({ tableId: z.uuid() });
+export const columnParam = z.object({
+  tableId: z.uuid(),
+  col: z.coerce.number().pipe(cellIndex),
+});
 export const cellParam = z.object({
   tableId: z.uuid(),
   row: z.coerce.number().pipe(cellIndex),

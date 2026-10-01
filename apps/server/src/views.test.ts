@@ -184,6 +184,7 @@ describe("keeping views pointed at the same cells", () => {
     expect(await user.json("PATCH", `/pages/${page.id}`, { name: "Data" })).toEqual({
       cells: [],
       views: [{ id: chart.id, source: "=Data!'Table 1'!A1:B3" }],
+      tables: [],
     });
     expect(await sources()).toEqual(["=Data!'Table 1'!A1:B3", "{{ 'Table 1'!A1 }}"]);
   });

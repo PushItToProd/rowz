@@ -9,6 +9,7 @@ export const TABLE: TableRecord = {
   position: 0,
   rowCount: 4,
   colCount: 3,
+  columns: null,
 };
 
 /** A spreadsheet with one page and one 4x3 table holding `inputs`, keyed by address. */
@@ -54,7 +55,7 @@ export function mockApi(): MockedApi {
     renameSpreadsheet: vi.fn().mockResolvedValue(undefined),
     deleteSpreadsheet: vi.fn().mockResolvedValue(undefined),
     createPage: vi.fn(),
-    renamePage: vi.fn().mockResolvedValue({ cells: [], views: [] }),
+    renamePage: vi.fn().mockResolvedValue({ cells: [], views: [], tables: [] }),
     createView: vi.fn(),
     updateView: vi.fn(),
     deleteView: vi.fn().mockResolvedValue(undefined),
