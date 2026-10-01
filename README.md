@@ -22,6 +22,18 @@ pnpm dev
 
 Open http://localhost:5173 and create an account. Development needs no database server: data is stored by PGlite, an in-process Postgres, under `apps/server/.data/`.
 
+### Developing from another machine
+
+To open the dev server from a second machine, put the URL that machine will use in `.env.local` at the repository root:
+
+```sh
+BASE_URL=https://devbox.example.com:5173
+```
+
+`pnpm dev` gives that file to both processes. The Vite dev server takes its port from the URL, listens on every interface, and accepts the URL's host name. The API server accepts sign-in requests from that origin alone, so http://localhost:5173 stops working while the setting is in place.
+
+Use an `https` URL. The app calls `crypto.randomUUID`, which browsers provide over plain HTTP only on localhost. With an `https` URL the dev server presents a self-signed certificate, which the browser asks you to accept on the first visit.
+
 ## Formulas
 
 A cell whose input starts with `=` is a formula. A leading apostrophe forces text: `'=not a formula`.
@@ -137,7 +149,7 @@ Every spreadsheet belongs to a workspace, and users reach spreadsheets through w
 
 ## Configuration
 
-The server reads environment variables. Development needs none.
+The server reads environment variables. Development needs none. `pnpm dev` also reads them from `.env.local` at the repository root, which Git ignores.
 
 | Variable                     | Default                              | Meaning                                                                                                                                        |
 | ---------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |

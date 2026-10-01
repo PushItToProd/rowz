@@ -8,7 +8,7 @@
     ".": "./src/app.ts"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env.local src/index.ts",
     "start": "node --import tsx src/index.ts",
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit"

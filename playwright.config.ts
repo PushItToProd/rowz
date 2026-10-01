@@ -27,7 +27,8 @@ export default defineConfig({
     {
       command: `pnpm --filter @spreadsheet-app/web exec vite --port ${String(WEB_PORT)} --strictPort`,
       url: WEB_URL,
-      env: { API_SERVER: `http://localhost:${String(API_PORT)}` },
+      // BASE_URL is set so that a developer's `.env.local` does not move this server to another URL.
+      env: { API_SERVER: `http://localhost:${String(API_PORT)}`, BASE_URL: WEB_URL },
       reuseExistingServer: false,
     },
   ],
