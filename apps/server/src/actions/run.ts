@@ -16,6 +16,7 @@ import {
 } from "@spreadsheet-app/engine";
 import type { StoredCell } from "@spreadsheet-app/shared";
 import { eq } from "drizzle-orm";
+import { forgetJournaled } from "../changes";
 import type { Database } from "../db/client";
 import { actionRuns, type RunStatus } from "../db/schema";
 import { ApiFailure, unprocessable } from "../errors";
@@ -224,6 +225,8 @@ async function runCell(
       return await record(effects, null, tables);
     } catch (cause) {
       if (!(cause instanceof ApiFailure)) throw cause;
+      // The changes made before the refused one journaled entries that are now rolled back.
+      forgetJournaled();
       return record(effects, cause.message);
     }
   });

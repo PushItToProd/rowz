@@ -58,6 +58,16 @@ export function noteJournaled(): void {
   if (context) context.journaled = true;
 }
 
+/**
+ * Takes back `noteJournaled` for the current request. A caller that ran
+ * changes inside a transaction of its own calls this when it rolls that
+ * transaction back, which removes the entries with it.
+ */
+export function forgetJournaled(): void {
+  const context = current.getStore();
+  if (context) context.journaled = false;
+}
+
 /** Records that the request being handled changed a spreadsheet. Outside a request it does nothing. */
 export function noteChange(spreadsheetId: string): void {
   current.getStore()?.changed.add(spreadsheetId);

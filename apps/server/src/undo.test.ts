@@ -647,6 +647,29 @@ describe("refused history operations", () => {
     expect((await snapshot(owner, fixture.id)).cells).toEqual([]);
   });
 
+  it("does not report an undoable step for a click whose writes were rolled back", async () => {
+    const fixture = await fresh();
+    const client = withClientId(owner);
+    await owner.json(
+      "PUT",
+      `/tables/${fixture.tableId}/cells`,
+      cellsBody({
+        A1: "first",
+        A2: "last",
+        // The row is added, and then the second write is refused as too long.
+        D1: `=BUTTON("Append", DO(APPEND_ROW(A:A, "next"), EXECUTE(REPT("x", ${String(LIMITS.inputLength + 1)}), C1)))`,
+      }),
+      204,
+    );
+    await owner.json("PATCH", `/tables/${fixture.tableId}`, { rowCount: 2 });
+
+    const response = await client.request("POST", `/tables/${fixture.tableId}/cells/0/3/click`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "failed", tables: [] });
+    expect(response.headers.get(UNDOABLE_HEADER)).toBeNull();
+    expect(await snapshot(client, fixture.id)).toMatchObject({ undoable: false });
+  });
+
   it("does not touch a spreadsheet or publish a change for a refused undo", async () => {
     const fixture = await fresh();
     const first = withClientId(owner);
