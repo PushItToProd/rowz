@@ -83,7 +83,9 @@ watch(
   <div class="editor">
     <div class="editor__chrome">
       <header class="editor__header">
-        <RouterLink :to="{ name: 'spreadsheets' }" class="editor__back">← Spreadsheets</RouterLink>
+        <RouterLink :to="{ name: 'spreadsheets' }" class="editor__back" aria-label="← Spreadsheets">
+          ← <span class="editor__back-label">Spreadsheets</span>
+        </RouterLink>
         <h1 v-if="store.spreadsheet && loaded">
           <EditableName
             :value="store.spreadsheet.name"

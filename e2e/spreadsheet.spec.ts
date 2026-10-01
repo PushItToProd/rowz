@@ -552,3 +552,36 @@ test("the help page documents formulas, with or without an account", async ({ pa
   // The editor is still open in the first tab.
   await expect(cell(page, "A1")).toBeVisible();
 });
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("pages fit the screen, and a cell is edited by tapping it twice", async ({ page }) => {
+    // Evaluated in the page, as text: this file is not compiled against the browser's types.
+    const fitsScreen = (): Promise<boolean> =>
+      page.evaluate<boolean>("document.documentElement.scrollWidth <= window.innerWidth");
+
+    await signUp(page);
+    expect(await fitsScreen()).toBe(true);
+    await page.getByRole("button", { name: "New spreadsheet" }).tap();
+    await expect(cell(page, "A1")).toBeVisible();
+    expect(await fitsScreen()).toBe(true);
+
+    await cell(page, "A1").tap();
+    await expect(page.getByLabel("Cell content")).toHaveCount(0);
+    await cell(page, "A1").tap();
+    await page.getByLabel("Cell content").fill("=6*7");
+    await page.keyboard.press("Enter");
+    await expect(cell(page, "A1")).toHaveText("42");
+
+    // The formula bar edits the selected cell too.
+    await cell(page, "B1").tap();
+    await page.getByLabel("Formula").fill("=A1+1");
+    await page.keyboard.press("Enter");
+    await expect(cell(page, "B1")).toHaveText("43");
+
+    await page.goto("/help");
+    await expect(page.getByRole("heading", { name: "Help" })).toBeVisible();
+    expect(await fitsScreen()).toBe(true);
+  });
+});

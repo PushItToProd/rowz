@@ -864,3 +864,42 @@ describe("row and column headers, and the menu", () => {
     expect(wrapper.emitted("menu")).toBeUndefined();
   });
 });
+
+describe("touch", () => {
+  async function tap(address: string): Promise<void> {
+    const cell = cellAt(address);
+    // jsdom has no PointerEvent, so a plain event carries the one field the grid reads.
+    const down = new Event("pointerdown", { bubbles: true });
+    Object.assign(down, { pointerType: "touch" });
+    cell.element.dispatchEvent(down);
+    await cell.trigger("mousedown");
+    await cell.trigger("click");
+  }
+
+  it("selects a cell on the first tap and edits it on the second", async () => {
+    await mountGrid({ A1: "hello" });
+    await tap("A1");
+    expect(selectedAddress()).toBe("A1");
+    expect(wrapper.find(".grid__editor").exists()).toBe(false);
+
+    await tap("A1");
+    const editor = wrapper.get<HTMLInputElement>(".grid__editor");
+    expect(editor.element.value).toBe("hello");
+    expect(document.activeElement).toBe(editor.element);
+  });
+
+  it("does not start editing when a mouse clicks the selected cell", async () => {
+    await mountGrid({ A1: "hello" });
+    await select("A1");
+    await cellAt("A1").trigger("mousedown");
+    await cellAt("A1").trigger("click");
+    expect(wrapper.find(".grid__editor").exists()).toBe(false);
+  });
+
+  it("does not start editing for a viewer", async () => {
+    await mountGrid({ A1: "hello" }, "viewer");
+    await tap("A1");
+    await tap("A1");
+    expect(wrapper.find(".grid__editor").exists()).toBe(false);
+  });
+});

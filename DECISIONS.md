@@ -2,6 +2,18 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: Phone-width layout and touch
+
+**Decision.** The app is usable on a phone. Below 640px the headers wrap, the back link is an arrow, page tabs scroll sideways, and table cards put their buttons under the name. On a touch device rows and buttons are taller, and inputs are 16px so iOS does not zoom when one takes focus.
+
+**Tapping the selected cell edits it.** On a desktop, typing starts an edit. A phone shows no keyboard until an input has focus, so the second tap opens the cell's input. A mouse click on the selected cell still does nothing, because that would make range selection and dragging start edits.
+
+**Not done on touch.**
+
+- **Selecting a range.** Dragging scrolls the page, as it should. Row and column headers still select whole lines.
+- **The fill handle.** It needs a drag.
+- **The right-click menu on iOS.** Safari sends no `contextmenu` event for a long press. Android does. The buttons above each table insert and delete rows and columns on both.
+
 ## 2026-10-01: A whole column in arithmetic means the formula's own row
 
 **Decision.** Your todo item: `=A:A+B:B` is equivalent to `=A1+B1` in any cell of row 1, and so on for other rows. A whole-column reference (`A:A`, `A:C`) written as an operand of an operator now means that column's cell in the formula's own row. A whole-row reference (`2:2`) means its cell in the formula's own column.

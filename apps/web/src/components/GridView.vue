@@ -152,6 +152,22 @@ function isHandleCell(row: number, col: number): boolean {
   return block.value?.endRow === row && block.value.endCol === col;
 }
 
+/**
+ * A tap on the cell that is already selected starts editing it. A phone has
+ * no Enter key to press until an input has focus and the keyboard is up.
+ */
+let tapOnSelected = false;
+
+function onCellPointerdown(event: PointerEvent, row: number, col: number): void {
+  tapOnSelected =
+    event.pointerType === "touch" && isSelected(row, col) && store.selectionEnd === null;
+}
+
+function onCellClick(): void {
+  if (tapOnSelected && draft.value === null) edit();
+  tapOnSelected = false;
+}
+
 function onCellMousedown(event: MouseEvent, row: number, col: number): void {
   if (event.button !== 0) return;
   if (event.shiftKey && selected.value) {
@@ -374,7 +390,9 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               'grid__cell--fill-preview': inFillPreview(row - 1, col - 1),
               'grid__cell--filled': store.filledBy(cell(row - 1, col - 1)) !== undefined,
             }"
+            @pointerdown="onCellPointerdown($event, row - 1, col - 1)"
             @mousedown="onCellMousedown($event, row - 1, col - 1)"
+            @click="onCellClick"
             @mouseenter="onCellMouseenter(row - 1, col - 1)"
             @contextmenu="onCellContextMenu($event, row - 1, col - 1)"
             @dblclick="edit()"

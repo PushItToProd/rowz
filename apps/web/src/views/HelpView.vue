@@ -288,6 +288,11 @@ const OPERATORS = [
           <code>=$A1</code> filled across stays <code>=$A1</code>.
         </li>
         <li>
+          On a phone or tablet, tap a cell to select it and tap it again to type into it. The bar
+          above the tables edits the selected cell too. The buttons above a table insert and delete
+          rows and columns.
+        </li>
+        <li>
           Click a row number or a column letter to select the whole row or column. Ctrl+A selects
           the whole table.
         </li>

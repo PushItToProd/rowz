@@ -952,3 +952,145 @@ select.cell-control--dropdown {
   background: var(--canvas);
   font-size: 0.9em;
 }
+
+/* Phone-width screens */
+
+@media (max-width: 640px) {
+  .list__header {
+    flex-wrap: wrap;
+  }
+
+  /* The address takes a line of its own, so the heading and the links fit on the first. */
+  .list__user {
+    order: 1;
+    width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .list__items li {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+
+  .list__items a {
+    flex-basis: 100%;
+  }
+
+  .list__items time {
+    flex: 1;
+  }
+
+  .editor__header {
+    gap: 10px;
+    padding: 8px 12px;
+  }
+
+  .editor__header h1 {
+    min-width: 0;
+    font-size: 1rem;
+  }
+
+  /* The arrow alone is enough to go back, and leaves the line to the spreadsheet's name. */
+  .editor__back-label {
+    display: none;
+  }
+
+  .formula-bar {
+    gap: 6px;
+    padding: 6px 12px;
+  }
+
+  .formula-bar__cell {
+    min-width: 0;
+    max-width: 40%;
+    overflow: hidden;
+    font-size: 0.85rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .formula-bar__input {
+    min-width: 0;
+  }
+
+  .page-tabs {
+    overflow-x: auto;
+    padding: 6px 12px 0;
+  }
+
+  .page-tabs > * {
+    flex-shrink: 0;
+  }
+
+  .editor__page {
+    gap: 14px;
+    padding: 10px 8px;
+  }
+
+  .table-card,
+  .view-card {
+    padding: 10px;
+  }
+
+  /* The name on one line and the buttons under it, where both have room. */
+  .table-card__header,
+  .view-card__header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .table-card__header h2,
+  .view-card__header h2 {
+    flex-basis: 100%;
+  }
+
+  .table-card__actions,
+  .view-card__actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .editor__add {
+    flex-wrap: wrap;
+  }
+
+  .help {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  /* A wide table of functions scrolls on its own and leaves the page as wide as the screen. */
+  .help table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* Fingers need larger targets than a mouse pointer does. */
+@media (pointer: coarse) {
+  .grid th,
+  .grid td {
+    height: 38px;
+  }
+
+  button,
+  .file-button {
+    padding: 8px 12px;
+  }
+
+  .context-menu button {
+    padding: 10px 12px;
+  }
+
+  /* Text under 16px makes iOS zoom the page when an input takes focus. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .grid__fill-handle {
+    width: 12px;
+    height: 12px;
+  }
+}
