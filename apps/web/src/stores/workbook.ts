@@ -517,22 +517,42 @@ export const useWorkbookStore = defineStore("workbook", () => {
       .map((item) => item.id);
   }
 
-  /** Moves a table, chart, or text view one place up or down its page. */
+  /** The last request to reorder a page, which the next one waits for. */
+  let reorders: Promise<void> = Promise.resolve();
+
+  /** Shows the items of a page in the order of their ids. */
+  function showOrder(order: readonly string[]): void {
+    const position = new Map(order.map((id, index) => [id, index]));
+    const placed = <T extends { id: string; position: number }>(item: T): T => ({
+      ...item,
+      position: position.get(item.id) ?? item.position,
+    });
+    tables.value = tables.value.map(placed);
+    views.value = views.value.map(placed);
+  }
+
+  /**
+   * Moves a table, chart, or text view one place up or down its page. The
+   * move shows at once, so a second click moves on from where the first left
+   * the item, and it is undone if the server refuses.
+   */
   function moveItem(pageId: string, itemId: string, by: -1 | 1): Promise<boolean> {
-    const order = itemsOn(pageId);
-    const from = order.indexOf(itemId);
+    const before = itemsOn(pageId);
+    const from = before.indexOf(itemId);
     const to = from + by;
-    if (from === -1 || to < 0 || to >= order.length) return Promise.resolve(false);
-    [order[from], order[to]] = [order[to] ?? itemId, order[from] ?? itemId];
+    if (from === -1 || to < 0 || to >= before.length) return Promise.resolve(false);
+    const order = before.with(from, before[to] ?? itemId).with(to, itemId);
+    showOrder(order);
+    // One request at a time, so the server ends on the order of the last click.
+    const sent = reorders.then(() => api.reorderPage(pageId, order));
+    reorders = sent.catch(() => undefined);
     return attempt(async () => {
-      await api.reorderPage(pageId, order);
-      const position = new Map(order.map((id, index) => [id, index]));
-      const placed = <T extends { id: string; position: number }>(item: T): T => ({
-        ...item,
-        position: position.get(item.id) ?? item.position,
-      });
-      tables.value = tables.value.map(placed);
-      views.value = views.value.map(placed);
+      try {
+        await sent;
+      } catch (cause) {
+        showOrder(before);
+        throw cause;
+      }
     }, "The page could not be rearranged");
   }
 
