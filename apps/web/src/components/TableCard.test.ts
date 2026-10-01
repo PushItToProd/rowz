@@ -122,3 +122,62 @@ describe("table actions", () => {
     expect(server.deleteTable).toHaveBeenCalledExactlyOnceWith("t1");
   });
 });
+
+describe("the menu of row, column, and cell actions", () => {
+  async function open(address: string) {
+    await render({ A1: "x", B2: "y" });
+    await wrapper
+      .get(`[data-cell="${address}"]`)
+      .trigger("contextmenu", { clientX: 10, clientY: 20 });
+    return wrapper.get('[role="menu"]');
+  }
+
+  function item(name: string) {
+    const found = wrapper
+      .findAll('[role="menuitem"]')
+      .find((candidate) => candidate.text() === name);
+    if (!found) throw new Error(`No menu item named ${name}`);
+    return found;
+  }
+
+  it("opens on a right-click and names the cell it acts on", async () => {
+    const menu = await open("B2");
+    expect(menu.attributes("aria-label")).toBe("Actions for B2");
+    expect(menu.findAll('[role="menuitem"]').map((entry) => entry.text())).toEqual([
+      "Insert row above",
+      "Insert row below",
+      "Delete row 2",
+      "Insert column left",
+      "Insert column right",
+      "Delete column B",
+      "Clear cells",
+    ]);
+  });
+
+  it.each([
+    ["Insert row above", { axis: "row", kind: "insert", index: 1 }],
+    ["Insert row below", { axis: "row", kind: "insert", index: 2 }],
+    ["Insert column left", { axis: "col", kind: "insert", index: 1 }],
+    ["Insert column right", { axis: "col", kind: "insert", index: 2 }],
+    ["Delete column B", { axis: "col", kind: "delete", index: 1 }],
+    ["Delete row 2", { axis: "row", kind: "delete", index: 1 }],
+  ])("%s edits the table and closes the menu", async (name, edit) => {
+    await open("B2");
+    await item(name).trigger("click");
+    expect(server.editTable).toHaveBeenCalledWith("t1", edit);
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+  });
+
+  it("clears the selected cells", async () => {
+    await open("B2");
+    await item("Clear cells").trigger("click");
+    expect(server.setCells).toHaveBeenCalledWith("t1", [{ row: 1, col: 1, input: "" }]);
+  });
+
+  it("closes on Escape and leaves the table alone", async () => {
+    const menu = await open("B2");
+    await menu.trigger("keydown", { key: "Escape" });
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+    expect(server.editTable).not.toHaveBeenCalled();
+  });
+});

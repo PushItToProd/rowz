@@ -868,3 +868,45 @@ select.cell-control--dropdown {
   display: flex;
   gap: 8px;
 }
+
+/* Context menu */
+
+.context-menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 14%);
+}
+
+.context-menu button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  text-align: left;
+}
+
+.context-menu button:hover:not(:disabled),
+.context-menu button:focus-visible {
+  background: var(--canvas);
+  outline: none;
+}
+
+.context-menu .context-menu__item--separated {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  padding-top: 8px;
+}
+
+.grid thead th,
+.grid tbody th {
+  cursor: pointer;
+}

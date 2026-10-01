@@ -802,3 +802,65 @@ describe("a viewer", () => {
     expect(server.setCells).not.toHaveBeenCalled();
   });
 });
+
+describe("row and column headers, and the menu", () => {
+  const block = () => useWorkbookStore().selectedBlock;
+
+  it("selects a whole row or column from its header", async () => {
+    await mountGrid();
+    await wrapper.findAll("tbody th")[1]!.trigger("mousedown");
+    expect(block()).toEqual({ startRow: 1, endRow: 1, startCol: 0, endCol: 2 });
+    await wrapper.findAll("thead th")[2]!.trigger("mousedown");
+    expect(block()).toEqual({ startRow: 0, endRow: 3, startCol: 1, endCol: 1 });
+    expect(document.activeElement).toBe(wrapper.get(".grid").element);
+  });
+
+  it("selects every cell with Ctrl+A", async () => {
+    await mountGrid();
+    await select("B2");
+    await press("a", { ctrlKey: true });
+    expect(block()).toEqual({ startRow: 0, endRow: 3, startCol: 0, endCol: 2 });
+  });
+
+  it("asks for the menu where a cell is right-clicked, and selects that cell", async () => {
+    await mountGrid();
+    await select("A1");
+    await cellAt("B3").trigger("contextmenu", { clientX: 120, clientY: 80 });
+    expect(selectedAddress()).toBe("B3");
+    expect(wrapper.emitted("menu")).toEqual([[{ x: 120, y: 80 }]]);
+  });
+
+  it("keeps a selected range when the right-click is inside it", async () => {
+    await mountGrid();
+    await select("A1");
+    await cellAt("B2").trigger("mousedown", { shiftKey: true });
+    await cellAt("B1").trigger("contextmenu");
+    expect(block()).toEqual({ startRow: 0, endRow: 1, startCol: 0, endCol: 1 });
+    expect(wrapper.emitted("menu")).toHaveLength(1);
+  });
+
+  it("asks for the menu from a header after selecting its row or column", async () => {
+    await mountGrid();
+    await wrapper.findAll("tbody th")[2]!.trigger("contextmenu", { clientX: 5, clientY: 6 });
+    expect(block()).toEqual({ startRow: 2, endRow: 2, startCol: 0, endCol: 2 });
+    expect(wrapper.emitted("menu")).toEqual([[{ x: 5, y: 6 }]]);
+  });
+
+  it.each([
+    ["ContextMenu", {}],
+    ["F10", { shiftKey: true }],
+  ])("asks for the menu at the selected cell on %s", async (key, options) => {
+    await mountGrid();
+    await select("B2");
+    await press(key, options);
+    expect(wrapper.emitted("menu")).toHaveLength(1);
+  });
+
+  it("leaves a viewer the browser's own menu", async () => {
+    await mountGrid({}, "viewer");
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    cellAt("A1").element.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(wrapper.emitted("menu")).toBeUndefined();
+  });
+});

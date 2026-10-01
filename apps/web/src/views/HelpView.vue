@@ -105,6 +105,8 @@ const KEYS = [
   ["Delete or Backspace", "Clear the selected cells."],
   ["Shift with an arrow key", "Select a range of cells."],
   ["Ctrl+C, Ctrl+X, Ctrl+V", "Copy, cut, and paste the selected cells."],
+  ["Ctrl+A", "Select every cell of the table."],
+  ["Shift+F10", "Open the menu of row, column, and cell actions."],
   ["Ctrl+D, Ctrl+R", "Copy the first row of the selection down, or its first column across."],
 ] as const;
 
@@ -284,6 +286,10 @@ const OPERATORS = [
           <code>=A1*$B$1</code> filled down becomes <code>=A2*$B$1</code>, and
           <code>=$A1</code> filled across stays <code>=$A1</code>.
         </li>
+        <li>
+          Click a row number or a column letter to select the whole row or column. Ctrl+A selects
+          the whole table.
+        </li>
         <li>A selection of several cells repeats as a pattern when it is filled.</li>
         <li>
           Copying puts the values the cells show on the clipboard, which is what other apps can use.
@@ -306,9 +312,10 @@ const OPERATORS = [
           {{ LIMITS.tableRows }} rows and {{ LIMITS.tableCols }} columns.
         </li>
         <li>
-          Select a cell to insert a row above it or a column to its left, or to delete its row or
-          column. Formulas that read the table are rewritten to keep reading the same cells. A
-          formula that named a deleted cell shows <code>#REF!</code>.
+          Right-click a cell to insert a row or column next to it, or to delete its row or column.
+          Shift+F10 opens the same menu from the keyboard, and the buttons above the table do the
+          same for the selected cell. Formulas that read the table are rewritten to keep reading the
+          same cells. A formula that named a deleted cell shows <code>#REF!</code>.
         </li>
         <li>Double-click the name of a spreadsheet, page, or table to rename it.</li>
         <li>

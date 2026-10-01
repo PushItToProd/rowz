@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { columnLabel } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
+import ContextMenu from "./ContextMenu.vue";
 import EditableName from "./EditableName.vue";
 import GridView from "./GridView.vue";
+import type { MenuItem } from "./menu";
 
 const props = defineProps<{ table: TableRecord }>();
 const store = useWorkbookStore();
@@ -41,6 +43,64 @@ function removeLine(axis: "row" | "col", index: number): void {
   if (holdsContent(axis, index) && !window.confirm(`Delete ${name} and what it holds?`)) return;
   void store.editTable(props.table.id, { axis, kind: "delete", index });
 }
+
+/** Where the menu of row, column, and cell actions is open, if it is. */
+const menuAt = ref<{ x: number; y: number } | null>(null);
+
+/** The actions for the selected cell. Each one acts on that cell's row or column. */
+const menuItems = computed((): MenuItem[] => {
+  const cell = selected.value;
+  if (!cell) return [];
+  const { row, col } = cell;
+  return [
+    {
+      label: "Insert row above",
+      disabled: rowsFull.value,
+      run: () => {
+        insert("row", row);
+      },
+    },
+    {
+      label: "Insert row below",
+      disabled: rowsFull.value,
+      run: () => {
+        insert("row", row + 1);
+      },
+    },
+    {
+      label: `Delete row ${String(row + 1)}`,
+      danger: true,
+      disabled: props.table.rowCount <= 1,
+      run: () => {
+        removeLine("row", row);
+      },
+    },
+    {
+      label: "Insert column left",
+      separated: true,
+      disabled: colsFull.value,
+      run: () => {
+        insert("col", col);
+      },
+    },
+    {
+      label: "Insert column right",
+      disabled: colsFull.value,
+      run: () => {
+        insert("col", col + 1);
+      },
+    },
+    {
+      label: `Delete column ${columnLabel(col)}`,
+      danger: true,
+      disabled: props.table.colCount <= 1,
+      run: () => {
+        removeLine("col", col);
+      },
+    },
+    { label: "Clear cells", separated: true, run: () => void store.clearSelection() },
+  ];
+});
 </script>
 
 <template>
@@ -108,6 +168,14 @@ function removeLine(axis: "row" | "col", index: number): void {
       </span>
     </div>
 
-    <GridView :table="table" />
+    <GridView :table="table" @menu="menuAt = $event" />
+    <ContextMenu
+      v-if="menuAt && selected"
+      :x="menuAt.x"
+      :y="menuAt.y"
+      :label="`Actions for ${columnLabel(selected.col)}${selected.row + 1}`"
+      :items="menuItems"
+      @close="menuAt = null"
+    />
   </section>
 </template>

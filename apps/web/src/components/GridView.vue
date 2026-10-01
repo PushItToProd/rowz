@@ -25,6 +25,8 @@ import CellView from "./CellView.vue";
 import FormulaAssist from "./FormulaAssist.vue";
 
 const props = defineProps<{ table: TableRecord }>();
+/** Asks for the menu of row, column, and cell actions at a place on screen. */
+const emit = defineEmits<{ menu: [at: { x: number; y: number }] }>();
 const store = useWorkbookStore();
 
 const grid = ref<HTMLElement>();
@@ -69,6 +71,51 @@ function select(row: number, col: number): void {
   if (isSelected(row, col) && store.selectionEnd === null) return;
   commit();
   store.selection = cell(row, col);
+}
+
+/** Selects a whole row or column, from its header. */
+function selectLine(axis: "row" | "col", index: number): void {
+  commit();
+  const last = { row: props.table.rowCount - 1, col: props.table.colCount - 1 };
+  store.selection = axis === "row" ? cell(index, 0) : cell(0, index);
+  store.extendSelection(
+    axis === "row" ? { row: index, col: last.col } : { row: last.row, col: index },
+  );
+  focusGrid();
+}
+
+function selectAll(): void {
+  store.selection = cell(0, 0);
+  store.extendSelection({ row: props.table.rowCount - 1, col: props.table.colCount - 1 });
+}
+
+/**
+ * Opens the menu for a right-clicked cell. A cell outside the selection is
+ * selected first, so the menu acts on what was clicked. A viewer gets the
+ * browser's own menu.
+ */
+function onCellContextMenu(event: MouseEvent, row: number, col: number): void {
+  if (!store.canEdit) return;
+  event.preventDefault();
+  if (!inBlock(row, col)) select(row, col);
+  focusGrid();
+  emit("menu", { x: event.clientX, y: event.clientY });
+}
+
+function onHeaderContextMenu(event: MouseEvent, axis: "row" | "col", index: number): void {
+  if (!store.canEdit) return;
+  event.preventDefault();
+  selectLine(axis, index);
+  emit("menu", { x: event.clientX, y: event.clientY });
+}
+
+/** Opens the menu from the keyboard, under the selected cell. */
+function openMenuAtSelection(): void {
+  if (!store.canEdit || !selected.value) return;
+  const box = grid.value
+    ?.querySelector(`[data-cell="${formatAddress(selected.value)}"]`)
+    ?.getBoundingClientRect();
+  if (box) emit("menu", { x: box.left, y: box.bottom });
 }
 
 /** Keeps a position inside the table. */
@@ -249,6 +296,8 @@ function onGridKeydown(event: KeyboardEvent): void {
   else if (key === "Tab") move(0, event.shiftKey ? -1 : 1);
   else if (key === "Enter" || key === "F2") edit();
   else if (key === "Delete" || key === "Backspace") void store.clearSelection();
+  else if (key === "ContextMenu" || (key === "F10" && event.shiftKey)) openMenuAtSelection();
+  else if (command && key.toLowerCase() === "a") selectAll();
   else if (command && key.toLowerCase() === "d") fillSelection("down");
   else if (command && key.toLowerCase() === "r") fillSelection("right");
   else if (key.length === 1 && !command && !event.altKey) {
@@ -293,12 +342,26 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
       <thead>
         <tr>
           <th class="grid__corner"></th>
-          <th v-for="col in table.colCount" :key="col" scope="col">{{ columnLabel(col - 1) }}</th>
+          <th
+            v-for="col in table.colCount"
+            :key="col"
+            scope="col"
+            @mousedown.left.prevent="selectLine('col', col - 1)"
+            @contextmenu="onHeaderContextMenu($event, 'col', col - 1)"
+          >
+            {{ columnLabel(col - 1) }}
+          </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="row in table.rowCount" :key="row" role="row">
-          <th scope="row">{{ row }}</th>
+          <th
+            scope="row"
+            @mousedown.left.prevent="selectLine('row', row - 1)"
+            @contextmenu="onHeaderContextMenu($event, 'row', row - 1)"
+          >
+            {{ row }}
+          </th>
           <td
             v-for="col in table.colCount"
             :key="col"
@@ -313,6 +376,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             }"
             @mousedown="onCellMousedown($event, row - 1, col - 1)"
             @mouseenter="onCellMouseenter(row - 1, col - 1)"
+            @contextmenu="onCellContextMenu($event, row - 1, col - 1)"
             @dblclick="edit()"
           >
             <input

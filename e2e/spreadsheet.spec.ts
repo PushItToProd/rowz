@@ -162,6 +162,22 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
   await page.reload();
   await expect(cell(page, "C1")).toHaveText("4");
   await expect(cell(page, "A2")).toHaveText("3");
+
+  // The same actions are on the menu a right-click opens.
+  await cell(page, "A2").click({ button: "right" });
+  const menu = page.getByRole("menu", { name: "Actions for A2" });
+  await menu.getByRole("menuitem", { name: "Insert row below" }).click();
+  await expect(menu).toHaveCount(0);
+  await expect(cell(page, "A3")).toHaveText("");
+  await enter(page, "A3", "10");
+  await expect(cell(page, "C1")).toHaveText("4");
+
+  // A right-click on a row header selects the row and opens the menu for it.
+  await page.locator('[data-table="Table 1"] tbody th').nth(2).click({ button: "right" });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page.keyboard.press("Delete");
+  await expect(cell(page, "A3")).toHaveText("");
 });
 
 test("a formula with several results fills the cells around it", async ({ page }) => {
