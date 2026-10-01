@@ -21,7 +21,7 @@ beforeAll(async () => {
   await owner.json(
     "PUT",
     `/tables/${created.tables[0]!.id}/cells`,
-    cellsBody({ A1: '=BUTTON("Go", EXECUTE(1, B1))' }),
+    cellsBody({ A1: '=BUTTON("Go", EXECUTE(1, B1))', A2: "=CHECKBOX(B2)" }),
     204,
   );
   snapshot = await owner.json<Snapshot>("GET", `/spreadsheets/${created.id}`);
@@ -49,6 +49,7 @@ function writeRoutes(): Route[] {
     // Below the button in A1, so the click that follows still finds it.
     ["POST", `/tables/${table}/edits`, { axis: "row", kind: "insert", index: 5 }],
     ["POST", `/tables/${table}/cells/0/0/click`],
+    ["POST", `/tables/${table}/cells/1/0/input`, { value: true }],
     ["DELETE", `/tables/${table}`],
     ["DELETE", `/pages/${page}`],
     ["DELETE", `/spreadsheets/${snapshot.id}`],
@@ -137,7 +138,7 @@ describe("an editor", () => {
     });
     // The page delete is refused because it is the last page, not for lack of access.
     expect(await statuses(editor, writeRoutes())).toEqual([
-      204, 201, 200, 201, 200, 204, 200, 200, 204, 204, 204,
+      204, 201, 200, 201, 200, 204, 200, 200, 200, 204, 204, 204,
     ]);
     await owner.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);
   });

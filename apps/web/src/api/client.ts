@@ -7,7 +7,7 @@ import type {
   TableRecord,
 } from "@spreadsheet-app/server";
 import type { ApiError, CellInput, StoredCell, StructuralEditBody } from "@spreadsheet-app/shared";
-import type { CellId } from "@spreadsheet-app/engine";
+import type { CellId, Scalar } from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
 export type { ClickResult, PageRecord, Snapshot, TableRecord };
@@ -109,6 +109,15 @@ export const api = {
 
   setCells: (tableId: string, cells: CellInput[]): Promise<void> =>
     done(routes.tables[":tableId"].cells.$put({ param: { tableId }, json: { cells } })),
+
+  /** Stores a value chosen through the checkbox or dropdown in a cell. */
+  input: ({ tableId, row, col }: CellId, value: Scalar): Promise<ClickResult> =>
+    body(
+      routes.tables[":tableId"].cells[":row"][":col"].input.$post({
+        param: { tableId, row: String(row), col: String(col) },
+        json: { value },
+      }),
+    ),
 
   click: ({ tableId, row, col }: CellId): Promise<ClickResult> =>
     body(

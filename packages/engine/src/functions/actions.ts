@@ -1,7 +1,7 @@
 import type { Node } from "../ast";
 import type { Effect } from "../effects";
 import { isAction, isError, literalInput, type Evaluated } from "../values";
-import { fail, grid, lazy, scalar, text } from "./arguments";
+import { fail, Failure, grid, lazy, scalar, text } from "./arguments";
 import type { FunctionDefinition, PlanContext } from "./registry";
 
 const ADDRESS_SEPARATOR = /[,;]/;
@@ -57,6 +57,87 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
           input: literalInput(scalar(value)),
         })),
       );
+    },
+  },
+
+  /**
+   * `APPEND_ROW(range, value, ...)` writes the values into the first row of
+   * the range after its last row that holds anything, growing the table when
+   * the range has no free row left. An array value takes one cell per element.
+   */
+  APPEND_ROW: {
+    kind: "action",
+    minArgs: 2,
+    maxArgs: Infinity,
+    plan([target, ...valueNodes], context): Effect[] {
+      const range = target?.type === "reference" ? context.resolve(target.reference) : undefined;
+      if (target?.type !== "reference")
+        fail("#VALUE!", "APPEND_ROW needs a range to add the row to");
+      if (!range) fail("#REF!", "The range to add the row to does not exist");
+
+      const values = valueNodes.flatMap((node) => grid(context.evaluate(node)).flat().map(scalar));
+      const width = range.endCol - range.startCol + 1;
+      if (values.length > width) {
+        fail(
+          "#VALUE!",
+          `APPEND_ROW was given ${String(values.length)} values for ${String(width)} columns`,
+        );
+      }
+      // The row after the last one with content. Cells an array formula fills count as content.
+      const rows = grid(context.evaluate(target));
+      const used = rows.findLastIndex((cells) =>
+        cells.some((cell) => cell !== null && cell !== ""),
+      );
+      const row = range.startRow + used + 1;
+      if (row > range.endRow) fail("#VALUE!", "The range has no empty row left");
+      return [
+        { type: "ensureRows", tableId: range.tableId, rowCount: row + 1 },
+        ...values.map((value, offset) => ({
+          type: "setCell" as const,
+          tableId: range.tableId,
+          row,
+          col: range.startCol + offset,
+          input: literalInput(value),
+        })),
+      ];
+    },
+  },
+
+  /** `CLEAR(range)` empties every cell of the range that holds something typed. */
+  CLEAR: {
+    kind: "action",
+    minArgs: 1,
+    maxArgs: 1,
+    plan([target], context): Effect[] {
+      if (target?.type !== "reference") fail("#VALUE!", "CLEAR needs a cell or range to empty");
+      const range = context.resolve(target.reference);
+      if (!range) fail("#REF!", "The range to empty does not exist");
+      return context.inputsIn(range).map(({ tableId, row, col }) => ({
+        type: "setCell" as const,
+        tableId,
+        row,
+        col,
+        input: "",
+      }));
+    },
+  },
+
+  /**
+   * `DO(action, ...)` runs several actions from one click. Every action reads
+   * the cells as they were before the click, not as an earlier action in the
+   * list left them.
+   */
+  DO: {
+    kind: "action",
+    minArgs: 1,
+    maxArgs: Infinity,
+    plan(args, context): Effect[] {
+      return args.flatMap((node) => {
+        const action = context.evaluate(node);
+        if (isError(action)) throw new Failure(action);
+        if (!isAction(action)) fail("#VALUE!", "DO takes actions such as EXECUTE or SEND_EMAIL");
+        return context.plan(action);
+      });
     },
   },
 

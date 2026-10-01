@@ -18,7 +18,7 @@ TypeScript is pinned to 6.0 because typescript-eslint and vue-tsc need its JavaS
 - **Every function has a help entry.** `packages/engine/src/docs.ts` holds the syntax, summary, and example the help page shows. A test fails when a function in the default registry has no entry or its example evaluates to an error.
 - **Recalculation never runs an action.** Action functions evaluate to an `ActionValue` and their arguments are not evaluated until `Workbook.planAction`. Their arguments are also left out of the dependency graph, which is why a counter button is not a cycle.
 - **Authorization lives in `SpreadsheetRepository`.** Route handlers reach spreadsheet data only through `c.var.repository`. A new query starts from `findSpreadsheet`, `findPage`, or `findTable`. `apps/server/src/access.test.ts` lists every route and must gain a line for each new one.
-- **The client names a cell; the server decides the effect.** The click endpoint takes an address and derives the action from stored inputs.
+- **The client names a cell; the server decides the effect.** The click endpoint takes an address and derives the action from stored inputs. The input endpoint for checkboxes and dropdowns also takes the chosen value, which the server checks against what the stored formula allows.
 - **Cells store inputs only.** Computed values are never persisted.
 - **Page and table names are unique within their parent, ignoring case,** because formulas resolve them that way. The database enforces it with unique indexes on `lower(name)`.
 - Packages export TypeScript source. There is no build step between packages.

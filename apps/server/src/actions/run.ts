@@ -2,11 +2,17 @@ import {
   createWorkbook,
   formatAddress,
   isButton,
+  isControl,
+  type ActionPlan,
   type CellId,
+  type CellValue,
   type Effect,
+  type EnsureRowsEffect,
   type ErrorValue,
+  type Scalar,
   type SendEmailEffect,
   type SetCellEffect,
+  type Workbook,
 } from "@spreadsheet-app/engine";
 import type { StoredCell } from "@spreadsheet-app/shared";
 import { eq } from "drizzle-orm";
@@ -14,7 +20,7 @@ import type { Database } from "../db/client";
 import { actionRuns, type RunStatus } from "../db/schema";
 import { ApiFailure, unprocessable } from "../errors";
 import type { Mailer } from "../mail/mailer";
-import { SpreadsheetRepository } from "../repo/spreadsheets";
+import { SpreadsheetRepository, type TableRecord } from "../repo/spreadsheets";
 
 export interface ActionDependencies {
   db: Database;
@@ -30,6 +36,8 @@ export interface ClickResult {
   error: string | null;
   /** Cells the action wrote, for the client to apply. */
   cells: StoredCell[];
+  /** Tables the action resized. */
+  tables: TableRecord[];
   emailsSent: number;
 }
 
@@ -43,6 +51,10 @@ function isSetCell(effect: Effect): effect is SetCellEffect {
   return effect.type === "setCell";
 }
 
+function isEnsureRows(effect: Effect): effect is EnsureRowsEffect {
+  return effect.type === "ensureRows";
+}
+
 function isSendEmail(effect: Effect): effect is SendEmailEffect {
   return effect.type === "sendEmail";
 }
@@ -51,7 +63,14 @@ interface Planned {
   runId: string;
   failure: string | null;
   effects: Effect[];
+  tables: TableRecord[];
 }
+
+/**
+ * Decides what a cell asks for, given its computed value. Throws an
+ * `ApiFailure` when the cell is not the kind of thing the request is for.
+ */
+type Decide = (workbook: Workbook, value: CellValue) => ActionPlan;
 
 /**
  * Runs the button in a cell.
@@ -59,14 +78,52 @@ interface Planned {
  * The client names only the cell. The action comes from the stored formula,
  * so a client cannot ask the server to perform an effect the spreadsheet does
  * not describe.
- *
- * Cell writes and the audit record commit together. Email is sent after the
- * commit, so a rolled-back click never sends mail.
  */
-export async function runButton(
+export function runButton(
+  dependencies: ActionDependencies,
+  userId: string,
+  cell: CellId,
+): Promise<ClickResult> {
+  return runCell(dependencies, userId, cell, (workbook, value) => {
+    if (!isButton(value)) {
+      throw unprocessable("not_a_button", `${formatAddress(cell)} does not hold a button`);
+    }
+    return workbook.planAction(value.action);
+  });
+}
+
+/**
+ * Stores a value chosen through the control in a cell, such as a checkbox.
+ * The control's formula says which cell the value goes to and which values
+ * are allowed, so the client supplies only the choice.
+ */
+export function runControl(
+  dependencies: ActionDependencies,
+  userId: string,
+  cell: CellId,
+  input: Scalar,
+): Promise<ClickResult> {
+  return runCell(dependencies, userId, cell, (workbook, value) => {
+    if (!isControl(value)) {
+      throw unprocessable(
+        "not_a_control",
+        `${formatAddress(cell)} does not hold a checkbox or a dropdown`,
+      );
+    }
+    return workbook.planInput(value, input);
+  });
+}
+
+/**
+ * Carries out what a cell asks for. Cell writes, table growth, and the audit
+ * record commit together. Email is sent after the commit, so a rolled-back
+ * run never sends mail.
+ */
+async function runCell(
   { db, mailer, emailRunsPerHour }: ActionDependencies,
   userId: string,
   cell: CellId,
+  decide: Decide,
 ): Promise<ClickResult> {
   const planned = await db.transaction(async (tx): Promise<Planned> => {
     const repository = new SpreadsheetRepository(tx, userId);
@@ -74,12 +131,13 @@ export async function runButton(
     await repository.lockSpreadsheet(spreadsheetId);
 
     const workbook = createWorkbook(await repository.getSnapshot(spreadsheetId));
-    const value = workbook.getValue(cell);
-    if (!isButton(value)) {
-      throw unprocessable("not_a_button", `${formatAddress(cell)} does not hold a button`);
-    }
+    const plan = decide(workbook, workbook.getValue(cell));
 
-    const record = async (effects: Effect[], failure: string | null): Promise<Planned> => {
+    const record = async (
+      effects: Effect[],
+      failure: string | null,
+      tables: TableRecord[] = [],
+    ): Promise<Planned> => {
       const status: RunStatus =
         failure !== null ? "failed" : effects.some(isSendEmail) ? "pending" : "succeeded";
       const [run] = await tx
@@ -87,10 +145,9 @@ export async function runButton(
         .values({ spreadsheetId, ...cell, userId, effects, status, error: failure })
         .returning({ id: actionRuns.id });
       if (!run) throw new Error("Insert returned no action run");
-      return { runId: run.id, failure, effects };
+      return { runId: run.id, failure, effects, tables };
     };
 
-    const plan = workbook.planAction(value.action);
     if (!plan.ok) return record([], describe(plan.error));
     const { effects } = plan;
 
@@ -102,29 +159,37 @@ export async function runButton(
     }
 
     try {
-      // A nested transaction, so a write that is refused undoes the writes
+      // A nested transaction, so a change that is refused undoes the changes
       // before it while the failed run is still recorded.
-      await tx.transaction(async (writes) => {
+      const tables = await tx.transaction(async (writes) => {
         const writer = new SpreadsheetRepository(writes, userId);
+        const grown: TableRecord[] = [];
+        // Tables grow first, so the cells written into new rows are inside the table.
+        for (const { tableId, rowCount } of effects.filter(isEnsureRows)) {
+          const table = await writer.ensureRows(tableId, rowCount);
+          if (table) grown.push(table);
+        }
         for (const [tableId, tableEffects] of Map.groupBy(
           effects.filter(isSetCell),
           (effect) => effect.tableId,
         )) {
           await writer.setCells(tableId, tableEffects);
         }
+        return grown;
       });
+      return await record(effects, null, tables);
     } catch (cause) {
       if (!(cause instanceof ApiFailure)) throw cause;
       return record(effects, cause.message);
     }
-    return record(effects, null);
   });
 
-  const { runId, failure, effects } = planned;
+  const { runId, failure, effects, tables } = planned;
   if (failure !== null) {
-    return { runId, status: "failed", error: failure, cells: [], emailsSent: 0 };
+    return { runId, status: "failed", error: failure, cells: [], tables: [], emailsSent: 0 };
   }
 
+  const done = { runId, cells: writtenCells(effects), tables };
   const emails = effects.filter(isSendEmail);
   if (emails.length > 0) {
     const outcome = await sendAll(mailer, emails);
@@ -132,30 +197,19 @@ export async function runButton(
       .update(actionRuns)
       .set({ status: outcome === null ? "succeeded" : "failed", error: outcome })
       .where(eq(actionRuns.id, runId));
-    if (outcome !== null) {
-      // Cell writes are already committed, so they are still reported.
-      return {
-        runId,
-        status: "failed",
-        error: outcome,
-        cells: writtenCells(effects),
-        emailsSent: 0,
-      };
-    }
+    // Cell writes are already committed, so they are reported even when the mail failed.
+    if (outcome !== null) return { ...done, status: "failed", error: outcome, emailsSent: 0 };
   }
-  return {
-    runId,
-    status: "succeeded",
-    error: null,
-    cells: writtenCells(effects),
-    emailsSent: emails.length,
-  };
+  return { ...done, status: "succeeded", error: null, emailsSent: emails.length };
 }
 
+/** The cells the effects wrote. When one cell was written twice, the last write is the one stored. */
 function writtenCells(effects: readonly Effect[]): StoredCell[] {
-  return effects
-    .filter(isSetCell)
-    .map(({ tableId, row, col, input }) => ({ tableId, row, col, input }));
+  const cells = new Map<string, StoredCell>();
+  for (const { tableId, row, col, input } of effects.filter(isSetCell)) {
+    cells.set(`${tableId}:${formatAddress({ row, col })}`, { tableId, row, col, input });
+  }
+  return [...cells.values()];
 }
 
 /** Sends every message. Returns `null` on success or a description of the first failure. */

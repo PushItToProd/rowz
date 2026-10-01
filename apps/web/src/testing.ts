@@ -30,7 +30,15 @@ export function at(address: string, tableId = "t1"): CellId {
 }
 
 export function clickResult(overrides: Partial<ClickResult> = {}): ClickResult {
-  return { runId: "r1", status: "succeeded", error: null, cells: [], emailsSent: 0, ...overrides };
+  return {
+    runId: "r1",
+    status: "succeeded",
+    error: null,
+    cells: [],
+    tables: [],
+    emailsSent: 0,
+    ...overrides,
+  };
 }
 
 export type MockedApi = { [K in keyof typeof api]: Mock<(typeof api)[K]> };
@@ -52,5 +60,6 @@ export function mockApi(): MockedApi {
     deleteTable: vi.fn().mockResolvedValue(undefined),
     setCells: vi.fn().mockResolvedValue(undefined),
     click: vi.fn().mockResolvedValue(clickResult()),
+    input: vi.fn().mockResolvedValue(clickResult()),
   };
 }

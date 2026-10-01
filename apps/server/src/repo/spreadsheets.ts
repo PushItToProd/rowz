@@ -315,6 +315,27 @@ export class SpreadsheetRepository {
   }
 
   /**
+   * Grows a table to at least `rowCount` rows. Returns the table when it
+   * grew, and `undefined` when it was already as tall.
+   */
+  async ensureRows(tableId: string, rowCount: number): Promise<TableRecord | undefined> {
+    const table = await this.findTable(tableId, "write");
+    if (rowCount <= table.rowCount) return undefined;
+    if (rowCount > LIMITS.tableRows) {
+      throw unprocessable(
+        "table_full",
+        `${table.name} cannot have more than ${String(LIMITS.tableRows)} rows`,
+      );
+    }
+    const [updated] = await this.db
+      .update(tables)
+      .set({ rowCount })
+      .where(eq(tables.id, tableId))
+      .returning(tableColumns);
+    return updated;
+  }
+
+  /**
    * Inserts or deletes one row or column. Cells past it move by one, and
    * formulas anywhere in the spreadsheet that read the table are rewritten to
    * keep reading the same cells. `cells` lists every cell that changed, with

@@ -198,6 +198,44 @@ describe("click", () => {
     expect(store.notice).toEqual(notice);
   });
 
+  it("names the cells an action wrote, or counts them when there are many", async () => {
+    const store = await open({ B1: BUTTON });
+    const cells = ["A1", "A2", "A3", "A4"].map((address) => ({ ...at(address), input: "x" }));
+    server.click.mockResolvedValue(clickResult({ cells: cells.slice(0, 3) }));
+    await store.click(at("B1"));
+    expect(store.notice?.text).toBe("Updated A1, A2, A3");
+
+    server.click.mockResolvedValue(clickResult({ cells }));
+    await store.click(at("B1"));
+    expect(store.notice?.text).toBe("Updated 4 cells");
+  });
+
+  it("applies a table the action grew before the cells written into its new rows", async () => {
+    const store = await open({ B1: BUTTON });
+    server.click.mockResolvedValue(
+      clickResult({
+        tables: [{ ...TABLE, rowCount: 5 }],
+        cells: [{ tableId: "t1", row: 4, col: 0, input: "appended" }],
+      }),
+    );
+    await store.click(at("B1"));
+    expect(store.tables[0]?.rowCount).toBe(5);
+    expect(store.inputOf({ tableId: "t1", row: 4, col: 0 })).toBe("appended");
+  });
+
+  it("stores a control's value quietly, and reports only a refusal", async () => {
+    const store = await open({ A1: "FALSE", B1: "=CHECKBOX(A1)" });
+    server.input.mockResolvedValue(clickResult({ cells: [{ ...at("A1"), input: "TRUE" }] }));
+    await store.input(at("B1"), true);
+    expect(server.input).toHaveBeenCalledExactlyOnceWith(at("B1"), true);
+    expect(store.valueOf(at("A1"))).toBe(true);
+    expect(store.notice).toBeNull();
+
+    server.input.mockResolvedValue(clickResult({ status: "failed", error: "No" }));
+    await store.input(at("B1"), false);
+    expect(store.notice).toEqual({ kind: "error", text: "No" });
+  });
+
   it("reports a request that fails", async () => {
     const store = await open({ B1: BUTTON });
     server.click.mockRejectedValue(new Error("B1 does not hold a button"));

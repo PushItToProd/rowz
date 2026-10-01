@@ -1,3 +1,4 @@
+import { LIMITS } from "@spreadsheet-app/shared";
 import { desc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ClickResult, PageRecord, Snapshot, TableRecord } from "./app";
@@ -75,6 +76,7 @@ describe("clicking an EXECUTE button", () => {
       status: "succeeded",
       error: null,
       cells: [{ tableId: sheet.tableId, row: 2, col: 0, input: "3" }],
+      tables: [],
       emailsSent: 0,
     });
     expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
@@ -300,6 +302,177 @@ describe("clicking a SEND_EMAIL button", () => {
     server.failSending(false);
     expect(await click(sheet, 0, 1, sender)).toMatchObject({ status: "succeeded" });
   });
+});
+
+describe("actions that add rows, clear cells, and combine", () => {
+  it("appends a row, growing the table when it is full", async () => {
+    const sheet = await sheetWith({
+      A1: "name",
+      B1: "qty",
+      D1: '=BUTTON("Add", APPEND_ROW(A:B, "pear", 3))',
+    });
+    await user.json("PATCH", `/tables/${sheet.tableId}`, { rowCount: 2 });
+
+    const first = await click(sheet, 0, 3);
+    expect(first).toMatchObject({
+      status: "succeeded",
+      tables: [],
+      cells: [
+        { row: 1, col: 0, input: "pear" },
+        { row: 1, col: 1, input: "3" },
+      ],
+    });
+
+    const second = await click(sheet, 0, 3);
+    expect(second).toMatchObject({
+      status: "succeeded",
+      tables: [{ id: sheet.tableId, rowCount: 3 }],
+      cells: [
+        { row: 2, col: 0, input: "pear" },
+        { row: 2, col: 1, input: "3" },
+      ],
+    });
+    const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${sheet.spreadsheetId}`);
+    expect(snapshot.tables[0]).toMatchObject({ rowCount: 3 });
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "1:0": "pear",
+      "2:0": "pear",
+      "2:1": "3",
+    });
+  });
+
+  it("refuses to grow a table past the row limit, and writes nothing", async () => {
+    const sheet = await sheetWith({ D1: '=BUTTON("Add", APPEND_ROW(A:A, "x"))' });
+    await user.json("PATCH", `/tables/${sheet.tableId}`, { rowCount: LIMITS.tableRows });
+    await user.json(
+      "PUT",
+      `/tables/${sheet.tableId}/cells`,
+      { cells: [{ row: LIMITS.tableRows - 1, col: 0, input: "last" }] },
+      204,
+    );
+
+    expect(await click(sheet, 0, 3)).toMatchObject({
+      status: "failed",
+      error: `Table 1 cannot have more than ${String(LIMITS.tableRows)} rows`,
+      cells: [],
+      tables: [],
+    });
+    const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${sheet.spreadsheetId}`);
+    expect(snapshot.tables[0]).toMatchObject({ rowCount: LIMITS.tableRows });
+  });
+
+  it("saves a form to a log and resets it in one click", async () => {
+    const sheet = await sheetWith({
+      A1: "pear",
+      A2: "3",
+      C1: '=BUTTON("Save", DO(APPEND_ROW(E:F, A1, A2), CLEAR(A1:A2)))',
+    });
+    const result = await click(sheet, 0, 2);
+    expect(result.status).toBe("succeeded");
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toEqual({
+      "0:2": '=BUTTON("Save", DO(APPEND_ROW(E:F, A1, A2), CLEAR(A1:A2)))',
+      "0:4": "pear",
+      "0:5": "3",
+    });
+    expect(await runsFor(sheet)).toMatchObject([
+      {
+        status: "succeeded",
+        effects: [{ type: "ensureRows" }, {}, {}, { input: "" }, { input: "" }],
+      },
+    ]);
+  });
+
+  it("reports the stored value when one click writes a cell twice", async () => {
+    const sheet = await sheetWith({
+      A1: '=BUTTON("Twice", DO(EXECUTE("first", B1), EXECUTE("second", B1)))',
+    });
+    expect(await click(sheet, 0, 0)).toMatchObject({
+      cells: [{ row: 0, col: 1, input: "second" }],
+    });
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "0:1": "second",
+    });
+  });
+
+  it("writes an array as a block of cells", async () => {
+    const sheet = await sheetWith({ A1: '=BUTTON("Fill", EXECUTE(SEQUENCE(2, 2), C3))' });
+    expect((await click(sheet, 0, 0)).cells).toHaveLength(4);
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "2:2": "1",
+      "2:3": "2",
+      "3:2": "3",
+      "3:3": "4",
+    });
+  });
+});
+
+describe("changing a control", () => {
+  function choose(sheet: Sheet, row: number, col: number, value: unknown, status = 200) {
+    return user.json<ClickResult>(
+      "POST",
+      `/tables/${sheet.tableId}/cells/${String(row)}/${String(col)}/input`,
+      { value },
+      status,
+    );
+  }
+
+  it("writes TRUE or FALSE from a checkbox to its cell, and records the run", async () => {
+    const sheet = await sheetWith({ B1: '=CHECKBOX(A1, "Done")' });
+    expect(await choose(sheet, 0, 1, true)).toMatchObject({
+      status: "succeeded",
+      cells: [{ tableId: sheet.tableId, row: 0, col: 0, input: "TRUE" }],
+    });
+    await choose(sheet, 0, 1, false);
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "0:0": "FALSE",
+    });
+    expect(await runsFor(sheet)).toHaveLength(2);
+  });
+
+  it("writes a dropdown's choice, and refuses a value that is not a choice", async () => {
+    const sheet = await sheetWith({ A1: "low", A2: "high", C1: "=DROPDOWN(A1:A2, B1)" });
+    expect(await choose(sheet, 0, 2, "high")).toMatchObject({
+      status: "succeeded",
+      cells: [{ row: 0, col: 1, input: "high" }],
+    });
+    expect(await choose(sheet, 0, 2, "medium")).toMatchObject({
+      status: "failed",
+      error: "#VALUE! medium is not one of the choices",
+      cells: [],
+    });
+    expect(await choose(sheet, 0, 2, null)).toMatchObject({ cells: [{ input: "" }] });
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).not.toHaveProperty("0:1");
+  });
+
+  it("refuses a cell that is not a control with 422", async () => {
+    const sheet = await sheetWith({ A1: "1", B1: '=BUTTON("x", EXECUTE(1, C1))' });
+    for (const [row, col] of [
+      [0, 0],
+      [0, 1],
+      [5, 5],
+    ] as const) {
+      expect(await choose(sheet, row, col, true, 422)).toMatchObject({
+        error: { code: "not_a_control" },
+      });
+    }
+    expect(await runsFor(sheet)).toEqual([]);
+  });
+
+  it("refuses a checkbox value that is not TRUE or FALSE", async () => {
+    const sheet = await sheetWith({ B1: "=CHECKBOX(A1)" });
+    expect(await choose(sheet, 0, 1, "yes")).toMatchObject({
+      status: "failed",
+      error: "#VALUE! A checkbox takes TRUE or FALSE",
+    });
+  });
+
+  it.each([{}, { value: [1] }, { value: { a: 1 } }])(
+    "rejects the malformed body %j",
+    async (body) => {
+      const sheet = await sheetWith({ B1: "=CHECKBOX(A1)" });
+      await user.json("POST", `/tables/${sheet.tableId}/cells/0/1/input`, body, 400);
+    },
+  );
 });
 
 describe("snapshot after a click", () => {

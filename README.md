@@ -52,6 +52,11 @@ An action is a function that describes a side effect. It does nothing until a bu
 | `BUTTON(label, action)`             | Shows a button. Clicking it runs the action.                                                     |
 | `EXECUTE(expression, target)`       | Writes the value of `expression` into the cell `target`.                                         |
 | `SEND_EMAIL(to, subject, body, cc)` | Sends an email. `cc` is optional. `to` and `cc` take addresses separated by commas or semicolons |
+| `APPEND_ROW(range, value, ...)`     | Writes the values into the first row of the range below its content, growing the table if needed |
+| `CLEAR(range)`                      | Empties the cells of the range.                                                                  |
+| `DO(action, ...)`                   | Runs several actions from one click.                                                             |
+
+A control is a cell that shows an input bound to another cell. `CHECKBOX(cell, label)` and `DROPDOWN(choices, cell)` show that cell's value and write a change back to it.
 
 An action's arguments are evaluated when the button is clicked, not when the sheet recalculates. `=BUTTON("Add one", EXECUTE(A1+1, A1))` is a counter, not a circular reference.
 

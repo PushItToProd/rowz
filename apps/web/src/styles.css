@@ -443,6 +443,27 @@ input.editable-name--editing {
   font-size: 0.85rem;
 }
 
+.cell-control {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  height: 28px;
+  padding: 0 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+select.cell-control--dropdown {
+  width: calc(100% - 8px);
+  height: 24px;
+  margin: 2px 4px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  font: inherit;
+}
+
 .cell-button {
   display: block;
   width: calc(100% - 8px);

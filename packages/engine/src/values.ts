@@ -56,7 +56,26 @@ export interface LambdaValue {
 
 /** `null` is an empty cell. */
 export type Scalar = number | string | boolean | null;
-export type CellValue = Scalar | ErrorValue | ActionValue | ButtonValue | LambdaValue;
+
+/**
+ * An input the cell shows, such as a checkbox, bound to another cell. It
+ * shows that cell's value, and a change made through it is written there.
+ */
+export interface ControlValue {
+  kind: "control";
+  control: "checkbox" | "dropdown";
+  /** The cell the control reads and writes. */
+  target: CellId;
+  /** The target cell's value when the control was computed. */
+  value: Scalar;
+  /** The choices of a dropdown. Empty for a checkbox. */
+  options: Scalar[];
+  /** Text shown beside a checkbox. */
+  label: string;
+}
+
+export type CellValue =
+  Scalar | ErrorValue | ActionValue | ButtonValue | LambdaValue | ControlValue;
 
 /** Several values as rows of cells: what a range reference reads, or an array a function made. */
 export interface RangeValue {
@@ -92,6 +111,10 @@ export function isButton(value: unknown): value is ButtonValue {
 
 export function isLambda(value: unknown): value is LambdaValue {
   return hasKind(value, "lambda");
+}
+
+export function isControl(value: unknown): value is ControlValue {
+  return hasKind(value, "control");
 }
 
 export function isRange(value: unknown): value is RangeValue {
@@ -169,6 +192,7 @@ export function formatValue(value: CellValue): string {
   if (isAction(value)) return value.name;
   if (isButton(value)) return value.label;
   if (isLambda(value)) return `LAMBDA(${value.params.join(", ")})`;
+  if (isControl(value)) return value.control === "checkbox" ? value.label : toText(value.value);
   return toText(value);
 }
 

@@ -17,7 +17,7 @@ export {
   type FunctionCategory,
   type FunctionDoc,
 } from "./docs";
-export type { Effect, SendEmailEffect, SetCellEffect } from "./effects";
+export type { Effect, EnsureRowsEffect, SendEmailEffect, SetCellEffect } from "./effects";
 export { defaultFunctions } from "./functions";
 export type {
   ActionFunction,
@@ -41,6 +41,7 @@ export {
   formatValue,
   isAction,
   isButton,
+  isControl,
   isError,
   isLambda,
   isFormulaInput,
@@ -48,6 +49,7 @@ export {
   type ActionValue,
   type ButtonValue,
   type CellValue,
+  type ControlValue,
   type ErrorCode,
   type ErrorValue,
   type LambdaValue,

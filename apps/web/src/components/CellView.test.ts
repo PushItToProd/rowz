@@ -39,6 +39,49 @@ describe("CellView", () => {
     expect(span.attributes("title")).toContain("=A1(5)");
   });
 
+  it("shows a checkbox with its label and emits the new state when changed", async () => {
+    const wrapper = render({
+      kind: "control",
+      control: "checkbox",
+      target: { tableId: "t1", row: 0, col: 0 },
+      value: true,
+      options: [],
+      label: "Done",
+    });
+    const box = wrapper.get<HTMLInputElement>("input");
+    expect(wrapper.text()).toBe("Done");
+    expect(box.element.checked).toBe(true);
+    await box.setValue(false);
+    expect(wrapper.emitted("choose")).toEqual([[false]]);
+  });
+
+  it("shows a dropdown with no choice selected when the cell holds none of the choices", () => {
+    const wrapper = render({
+      kind: "control",
+      control: "dropdown",
+      target: { tableId: "t1", row: 0, col: 0 },
+      value: "something else",
+      options: ["a", 2, true],
+      label: "",
+    });
+    const select = wrapper.get<HTMLSelectElement>("select");
+    expect(select.findAll("option").map((option) => option.text())).toEqual(["", "a", "2", "TRUE"]);
+    expect(select.element.value).toBe("-1");
+  });
+
+  it("emits a dropdown choice with its original type", async () => {
+    const wrapper = render({
+      kind: "control",
+      control: "dropdown",
+      target: { tableId: "t1", row: 0, col: 0 },
+      value: null,
+      options: ["a", 2],
+      label: "",
+    });
+    await wrapper.get("select").setValue("1");
+    expect(wrapper.emitted("choose")).toEqual([[2]]);
+  });
+
   it("shows an error code with its explanation as a tooltip", () => {
     const span = render({ kind: "error", code: "#DIV/0!", message: "Division by zero" }).get(
       "span",

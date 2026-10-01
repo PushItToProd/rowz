@@ -23,6 +23,12 @@ describe("HelpView", () => {
       "gives a button labeled “Add one”",
     );
     expect(wrapper.text()).toContain("A1 holds 1, A2 holds 2, A3 holds 3");
+    expect(wrapper.get('[data-function="CHECKBOX"]').text()).toContain(
+      "gives a checkbox labeled “Done”",
+    );
+    expect(wrapper.get('[data-function="DROPDOWN"]').text()).toContain(
+      "gives a list offering apple, banana, cherry",
+    );
     expect(wrapper.get('[data-function="FILTER"]').text()).toContain(
       "gives banana, cherry down a column",
     );
@@ -53,7 +59,7 @@ describe("HelpView", () => {
   it("links each contents entry to a section on the page", () => {
     const wrapper = render();
     const targets = wrapper.findAll(".help__contents a").map((link) => link.attributes("href"));
-    expect(targets).toHaveLength(9);
+    expect(targets).toHaveLength(10);
     for (const target of targets)
       expect(wrapper.find(`section${target ?? ""}`).exists()).toBe(true);
   });

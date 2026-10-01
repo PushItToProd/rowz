@@ -97,8 +97,11 @@ const MOVES: Record<string, [rows: number, cols: number]> = {
 };
 
 function onGridKeydown(event: KeyboardEvent): void {
-  // While editing, keys belong to the editor input.
-  if (draft.value !== null || !selected.value) return;
+  // While editing, keys belong to the editor input. A checkbox or dropdown in
+  // a cell also keeps its own keys, such as the arrows that change a choice.
+  const inControl =
+    event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement;
+  if (draft.value !== null || !selected.value || inControl) return;
   const { key } = event;
   const step = MOVES[key];
   if (step) move(...step);
@@ -180,6 +183,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               :running="store.running.has(cellKey(cell(row - 1, col - 1)))"
               :can-run="store.canEdit"
               @run="run(row - 1, col - 1)"
+              @choose="store.input(cell(row - 1, col - 1), $event)"
             />
           </td>
         </tr>

@@ -1,13 +1,14 @@
 import { zValidator } from "@hono/zod-validator";
 import {
   cellParam,
+  controlInputBody,
   setCellsBody,
   structuralEditBody,
   tableParam,
   updateTableBody,
 } from "@spreadsheet-app/shared";
 import { Hono } from "hono";
-import { runButton, type ActionDependencies } from "../actions/run";
+import { runButton, runControl, type ActionDependencies } from "../actions/run";
 import { onInvalid, type Env } from "../http";
 
 export function tableRoutes(dependencies: ActionDependencies) {
@@ -41,6 +42,15 @@ export function tableRoutes(dependencies: ActionDependencies) {
       async (c) => {
         await c.var.repository.setCells(c.req.valid("param").tableId, c.req.valid("json").cells);
         return c.body(null, 204);
+      },
+    )
+    .post(
+      "/:tableId/cells/:row/:col/input",
+      zValidator("param", cellParam, onInvalid),
+      zValidator("json", controlInputBody, onInvalid),
+      async (c) => {
+        const { value } = c.req.valid("json");
+        return c.json(await runControl(dependencies, c.var.userId, c.req.valid("param"), value));
       },
     )
     .post("/:tableId/cells/:row/:col/click", zValidator("param", cellParam, onInvalid), async (c) =>

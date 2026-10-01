@@ -5,6 +5,7 @@ import {
   Workbook,
   type CellId,
   type CellValue,
+  type Scalar,
 } from "@spreadsheet-app/engine";
 import type { StructuralEditBody } from "@spreadsheet-app/shared";
 import { defineStore } from "pinia";
@@ -15,6 +16,9 @@ export interface Notice {
   kind: "success" | "error";
   text: string;
 }
+
+/** A notice names the cells an action wrote, up to this many. Past that it gives the count. */
+const MAX_NAMED_CELLS = 3;
 
 function messageOf(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message !== "" ? cause.message : fallback;
@@ -118,26 +122,55 @@ export const useWorkbookStore = defineStore("workbook", () => {
       return { kind: "error", text: result.error ?? "The action failed" };
     }
     if (result.emailsSent > 0) return { kind: "success", text: "Email sent" };
+    if (result.cells.length === 0) return { kind: "success", text: "Done" };
+    if (result.cells.length > MAX_NAMED_CELLS) {
+      return { kind: "success", text: `Updated ${String(result.cells.length)} cells` };
+    }
     const written = result.cells.map((cell) => nameOf(cell, buttonTableId)).join(", ");
-    return { kind: "success", text: written === "" ? "Done" : `Updated ${written}` };
+    return { kind: "success", text: `Updated ${written}` };
   }
 
   /** Asks the server to run the button in a cell, then shows the cells it wrote. */
-  async function click(id: CellId): Promise<void> {
+  /**
+   * Sends a request that makes the server run what a cell asks for, then
+   * shows the tables it resized and the cells it wrote.
+   */
+  async function run(
+    id: CellId,
+    request: () => Promise<ClickResult>,
+  ): Promise<ClickResult | undefined> {
     const key = cellKey(id);
-    if (running.has(key) || !canEdit.value) return;
+    if (running.has(key) || !canEdit.value) return undefined;
     running.add(key);
     try {
       // The server evaluates stored inputs, so pending edits must be stored first.
       await saves;
-      const result = await api.click(id);
+      const result = await request();
+      if (result.tables.length > 0) {
+        const resized = new Map(result.tables.map((table) => [table.id, table]));
+        tables.value = tables.value.map((table) => resized.get(table.id) ?? table);
+        syncStructure();
+      }
       for (const cell of result.cells) apply(cell, cell.input);
-      notice.value = describe(result, id.tableId);
+      return result;
     } catch (cause) {
       fail(cause, "The action could not be run");
+      return undefined;
     } finally {
       running.delete(key);
     }
+  }
+
+  /** Asks the server to run the button in a cell. */
+  async function click(id: CellId): Promise<void> {
+    const result = await run(id, () => api.click(id));
+    if (result) notice.value = describe(result, id.tableId);
+  }
+
+  /** Stores a value chosen through the checkbox or dropdown in a cell. Success is silent. */
+  async function input(id: CellId, value: Scalar): Promise<void> {
+    const result = await run(id, () => api.input(id, value));
+    if (result?.status === "failed") notice.value = describe(result, id.tableId);
   }
 
   /** Runs a structure change and reports a failure as a notice. Returns whether it worked. */
@@ -258,6 +291,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     inputOf,
     setCell,
     click,
+    input,
     renameSpreadsheet,
     addPage,
     renamePage,

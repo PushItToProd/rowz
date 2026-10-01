@@ -3,15 +3,19 @@ import type { Node, Reference } from "./ast";
 import type { Effect } from "./effects";
 import { evaluate, referencesOf, type EvaluationContext } from "./evaluate";
 import { defaultFunctions } from "./functions";
-import { Failure } from "./functions/arguments";
+import { fail, Failure } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
 import { DependencyIndex, evaluationOrder } from "./graph";
 import { parseFormula } from "./parser";
 import { TableResolver, type WorkbookData, type WorkbookStructure } from "./structure";
 import { FormulaSyntaxError } from "./tokenizer";
 import {
+  compare,
   error,
   isFormulaInput,
+  literalInput,
+  toText,
+  type ControlValue,
   isRange,
   parseLiteralInput,
   type ActionValue,
@@ -189,23 +193,51 @@ export class Workbook {
    * Nothing is applied: the caller decides whether and how to carry them out.
    */
   planAction(action: ActionValue): ActionPlan {
-    const definition = this.functions.get(action.name);
-    if (definition?.kind !== "action") {
-      return { ok: false, error: error("#NAME?", `Unknown action ${action.name}`) };
-    }
     this.settle();
-    const context = this.context(action.origin);
     try {
-      const effects = definition.plan(action.args, {
-        origin: action.origin,
-        evaluate: (node) => evaluate(node, context),
-        resolve: (reference) => context.resolve(reference),
-      });
-      return { ok: true, effects };
+      return { ok: true, effects: this.effectsOf(action) };
     } catch (cause) {
       if (cause instanceof Failure) return { ok: false, error: cause.error };
       throw cause;
     }
+  }
+
+  /**
+   * Turns a value chosen through a control, such as a checkbox being ticked,
+   * into the effect that stores it in the control's target cell.
+   */
+  planInput(control: ControlValue, value: Scalar): ActionPlan {
+    const refuse = (message: string): ActionPlan => ({
+      ok: false,
+      error: error("#VALUE!", message),
+    });
+    if (control.control === "checkbox" && typeof value !== "boolean") {
+      return refuse("A checkbox takes TRUE or FALSE");
+    }
+    const isChoice = control.options.some(
+      (option) => typeof option === typeof value && compare(option, value) === 0,
+    );
+    if (control.control === "dropdown" && value !== null && !isChoice) {
+      return refuse(`${toText(value)} is not one of the choices`);
+    }
+    return {
+      ok: true,
+      effects: [{ type: "setCell", ...control.target, input: literalInput(value) }],
+    };
+  }
+
+  /** The effects an action asks for. Throws `Failure` when the action cannot run. */
+  private effectsOf(action: ActionValue): Effect[] {
+    const definition = this.functions.get(action.name);
+    if (definition?.kind !== "action") fail("#NAME?", `Unknown action ${action.name}`);
+    const context = this.context(action.origin);
+    return definition.plan(action.args, {
+      origin: action.origin,
+      evaluate: (node) => evaluate(node, context),
+      resolve: (reference) => context.resolve(reference),
+      inputsIn: (range) => this.recordsIn(range).map((record) => record.id),
+      plan: (inner) => this.effectsOf(inner),
+    });
   }
 
   private record(id: CellId): CellRecord | undefined {

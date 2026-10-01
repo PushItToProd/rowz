@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, snapshotWith, TABLE, type MockedApi } from "../testing";
+import { at, clickResult, snapshotWith, TABLE, type MockedApi } from "../testing";
 import GridView from "./GridView.vue";
 
 vi.mock("../api/client", async () => ({ api: (await import("../testing")).mockApi() }));
@@ -278,13 +278,7 @@ describe("buttons", () => {
 
   it("runs the action when the button is clicked and shows the written value", async () => {
     await mountGrid({ A1: "1", B1: BUTTON });
-    server.click.mockResolvedValue({
-      runId: "r",
-      status: "succeeded",
-      error: null,
-      cells: [{ ...at("A1"), input: "2" }],
-      emailsSent: 0,
-    });
+    server.click.mockResolvedValue(clickResult({ cells: [{ ...at("A1"), input: "2" }] }));
 
     const button = cellAt("B1").get("button");
     expect(button.text()).toBe("Add one");
@@ -324,9 +318,77 @@ describe("buttons", () => {
   });
 });
 
+describe("controls", () => {
+  it("shows a checkbox for the cell it is bound to, and sends a change to the server", async () => {
+    await mountGrid({ A1: "FALSE", B1: '=CHECKBOX(A1, "Done")' });
+    server.input.mockResolvedValue(clickResult({ cells: [{ ...at("A1"), input: "TRUE" }] }));
+
+    const box = cellAt("B1").get<HTMLInputElement>('input[type="checkbox"]');
+    expect(cellAt("B1").text()).toBe("Done");
+    expect(box.element.checked).toBe(false);
+
+    await box.setValue(true);
+    await vi.waitFor(() => {
+      expect(cellAt("A1").text()).toBe("TRUE");
+    });
+    expect(server.input).toHaveBeenCalledExactlyOnceWith(at("B1"), true);
+    expect(cellAt("B1").get<HTMLInputElement>("input").element.checked).toBe(true);
+    expect(useWorkbookStore().notice).toBeNull();
+  });
+
+  it("shows a dropdown of the choices, with the bound cell's value chosen", async () => {
+    await mountGrid({ A1: "low", A2: "high", B1: "high", C1: "=DROPDOWN(A1:A2, B1)" });
+    server.input.mockResolvedValue(clickResult({ cells: [{ ...at("B1"), input: "low" }] }));
+
+    const select = cellAt("C1").get<HTMLSelectElement>("select");
+    expect(select.findAll("option").map((option) => option.text())).toEqual(["", "low", "high"]);
+    expect(select.element.selectedOptions[0]?.text).toBe("high");
+
+    await select.setValue("0");
+    await vi.waitFor(() => {
+      expect(cellAt("B1").text()).toBe("low");
+    });
+    expect(server.input).toHaveBeenCalledExactlyOnceWith(at("C1"), "low");
+  });
+
+  it("sends an empty value when the blank choice is picked", async () => {
+    await mountGrid({ B1: "x", C1: '=DROPDOWN("x, y", B1)' });
+    await cellAt("C1").get("select").setValue("-1");
+    await vi.waitFor(() => {
+      expect(server.input).toHaveBeenCalledExactlyOnceWith(at("C1"), null);
+    });
+  });
+
+  it("leaves arrow keys to a focused dropdown, so they change the choice and not the selection", async () => {
+    await mountGrid({ C1: '=DROPDOWN("x, y", B1)' });
+    await select("C1");
+    await cellAt("C1").get("select").trigger("keydown", { key: "ArrowDown" });
+    expect(selectedAddress()).toBe("C1");
+  });
+
+  it("reports a refused choice", async () => {
+    await mountGrid({ B1: "=CHECKBOX(A1)" });
+    server.input.mockResolvedValue(
+      clickResult({ status: "failed", error: "A1 is outside the table" }),
+    );
+    await cellAt("B1").get("input").setValue(true);
+    await vi.waitFor(() => {
+      expect(useWorkbookStore().notice).toEqual({ kind: "error", text: "A1 is outside the table" });
+    });
+  });
+});
+
 describe("a viewer", () => {
   it("can select but not edit, clear, or run buttons", async () => {
-    await mountGrid({ A1: "1", B1: '=BUTTON("Go", EXECUTE(1, C1))' }, "viewer");
+    await mountGrid(
+      {
+        A1: "1",
+        B1: '=BUTTON("Go", EXECUTE(1, C1))',
+        A2: "=CHECKBOX(A3)",
+        B2: '=DROPDOWN("x", B3)',
+      },
+      "viewer",
+    );
     await select("A1");
     expect(selectedAddress()).toBe("A1");
 
@@ -338,6 +400,8 @@ describe("a viewer", () => {
     await press("Delete");
     expect(cellAt("A1").text()).toBe("1");
     expect(cellAt("B1").get("button").attributes("disabled")).toBeDefined();
+    expect(cellAt("A2").get("input").attributes("disabled")).toBeDefined();
+    expect(cellAt("B2").get("select").attributes("disabled")).toBeDefined();
     expect(server.setCells).not.toHaveBeenCalled();
   });
 });

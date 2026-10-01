@@ -49,6 +49,11 @@ export const setCellsBody = z.object({
   cells: z.array(cellInput).min(1).max(LIMITS.cellsPerRequest),
 });
 
+/** A value chosen through a checkbox or dropdown. */
+export const controlInputBody = z.object({
+  value: z.union([z.string().max(LIMITS.inputLength), z.number(), z.boolean(), z.null()]),
+});
+
 export const spreadsheetParam = z.object({ spreadsheetId: z.uuid() });
 export const pageParam = z.object({ pageId: z.uuid() });
 export const tableParam = z.object({ tableId: z.uuid() });

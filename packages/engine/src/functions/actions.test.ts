@@ -249,3 +249,147 @@ describe("SEND_EMAIL", () => {
     expect(clickFormula(`=BUTTON("x", ${action})`)).toEqual({ kind: "error", code, message });
   });
 });
+
+describe("APPEND_ROW", () => {
+  it("writes the values into the first row after the last one with content", () => {
+    const effects = clickFormula('=BUTTON("Add", APPEND_ROW(A:C, "pear", 1 + 1, TRUE))', {
+      A1: "name",
+      B1: "count",
+      A2: "apple",
+      C2: "x",
+    });
+    expect(effects).toEqual([
+      { type: "ensureRows", tableId: "t1", rowCount: 3 },
+      { type: "setCell", tableId: "t1", row: 2, col: 0, input: "pear" },
+      { type: "setCell", tableId: "t1", row: 2, col: 1, input: "2" },
+      { type: "setCell", tableId: "t1", row: 2, col: 2, input: "TRUE" },
+    ]);
+  });
+
+  it("starts at the top of an empty range, and at the range's own first row and column", () => {
+    expect(clickFormula('=BUTTON("Add", APPEND_ROW(B5:D, "x"))', { A1: "outside" })).toEqual([
+      { type: "ensureRows", tableId: "t1", rowCount: 5 },
+      { type: "setCell", tableId: "t1", row: 4, col: 1, input: "x" },
+    ]);
+  });
+
+  it("adds to a range in another table, and spreads an array over cells", () => {
+    const workbook = workbookWith({
+      t1: { A1: "a", B1: "b", E1: '=BUTTON("Log", APPEND_ROW(\'Other Table\'!A:C, A1:B1, "end"))' },
+      t2: { A1: "first" },
+    });
+    expect(click(workbook, "E1")).toEqual([
+      { type: "ensureRows", tableId: "t2", rowCount: 2 },
+      { type: "setCell", tableId: "t2", row: 1, col: 0, input: "a" },
+      { type: "setCell", tableId: "t2", row: 1, col: 1, input: "b" },
+      { type: "setCell", tableId: "t2", row: 1, col: 2, input: "end" },
+    ]);
+  });
+
+  it("counts a cell that an array formula fills as content", () => {
+    expect(
+      clickFormula('=BUTTON("Add", APPEND_ROW(A:A, "next"))', { A1: "=SEQUENCE(3)" }),
+    ).toMatchObject([{ rowCount: 4 }, { row: 3, input: "next" }]);
+  });
+
+  it.each([
+    ['APPEND_ROW(A1:B1, "x")', "#VALUE!", "The range has no empty row left"],
+    ["APPEND_ROW(A:B, 1, 2, 3)", "#VALUE!", "APPEND_ROW was given 3 values for 2 columns"],
+    ['APPEND_ROW("A:B", 1)', "#VALUE!", "APPEND_ROW needs a range to add the row to"],
+    ["APPEND_ROW(Missing!A:B, 1)", "#REF!", "The range to add the row to does not exist"],
+    ["APPEND_ROW(A:B, 1/0)", "#DIV/0!", "Division by zero"],
+  ])("refuses %s", (action, code, message) => {
+    expect(clickFormula(`=BUTTON("x", ${action})`, { A1: "taken", B1: "taken" })).toEqual({
+      kind: "error",
+      code,
+      message,
+    });
+  });
+});
+
+describe("CLEAR", () => {
+  it("empties the cells of the range that hold something typed, and only those", () => {
+    const effects = clickFormula('=BUTTON("Reset", CLEAR(A1:B2))', {
+      A1: "x",
+      B2: "=1+1",
+      C1: "outside",
+    });
+    expect(effects).toEqual([
+      { type: "setCell", tableId: "t1", row: 0, col: 0, input: "" },
+      { type: "setCell", tableId: "t1", row: 1, col: 1, input: "" },
+    ]);
+  });
+
+  it("empties a whole column or a single cell", () => {
+    expect(
+      clickFormula('=BUTTON("Reset", CLEAR(A:A))', { A1: "x", A9: "y", B1: "z" }),
+    ).toHaveLength(2);
+    expect(clickFormula('=BUTTON("Reset", CLEAR(B1))', { A1: "x", B1: "z" })).toEqual([
+      { type: "setCell", tableId: "t1", row: 0, col: 1, input: "" },
+    ]);
+    expect(clickFormula('=BUTTON("Reset", CLEAR(D1:D9))')).toEqual([]);
+  });
+
+  it.each([
+    ["CLEAR(5)", "#VALUE!"],
+    ["CLEAR(Missing!A1)", "#REF!"],
+  ])("refuses %s with %s", (action, code) => {
+    expect(clickFormula(`=BUTTON("x", ${action})`)).toMatchObject({ kind: "error", code });
+  });
+});
+
+describe("DO", () => {
+  it("combines the effects of several actions, in order", () => {
+    const effects = clickFormula(
+      '=BUTTON("Submit", DO(APPEND_ROW(D:E, A1, A2), CLEAR(A1:A2), SEND_EMAIL("a@b.co", "New", A1)))',
+      { A1: "pear", A2: "3" },
+    );
+    expect(effects).toEqual([
+      { type: "ensureRows", tableId: "t1", rowCount: 1 },
+      { type: "setCell", tableId: "t1", row: 0, col: 3, input: "pear" },
+      { type: "setCell", tableId: "t1", row: 0, col: 4, input: "3" },
+      { type: "setCell", tableId: "t1", row: 0, col: 0, input: "" },
+      { type: "setCell", tableId: "t1", row: 1, col: 0, input: "" },
+      { type: "sendEmail", to: ["a@b.co"], cc: [], subject: "New", body: "pear" },
+    ]);
+  });
+
+  it("lets every action read the cells as they were before the click", () => {
+    const effects = clickFormula('=BUTTON("Swap", DO(EXECUTE(A2, A1), EXECUTE(A1, A2)))', {
+      A1: "one",
+      A2: "two",
+    });
+    expect(effects).toMatchObject([
+      { row: 0, input: "two" },
+      { row: 1, input: "one" },
+    ]);
+  });
+
+  it("nests, and takes an action chosen by a formula", () => {
+    expect(
+      clickFormula(
+        '=BUTTON("Go", DO(DO(EXECUTE(1, B1)), IF(A1 > 0, EXECUTE(2, B2), EXECUTE(3, B3))))',
+        {
+          A1: "5",
+        },
+      ),
+    ).toMatchObject([
+      { row: 0, input: "1" },
+      { row: 1, input: "2" },
+    ]);
+  });
+
+  it("does nothing at all when one of its actions cannot run", () => {
+    expect(clickFormula('=BUTTON("Go", DO(EXECUTE(1, B1), EXECUTE(1/0, B2)))')).toMatchObject({
+      kind: "error",
+      code: "#DIV/0!",
+    });
+  });
+
+  it.each([
+    ["DO(5)", "#VALUE!", "DO takes actions such as EXECUTE or SEND_EMAIL"],
+    ["DO(1/0)", "#DIV/0!", "Division by zero"],
+  ])("refuses %s", (action, code, message) => {
+    expect(clickFormula(`=BUTTON("x", ${action})`)).toEqual({ kind: "error", code, message });
+  });
+});

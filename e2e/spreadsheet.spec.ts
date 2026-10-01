@@ -201,6 +201,46 @@ test("a formula with several results fills the cells around it", async ({ page }
   await expect(cell(page, "G1")).toHaveText("70");
 });
 
+test("a form with a checkbox and a dropdown saves rows to a log", async ({ page }) => {
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add table" }).click();
+
+  // Table 1 is the form. Table 2 is the log.
+  await enter(page, "A1", "Item");
+  await enter(page, "B1", "pear");
+  await enter(page, "A2", "Size");
+  await enter(page, "C2", '=DROPDOWN("small, large", B2)');
+  await enter(page, "A3", "Gift");
+  await enter(page, "C3", '=CHECKBOX(B3, "wrap it")');
+  await enter(
+    page,
+    "A5",
+    "=BUTTON(\"Save\", DO(APPEND_ROW('Table 2'!A:C, B1, B2, B3), CLEAR(B1:B3)))",
+  );
+
+  await cell(page, "C2").getByRole("combobox").selectOption("large");
+  await expect(cell(page, "B2")).toHaveText("large");
+  await cell(page, "C3").getByRole("checkbox").check();
+  await expect(cell(page, "B3")).toHaveText("TRUE");
+
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(cell(page, "A1", "Table 2")).toHaveText("pear");
+  await expect(cell(page, "B1", "Table 2")).toHaveText("large");
+  await expect(cell(page, "C1", "Table 2")).toHaveText("TRUE");
+  // The form is reset, and its controls follow.
+  await expect(cell(page, "B1")).toHaveText("");
+  await expect(cell(page, "C3").getByRole("checkbox")).not.toBeChecked();
+  await expect(cell(page, "C2").getByRole("combobox")).toHaveValue("-1");
+
+  await enter(page, "B1", "fig");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(cell(page, "A2", "Table 2")).toHaveText("fig");
+
+  await page.reload();
+  await expect(cell(page, "A1", "Table 2")).toHaveText("pear");
+  await expect(cell(page, "A2", "Table 2")).toHaveText("fig");
+});
+
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "=1/0");

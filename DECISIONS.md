@@ -2,6 +2,31 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-09-30: Controls and form actions
+
+**Decision.** Two controls and three actions:
+
+- `CHECKBOX(cell, [label])` and `DROPDOWN(choices, cell)` show an input bound to another cell.
+- `APPEND_ROW(range, value, ...)` adds a row below the content of a range and grows the table when needed.
+- `CLEAR(range)` empties cells.
+- `DO(action, ...)` runs several actions from one click.
+
+Together they make a form: inputs, a Save button that appends to a log table and resets the inputs.
+
+**Why a control writes to another cell.** A formula cannot hold state: its cell's input is the formula. So a control is bound to a target cell, shows that cell's value, and writes changes there. Other formulas read the target cell. This is the same shape as `EXECUTE(value, target)`.
+
+**How a change is stored.** The browser sends the control's cell address and the chosen value. The server evaluates the stored formula, checks that the value is allowed (TRUE or FALSE for a checkbox, one of the choices for a dropdown), and writes it to the target the formula names. As with buttons, the browser cannot name the cell to write. Each change is recorded in `action_runs`.
+
+**Choices.**
+
+- **`DO` actions do not see each other's writes.** Every action reads the cells as they were before the click. This lets `DO(APPEND_ROW(Log!A:B, A1, A2), CLEAR(A1:A2))` work in either order, and makes `DO(EXECUTE(A2, A1), EXECUTE(A1, A2))` a swap.
+- **`APPEND_ROW` counts cells filled by an array formula as content**, so it never writes into a spilled result.
+- **`CLEAR` only empties cells that hold typed input.** Cells filled by an array formula are not typed, and are left to their formula.
+- **A successful control change shows no notice.** The control itself shows the new state. A refused change shows the reason.
+- **No dates yet**, so a log row cannot carry a timestamp. `NOW()` needs the date work listed in the todo file.
+
+**To change.** Actions are in `packages/engine/src/functions/actions.ts`, controls in `controls.ts`, and the server's handling in `apps/server/src/actions/run.ts`.
+
 ## 2026-09-30: Array results fill neighboring cells
 
 **Decision.** A formula whose result is several values shows the first in its own cell and fills the cells below and to its right, as in Excel and Google Sheets. `FILTER`, `SORT`, `UNIQUE`, `SEQUENCE`, `TRANSPOSE`, `TAKE`, `DROP`, `MAP`, `REDUCE`, `BYROW`, and `BYCOL` build on this. A bare range such as `=A1:A3` now fills cells too; it used to be `#VALUE!`.

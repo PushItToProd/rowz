@@ -7,6 +7,7 @@ import {
   FUNCTION_CATEGORIES,
   functionDocs,
   isButton,
+  isControl,
   parseAddress,
   type CellValue,
   type FunctionCategory,
@@ -41,7 +42,11 @@ function describeResult(rows: CellValue[][]): string {
   const [first = []] = rows;
   const [single = null] = first;
   if (rows.length === 1 && first.length === 1) {
-    return isButton(single) ? `a button labeled “${single.label}”` : formatValue(single);
+    if (isButton(single)) return `a button labeled “${single.label}”`;
+    if (!isControl(single)) return formatValue(single);
+    return single.control === "checkbox"
+      ? `a checkbox labeled “${single.label}”`
+      : `a list offering ${single.options.map(formatValue).join(", ")}`;
   }
   const lines = rows.map((cells) => cells.map(formatValue).join(", "));
   if (rows.length === 1) return `${lines.join("")} across a row`;
@@ -73,6 +78,7 @@ const SECTIONS = [
   ["names", "Names and your own functions"],
   ["arrays", "Formulas that fill several cells"],
   ["actions", "Buttons and actions"],
+  ["controls", "Checkboxes and dropdowns"],
   ["errors", "Errors"],
 ] as const;
 
@@ -426,6 +432,12 @@ const OPERATORS = [
           page, written like any other reference.
         </li>
         <li>
+          <code>APPEND_ROW</code> adds a row below the last one with content, which turns a table
+          into a log. <code>CLEAR</code> empties cells. <code>DO</code> runs several actions from
+          one click, so a button can save a form and then reset it:
+          <code>=BUTTON("Save", DO(APPEND_ROW(Log!A:B, A1, A2), CLEAR(A1:A2)))</code>.
+        </li>
+        <li>
           When an action cannot run, a message says why and nothing is changed. Examples are a
           recipient that is not an email address, and a target cell outside its table.
         </li>
@@ -433,7 +445,9 @@ const OPERATORS = [
           This version records each email in the server's log and does not deliver it. The server
           limits how many emails one person's clicks can send in an hour.
         </li>
-        <li>Someone who can only view a spreadsheet cannot run its buttons.</li>
+        <li>
+          Someone who can only view a spreadsheet cannot run its buttons or change its controls.
+        </li>
         <li>
           An action typed without <code>BUTTON</code> around it shows its name in gray and never
           runs.
@@ -441,6 +455,28 @@ const OPERATORS = [
         <li>
           To change a button's formula, select its cell and press Enter, or use the formula bar.
         </li>
+      </ul>
+    </section>
+
+    <section id="controls">
+      <h2>Checkboxes and dropdowns</h2>
+      <p>
+        A control is a cell that shows an input bound to another cell. It shows that cell's value,
+        and changing the control writes the new value there.
+      </p>
+      <ul>
+        <li>
+          <code>=CHECKBOX(B1, "Paid")</code> is ticked when B1 holds TRUE. Ticking or clearing it
+          writes TRUE or FALSE to B1.
+        </li>
+        <li>
+          <code>=DROPDOWN(D1:D5, B2)</code> offers the values of D1 to D5 and writes the choice to
+          B2. The choices can also be written out: <code>=DROPDOWN("low, medium, high", B2)</code>.
+        </li>
+        <li>
+          Formulas read the bound cell, not the control: <code>=IF(B1, "thanks", "waiting")</code>.
+        </li>
+        <li>A control cannot be bound to its own cell.</li>
       </ul>
     </section>
 

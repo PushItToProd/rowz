@@ -9,6 +9,7 @@ export const FUNCTION_CATEGORIES = [
   "Information",
   "Names",
   "Arrays",
+  "Controls",
   "Actions",
 ] as const;
 export type FunctionCategory = (typeof FUNCTION_CATEGORIES)[number];
@@ -538,6 +539,22 @@ export const functionDocs: readonly FunctionDoc[] = [
     example: "BYCOL(A1:B3, LAMBDA(col, COUNTA(col)))",
   },
   {
+    name: "CHECKBOX",
+    category: "Controls",
+    syntax: "CHECKBOX(cell, [label])",
+    summary:
+      "Shows a checkbox that is ticked when the cell holds TRUE. Ticking or clearing it writes TRUE or FALSE to the cell.",
+    example: 'CHECKBOX(C1, "Done")',
+  },
+  {
+    name: "DROPDOWN",
+    category: "Controls",
+    syntax: "DROPDOWN(choices, cell)",
+    summary:
+      'Shows a list to choose from and writes the choice to the cell. The choices are the values of a range, or text with commas between them such as "low, medium, high".',
+    example: "DROPDOWN(B1:B3, C1)",
+  },
+  {
     name: "BUTTON",
     category: "Actions",
     syntax: "BUTTON(label, action)",
@@ -559,6 +576,29 @@ export const functionDocs: readonly FunctionDoc[] = [
     summary:
       "Sends an email. `to` and `cc` each take one address or several separated by commas or semicolons.",
     example: 'BUTTON("Click me!", SEND_EMAIL("ada@example.com", "Hello", "The total is " & A3))',
+  },
+  {
+    name: "APPEND_ROW",
+    category: "Actions",
+    syntax: "APPEND_ROW(range, value, ...)",
+    summary:
+      "Writes the values into the first row of the range after its last row with content. The table grows when it has no row left.",
+    example: 'BUTTON("Add", APPEND_ROW(A:B, 4, "date"))',
+  },
+  {
+    name: "CLEAR",
+    category: "Actions",
+    syntax: "CLEAR(range)",
+    summary: "Empties the cells of the range.",
+    example: 'BUTTON("Reset", CLEAR(A1:A3))',
+  },
+  {
+    name: "DO",
+    category: "Actions",
+    syntax: "DO(action, ...)",
+    summary:
+      "Runs several actions from one click. Each action reads the cells as they were before the click.",
+    example: 'BUTTON("Move", DO(EXECUTE(A1, C1), CLEAR(A1)))',
   },
 ];
 

@@ -2,7 +2,7 @@ import type { CellId, CellRange } from "../address";
 import type { Node, Reference } from "../ast";
 import type { Effect } from "../effects";
 import type { EvaluationContext } from "../evaluate";
-import type { Evaluated } from "../values";
+import type { ActionValue, Evaluated } from "../values";
 
 /** An argument that is evaluated only when called. `IF` uses this to skip the branch not taken. */
 export type Argument = () => Evaluated;
@@ -27,6 +27,10 @@ export interface PlanContext {
   evaluate(node: Node): Evaluated;
   /** Finds the cells a reference points at, or `undefined` if its table does not exist. */
   resolve(reference: Reference): CellRange | undefined;
+  /** The cells of a range that hold something a user typed. */
+  inputsIn(range: CellRange): CellId[];
+  /** The effects of another action, for an action that combines actions. */
+  plan(action: ActionValue): Effect[];
 }
 
 /**
