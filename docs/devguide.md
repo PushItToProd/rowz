@@ -10,16 +10,16 @@ The engine is pure and has no I/O. An action formula evaluates to a description 
 
 ## Main components
 
-| Area | Start here | Common changes |
-| --- | --- | --- |
-| Formula engine | [`packages/engine/src/workbook.ts`](../packages/engine/src/workbook.ts) | Evaluation, dependency tracking, array spills, typed and formula columns, action planning |
-| Formula language | [`tokenizer.ts`](../packages/engine/src/tokenizer.ts), [`parser.ts`](../packages/engine/src/parser.ts), [`evaluate.ts`](../packages/engine/src/evaluate.ts) | Syntax, references, and evaluation behavior |
-| Functions and help | [`packages/engine/src/functions/index.ts`](../packages/engine/src/functions/index.ts), [`docs.ts`](../packages/engine/src/docs.ts) | Built-in functions and the entries shown on `/help` |
-| Shared contracts | [`packages/shared/src/index.ts`](../packages/shared/src/index.ts) | API request schemas, limits, and spreadsheet import/export format |
-| Web app | [`EditorView.vue`](../apps/web/src/views/EditorView.vue), [`workbook.ts`](../apps/web/src/stores/workbook.ts) | Editor composition, spreadsheet state, local recalculation, saving, selection, undo, and redo |
-| Grid and formula UI | [`apps/web/src/components/`](../apps/web/src/components/) | Table interaction, cell rendering, formula bar and completion, charts, text views, and menus |
-| API and persistence | [`app.ts`](../apps/server/src/app.ts), [`spreadsheets.ts`](../apps/server/src/repo/spreadsheets.ts) | HTTP routes, authorization, database changes, history, and formula rewrites |
-| Actions and effects | [`run.ts`](../apps/server/src/actions/run.ts), [`effects.ts`](../packages/engine/src/effects.ts) | Effects such as cell writes, table growth, and email |
+| Area                | Start here                                                                                                                                                  | Common changes                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Formula engine      | [`packages/engine/src/workbook.ts`](../packages/engine/src/workbook.ts)                                                                                     | Evaluation, dependency tracking, array spills, typed and formula columns, action planning     |
+| Formula language    | [`tokenizer.ts`](../packages/engine/src/tokenizer.ts), [`parser.ts`](../packages/engine/src/parser.ts), [`evaluate.ts`](../packages/engine/src/evaluate.ts) | Syntax, references, and evaluation behavior                                                   |
+| Functions and help  | [`packages/engine/src/functions/index.ts`](../packages/engine/src/functions/index.ts), [`docs.ts`](../packages/engine/src/docs.ts)                          | Built-in functions and the entries shown on `/help`                                           |
+| Shared contracts    | [`packages/shared/src/index.ts`](../packages/shared/src/index.ts)                                                                                           | API request schemas, limits, and spreadsheet import/export format                             |
+| Web app             | [`EditorView.vue`](../apps/web/src/views/EditorView.vue), [`workbook.ts`](../apps/web/src/stores/workbook.ts)                                               | Editor composition, spreadsheet state, local recalculation, saving, selection, undo, and redo |
+| Grid and formula UI | [`apps/web/src/components/`](../apps/web/src/components/)                                                                                                   | Table interaction, cell rendering, formula bar and completion, charts, text views, and menus  |
+| API and persistence | [`app.ts`](../apps/server/src/app.ts), [`spreadsheets.ts`](../apps/server/src/repo/spreadsheets.ts)                                                         | HTTP routes, authorization, database changes, history, and formula rewrites                   |
+| Actions and effects | [`run.ts`](../apps/server/src/actions/run.ts), [`effects.ts`](../packages/engine/src/effects.ts)                                                            | Effects such as cell writes, table growth, and email                                          |
 
 Useful supporting modules include [`graph.ts`](../packages/engine/src/graph.ts) for formula dependencies, [`template.ts`](../packages/engine/src/template.ts) for text-view templates, [`views.ts`](../packages/engine/src/views.ts) and [`columns.ts`](../packages/engine/src/columns.ts) for formula rewrites, and [`api/client.ts`](../apps/web/src/api/client.ts) for typed web-to-server calls.
 
