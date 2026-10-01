@@ -9,7 +9,10 @@ export interface CellId extends CellAddress {
   tableId: string;
 }
 
-/** An inclusive rectangle of cells in a specific table, with start <= end. */
+/**
+ * An inclusive rectangle of cells in a specific table, with start <= end. An
+ * end is `Infinity` for a range with an open side, such as a whole column.
+ */
 export interface CellRange {
   tableId: string;
   startRow: number;

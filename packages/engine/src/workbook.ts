@@ -28,6 +28,12 @@ export interface TableDefinition {
   id: string;
   pageId: string;
   name: string;
+  /**
+   * The table's size. A range with an open side, such as `A:A`, stops here.
+   * Without a size it stops at the last row and column that hold a cell.
+   */
+  rowCount?: number;
+  colCount?: number;
 }
 
 export interface WorkbookStructure {
@@ -63,6 +69,17 @@ function parseContent(input: string): CellContent {
     if (!(cause instanceof FormulaSyntaxError)) throw cause;
     return { type: "invalid", error: error(cause.code, cause.message) };
   }
+}
+
+/**
+ * The first and last index a reference covers along one axis, given what its
+ * two corners say. A corner that leaves the axis out makes that side open:
+ * the start defaults to the first row or column, and the end has no limit.
+ */
+function span(start: number | null, end: number | null): [first: number, last: number] {
+  if (end === null) return [start ?? 0, Infinity];
+  if (start === null) return [0, end];
+  return [Math.min(start, end), Math.max(start, end)];
 }
 
 function sameName(a: string, b: string): boolean {
@@ -184,13 +201,23 @@ export class Workbook {
     const table = this.findTable(reference, originTableId);
     if (!table) return undefined;
     const { start, end = start } = reference;
-    return {
-      tableId: table.id,
-      startRow: Math.min(start.row, end.row),
-      startCol: Math.min(start.col, end.col),
-      endRow: Math.max(start.row, end.row),
-      endCol: Math.max(start.col, end.col),
-    };
+    const [startRow, endRow] = span(start.row, end.row);
+    const [startCol, endCol] = span(start.col, end.col);
+    return { tableId: table.id, startRow, startCol, endRow, endCol };
+  }
+
+  private extent(tableId: string): { rows: number; cols: number } {
+    const table = this.tables.get(tableId);
+    if (table?.rowCount !== undefined && table.colCount !== undefined) {
+      return { rows: table.rowCount, cols: table.colCount };
+    }
+    let rows = 0;
+    let cols = 0;
+    for (const { id } of this.cells.get(tableId)?.values() ?? []) {
+      rows = Math.max(rows, id.row + 1);
+      cols = Math.max(cols, id.col + 1);
+    }
+    return { rows: table?.rowCount ?? rows, cols: table?.colCount ?? cols };
   }
 
   private findTable(reference: Reference, originTableId: string): TableDefinition | undefined {
@@ -214,6 +241,7 @@ export class Workbook {
       functions: this.functions,
       resolve: (reference) => this.resolve(reference, origin.tableId),
       read: (cell) => this.getValue(cell),
+      extent: (tableId) => this.extent(tableId),
     };
   }
 

@@ -76,6 +76,10 @@ const KEYS = [
 const REFERENCES = [
   ["A1", "The cell in column A, row 1 of the formula's own table."],
   ["A1:B3", "A range: every cell from A1 to B3. Functions such as SUM take ranges."],
+  ["A:A", "All of column A. A:C is columns A to C."],
+  ["2:2", "All of row 2. 2:5 is rows 2 to 5."],
+  ["A2:A", "Column A from row 2 to the bottom of the table."],
+  ["A1:4", "Rows 1 to 4, from column A to the last column of the table."],
   ["$A$1", "The same cell as A1. The $ marks are accepted and have no effect yet."],
   ["Sales!A1", "Cell A1 of the table named Sales on the formula's own page."],
   ["'Table 2'!A1:A9", "A table whose name has a space needs single quotes."],

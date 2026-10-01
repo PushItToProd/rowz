@@ -26,18 +26,25 @@ const BINARY_PRECEDENCE: Record<Operator, number> = {
   "^": 5,
 };
 
-const CELL_PATTERN = /^(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*)$/;
+// A column, a row, or both: `A`, `$7`, `$A$7`.
+const CORNER_PATTERN = /^(?:(\$?)([A-Za-z]{1,3}))?(?:(\$?)([1-9][0-9]*))?$/;
 
-function parseReferenceCell(text: string): ReferenceCell | undefined {
-  const match = CELL_PATTERN.exec(text);
-  if (!match) return undefined;
-  const [, colMarker, letters = "", rowMarker, digits = ""] = match;
+/** Reads one corner of a reference. The result may lack a row or a column, never both. */
+function parseCorner(text: string): ReferenceCell | undefined {
+  const match = CORNER_PATTERN.exec(text);
+  if (!match || text === "") return undefined;
+  const [, colMarker, letters, rowMarker, digits] = match;
+  if (letters === undefined && digits === undefined) return undefined;
   return {
-    row: Number(digits) - 1,
-    col: columnIndex(letters),
+    row: digits === undefined ? null : Number(digits) - 1,
+    col: letters === undefined ? null : columnIndex(letters),
     rowAbsolute: rowMarker === "$",
     colAbsolute: colMarker === "$",
   };
+}
+
+function isWholeCell(corner: ReferenceCell): boolean {
+  return corner.row !== null && corner.col !== null;
 }
 
 /** A reference and where it is written in the formula text. */
@@ -56,7 +63,10 @@ class Parser {
   /** Where the most recently consumed token ends. */
   private consumedTo = 0;
 
-  constructor(private readonly tokens: readonly Token[]) {}
+  constructor(
+    private readonly tokens: readonly Token[],
+    private readonly text: string,
+  ) {}
 
   parse(): Node {
     const node = this.expression(0);
@@ -119,8 +129,12 @@ class Parser {
   private primary(): Node {
     const token = this.next();
     switch (token.type) {
-      case "number":
+      case "number": {
+        // A whole number before a colon is a row: `1:4` is rows 1 to 4.
+        const row = this.isPunctuation(":") ? this.cornerOf(token) : undefined;
+        if (row) return this.located(this.rangeFrom(row, token), token.position);
         return { type: "number", value: token.value };
+      }
       case "string":
         return { type: "string", value: token.value };
       case "error":
@@ -131,7 +145,7 @@ class Parser {
         }
         return this.qualifiedReference(token.value, token.position);
       case "identifier":
-        return this.identifier(token.value, token.position);
+        return this.identifier(token);
       case "punctuation":
         if (token.value === "(") {
           const node = this.expression(0);
@@ -145,7 +159,8 @@ class Parser {
     }
   }
 
-  private identifier(name: string, position: number): Node {
+  private identifier(token: Token & { type: "identifier" }): Node {
+    const { value: name, position } = token;
     if (this.isPunctuation("(")) return this.call(name);
     if (this.isPunctuation("!")) return this.qualifiedReference(name, position);
 
@@ -153,9 +168,12 @@ class Parser {
     if (upper === "TRUE") return { type: "boolean", value: true };
     if (upper === "FALSE") return { type: "boolean", value: false };
 
-    const start = parseReferenceCell(name);
-    if (!start) throw new FormulaSyntaxError(`Unknown name ${name}`, position, "#NAME?");
-    return this.located(this.rangeFrom(start), position);
+    // A lone column such as `A` is only a reference as the start of a range.
+    const start = this.cornerOf(token);
+    if (!start || (!isWholeCell(start) && !this.isPunctuation(":"))) {
+      throw new FormulaSyntaxError(`Unknown name ${name}`, position, "#NAME?");
+    }
+    return this.located(this.rangeFrom(start, token), position);
   }
 
   private located(reference: Reference, from: number): Node {
@@ -195,22 +213,32 @@ class Parser {
       this.next();
     }
 
-    const start = this.referenceCell();
+    const token = this.next();
+    const start = this.corner(token);
     const qualifier =
       names.length === 2 ? { page: names[0], table: names[1] } : { table: names[0] };
-    return this.located({ ...qualifier, ...this.rangeFrom(start) }, position);
+    return this.located({ ...qualifier, ...this.rangeFrom(start, token) }, position);
   }
 
-  private referenceCell(): ReferenceCell {
-    const token = this.next();
-    const cell = token.type === "identifier" ? parseReferenceCell(token.value) : undefined;
-    if (!cell) throw new FormulaSyntaxError("Expected a cell address", token.position);
-    return cell;
+  /** Reads a token as a corner: an identifier such as `A1` or `B`, or a whole number as a row. */
+  private cornerOf(token: Token): ReferenceCell | undefined {
+    if (token.type !== "identifier" && token.type !== "number") return undefined;
+    return parseCorner(this.text.slice(token.position, token.end));
   }
 
-  private rangeFrom(start: ReferenceCell): Reference {
-    if (!this.consumePunctuation(":")) return { start };
-    return { start, end: this.referenceCell() };
+  private corner(token: Token): ReferenceCell {
+    const corner = this.cornerOf(token);
+    if (!corner) throw new FormulaSyntaxError("Expected a cell address", token.position);
+    return corner;
+  }
+
+  /** Finishes a reference whose first corner, read from `startToken`, is `start`. */
+  private rangeFrom(start: ReferenceCell, startToken: Token): Reference {
+    if (this.consumePunctuation(":")) return { start, end: this.corner(this.next()) };
+    if (!isWholeCell(start)) {
+      throw new FormulaSyntaxError("Expected a cell address", startToken.position);
+    }
+    return { start };
   }
 }
 
@@ -227,6 +255,6 @@ export function parseFormulaWithReferences(text: string): {
   ast: Node;
   references: LocatedReference[];
 } {
-  const parser = new Parser(tokenize(text));
+  const parser = new Parser(tokenize(text), text);
   return { ast: parser.parse(), references: parser.references };
 }

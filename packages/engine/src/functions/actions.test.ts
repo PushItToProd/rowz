@@ -179,6 +179,7 @@ describe("EXECUTE", () => {
     ["EXECUTE(A1:A2, C1)", "#VALUE!"],
     ['EXECUTE(SEND_EMAIL("a@b.co", "s", "b"), C1)', "#VALUE!"],
     ["EXECUTE(1, C1:C2)", "#VALUE!"],
+    ["EXECUTE(1, C:C)", "#VALUE!"],
     ["EXECUTE(1, 5)", "#VALUE!"],
     ["EXECUTE(1, Missing!A1)", "#REF!"],
     ["EXECUTE(Z99, C1)", "#VALUE!"],

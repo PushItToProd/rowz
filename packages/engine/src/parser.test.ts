@@ -104,6 +104,42 @@ describe("references", () => {
     });
   });
 
+  it.each<[string, Partial<ReferenceCell>, Partial<ReferenceCell>]>([
+    ["A:C", { row: null, col: 0 }, { row: null, col: 2 }],
+    ["2:5", { row: 1, col: null }, { row: 4, col: null }],
+    ["A2:A", { row: 1, col: 0 }, { row: null, col: 0 }],
+    ["A1:4", { row: 0, col: 0 }, { row: 3, col: null }],
+    ["B:C9", { row: null, col: 1 }, { row: 8, col: 2 }],
+    ["3:D8", { row: 2, col: null }, { row: 7, col: 3 }],
+    ["$A:$C", { row: null, col: 0, colAbsolute: true }, { row: null, col: 2, colAbsolute: true }],
+    ["$2:$5", { row: 1, col: null, rowAbsolute: true }, { row: 4, col: null, rowAbsolute: true }],
+  ])("parses the open-sided range %s", (text, start, end) => {
+    expect(parseFormula(text)).toMatchObject({ type: "reference", reference: { start, end } });
+  });
+
+  it("parses an open-sided range after a qualifier and inside a call", () => {
+    expect(parseFormula("SUM(Sales!B:B, 'Page 2'!Sales!1:1)")).toMatchObject({
+      args: [
+        { reference: { table: "Sales", start: { row: null, col: 1 }, end: { row: null, col: 1 } } },
+        { reference: { page: "Page 2", table: "Sales", start: { row: 0, col: null } } },
+      ],
+    });
+  });
+
+  it("reads a number as a number unless a colon follows it", () => {
+    expect(parseFormula("1+4")).toEqual(binary("+", number(1), number(4)));
+    expect(parseFormula("SUM(1, 4)")).toMatchObject({ args: [number(1), number(4)] });
+  });
+
+  it.each(["A", "AB", "abc"])("reports the lone column %s as an unknown name", (text) => {
+    try {
+      parseFormula(text);
+      expect.unreachable();
+    } catch (cause) {
+      expect((cause as FormulaSyntaxError).code).toBe("#NAME?");
+    }
+  });
+
   it("parses a table qualifier, quoted or not", () => {
     const expected = { type: "reference", reference: { table: "Table2", start: cell(0, 0) } };
     expect(parseFormula("Table2!A1")).toEqual(expected);
@@ -183,7 +219,11 @@ describe("syntax errors", () => {
     ["Table1!5", "Expected a cell address"],
     ["A!B!C!D1", "Expected a cell address"],
     ["A1:", "Expected a cell address"],
-    ["A1:foo", "Expected a cell address"],
+    ["A1:total", "Expected a cell address"],
+    ["A1:1.5", "Expected a cell address"],
+    ["Sales!B", "Expected a cell address"],
+    ["Sales!7", "Expected a cell address"],
+    ["1.5:2", "Unexpected :"],
   ])("rejects %j with %j", (text, message) => {
     expect(() => parseFormula(text)).toThrow(FormulaSyntaxError);
     expect(() => parseFormula(text)).toThrow(message);
@@ -208,9 +248,16 @@ describe("printNode", () => {
     rowAbsolute: fc.boolean(),
     colAbsolute: fc.boolean(),
   });
-  const cells = fc.record(
-    { start: referenceCell, end: referenceCell },
-    { requiredKeys: ["start"] },
+  // A corner of a range may name only a column or only a row. The `$` marker
+  // of the side left out cannot be written, so it is always false.
+  const corner = fc.oneof(
+    referenceCell,
+    referenceCell.map((cell) => ({ ...cell, row: null, rowAbsolute: false })),
+    referenceCell.map((cell) => ({ ...cell, col: null, colAbsolute: false })),
+  );
+  const cells = fc.oneof(
+    fc.record({ start: referenceCell }),
+    fc.record({ start: corner, end: corner }),
   );
   const reference = fc.oneof(
     cells,

@@ -5,10 +5,17 @@ export type BinaryOperator =
   "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | ">" | "<=" | ">=";
 export type UnaryOperator = "+" | "-";
 
-/** One corner of a reference. `$` markers are kept so a formula prints back as written. */
+/**
+ * One corner of a reference. `$` markers are kept so a formula prints back as
+ * written. A corner of a range may leave out its row or its column, which
+ * leaves that side of the range open: `A:A` is all of column A, `2:3` is all
+ * of rows 2 and 3, and `A2:A` runs from A2 to the bottom of the table.
+ */
 export interface ReferenceCell {
-  row: number;
-  col: number;
+  /** `null` when the corner names only a column. */
+  row: number | null;
+  /** `null` when the corner names only a row. */
+  col: number | null;
   rowAbsolute: boolean;
   colAbsolute: boolean;
 }
@@ -37,8 +44,8 @@ export type Node =
   | { type: "call"; name: string; args: Node[] };
 
 function printReferenceCell(cell: ReferenceCell): string {
-  const col = `${cell.colAbsolute ? "$" : ""}${columnLabel(cell.col)}`;
-  const row = `${cell.rowAbsolute ? "$" : ""}${String(cell.row + 1)}`;
+  const col = cell.col === null ? "" : `${cell.colAbsolute ? "$" : ""}${columnLabel(cell.col)}`;
+  const row = cell.row === null ? "" : `${cell.rowAbsolute ? "$" : ""}${String(cell.row + 1)}`;
   return col + row;
 }
 

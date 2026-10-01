@@ -33,6 +33,12 @@ describe("rewriteReferences", () => {
     expect(rewriteReferences("=T!$A1:B$2", renameTables)).toBe("=Renamed!$A1:B$2");
   });
 
+  it("keeps the open sides of a rewritten range", () => {
+    expect(rewriteReferences("=SUM(T!a:a, T!2:$5, T!B2:B, 1:1)", renameTables)).toBe(
+      "=SUM(Renamed!A:A, Renamed!2:$5, Renamed!B2:B, 1:1)",
+    );
+  });
+
   it("writes #REF! where a reference's target is gone, and the result still parses", () => {
     const rewritten = rewriteReferences("=SUM(A1, Gone!B2) + 1", (reference) =>
       reference.table === "Gone" ? "#REF!" : undefined,

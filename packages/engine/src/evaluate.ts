@@ -20,6 +20,8 @@ export interface EvaluationContext {
   /** Finds the cells a reference points at, or `undefined` if its table does not exist. */
   resolve(reference: Reference): CellRange | undefined;
   read(cell: CellId): CellValue;
+  /** The size of a table, which is where a range with an open side stops. */
+  extent(tableId: string): { rows: number; cols: number };
 }
 
 function arity(name: string, min: number, max: number): string {
@@ -100,9 +102,12 @@ function binary(operator: BinaryOperator, left: Scalar, right: Scalar): Scalar |
 function readReference(reference: Reference, context: EvaluationContext): Evaluated {
   const range = context.resolve(reference);
   if (!range) return error("#REF!", "The referenced table does not exist");
-  const { tableId, startRow, startCol, endRow, endCol } = range;
+  const { tableId, startRow, startCol } = range;
   if (!reference.end) return context.read({ tableId, row: startRow, col: startCol });
 
+  const extent = context.extent(tableId);
+  const endRow = Math.min(range.endRow, extent.rows - 1);
+  const endCol = Math.min(range.endCol, extent.cols - 1);
   const rows: CellValue[][] = [];
   for (let row = startRow; row <= endRow; row += 1) {
     const cells: CellValue[] = [];

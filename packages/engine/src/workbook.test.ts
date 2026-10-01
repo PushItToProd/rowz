@@ -166,6 +166,70 @@ describe("references", () => {
   });
 });
 
+describe("ranges with an open side", () => {
+  const cells = { A1: "1", A2: "2", A3: "3", B1: "10", B2: "20", C2: "200" };
+
+  it.each<[string, CellValue]>([
+    ["=SUM(A:A)", 6],
+    ["=SUM(A:B)", 36],
+    ["=SUM(2:2)", 222],
+    ["=SUM(1:2)", 233],
+    ["=SUM(A2:A)", 5],
+    ["=SUM(B2:C)", 220],
+    ["=SUM(A1:2)", 233],
+    ["=SUM(B:B2)", 30],
+    ["=SUM(2:B3)", 25],
+    ["=SUM($A:$A)", 6],
+    ["=COUNTA(A:C)", 6],
+    ["=COUNTA(D:D)", 0],
+    ["=SUM(A9:A)", 0],
+  ])("%s is %j", (formula, expected) => {
+    // The formula sits outside every range it reads.
+    const workbook = workbookWith({
+      t1: cells,
+      t2: { A1: formula.replaceAll(/([(,])/g, "$1Table1!") },
+    });
+    expect(workbook.getValue(at("A1", "t2"))).toBe(expected);
+  });
+
+  it("reads to the last row and column that hold a cell when the table has no declared size", () => {
+    const workbook = workbookWith({ t1: { A1: "1", C5: "5" }, t2: { A1: "=COUNTA(Table1!A:C)" } });
+    expect(workbook.getValue(at("A1", "t2"))).toBe(2);
+  });
+
+  it("stops at the table's declared size", () => {
+    const workbook = workbookWith({});
+    workbook.setStructure({
+      ...STRUCTURE,
+      tables: STRUCTURE.tables.map((table) => ({ ...table, rowCount: 3, colCount: 2 })),
+    });
+    for (const [address, input] of Object.entries({ A1: "1", A3: "3", B2: "20" })) {
+      workbook.setCell(at(address), input);
+    }
+    workbook.setCell(at("A1", "t2"), '=SUM(Table1!A:B) & "/" & SUM(Table1!1:3)');
+    expect(workbook.getValue(at("A1", "t2"))).toBe("24/24");
+  });
+
+  it("recalculates when a cell far down an open column gets a value", () => {
+    const workbook = workbookWith({ t1: { A1: "1", B1: "=SUM(A:A)", C1: "=SUM(A2:A)" } });
+    expect(workbook.getValue(at("B1"))).toBe(1);
+    expect(workbook.getValue(at("C1"))).toBe(0);
+    workbook.setCell(at("A500"), "5");
+    expect(workbook.getValue(at("B1"))).toBe(6);
+    expect(workbook.getValue(at("C1"))).toBe(5);
+  });
+
+  it("reports a cycle for a formula inside the column or row it reads", () => {
+    expectError(workbookWith({ t1: { A5: "=SUM(A:A)" } }).getValue(at("A5")), "#CYCLE!");
+    expectError(workbookWith({ t1: { C2: "=SUM(2:2)" } }).getValue(at("C2")), "#CYCLE!");
+    expect(workbookWith({ t1: { A1: "4", B1: "=SUM(A:A)" } }).getValue(at("B1"))).toBe(4);
+  });
+
+  it("cannot be held by a cell, like any range", () => {
+    expectError(evaluateFormula("=A:A"), "#VALUE!");
+  });
+});
+
 describe("recalculation", () => {
   it("updates dependents when a cell changes", () => {
     const workbook = workbookWith({ t1: { A1: "1", B1: "=A1*2", C1: "=B1+1", D1: "=SUM(A1:C1)" } });
