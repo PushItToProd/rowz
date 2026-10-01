@@ -1,10 +1,14 @@
 import { parseDate } from "../dates";
+import { fail } from "../errors";
 import { compare, isScalar, kindOf, parseNumber, type CellValue, type Scalar } from "../values";
 
 type Comparison = "=" | "<>" | "<" | ">" | "<=" | ">=";
 
 const OPERATOR = /^(<=|>=|<>|<|>|=)?(.*)$/s;
-const REGEX_SPECIAL = /[.+^${}()|[\]\\]/g;
+
+// Matching costs at most the pattern's length times the text's, so a limit on
+// the pattern keeps the cost in proportion to the text. 255 is Excel's limit.
+const MAX_WILDCARD_PATTERN = 255;
 
 const HOLDS: Record<Comparison, (order: number) => boolean> = {
   "=": (order) => order === 0,
@@ -25,10 +29,53 @@ function operand(text: string): Scalar {
   return parseDate(text) ?? text;
 }
 
-/** Turns text with `*` (any run of characters) and `?` (any one character) into a whole-text matcher. */
-function wildcard(pattern: string): RegExp {
-  const source = pattern.replace(REGEX_SPECIAL, "\\$&").replaceAll("*", ".*").replaceAll("?", ".");
-  return new RegExp(`^${source}$`, "is");
+/** The characters of text without their letter case, so that `?` stands for one whole character. */
+function folded(text: string): string[] {
+  return Array.from(text, (character) => character.toLowerCase());
+}
+
+/**
+ * Turns text with `*` (any run of characters) and `?` (any one character)
+ * into a whole-text matcher that ignores letter case.
+ *
+ * The matcher is not a regular expression, which can take time exponential in
+ * the number of `*`s on text that nearly matches. On a mismatch this goes
+ * back only to the last `*` and has it take one more character. An earlier
+ * `*` never has to change: it took the fewest characters that let the pattern
+ * after it fit, which leaves the most text for the rest. So the work is at
+ * most the pattern's length times the text's.
+ */
+function wildcard(pattern: string): (text: string) => boolean {
+  const wanted = folded(pattern);
+  if (wanted.length > MAX_WILDCARD_PATTERN && wanted.includes("*")) {
+    fail("#VALUE!", `A criterion with * can be at most ${String(MAX_WILDCARD_PATTERN)} characters`);
+  }
+  return (text) => {
+    const given = folded(text);
+    let at = 0;
+    let next = 0;
+    // Where the pattern continues after the last `*` passed, and the text that `*` has not taken.
+    let afterStar = -1;
+    let untaken = 0;
+    while (at < given.length) {
+      if (wanted[next] === "*") {
+        next += 1;
+        afterStar = next;
+        untaken = at;
+      } else if (wanted[next] === "?" || wanted[next] === given[at]) {
+        next += 1;
+        at += 1;
+      } else if (afterStar !== -1) {
+        untaken += 1;
+        at = untaken;
+        next = afterStar;
+      } else {
+        return false;
+      }
+    }
+    while (wanted[next] === "*") next += 1;
+    return next === wanted.length;
+  };
 }
 
 /**
@@ -54,9 +101,9 @@ export function criterion(given: Scalar): (cell: CellValue) => boolean {
   }
 
   if (typeof target === "string" && equality) {
-    const matcher = wildcard(target);
+    const matches = wildcard(target);
     const wantsMatch = comparison === "=";
-    return (cell) => (typeof cell === "string" && matcher.test(cell)) === wantsMatch;
+    return (cell) => (typeof cell === "string" && matches(cell)) === wantsMatch;
   }
 
   return (cell) => {

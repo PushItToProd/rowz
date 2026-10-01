@@ -61,6 +61,22 @@ export function grid(value: Evaluated): CellValue[][] {
   return isRange(given) ? given.rows : [[given]];
 }
 
+// The cells of the largest table, so a larger array would have nowhere to
+// spill. Every array a formula makes stays within it, which bounds the memory
+// a formula can ask for.
+export const MAX_ARRAY_CELLS = 100_000;
+
+/**
+ * Fails when an array of this many cells is more than a formula may make. A
+ * function whose result can be larger than each of its arguments calls this
+ * with the size of the result before it allocates any of it.
+ */
+export function limitCells(count: number): void {
+  if (count > MAX_ARRAY_CELLS) {
+    fail("#VALUE!", `An array can hold at most ${MAX_ARRAY_CELLS.toLocaleString("en-US")} cells`);
+  }
+}
+
 /** Makes an array result from rows of cells. */
 export function array(rows: CellValue[][]): RangeValue {
   return { kind: "range", rows };

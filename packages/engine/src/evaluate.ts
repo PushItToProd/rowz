@@ -9,7 +9,7 @@ import {
 } from "./ast";
 import { DAY_MS, dateFromMs, isDate } from "./dates";
 import { error, fail, Failure, finite } from "./errors";
-import { array, element, number, scalar } from "./functions/arguments";
+import { array, element, limitCells, number, scalar } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
 import {
   compare,
@@ -195,6 +195,8 @@ function elementwise(
     const cell = cells?.length === 1 ? cells[0] : cells?.[col];
     return cell === undefined ? error("#N/A", "The arrays are not the same size") : cell;
   };
+  // A column paired with a row gives a cell for every pair.
+  limitCells(height * width);
   return array(
     Array.from({ length: height }, (_, row) =>
       Array.from({ length: width }, (_, col) =>

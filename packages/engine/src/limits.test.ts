@@ -51,6 +51,43 @@ describe("results that a cell cannot hold", () => {
   });
 });
 
+describe("arrays larger than the largest table", () => {
+  const TOO_LARGE = "An array can hold at most 100,000 cells";
+
+  it.each([
+    "=SEQUENCE(100001)",
+    "=SEQUENCE(1e200, 1e200)",
+    "=ROWS(VSTACK(SEQUENCE(60000), SEQUENCE(60000)))",
+    "=COLUMNS(HSTACK(SEQUENCE(1, 60000), SEQUENCE(1, 60000)))",
+    // The shorter one is padded to the height of the taller.
+    "=ROWS(HSTACK(SEQUENCE(60000), 1))",
+    "=COLUMNS(VSTACK(SEQUENCE(1, 60000), 1))",
+    "=ROWS(FLATTEN(SEQUENCE(60000), SEQUENCE(60000)))",
+    "=ROWS(LET(a, SEQUENCE(100000), VSTACK(a, a, a, a, a, a, a, a, a, a)))",
+    // A column and a row pair into a cell for each combination.
+    "=ROWS(SEQUENCE(1000) + SEQUENCE(1, 1000))",
+    "=ROWS(-SEQUENCE(1000) = SEQUENCE(1, 101))",
+    '=COLUMNS(SPLIT(REPT("a,", 100000), ","))',
+    '=ROWS(QUERY(SEQUENCE(50000), "select A, A, A"))',
+    '=ROWS(QUERY(SEQUENCE(50000), "select A, sum(A), count(A), max(A) group by A"))',
+    '=ROWS(QUERY(HSTACK(SEQUENCE(400), SEQUENCE(400)), "select A, sum(B) group by A pivot B"))',
+  ])("%s is an error", (formula) => {
+    expect(message(evaluateFormula(formula))).toBe(TOO_LARGE);
+  });
+
+  it.each([
+    ["=ROWS(SEQUENCE(100000))", 100000],
+    ["=ROWS(VSTACK(SEQUENCE(50000), SEQUENCE(50000)))", 100000],
+    ["=COLUMNS(HSTACK(SEQUENCE(1, 50000), SEQUENCE(1, 50000)))", 100000],
+    ["=ROWS(FLATTEN(SEQUENCE(250, 200), SEQUENCE(250, 200)))", 100000],
+    ["=SUM(SEQUENCE(1000) * SEQUENCE(1, 100))", 2527525000],
+    ['=COLUMNS(SPLIT(REPT("a,", 99999), ","))', 100000],
+    ['=ROWS(QUERY(SEQUENCE(50000), "select A, A, A limit 10"))', 10],
+  ])("%s is %d", (formula, value) => {
+    expect(evaluateFormula(formula)).toBe(value);
+  });
+});
+
 describe("dates outside the calendar", () => {
   it.each([
     "=DATE(10000, 1, 1)",

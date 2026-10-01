@@ -22,7 +22,7 @@ import {
   type CellValue,
   type Evaluated,
 } from "../values";
-import { array, fail, Failure, grid, integer, lazy, text } from "./arguments";
+import { array, fail, Failure, grid, integer, lazy, limitCells, text } from "./arguments";
 import type { FunctionDefinition } from "./registry";
 
 type Names = Map<string, Evaluated>;
@@ -113,9 +113,10 @@ class Runner {
 
     if (!grouped) {
       const sorted = this.sorted(kept, (row, expression) => this.cell(expression, row.names));
-      const body = this.page(sorted).map((row) =>
-        select.map((item) => this.cell(item.expression, row.names)),
-      );
+      const shown = this.page(sorted);
+      // A SELECT may name a column any number of times, so the result can be wider than the data.
+      limitCells((shown.length + 1) * select.length);
+      const body = shown.map((row) => select.map((item) => this.cell(item.expression, row.names)));
       return titled ? [select.map((item) => this.title(item)), ...body] : body;
     }
 
@@ -127,6 +128,7 @@ class Runner {
       this.sorted(groups, (group, expression) => this.cell(expression, undefined, group)),
     );
     if (query.pivot.length > 0) return this.pivoted(select, sorted, kept);
+    limitCells((sorted.length + 1) * select.length);
     const body = sorted.map((group) =>
       select.map((item) => this.cell(item.expression, undefined, group)),
     );
@@ -153,6 +155,7 @@ class Runner {
     const spread = select.filter((item) => hasAggregate(item.expression));
     if (spread.length === 0) fail("#VALUE!", "PIVOT needs a function such as SUM in the SELECT");
 
+    limitCells((groups.length + 1) * (fixed.length + columns.length * spread.length));
     const header = [
       ...fixed.map((item) => this.title(item)),
       ...columns.flatMap(([, cells]) => {

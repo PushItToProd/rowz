@@ -1,7 +1,19 @@
 import { isDate } from "../dates";
 import { formatDateAs, FormatError, formatNumber } from "../format";
 import { parseNumber, toText, type Scalar } from "../values";
-import { array, boolean, eager, fail, integer, items, number, scalar, text } from "./arguments";
+import {
+  array,
+  boolean,
+  eager,
+  fail,
+  integer,
+  items,
+  limitCells,
+  MAX_ARRAY_CELLS,
+  number,
+  scalar,
+  text,
+} from "./arguments";
 import type { FunctionDefinition } from "./registry";
 
 function textFunction(compute: (value: string) => Scalar): FunctionDefinition {
@@ -43,11 +55,10 @@ export const textFunctions: Record<string, FunctionDefinition> = {
   SPLIT: eager(2, 2, (value, delimiter) => {
     const at = text(delimiter);
     if (at === "") fail("#VALUE!", "The delimiter cannot be empty");
-    return array([
-      text(value)
-        .split(at)
-        .map((piece) => parseNumber(piece) ?? piece),
-    ]);
+    // One piece past the limit is enough to tell that there are too many.
+    const pieces = text(value).split(at, MAX_ARRAY_CELLS + 1);
+    limitCells(pieces.length);
+    return array([pieces.map((piece) => parseNumber(piece) ?? piece)]);
   }),
   /** Capitalizes the first letter of each word and puts the rest in lower case. */
   PROPER: textFunction((value) =>

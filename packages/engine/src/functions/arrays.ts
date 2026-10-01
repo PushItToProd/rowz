@@ -10,12 +10,10 @@ import {
   integer,
   lambda,
   lazy,
+  limitCells,
   number,
 } from "./arguments";
 import type { FunctionDefinition } from "./registry";
-
-// Large enough for real use, and small enough that a typo cannot freeze the page.
-const MAX_GENERATED_CELLS = 100_000;
 
 function width(rows: readonly CellValue[][]): number {
   return rows[0]?.length ?? 0;
@@ -130,8 +128,7 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
   SEQUENCE: eager(1, 4, (rowCount, colCount = 1, start = 1, step = 1) => {
     const [height, wide] = [integer(rowCount), integer(colCount)];
     if (height < 1 || wide < 1) fail("#VALUE!", "SEQUENCE needs at least one row and one column");
-    if (height * wide > MAX_GENERATED_CELLS)
-      fail("#VALUE!", "SEQUENCE cannot make that many cells");
+    limitCells(height * wide);
     const [first, increment] = [number(start), number(step)];
     return array(
       Array.from({ length: height }, (_, row) =>
@@ -156,6 +153,7 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
   HSTACK: eager(1, Infinity, (...sources) => {
     const grids = sources.map(grid);
     const height = Math.max(...grids.map((rows) => rows.length));
+    limitCells(height * grids.reduce((total, rows) => total + width(rows), 0));
     return array(
       Array.from({ length: height }, (_, row) =>
         grids.flatMap((rows) =>
@@ -168,6 +166,7 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
   VSTACK: eager(1, Infinity, (...sources) => {
     const grids = sources.map(grid);
     const widest = Math.max(...grids.map(width));
+    limitCells(widest * grids.reduce((total, rows) => total + rows.length, 0));
     return array(
       grids.flatMap((rows) =>
         rows.map((cells) => Array.from({ length: widest }, (_, col) => cells[col] ?? null)),
@@ -176,12 +175,14 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
   }),
 
   /** Every cell of the ranges in one column, reading each range row by row. */
-  FLATTEN: eager(1, Infinity, (...sources) =>
-    result(
-      sources.flatMap((source) => grid(source).flat()).map((cell) => [cell]),
+  FLATTEN: eager(1, Infinity, (...sources) => {
+    const grids = sources.map(grid);
+    limitCells(grids.flat().reduce((total, cells) => total + cells.length, 0));
+    return result(
+      grids.flatMap((rows) => rows.flat()).map((cell) => [cell]),
       "There are no cells to list",
-    ),
-  ),
+    );
+  }),
 
   ROWS: eager(1, 1, (source) => grid(source).length),
   COLUMNS: eager(1, 1, (source) => width(grid(source))),
