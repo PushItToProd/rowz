@@ -2,7 +2,7 @@ These items are not necessarily in priority order. Triage and prioritize smaller
 
 Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author will remove the prefix if they fully endorse the idea, though agents asked to act autonomously should not consider these markers as prohibitions on implementation.
 
-Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions. When instructed to work autonomously, execute these items first in ascending order (do all P0s first, then P1s, etc.). Items with the same priority are co-equal unless you're instructed otherwise. Items with priority "P10" and above are backlogged and generally shouldn't be picked up unless the author says so explicitly (this is primarily about allocation of work and the author's perceived necessity of the feature). Remove these priority prefixes when checking items off. Check these items off when making commits.
+Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions. When instructed to work autonomously, execute these items first in ascending order (do all P0s first, then P1s, etc.). Items with the same priority are co-equal unless you're instructed otherwise. Items with priority "P10" and above are backlogged and generally shouldn't be picked up unless the author says so explicitly (this is primarily about allocation of work and the author's perceived necessity of the feature). Remove these priority prefixes when checking items off. Check these items off before making commits.
 
 ## Formula language and functions
 
@@ -56,6 +56,9 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] add context menus for actions like inserting/deleting rows/columns
 - [x] (Claude) filling a number or date series: `1, 2` filled down should continue `3, 4`
 - [x] (Claude) select whole rows and columns by clicking their headers, and Ctrl+A
+
+- [ ] **P1** bug: the formula bar doesn't save changes when it loses focus
+- [ ] **P1** hitting enter with the formula bar focused should return focus to the cell -- you can type input and try to hit enter and it'll just stay focused instead of acting like you hit enter in the cell input (I suspect possibly b/c of a conflict with the suggestion behavior)
 
 - [ ] **P3** implement the handy tab+enter workflow from Excel and Sheets -- if you select a certain cell with the mouse or arrow keys, use tab to traverse multiple cells (optionally entering values into any or none of them), then input a value into a cell and submit that value by hitting enter, it'll drop to the next row in the column where you started
   - example: in a table, select C3. hit tab 3 times (optionally entering values in any cells in C3:E3 along the way) - now you're in F3. hit enter to focus the cell input (or just start typing), type anything (or nothing), and hit enter to submit. the selection should move to C4.
@@ -169,7 +172,8 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 
 ## Undo and collaboration
 
-- [ ] **P0** undo that survives structural changes (insert or delete a row, rename), and undo of formatting
+- [ ] **P0** undo that survives structural changes (insert or delete a row, rename), and undo of formatting (I'm inclined to tie this into verison history -author)
+- [ ] **P8** named versions
 - [x] (Claude) undo and redo (persistent version history): the server keeps versions, and History restores one or opens a copy
 - [x] (Claude) Ctrl+Z and Ctrl+Y for single edits within a session
 - [ ] (Claude) store versions compressed or as differences if large spreadsheets make them costly
@@ -199,9 +203,8 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 
 ## To organize
 
-- [ ] **P2** the formula bar doesn't save changes when it loses focus, but it should
-- [ ] **P2** the formula bar doesn't save changes on submit
-- [ ] **P1** come up with a good name to refer to all "page components" - tables, charts, text templates, etc. -- I guess "page components" could work but feels kinda generic.
+- [ ] **P1** come up with a good name to refer to all "page components" - tables, charts, text templates, etc. -- I guess "page components" could work but feels kinda generic. `Card` is used in the component names. "card types"?
+- [ ] **P1** exclude todo.md and everything under my `_scratch/` dir from Prettier
 
 ## Ambitious ideas - don't implement until further consideration
 
