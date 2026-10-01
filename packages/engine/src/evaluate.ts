@@ -1,17 +1,16 @@
 import type { CellId, CellRange } from "./address";
 import type { BinaryOperator, Node, Reference } from "./ast";
-import { Failure } from "./functions/arguments";
+import { fail, Failure, number, scalar } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
 import {
   compare,
   error,
   isError,
-  isScalar,
-  toNumber,
+  isLambda,
   toText,
   type CellValue,
-  type ErrorValue,
   type Evaluated,
+  type LambdaValue,
   type Scalar,
 } from "./values";
 
@@ -24,7 +23,14 @@ export interface EvaluationContext {
   read(cell: CellId): CellValue;
   /** The size of a table, which is where a range with an open side stops. */
   extent(tableId: string): { rows: number; cols: number };
+  /** Values bound by `LET` and `LAMBDA`, keyed by name in lower case. */
+  names?: ReadonlyMap<string, Evaluated>;
+  /** How many function calls deep the evaluation is. */
+  depth?: number;
 }
+
+// Deep enough for real formulas, and far short of overflowing the call stack.
+const MAX_CALL_DEPTH = 200;
 
 function arity(name: string, min: number, max: number): string {
   const count = (n: number): string => `${String(n)} argument${n === 1 ? "" : "s"}`;
@@ -33,27 +39,15 @@ function arity(name: string, min: number, max: number): string {
   return `${name} takes ${String(min)} to ${count(max)}`;
 }
 
-function arithmetic(
-  operator: "+" | "-" | "*" | "/" | "^",
-  left: Scalar,
-  right: Scalar,
-): Scalar | ErrorValue {
-  const a = toNumber(left);
-  if (isError(a)) return a;
-  const b = toNumber(right);
-  if (isError(b)) return b;
-  if (operator === "/" && b === 0) return error("#DIV/0!", "Division by zero");
-  const result = {
-    "+": a + b,
-    "-": a - b,
-    "*": a * b,
-    "/": a / b,
-    "^": a ** b,
-  }[operator];
-  return Number.isFinite(result) ? result : error("#VALUE!", "The result is not a number");
+function arithmetic(operator: "+" | "-" | "*" | "/" | "^", left: Scalar, right: Scalar): number {
+  const a = number(left);
+  const b = number(right);
+  if (operator === "/" && b === 0) fail("#DIV/0!", "Division by zero");
+  const result = { "+": a + b, "-": a - b, "*": a * b, "/": a / b, "^": a ** b }[operator];
+  return Number.isFinite(result) ? result : fail("#VALUE!", "The result is not a number");
 }
 
-function binary(operator: BinaryOperator, left: Scalar, right: Scalar): Scalar | ErrorValue {
+function binary(operator: BinaryOperator, left: Scalar, right: Scalar): Scalar {
   switch (operator) {
     case "&":
       return toText(left) + toText(right);
@@ -76,7 +70,7 @@ function binary(operator: BinaryOperator, left: Scalar, right: Scalar): Scalar |
 
 function readReference(reference: Reference, context: EvaluationContext): Evaluated {
   const range = context.resolve(reference);
-  if (!range) return error("#REF!", "The referenced table does not exist");
+  if (!range) fail("#REF!", "The referenced table does not exist");
   const { tableId, startRow, startCol } = range;
   if (!reference.end) return context.read({ tableId, row: startRow, col: startCol });
 
@@ -86,37 +80,71 @@ function readReference(reference: Reference, context: EvaluationContext): Evalua
   const rows: CellValue[][] = [];
   for (let row = startRow; row <= endRow; row += 1) {
     const cells: CellValue[] = [];
-    for (let col = startCol; col <= endCol; col += 1)
+    for (let col = startCol; col <= endCol; col += 1) {
       cells.push(context.read({ tableId, row, col }));
+    }
     rows.push(cells);
   }
   return { kind: "range", rows };
 }
 
-function call(name: string, args: Node[], context: EvaluationContext): Evaluated {
+/**
+ * Calls a function made by `LAMBDA` with values for its parameters. The body
+ * runs in the context the function was made in, with the parameters bound.
+ */
+export function callLambda(
+  lambda: LambdaValue,
+  values: readonly Evaluated[],
+  caller: EvaluationContext,
+): Evaluated {
+  if (values.length !== lambda.params.length) {
+    fail("#ERROR!", arity("The function", lambda.params.length, lambda.params.length));
+  }
+  const depth = (caller.depth ?? 0) + 1;
+  if (depth > MAX_CALL_DEPTH) fail("#ERROR!", "Function calls are nested too deeply");
+
+  const names = new Map(lambda.context.names);
+  lambda.params.forEach((param, index) => names.set(param.toLowerCase(), values[index] ?? null));
+  return compute(lambda.body, { ...lambda.context, names, depth });
+}
+
+/** Calls whatever a value is, which must be a function made by `LAMBDA`. */
+function applyValue(
+  target: Evaluated,
+  args: readonly Node[],
+  context: EvaluationContext,
+): Evaluated {
+  if (isError(target)) throw new Failure(target);
+  if (!isLambda(target)) fail("#VALUE!", "Only a function made with LAMBDA can be called");
+  return callLambda(
+    target,
+    args.map((arg) => evaluate(arg, context)),
+    context,
+  );
+}
+
+function call(name: string, args: readonly Node[], context: EvaluationContext): Evaluated {
+  // A name bound by LET or LAMBDA comes before a built-in function of the same name.
+  const bound = context.names?.get(name.toLowerCase());
+  if (bound !== undefined) return applyValue(bound, args, context);
+
   const definition = context.functions.get(name);
-  if (!definition) return error("#NAME?", `Unknown function ${name}`);
+  if (!definition) fail("#NAME?", `Unknown function ${name}`);
   if (args.length < definition.minArgs || args.length > definition.maxArgs) {
-    return error("#ERROR!", arity(name, definition.minArgs, definition.maxArgs));
+    fail("#ERROR!", arity(name, definition.minArgs, definition.maxArgs));
   }
-  if (definition.kind === "action") return { kind: "action", name, args, origin: context.origin };
-  try {
-    return definition.call(args.map((arg) => () => evaluate(arg, context)));
-  } catch (cause) {
-    // A function reports a bad argument by throwing. Anything else is a bug and keeps propagating.
-    if (cause instanceof Failure) return cause.error;
-    throw cause;
+  switch (definition.kind) {
+    case "action":
+      return { kind: "action", name, args: [...args], origin: context.origin };
+    case "special":
+      return definition.evaluate(args, context);
+    case "pure":
+      return definition.call(args.map((arg) => () => evaluate(arg, context)));
   }
 }
 
-/** Narrows an operand to a single value. Ranges, actions, and buttons are `#VALUE!`. */
-function asScalar(value: Evaluated): Scalar | ErrorValue {
-  if (isScalar(value) || isError(value)) return value;
-  return error("#VALUE!", "Expected a single value");
-}
-
-/** Evaluates an AST. Reads cell values through `context` and has no side effects. */
-export function evaluate(node: Node, context: EvaluationContext): Evaluated {
+/** Evaluates a node. Throws `Failure` where `evaluate` would return an error. */
+function compute(node: Node, context: EvaluationContext): Evaluated {
   switch (node.type) {
     case "number":
     case "string":
@@ -126,22 +154,38 @@ export function evaluate(node: Node, context: EvaluationContext): Evaluated {
       return error(node.code);
     case "reference":
       return readReference(node.reference, context);
+    case "name": {
+      const bound = context.names?.get(node.name.toLowerCase());
+      return bound ?? fail("#NAME?", `Unknown name ${node.name}`);
+    }
     case "call":
       return call(node.name, node.args, context);
+    case "apply":
+      return applyValue(compute(node.target, context), node.args, context);
     case "unary": {
-      const operand = asScalar(evaluate(node.operand, context));
-      if (isError(operand)) return operand;
-      const number = toNumber(operand);
-      if (isError(number)) return number;
-      return node.operator === "-" ? -number : number;
+      const operand = number(compute(node.operand, context));
+      return node.operator === "-" ? -operand : operand;
     }
-    case "binary": {
-      const left = asScalar(evaluate(node.left, context));
-      if (isError(left)) return left;
-      const right = asScalar(evaluate(node.right, context));
-      if (isError(right)) return right;
-      return binary(node.operator, left, right);
-    }
+    case "binary":
+      return binary(
+        node.operator,
+        scalar(compute(node.left, context)),
+        scalar(compute(node.right, context)),
+      );
+  }
+}
+
+/**
+ * Evaluates an AST. Reads cell values through `context` and has no side
+ * effects. A failure anywhere inside comes back as an error value.
+ */
+export function evaluate(node: Node, context: EvaluationContext): Evaluated {
+  try {
+    return compute(node, context);
+  } catch (cause) {
+    // A function reports a bad argument by throwing Failure. Anything else is a bug.
+    if (cause instanceof Failure) return cause.error;
+    throw cause;
   }
 }
 
@@ -151,16 +195,19 @@ export function evaluate(node: Node, context: EvaluationContext): Evaluated {
  * a cell holding `=BUTTON("Add", EXECUTE(A1+1, A1))` does not depend on A1.
  */
 export function referencesOf(node: Node, functions: FunctionRegistry): Reference[] {
+  const all = (nodes: readonly Node[]): Reference[] =>
+    nodes.flatMap((child) => referencesOf(child, functions));
   switch (node.type) {
     case "reference":
       return [node.reference];
     case "unary":
       return referencesOf(node.operand, functions);
     case "binary":
-      return [...referencesOf(node.left, functions), ...referencesOf(node.right, functions)];
+      return all([node.left, node.right]);
     case "call":
-      if (functions.get(node.name)?.kind === "action") return [];
-      return node.args.flatMap((arg) => referencesOf(arg, functions));
+      return functions.get(node.name)?.kind === "action" ? [] : all(node.args);
+    case "apply":
+      return all([node.target, ...node.args]);
     default:
       return [];
   }

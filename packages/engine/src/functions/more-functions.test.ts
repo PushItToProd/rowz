@@ -116,14 +116,11 @@ describe("logic and information", () => {
     ["=ISLOGICAL(A1 > 0)", true],
     ["=ISLOGICAL(1)", false],
     ["=ISERROR(1/0)", true],
-    ["=ISERROR(nope)", false],
+    ["=ISERROR(nope)", true],
     ["=ISERROR(A1)", false],
     ["=ISNUMBER(1/0)", false],
   ])("%s is %j", (formula, expected) => {
-    const value = evaluateFormula(formula, { A1: "1", A2: "2" });
-    // `=ISERROR(nope)` does not parse, so the cell itself is an error.
-    if (formula.includes("nope")) expect(value).toMatchObject({ code: "#NAME?" });
-    else expect(value).toBe(expected);
+    expect(evaluateFormula(formula, { A1: "1", A2: "2" })).toBe(expected);
   });
 
   it.each([

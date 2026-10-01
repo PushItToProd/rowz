@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { formatValue, isAction, isButton, isError, type CellValue } from "@spreadsheet-app/engine";
+import {
+  formatValue,
+  isAction,
+  isButton,
+  isError,
+  isLambda,
+  type CellValue,
+} from "@spreadsheet-app/engine";
 import { computed } from "vue";
 
 const props = defineProps<{
@@ -16,6 +23,7 @@ const kind = computed(() => {
   const { value } = props;
   if (isButton(value)) return "button";
   if (isAction(value)) return "action";
+  if (isLambda(value)) return "function";
   if (isError(value)) return "error";
   return typeof value === "string" || value === null ? "text" : typeof value;
 });
@@ -36,6 +44,13 @@ const hint = computed(() => (isError(props.value) ? props.value.message : undefi
     v-else-if="kind === 'action'"
     class="cell-value cell-value--action"
     title="An action runs when it is inside BUTTON()"
+  >
+    {{ text }}
+  </span>
+  <span
+    v-else-if="kind === 'function'"
+    class="cell-value cell-value--action"
+    title="A function. Call it from another cell by this cell's address, such as =A1(5)"
   >
     {{ text }}
   </span>

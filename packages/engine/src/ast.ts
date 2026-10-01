@@ -41,7 +41,12 @@ export type Node =
   | { type: "reference"; reference: Reference }
   | { type: "unary"; operator: UnaryOperator; operand: Node }
   | { type: "binary"; operator: BinaryOperator; left: Node; right: Node }
-  | { type: "call"; name: string; args: Node[] };
+  /** A word that is not a cell address: a name bound by `LET` or a parameter of `LAMBDA`. */
+  | { type: "name"; name: string }
+  /** A call by name: a built-in function, or a name bound to a function. */
+  | { type: "call"; name: string; args: Node[] }
+  /** A call of the function an expression evaluates to: `A1(5)`, `LAMBDA(x, x+1)(5)`. */
+  | { type: "apply"; target: Node; args: Node[] };
 
 function printReferenceCell(cell: ReferenceCell): string {
   const col = cell.col === null ? "" : `${cell.colAbsolute ? "$" : ""}${columnLabel(cell.col)}`;
@@ -87,7 +92,15 @@ export function printNode(node: Node): string {
       return `(${node.operator}${printNode(node.operand)})`;
     case "binary":
       return `(${printNode(node.left)}${node.operator}${printNode(node.right)})`;
+    case "name":
+      return node.name;
     case "call":
       return `${node.name}(${node.args.map(printNode).join(",")})`;
+    case "apply": {
+      // A word directly before `(` would be read as a call by name, so it gets parentheses.
+      const bare = node.target.type === "name" || node.target.type === "boolean";
+      const target = bare ? `(${printNode(node.target)})` : printNode(node.target);
+      return `${target}(${node.args.map(printNode).join(",")})`;
+    }
   }
 }

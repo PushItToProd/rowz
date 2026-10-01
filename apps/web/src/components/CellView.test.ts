@@ -1,4 +1,4 @@
-import type { ActionValue, CellValue } from "@spreadsheet-app/engine";
+import { createWorkbook, type ActionValue, type CellValue } from "@spreadsheet-app/engine";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import CellView from "./CellView.vue";
@@ -26,6 +26,17 @@ describe("CellView", () => {
     const span = render(value).get("span");
     expect(span.text()).toBe(text);
     expect(span.classes()).toContain(className);
+  });
+
+  it("shows a function by its parameters, with a hint on how to call it", () => {
+    const lambda = createWorkbook({
+      pages: [{ id: "p", name: "Page" }],
+      tables: [{ id: "t", pageId: "p", name: "Table" }],
+      cells: [{ tableId: "t", row: 0, col: 0, input: "=LAMBDA(price, qty, price * qty)" }],
+    }).getValue({ tableId: "t", row: 0, col: 0 });
+    const span = render(lambda).get("span");
+    expect(span.text()).toBe("LAMBDA(price, qty)");
+    expect(span.attributes("title")).toContain("=A1(5)");
   });
 
   it("shows an error code with its explanation as a tooltip", () => {

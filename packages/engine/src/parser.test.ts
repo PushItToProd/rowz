@@ -131,13 +131,8 @@ describe("references", () => {
     expect(parseFormula("SUM(1, 4)")).toMatchObject({ args: [number(1), number(4)] });
   });
 
-  it.each(["A", "AB", "abc"])("reports the lone column %s as an unknown name", (text) => {
-    try {
-      parseFormula(text);
-      expect.unreachable();
-    } catch (cause) {
-      expect((cause as FormulaSyntaxError).code).toBe("#NAME?");
-    }
+  it.each(["A", "AB", "abc"])("reads the lone column %s as a name, not a reference", (text) => {
+    expect(parseFormula(text)).toEqual({ type: "name", name: text });
   });
 
   it("parses a table qualifier, quoted or not", () => {
@@ -228,16 +223,52 @@ describe("syntax errors", () => {
     expect(() => parseFormula(text)).toThrow(FormulaSyntaxError);
     expect(() => parseFormula(text)).toThrow(message);
   });
+});
 
-  it("reports an unknown bare word as a name error", () => {
-    try {
-      parseFormula("1+total");
-      expect.unreachable();
-    } catch (cause) {
-      expect(cause).toBeInstanceOf(FormulaSyntaxError);
-      expect((cause as FormulaSyntaxError).code).toBe("#NAME?");
-      expect((cause as FormulaSyntaxError).position).toBe(2);
-    }
+describe("names and calls of values", () => {
+  it("parses a word that is not a cell address as a name, keeping its letter case", () => {
+    expect(parseFormula("1+Total")).toEqual(
+      binary("+", number(1), { type: "name", name: "Total" }),
+    );
+    expect(parseFormula("tax_rate")).toEqual({ type: "name", name: "tax_rate" });
+  });
+
+  it("parses a cell address before parentheses as a call of that cell's value", () => {
+    expect(parseFormula("A1(5, B2)")).toEqual({
+      type: "apply",
+      target: { type: "reference", reference: { start: cell(0, 0) } },
+      args: [number(5), { type: "reference", reference: { start: cell(1, 1) } }],
+    });
+    expect(parseFormula("Sales!A1()")).toMatchObject({
+      type: "apply",
+      target: { type: "reference", reference: { table: "Sales" } },
+      args: [],
+    });
+  });
+
+  it("parses parentheses after a call or a parenthesized value as a call of the result", () => {
+    expect(parseFormula("LAMBDA(x, x)(5)")).toMatchObject({
+      type: "apply",
+      target: { type: "call", name: "LAMBDA" },
+      args: [number(5)],
+    });
+    expect(parseFormula("(f)(1)(2)")).toMatchObject({
+      type: "apply",
+      target: { type: "apply", target: { type: "name", name: "f" }, args: [number(1)] },
+      args: [number(2)],
+    });
+  });
+
+  it("parses a word before parentheses as a call by name", () => {
+    expect(parseFormula("double(4)")).toEqual({ type: "call", name: "DOUBLE", args: [number(4)] });
+  });
+
+  it("includes a called cell among the located references", () => {
+    const { references } = parseFormulaWithReferences("A1(B2) + 1");
+    expect(references.map(({ from, to }) => [from, to])).toEqual([
+      [0, 2],
+      [3, 5],
+    ]);
   });
 });
 
@@ -301,9 +332,14 @@ describe("printNode", () => {
           tie("node"),
         )
         .map(([operator, left, right]) => binary(operator, left, right)),
+      // Four letters or more, so a name is never read as a cell address or a column.
+      fc.stringMatching(/^[a-z_]{4,8}$/).map((name): Node => ({ type: "name", name })),
       fc
-        .tuple(fc.stringMatching(/^[A-Z][A-Z0-9_]{0,8}$/), fc.array(tie("node"), { maxLength: 3 }))
+        .tuple(fc.stringMatching(/^[A-Z_]{4,8}$/), fc.array(tie("node"), { maxLength: 3 }))
         .map(([name, args]): Node => ({ type: "call", name, args })),
+      fc
+        .tuple(tie("node"), fc.array(tie("node"), { maxLength: 2 }))
+        .map(([target, args]): Node => ({ type: "apply", target, args })),
     ),
   }));
 

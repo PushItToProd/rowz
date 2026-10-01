@@ -123,7 +123,10 @@ class Parser {
       this.next();
       return { type: "unary", operator: token.value, operand: this.unary() };
     }
-    return this.primary();
+    // Parentheses after a value call it: `A1(5)`, `LAMBDA(x, x+1)(5)`.
+    let node = this.primary();
+    while (this.isPunctuation("(")) node = { type: "apply", target: node, args: this.arguments() };
+    return node;
   }
 
   private primary(): Node {
@@ -161,18 +164,22 @@ class Parser {
 
   private identifier(token: Token & { type: "identifier" }): Node {
     const { value: name, position } = token;
-    if (this.isPunctuation("(")) return this.call(name);
     if (this.isPunctuation("!")) return this.qualifiedReference(name, position);
+
+    // A cell address before `(` is a call of the function in that cell, so a
+    // function cannot be named like a cell address.
+    const start = this.cornerOf(token);
+    const isCell = start !== undefined && isWholeCell(start);
+    if (this.isPunctuation("(") && !isCell) {
+      return { type: "call", name: name.toUpperCase(), args: this.arguments() };
+    }
 
     const upper = name.toUpperCase();
     if (upper === "TRUE") return { type: "boolean", value: true };
     if (upper === "FALSE") return { type: "boolean", value: false };
 
     // A lone column such as `A` is only a reference as the start of a range.
-    const start = this.cornerOf(token);
-    if (!start || (!isWholeCell(start) && !this.isPunctuation(":"))) {
-      throw new FormulaSyntaxError(`Unknown name ${name}`, position, "#NAME?");
-    }
+    if (!start || (!isCell && !this.isPunctuation(":"))) return { type: "name", name };
     return this.located(this.rangeFrom(start, token), position);
   }
 
@@ -181,7 +188,8 @@ class Parser {
     return { type: "reference", reference };
   }
 
-  private call(name: string): Node {
+  /** Parses a parenthesized, comma-separated argument list, positioned at the `(`. */
+  private arguments(): Node[] {
     this.expectPunctuation("(");
     const args: Node[] = [];
     if (!this.isPunctuation(")")) {
@@ -190,7 +198,7 @@ class Parser {
       } while (this.consumePunctuation(","));
     }
     this.expectPunctuation(")");
-    return { type: "call", name: name.toUpperCase(), args };
+    return args;
   }
 
   private consumePunctuation(value: Punctuation): boolean {

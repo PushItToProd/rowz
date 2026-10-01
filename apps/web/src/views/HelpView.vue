@@ -58,6 +58,7 @@ const SECTIONS = [
   ["references", "References"],
   ["operators", "Operators"],
   ["functions", "Functions"],
+  ["names", "Names and your own functions"],
   ["actions", "Buttons and actions"],
   ["errors", "Errors"],
 ] as const;
@@ -301,6 +302,55 @@ const OPERATORS = [
           </tbody>
         </table>
       </template>
+    </section>
+
+    <section id="names">
+      <h2>Names and your own functions</h2>
+      <p>
+        <code>LET</code> gives a name to a value so a formula can use it more than once:
+        <code>=LET(total, SUM(A1:A3), total / COUNT(A1:A3))</code>. A name is any word that is not a
+        cell address, so <code>total</code> and <code>tax_rate</code> work and <code>x1</code> does
+        not. Names ignore letter case.
+      </p>
+      <p>
+        <code>LAMBDA</code> makes a function. Its last part is what the function computes, and the
+        parts before it are the names of its inputs. Call a function by putting values in
+        parentheses after it.
+      </p>
+      <table>
+        <tbody>
+          <tr>
+            <th scope="row">Call it at once</th>
+            <td><code>=LAMBDA(x, x * 2)(21)</code></td>
+          </tr>
+          <tr>
+            <th scope="row">Name it with LET</th>
+            <td><code>=LET(double, LAMBDA(x, x * 2), double(A1) + double(A2))</code></td>
+          </tr>
+          <tr>
+            <th scope="row">Keep it in a cell</th>
+            <td>
+              Put <code>=LAMBDA(x, x * 2)</code> in D1. Any formula can then call
+              <code>=D1(21)</code>, or <code>=Tools!D1(21)</code> from another table.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <ul>
+        <li>A cell that holds a function shows <code>LAMBDA</code> and its input names in gray.</li>
+        <li>
+          Cell references inside a function are read from the cell that defines it, wherever it is
+          called from.
+        </li>
+        <li>
+          A function kept in a cell cannot call its own cell. A function can still repeat itself by
+          taking itself as an input:
+          <code>=LET(f, LAMBDA(self, n, IF(n &lt;= 1, 1, n * self(self, n - 1))), f(f, 5))</code>.
+        </li>
+        <li>
+          Because a cell address before parentheses calls that cell, no function is named like one.
+        </li>
+      </ul>
     </section>
 
     <section id="actions">

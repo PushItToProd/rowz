@@ -63,6 +63,8 @@ describe("functionDocs", () => {
     ["SWITCH", "two"],
     ["IFS", "small"],
     ["ISBLANK", true],
+    ["LET", 12],
+    ["LAMBDA", 6],
   ])("the %s example gives %j", (name, expected) => {
     const doc = functionDocs.find((candidate) => candidate.name === name);
     expect(evaluateExample(doc!.example).value).toBe(expected);

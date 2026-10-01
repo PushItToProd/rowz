@@ -1,6 +1,7 @@
 import type { CellId, CellRange } from "../address";
 import type { Node, Reference } from "../ast";
 import type { Effect } from "../effects";
+import type { EvaluationContext } from "../evaluate";
 import type { Evaluated } from "../values";
 
 /** An argument that is evaluated only when called. `IF` uses this to skip the branch not taken. */
@@ -40,5 +41,16 @@ export interface ActionFunction {
   plan(args: readonly Node[], context: PlanContext): Effect[];
 }
 
-export type FunctionDefinition = PureFunction | ActionFunction;
+/**
+ * A form that needs its arguments as written, not as values, because some of
+ * them are names to bind. `LET` and `LAMBDA` are the special forms.
+ */
+export interface SpecialForm {
+  kind: "special";
+  minArgs: number;
+  maxArgs: number;
+  evaluate(args: readonly Node[], context: EvaluationContext): Evaluated;
+}
+
+export type FunctionDefinition = PureFunction | ActionFunction | SpecialForm;
 export type FunctionRegistry = ReadonlyMap<string, FunctionDefinition>;

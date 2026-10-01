@@ -7,6 +7,7 @@ export const FUNCTION_CATEGORIES = [
   "Lookup",
   "Text",
   "Information",
+  "Names",
   "Actions",
 ] as const;
 export type FunctionCategory = (typeof FUNCTION_CATEGORIES)[number];
@@ -420,6 +421,22 @@ export const functionDocs: readonly FunctionDoc[] = [
     syntax: "ISERROR(value)",
     summary: "TRUE when the value is an error.",
     example: "ISERROR(1/0)",
+  },
+  {
+    name: "LET",
+    category: "Names",
+    syntax: "LET(name, value, ..., result)",
+    summary:
+      "Gives names to values and computes the result with them. Each value can use the names before it. A name is a word that is not a cell address.",
+    example: "LET(total, SUM(A1:A3), total * 2)",
+  },
+  {
+    name: "LAMBDA",
+    category: "Names",
+    syntax: "LAMBDA(parameter, ..., body)",
+    summary:
+      "Makes a function of your own. Call it by putting values in parentheses after it. Name it with `LET`, or leave it in a cell and call the cell.",
+    example: "LAMBDA(price, count, price * count)(A2, A3)",
   },
   {
     name: "BUTTON",

@@ -2,6 +2,21 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-09-30: LET, LAMBDA, and calling a function kept in a cell
+
+**Decision.** `LET(name, value, ..., result)` and `LAMBDA(parameter, ..., body)` work as in Excel. A function kept in a cell is called by the cell's address: with `=LAMBDA(x, x * 2)` in D1, another cell writes `=D1(21)`.
+
+**Why the cell address is the call syntax.** The todo item asked for a function bound in one cell and invoked from others. Calling by address needs no naming feature, and it reuses everything references already do: the caller depends on the defining cell, renames and row inserts rewrite the call, and `Tools!D1(21)` reaches another table. A named-function feature (a workbook-level list of names) would read better and can be added on top.
+
+**Consequences.**
+
+- A cell address before parentheses always means "call that cell". No built-in function can be named like a cell address, so a future `LOG10` or `ATAN2` needs a different name or a parser exception. A test enforces this for the built-in list.
+- An unknown word is now a `#NAME?` error when the formula is computed, not when it is parsed. The result in the cell is the same.
+- References inside a function body are read from the defining cell's table, not the caller's.
+- A function in a cell cannot call its own cell, because that is a reference cycle. Recursion works by passing the function to itself. Calls nest at most 200 deep.
+
+**To change.** `packages/engine/src/functions/names.ts` holds the two forms. The call syntax is in `Parser.identifier` and `Parser.unary`.
+
 ## 2026-09-30: The first batch of added functions
 
 **Decision.** Added 35 functions that other spreadsheets have and that return a single value: the `SUMIF` family, `VLOOKUP`, `XLOOKUP`, `MATCH`, `INDEX`, more math and text functions, the `IS` checks, `IFS`, and `SWITCH`. The help page lists them all.

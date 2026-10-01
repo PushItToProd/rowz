@@ -25,6 +25,7 @@ export type {
   FunctionRegistry,
   PlanContext,
   PureFunction,
+  SpecialForm,
 } from "./functions/registry";
 export { parseFormula, parseFormulaWithReferences, type LocatedReference } from "./parser";
 export {
@@ -41,6 +42,7 @@ export {
   isAction,
   isButton,
   isError,
+  isLambda,
   isFormulaInput,
   literalInput,
   type ActionValue,
@@ -48,6 +50,7 @@ export {
   type CellValue,
   type ErrorCode,
   type ErrorValue,
+  type LambdaValue,
   type Scalar,
 } from "./values";
 export {

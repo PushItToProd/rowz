@@ -1,5 +1,6 @@
 import type { CellId } from "./address";
 import type { Node } from "./ast";
+import type { EvaluationContext } from "./evaluate";
 
 /** `#ERROR!` means the formula text could not be parsed, or a function got the wrong number of arguments. */
 export const ERROR_CODES = [
@@ -39,9 +40,22 @@ export interface ButtonValue {
   action: ActionValue;
 }
 
+/**
+ * A function made by `LAMBDA`. It keeps the context it was made in, so its
+ * body reads cells relative to the cell that defines it and sees the names
+ * that were bound there.
+ */
+export interface LambdaValue {
+  kind: "lambda";
+  /** Parameter names as written. Lookups ignore letter case. */
+  params: string[];
+  body: Node;
+  context: EvaluationContext;
+}
+
 /** `null` is an empty cell. */
 export type Scalar = number | string | boolean | null;
-export type CellValue = Scalar | ErrorValue | ActionValue | ButtonValue;
+export type CellValue = Scalar | ErrorValue | ActionValue | ButtonValue | LambdaValue;
 
 /** The values of a range reference, as rows of cells. */
 export interface RangeValue {
@@ -70,6 +84,10 @@ export function isAction(value: unknown): value is ActionValue {
 
 export function isButton(value: unknown): value is ButtonValue {
   return hasKind(value, "button");
+}
+
+export function isLambda(value: unknown): value is LambdaValue {
+  return hasKind(value, "lambda");
 }
 
 export function isRange(value: unknown): value is RangeValue {
@@ -146,6 +164,7 @@ export function formatValue(value: CellValue): string {
   if (isError(value)) return value.code;
   if (isAction(value)) return value.name;
   if (isButton(value)) return value.label;
+  if (isLambda(value)) return `LAMBDA(${value.params.join(", ")})`;
   return toText(value);
 }
 
