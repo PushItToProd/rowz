@@ -519,6 +519,13 @@ const OPERATORS = [
           <code>=MAP(A1:A3, LAMBDA(n, IF(n &gt; 1, "many", "one")))</code>.
         </li>
         <li>
+          A whole column in arithmetic means that column's cell in the formula's own row:
+          <code>=A:A + B:B</code> in row 5 is <code>=A5 + B5</code>, and the same formula can be
+          filled down a column. It gives one value and fills no other cells. To work on every cell
+          of a column at once, write the range from its first row, as in <code>=A1:A + B1:B</code>,
+          or use a function that takes ranges, such as <code>SUMPRODUCT(A:A, B:B)</code>.
+        </li>
+        <li>
           A function that takes a range also takes an array, so results can be combined without
           filling any cells: <code>=SUM(A1:A3 * B1:B3)</code>.
         </li>

@@ -2,6 +2,31 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: A whole column in arithmetic means the formula's own row
+
+**Decision.** Your todo item: `=A:A+B:B` is equivalent to `=A1+B1` in any cell of row 1, and so on for other rows. A whole-column reference (`A:A`, `A:C`) written as an operand of an operator now means that column's cell in the formula's own row. A whole-row reference (`2:2`) means its cell in the formula's own column.
+
+**The rule is about how the reference is written, not about the shape of the result.**
+
+| Formula in row 5               | Meaning                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `=A:A + B:B`                   | `=A5 + B5`. One value. Nothing spills.                                    |
+| `=IF(A:A > 1, "big", "small")` | `=IF(A5 > 1, ...)`. The comparison is an operator.                        |
+| `=SUM(A:A)`                    | The whole column. `A:A` is an argument of `SUM`, not an operand.          |
+| `=A1:A + B1:B`                 | Every row, spilling down. A range that names a row is the cells it names. |
+| `=SUM(A:A * B:B)`              | `A5 * B5`. Use `SUMPRODUCT(A:A, B:B)` or `SUM(A1:A * B1:B)` for all rows. |
+
+**Why this rule.** Before this, `=A:A+B:B` produced a column of results that spilled from the formula's cell, so it worked only in row 1 and collided with a second copy of itself. The alternative was to decide by the result: when an array is as tall as the table and cannot spill, take this row's element. That would also change `=SORT(A:A)` in row 2 from `#SPILL!` to "the second smallest value", which is wrong. Deciding by syntax is what Google Sheets does outside `ARRAYFORMULA`.
+
+**Costs.**
+
+- `=SUM(A:A * B:B)` is one row's product. Sheets has the same trap.
+- **A formula in a chart or text view is not in a row,** so there a whole column in arithmetic stays the whole column: `{{ SUM(Sales!B:B * Sales!C:C) }}` adds every row. The same text means something different in a cell.
+- **Inside a `LAMBDA`, "the formula's own row" is the row of the cell that defines the function,** not the row of the cell that calls it.
+- A function that expects one value still does not take a whole column directly: `=UPPER(A:A)` is `#VALUE!`. `=UPPER(A:A & "")` works, because `&` is an operator. Making function arguments intersect as well is the remaining half of "functions do not work cell by cell" in the todo file.
+
+**To change.** `operand` in `packages/engine/src/evaluate.ts`.
+
 ## 2026-10-01: Import and export
 
 **Decision.** Two kinds of file.

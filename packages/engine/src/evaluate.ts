@@ -1,5 +1,5 @@
-import type { CellId, CellRange } from "./address";
-import type { BinaryOperator, Node, Reference } from "./ast";
+import { columnLabel, type CellId, type CellRange } from "./address";
+import { formatReference, type BinaryOperator, type Node, type Reference } from "./ast";
 import { DAY_MS, dateFromMs, isDate } from "./dates";
 import { array, element, fail, Failure, number, scalar } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
@@ -113,6 +113,45 @@ function readReference(reference: Reference, context: EvaluationContext): Evalua
 }
 
 /**
+ * Evaluates an operand of an operator. A whole column written as an operand
+ * means that column's cell in the formula's own row, so `=A:A + B:B` in row 5
+ * is `=A5 + B5`, and one formula serves every row it is filled into. A whole
+ * row means its cell in the formula's own column. Anywhere else, and in a
+ * formula that is not in a cell, a whole column is all of its cells.
+ */
+function operand(node: Node, context: EvaluationContext): Evaluated {
+  const { origin } = context;
+  if (node.type !== "reference" || origin.tableId === "") return compute(node, context);
+  const { start, end } = node.reference;
+  const columns = end !== undefined && start.row === null && end.row === null;
+  const rows = end !== undefined && start.col === null && end.col === null;
+  if (!columns && !rows) return compute(node, context);
+
+  const range = context.resolve(node.reference);
+  if (!range) fail("#REF!", "The referenced table does not exist");
+  const { tableId } = range;
+  const extent = context.extent(tableId);
+  const written = formatReference(node.reference);
+  if (columns) {
+    if (origin.row >= extent.rows)
+      fail("#VALUE!", `${written} has no row ${String(origin.row + 1)}`);
+    const cells: CellValue[] = [];
+    for (let col = range.startCol; col <= Math.min(range.endCol, extent.cols - 1); col += 1) {
+      cells.push(context.read({ tableId, row: origin.row, col }));
+    }
+    return cells.length === 1 ? (cells[0] ?? null) : { kind: "range", rows: [cells] };
+  }
+  if (origin.col >= extent.cols) {
+    fail("#VALUE!", `${written} has no column ${columnLabel(origin.col)}`);
+  }
+  const cells: CellValue[][] = [];
+  for (let row = range.startRow; row <= Math.min(range.endRow, extent.rows - 1); row += 1) {
+    cells.push([context.read({ tableId, row, col: origin.col })]);
+  }
+  return cells.length === 1 ? (cells[0]?.[0] ?? null) : { kind: "range", rows: cells };
+}
+
+/**
  * Applies an operator to its operands. With only single values that is one
  * computation. When an operand is an array, the operator is applied cell by
  * cell and the result is an array: a single value pairs with every cell, and
@@ -223,11 +262,11 @@ function compute(node: Node, context: EvaluationContext): Evaluated {
       return applyValue(compute(node.target, context), node.args, context);
     case "unary": {
       const sign = node.operator === "-" ? -1 : 1;
-      return elementwise([compute(node.operand, context)], (operand) => sign * number(operand));
+      return elementwise([operand(node.operand, context)], (value) => sign * number(value));
     }
     case "binary":
       return elementwise(
-        [compute(node.left, context), compute(node.right, context)],
+        [operand(node.left, context), operand(node.right, context)],
         (left = null, right = null) => binary(node.operator, left, right),
       );
   }
