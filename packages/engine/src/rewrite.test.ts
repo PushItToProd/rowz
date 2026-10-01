@@ -3,14 +3,17 @@ import type { Reference } from "./ast";
 import { cellKey, formatAddress } from "./address";
 import {
   inputsAfterEdit,
+  inputsAfterMove,
   inputsAfterRename,
   rewriteReferences,
   translateInput,
+  type Move,
   type Rename,
   type StructuralEdit,
 } from "./rewrite";
 import { at, STRUCTURE } from "./testing";
 import type { WorkbookData } from "./structure";
+import { Workbook } from "./workbook";
 
 /** Renames every table qualifier to `Renamed` and leaves unqualified references alone. */
 const renameTables = (reference: Reference): Reference | undefined =>
@@ -192,6 +195,109 @@ describe("inputsAfterRename", () => {
     const cells = { t1: { A1: "='Other Table'!A1 + Archive!Table1!A1" } };
     expect(after(cells, { kind: "table", tableId: "missing", name: "x" })).toEqual([]);
     expect(after(cells, { kind: "page", pageId: "missing", name: "x" })).toEqual([]);
+  });
+});
+
+describe("inputsAfterMove", () => {
+  // STRUCTURE: t1 "Table1" and t2 "Other Table" on p1 "Page 1"; t3 "Table1" on p2 "Archive".
+  function after(cells: Record<string, Record<string, string>>, move: Move): string[] {
+    const data: WorkbookData = {
+      ...STRUCTURE,
+      cells: Object.entries(cells).flatMap(([tableId, inputs]) =>
+        Object.entries(inputs).map(([address, input]) => ({ ...at(address, tableId), input })),
+      ),
+    };
+    return inputsAfterMove(data, move)
+      .map((cell) => `${cell.tableId} ${formatAddress(cell)} ${cell.input}`)
+      .sort();
+  }
+  const toArchive: Move = { kind: "table", tableId: "t2", pageId: "p2" };
+
+  it("names the new page in formulas elsewhere that read the moved table", () => {
+    expect(
+      after(
+        {
+          t1: {
+            A1: "='Other Table'!A1",
+            A2: "=SUM('page 1'!'Other Table'!A1:A3)",
+            A3: "=Table1!A1 + B2",
+          },
+        },
+        toArchive,
+      ),
+    ).toEqual(["t1 A1 =Archive!'Other Table'!A1", "t1 A2 =SUM(Archive!'Other Table'!A1:A3)"]);
+  });
+
+  it("needs no page name in formulas on the page the table moves to", () => {
+    expect(
+      after({ t3: { A1: "='Page 1'!'Other Table'!A1", A2: "='Other Table'!A1" } }, toArchive),
+    ).toEqual(["t3 A1 ='Other Table'!A1"]);
+  });
+
+  it("names the old page in the moved table's formulas that read tables left behind", () => {
+    expect(
+      after(
+        {
+          t2: {
+            A1: "=Table1!B1",
+            A2: "='Other Table'!A5 + A4",
+            A3: "='Page 1'!'Other Table'!A5",
+            A4: "=Archive!Table1!A1 + 'Page 1'!Table1!A1",
+            A5: "=Missing!A1",
+          },
+        },
+        toArchive,
+      ),
+    ).toEqual(["t2 A1 ='Page 1'!Table1!B1", "t2 A3 ='Other Table'!A5"]);
+  });
+
+  it("keeps every formula reading the cells it read", () => {
+    const cells = {
+      t1: { A1: "='Other Table'!A1", A2: "7" },
+      t2: { A1: "=Table1!A2 * 2", A2: "='Other Table'!A1 + 1" },
+      t3: { A1: "='Page 1'!'Other Table'!A2", A2: "=Table1!A1" },
+    };
+    const values = (structure: typeof STRUCTURE, inputs: typeof cells) => {
+      const workbook = new Workbook();
+      workbook.setStructure(structure);
+      for (const [tableId, written] of Object.entries(inputs)) {
+        for (const [address, input] of Object.entries(written)) {
+          workbook.setCell(at(address, tableId), input);
+        }
+      }
+      return Object.entries(inputs).flatMap(([tableId, written]) =>
+        Object.keys(written).map((address) => workbook.getValue(at(address, tableId))),
+      );
+    };
+    const before = values(STRUCTURE, cells);
+    expect(before).toEqual([14, 7, 14, 15, 15, 15]);
+
+    const moved = structuredClone(cells) as Record<string, Record<string, string>>;
+    const data: WorkbookData = {
+      ...STRUCTURE,
+      cells: Object.entries(cells).flatMap(([tableId, inputs]) =>
+        Object.entries(inputs).map(([address, input]) => ({ ...at(address, tableId), input })),
+      ),
+    };
+    for (const cell of inputsAfterMove(data, toArchive)) {
+      moved[cell.tableId]![formatAddress(cell)] = cell.input;
+    }
+    const tables = STRUCTURE.tables.map((table) =>
+      table.id === "t2" ? { ...table, pageId: "p2" } : table,
+    );
+    expect(values({ ...STRUCTURE, tables }, moved as typeof cells)).toEqual(before);
+  });
+
+  it("writes nothing for a table or page that does not exist", () => {
+    const cells = { t1: { A1: "='Other Table'!A1" } };
+    expect(after(cells, { kind: "table", tableId: "missing", pageId: "p2" })).toEqual([]);
+    expect(after(cells, { kind: "table", tableId: "t2", pageId: "missing" })).toEqual([]);
+  });
+
+  it("leaves cells alone when it is a view that moves", () => {
+    expect(
+      after({ t1: { A1: "='Other Table'!A1" } }, { kind: "view", viewId: "v", pageId: "p2" }),
+    ).toEqual([]);
   });
 });
 

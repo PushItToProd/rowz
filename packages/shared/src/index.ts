@@ -180,6 +180,14 @@ export const FILE_LIMITS = {
   bytes: 32 * 1024 * 1024,
 } as const;
 
+/** The pages of a spreadsheet, by id, in the order their tabs are to sit in. */
+export const reorderPagesBody = z.object({
+  pages: z.array(z.uuid()).min(1).max(FILE_LIMITS.pages),
+});
+
+/** Moving a block to another page of its spreadsheet. */
+export const moveBlockBody = z.object({ pageId: z.uuid() });
+
 export const FILE_FORMAT = "spreadsheet-app";
 
 const fileTable = z.object({

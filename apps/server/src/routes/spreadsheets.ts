@@ -4,6 +4,7 @@ import {
   memberParam,
   nameBody,
   optionalNameBody,
+  reorderPagesBody,
   shareBody,
   spreadsheetFile,
   spreadsheetParam,
@@ -161,6 +162,19 @@ export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
             c.req.valid("json").name,
           );
           return c.json(created, 201);
+        },
+      )
+      // Puts the pages of a spreadsheet in a new order.
+      .put(
+        "/:spreadsheetId/pages/order",
+        zValidator("param", spreadsheetParam, onInvalid),
+        zValidator("json", reorderPagesBody, onInvalid),
+        async (c) => {
+          await c.var.repository.reorderPages(
+            c.req.valid("param").spreadsheetId,
+            c.req.valid("json").pages,
+          );
+          return c.body(null, 204);
         },
       )
   );

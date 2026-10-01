@@ -1,9 +1,11 @@
 import type { Reference } from "./ast";
 import {
   editDecider,
+  moveDecider,
   renameDecider,
   rewriteReferences,
   type Decide,
+  type Move,
   type Rename,
   type Replacement,
   type StructuralEdit,
@@ -45,8 +47,9 @@ function rewriteViews(
 ): { id: string; source: string }[] {
   const resolver = new TableResolver(structure);
   return views.flatMap((view) => {
+    const origin = { pageId: view.pageId, viewId: view.id };
     const source = rewriteSource(view, (reference) =>
-      decide(reference, resolver.findFromPage(reference, view.pageId)),
+      decide(reference, resolver.findFromPage(reference, view.pageId), origin),
     );
     return source === view.source ? [] : [{ id: view.id, source }];
   });
@@ -59,6 +62,18 @@ export function viewsAfterRename(
   rename: Rename,
 ): { id: string; source: string }[] {
   return rewriteViews(structure, views, renameDecider(new TableResolver(structure), rename));
+}
+
+/**
+ * The views whose sources must name a page for a table or view to move to
+ * another page and every view to go on reading the tables it read.
+ */
+export function viewsAfterMove(
+  structure: WorkbookStructure,
+  views: readonly ViewSource[],
+  move: Move,
+): { id: string; source: string }[] {
+  return rewriteViews(structure, views, moveDecider(structure, move));
 }
 
 /** The views that read a table whose row or column is being inserted or deleted, rewritten to follow. */

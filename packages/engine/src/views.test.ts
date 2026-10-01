@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { STRUCTURE } from "./testing";
-import { viewsAfterEdit, viewsAfterRename, type ViewSource } from "./views";
+import { viewsAfterEdit, viewsAfterMove, viewsAfterRename, type ViewSource } from "./views";
 
 // STRUCTURE: t1 "Table1" and t2 "Other Table" on p1 "Page 1"; t3 "Table1" on p2 "Archive".
 const views: ViewSource[] = [
@@ -47,6 +47,42 @@ describe("viewsAfterRename", () => {
         },
       ],
     );
+  });
+});
+
+describe("viewsAfterMove", () => {
+  it("names the new page in the views that read a moved table", () => {
+    expect(
+      viewsAfterMove(STRUCTURE, views, { kind: "table", tableId: "t2", pageId: "p2" }),
+    ).toEqual([{ id: "chart-with-equals", source: "=SORT(Archive!'Other Table'!A:B, 2)" }]);
+    // On the page the table moves to, its name alone is enough.
+    expect(
+      viewsAfterMove(STRUCTURE, views, { kind: "table", tableId: "t1", pageId: "p2" }),
+    ).toEqual([
+      { id: "chart-on-p1", source: "Archive!Table1!A1:B9" },
+      {
+        id: "text-on-p2",
+        source: "Table1!A5 in prose. {{ Table1!A5 }} {% for a in Table1!A2:A9 %}{{ a }}{% end %}",
+      },
+    ]);
+  });
+
+  it("names the old page in a moved view, where it read a table by name alone", () => {
+    expect(
+      viewsAfterMove(STRUCTURE, views, { kind: "view", viewId: "chart-on-p1", pageId: "p2" }),
+    ).toEqual([{ id: "chart-on-p1", source: "'Page 1'!Table1!A1:B9" }]);
+    expect(
+      viewsAfterMove(STRUCTURE, views, { kind: "view", viewId: "text-on-p2", pageId: "p1" }),
+    ).toEqual([
+      {
+        id: "text-on-p2",
+        source:
+          "Table1!A5 in prose. {{ 'Page 1'!Table1!A5 }} {% for a in Archive!Table1!A2:A9 %}{{ a }}{% end %}",
+      },
+    ]);
+    expect(
+      viewsAfterMove(STRUCTURE, views, { kind: "view", viewId: "plain", pageId: "p2" }),
+    ).toEqual([]);
   });
 });
 

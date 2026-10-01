@@ -5,6 +5,7 @@ import {
   controlInputBody,
   formatCellsBody,
   makeColumnsBody,
+  moveBlockBody,
   setCellsBody,
   structuralEditBody,
   tableParam,
@@ -37,6 +38,16 @@ export function tableRoutes(dependencies: ActionDependencies) {
         await c.var.repository.deleteTable(c.req.valid("param").tableId);
         return c.body(null, 204);
       })
+      // Moves the table to another page of its spreadsheet.
+      .put(
+        "/:tableId/page",
+        zValidator("param", tableParam, onInvalid),
+        zValidator("json", moveBlockBody, onInvalid),
+        async (c) => {
+          const { tableId } = c.req.valid("param");
+          return c.json(await c.var.repository.moveTable(tableId, c.req.valid("json").pageId));
+        },
+      )
       .post(
         "/:tableId/edits",
         zValidator("param", tableParam, onInvalid),

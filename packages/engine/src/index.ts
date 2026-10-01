@@ -18,7 +18,12 @@ export {
   type Node,
   type Reference,
 } from "./ast";
-export { columnFormulasAfterEdit, columnFormulasAfterRename, type ColumnFormula } from "./columns";
+export {
+  columnFormulasAfterEdit,
+  columnFormulasAfterMove,
+  columnFormulasAfterRename,
+  type ColumnFormula,
+} from "./columns";
 export {
   errorDocs,
   EXAMPLE_CELLS,
@@ -42,7 +47,9 @@ export type {
 export { parseFormula, parseFormulaWithReferences, type LocatedReference } from "./parser";
 export {
   inputsAfterEdit,
+  inputsAfterMove,
   inputsAfterRename,
+  type Move,
   rewriteReferences,
   translateInput,
   type Rename,
@@ -108,5 +115,11 @@ export {
   type TemplateBlock,
   type TemplateNode,
 } from "./template";
-export { viewsAfterEdit, viewsAfterRename, type ViewKind, type ViewSource } from "./views";
+export {
+  viewsAfterEdit,
+  viewsAfterMove,
+  viewsAfterRename,
+  type ViewKind,
+  type ViewSource,
+} from "./views";
 export { createWorkbook, Workbook, type ActionPlan, type WorkbookOptions } from "./workbook";

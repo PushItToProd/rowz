@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { at } from "./testing";
 import { formatReference } from "./ast";
-import { columnFormulasAfterEdit, columnFormulasAfterRename } from "./columns";
+import {
+  columnFormulasAfterEdit,
+  columnFormulasAfterMove,
+  columnFormulasAfterRename,
+} from "./columns";
 import { parseFormula, parseFormulaWithReferences } from "./parser";
 import { inputsAfterRename, rewriteReferences, translateInput } from "./rewrite";
 import type { ColumnDefinition, WorkbookStructure } from "./structure";
@@ -425,6 +429,12 @@ describe("rewriting column references", () => {
     expect(columnFormulasAfterRename(shape, { kind: "table", tableId: "t3", name: "X" })).toEqual(
       [],
     );
+    expect(columnFormulasAfterMove(shape, { kind: "table", tableId: "t1", pageId: "p2" })).toEqual([
+      { tableId: "t1", col: 3, formula: "=[Price] * [Qty] + 'Page 1'!Notes!A2 + B1" },
+    ]);
+    expect(columnFormulasAfterMove(shape, { kind: "table", tableId: "t2", pageId: "p2" })).toEqual([
+      { tableId: "t1", col: 3, formula: "=[Price] * [Qty] + 'Other Page'!Notes!A2 + B1" },
+    ]);
     expect(
       columnFormulasAfterEdit(shape, { tableId: "t2", axis: "row", kind: "insert", index: 0 }),
     ).toEqual([{ tableId: "t1", col: 3, formula: "=[Price] * [Qty] + Notes!A3 + B1" }]);

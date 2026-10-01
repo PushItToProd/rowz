@@ -1,8 +1,10 @@
 import {
   editDecider,
+  moveDecider,
   renameDecider,
   rewriteReferences,
   type Decide,
+  type Move,
   type Rename,
   type StructuralEdit,
 } from "./rewrite";
@@ -25,8 +27,9 @@ function rewriteColumns(structure: WorkbookStructure, decide: Decide): ColumnFor
   return structure.tables.flatMap((table) =>
     (table.columns ?? []).flatMap((column, col) => {
       if (column.formula === undefined) return [];
+      const origin = { pageId: table.pageId, tableId: table.id };
       const formula = rewriteReferences(column.formula, (reference) =>
-        decide(reference, resolver.find(reference, table.id)),
+        decide(reference, resolver.find(reference, table.id), origin),
       );
       return formula === column.formula ? [] : [{ tableId: table.id, col, formula }];
     }),
@@ -39,6 +42,14 @@ export function columnFormulasAfterRename(
   rename: Rename,
 ): ColumnFormula[] {
   return rewriteColumns(structure, renameDecider(new TableResolver(structure), rename));
+}
+
+/**
+ * The column formulas that must name a page for a table to move to another
+ * page and every formula to go on reading the tables it read.
+ */
+export function columnFormulasAfterMove(structure: WorkbookStructure, move: Move): ColumnFormula[] {
+  return rewriteColumns(structure, moveDecider(structure, move));
 }
 
 /**

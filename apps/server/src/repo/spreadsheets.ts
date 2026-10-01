@@ -1,21 +1,25 @@
 import {
   addFormatRule,
   columnFormulasAfterEdit,
+  columnFormulasAfterMove,
   columnFormulasAfterRename,
   columnLabel,
   formatAddress,
   formatRulesAfterEdit,
   inputsAfterEdit,
+  inputsAfterMove,
   inputsAfterRename,
   isFormulaInput,
   sameColumnName,
   viewsAfterEdit,
+  viewsAfterMove,
   viewsAfterRename,
   type ChartType,
   type ColumnDefinition,
   type ColumnFormula,
   type ColumnType,
   type FormatRule,
+  type Move,
   type Rename,
   type StructuralEdit,
 } from "@spreadsheet-app/engine";
@@ -808,6 +812,110 @@ export class SpreadsheetRepository {
     });
   }
 
+  /**
+   * Puts the pages of a spreadsheet in the order given. The list must name
+   * every one of them once, so that a stale client cannot leave two pages in
+   * one place.
+   */
+  async reorderPages(spreadsheetId: string, order: readonly string[]): Promise<void> {
+    await this.findSpreadsheet(spreadsheetId, "write");
+    await this.change(spreadsheetId, async (tx) => {
+      const rows = await tx
+        .select({ id: pages.id })
+        .from(pages)
+        .where(eq(pages.spreadsheetId, spreadsheetId));
+      const present = new Set(rows.map((row) => row.id));
+      const complete =
+        order.length === present.size &&
+        new Set(order).size === order.length &&
+        order.every((id) => present.has(id));
+      if (!complete) {
+        throw conflict("The pages have changed. Reload the spreadsheet and try again");
+      }
+      for (const [position, id] of order.entries()) {
+        await tx.update(pages).set({ position }).where(eq(pages.id, id));
+      }
+    });
+  }
+
+  /**
+   * The page a block is to move to: another page of the block's own
+   * spreadsheet. Must run inside `change`.
+   */
+  private async destination(
+    tx: Database,
+    block: Found<{ pageId: string; name: string }>,
+    pageId: string,
+  ): Promise<PageRecord> {
+    const page = await this.within(tx).findPage(pageId, "write");
+    // A page of another spreadsheet is reported as a page of this one that does not exist.
+    if (page.spreadsheetId !== block.spreadsheetId) throw notFound("Page");
+    if (page.id === block.pageId) {
+      throw unprocessable("same_page", `${block.name} is already on ${page.name}`);
+    }
+    return page;
+  }
+
+  /**
+   * Moves a table to the end of another page of its spreadsheet. A table name
+   * alone in a formula means a table on the formula's own page, so formulas
+   * that would come to mean another table are rewritten to name the page.
+   */
+  async moveTable(tableId: string, pageId: string): Promise<Rewritten & { table: TableRecord }> {
+    return this.changeTable(tableId, async (table, tx) => {
+      const page = await this.destination(tx, table, pageId);
+      const position = await this.within(tx).nextPosition(pageId);
+      const rewritten = await this.rewriteForMove(tx, table.spreadsheetId, {
+        kind: "table",
+        tableId,
+        pageId,
+      });
+      const [updated] = await tx
+        .update(tables)
+        .set({ pageId, position })
+        .where(eq(tables.id, tableId))
+        .returning(tableColumns)
+        .catch((cause: unknown) => {
+          if (!isUniqueViolation(cause)) throw cause;
+          throw conflict(`${page.name} already has a table named ${table.name}`);
+        });
+      if (!updated) throw notFound("Table");
+      return {
+        table: updated,
+        ...rewritten,
+        tables: rewritten.tables.filter((candidate) => candidate.id !== tableId),
+      };
+    });
+  }
+
+  /**
+   * Moves a chart or text view to the end of another page of its
+   * spreadsheet. Where its source named a table by name alone, it now names
+   * the page too, and so reads the same table.
+   */
+  async moveView(viewId: string, pageId: string): Promise<Rewritten & { view: ViewRecord }> {
+    return this.changeView(viewId, async (view, tx) => {
+      await this.destination(tx, view, pageId);
+      const position = await this.within(tx).nextPosition(pageId);
+      const rewritten = await this.rewriteForMove(tx, view.spreadsheetId, {
+        kind: "view",
+        viewId,
+        pageId,
+      });
+      const [updated] = await tx
+        .update(views)
+        .set({ pageId, position })
+        .where(eq(views.id, viewId))
+        .returning(viewColumns);
+      if (!updated) throw notFound("View");
+      return {
+        view: updated,
+        ...rewritten,
+        views: rewritten.views.filter((candidate) => candidate.id !== viewId),
+      };
+    });
+  }
+
   async deletePage(pageId: string): Promise<void> {
     await this.changePage(pageId, async (page, tx) => {
       const remaining = await tx.$count(pages, eq(pages.spreadsheetId, page.spreadsheetId));
@@ -1378,18 +1486,45 @@ export class SpreadsheetRepository {
     rename: Rename,
   ): Promise<Rewritten> {
     const snapshot = await this.within(tx).getSnapshot(spreadsheetId);
-    const rewritten = {
+    return this.storeRewrite(tx, snapshot, {
       cells: inputsAfterRename(snapshot, rename),
       views: viewsAfterRename(snapshot, snapshot.views, rename),
-    };
+      columns: columnFormulasAfterRename(snapshot, rename),
+    });
+  }
+
+  /**
+   * Rewrites the formulas that must name a page for a table or view to move
+   * to another page, and returns what changed. Must run inside `change`,
+   * before the move itself: where things are now is how the formulas are read.
+   */
+  private async rewriteForMove(
+    tx: Database,
+    spreadsheetId: string,
+    move: Move,
+  ): Promise<Rewritten> {
+    const snapshot = await this.within(tx).getSnapshot(spreadsheetId);
+    return this.storeRewrite(tx, snapshot, {
+      cells: inputsAfterMove(snapshot, move),
+      views: viewsAfterMove(snapshot, snapshot.views, move),
+      columns: columnFormulasAfterMove(snapshot, move),
+    });
+  }
+
+  /** Stores what a rewrite changed in the three places that hold formulas. */
+  private async storeRewrite(
+    tx: Database,
+    snapshot: Snapshot,
+    rewritten: {
+      cells: StoredCell[];
+      views: { id: string; source: string }[];
+      columns: ColumnFormula[];
+    },
+  ): Promise<Rewritten> {
     await this.storeCells(tx, rewritten.cells);
     await this.storeViewSources(tx, rewritten.views);
-    const changed = await this.storeColumnFormulas(
-      tx,
-      snapshot.tables,
-      columnFormulasAfterRename(snapshot, rename),
-    );
-    return { ...rewritten, tables: changed };
+    const tables = await this.storeColumnFormulas(tx, snapshot.tables, rewritten.columns);
+    return { cells: rewritten.cells, views: rewritten.views, tables };
   }
 
   /** Stores rewritten formulas of formula columns, and returns the tables they belong to as they now are. */

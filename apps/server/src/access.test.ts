@@ -54,6 +54,10 @@ function writeRoutes(): Route[] {
     ["POST", `/spreadsheets/${snapshot.id}/pages`, {}],
     ["PATCH", `/pages/${page}`, { name: "Taken over" }],
     ["PUT", `/pages/${page}/order`, { blocks: [view, table] }],
+    ["PUT", `/spreadsheets/${snapshot.id}/pages/order`, { pages: [page] }],
+    // The page they are on already, which is refused only once the caller may write.
+    ["PUT", `/tables/${table}/page`, { pageId: page }],
+    ["PUT", `/views/${view}/page`, { pageId: page }],
     ["POST", `/pages/${page}/tables`, {}],
     ["PATCH", `/tables/${table}`, { name: "Taken over" }],
     ["PUT", `/tables/${table}/cells`, cellsBody({ C3: "written" })],
@@ -189,10 +193,11 @@ describe("an editor", () => {
     expect(await editor.json("GET", `/spreadsheets/${snapshot.id}`)).toMatchObject({
       role: "editor",
     });
-    // The restore names a version that does not exist. Sharing and deleting are the owner's.
+    // The restore names a version that does not exist. The page order leaves out the page just
+    // added, and each move names the page the block is on. Sharing and deleting are the owner's.
     expect(await statuses(editor, writeRoutes())).toEqual([
-      404, 204, 201, 200, 204, 201, 200, 204, 200, 200, 200, 200, 200, 200, 200, 201, 200, 204, 204,
-      204, 403, 403, 403,
+      404, 204, 201, 200, 204, 409, 422, 422, 201, 200, 204, 200, 200, 200, 200, 200, 200, 200, 201,
+      200, 204, 204, 204, 403, 403, 403,
     ]);
     await owner.json("DELETE", `/spreadsheets/${snapshot.id}`, undefined, 204);
     await editor.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);

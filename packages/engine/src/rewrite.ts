@@ -9,6 +9,7 @@ import {
   type StoredInput,
   type TableDefinition,
   type WorkbookData,
+  type WorkbookStructure,
 } from "./structure";
 
 /** What to write in place of a reference: a new reference, or `#REF!` when its target is gone. */
@@ -73,6 +74,18 @@ export type Rename =
   /** A column of a data table, named `from` before the rename. */
   | { kind: "column"; tableId: string; from: string; name: string };
 
+/** Moving a table, or a chart or text view, to another page. */
+export type Move =
+  | { kind: "table"; tableId: string; pageId: string }
+  | { kind: "view"; viewId: string; pageId: string };
+
+/** Where a formula is written: its page, and the table or view that holds it. */
+export interface Origin {
+  pageId: string | undefined;
+  tableId?: string;
+  viewId?: string;
+}
+
 /**
  * Decides how a reference must be rewritten, given the table it means where
  * it is written. `undefined` leaves the reference as it is.
@@ -80,6 +93,7 @@ export type Rename =
 export type Decide = (
   reference: Reference,
   target: TableDefinition | undefined,
+  origin: Origin,
 ) => Replacement | undefined;
 
 /** The rewrite a rename asks for: the new name in place of the old, wherever the old one is written. */
@@ -106,18 +120,68 @@ export function renameDecider(resolver: TableResolver, rename: Rename): Decide {
 }
 
 /**
+ * The rewrite a move to another page asks for. A table name alone means a
+ * table on the formula's own page, so a page name is written wherever the
+ * move would otherwise change which table a reference means:
+ *
+ * - a reference to the moved table names the page it moves to
+ * - a reference in what moves, to a table that stays behind, names the page it is on
+ */
+export function moveDecider(structure: WorkbookStructure, move: Move): Decide {
+  const pageName = (pageId: string): string | undefined =>
+    structure.pages.find((page) => page.id === pageId)?.name;
+  const to = pageName(move.pageId);
+  return (reference, target, origin) => {
+    // A reference with no table name follows its formula's table, wherever that goes.
+    if (reference.table === undefined || !target || to === undefined) return undefined;
+    const moves =
+      move.kind === "table" ? origin.tableId === move.tableId : origin.viewId === move.viewId;
+    if (move.kind === "table" && target.id === move.tableId) {
+      // Within the moved table, its name alone still means it.
+      if (moves || origin.pageId === move.pageId) {
+        return reference.page === undefined ? undefined : withoutPage(reference);
+      }
+      return { ...reference, page: to };
+    }
+    if (!moves || reference.page !== undefined || target.pageId === move.pageId) return undefined;
+    const from = pageName(target.pageId);
+    return from === undefined ? undefined : { ...reference, page: from };
+  };
+}
+
+function withoutPage(reference: Reference): Reference {
+  const bare = { ...reference };
+  delete bare.page;
+  return bare;
+}
+
+/** The cells whose formulas a rewrite changes, as they are written after it. */
+function rewriteInputs(data: WorkbookData, resolver: TableResolver, decide: Decide): StoredInput[] {
+  return data.cells.flatMap(({ input, ...cell }) => {
+    const origin = { pageId: resolver.table(cell.tableId)?.pageId, tableId: cell.tableId };
+    const rewritten = rewriteReferences(input, (reference) =>
+      decide(reference, resolver.find(reference, cell.tableId), origin),
+    );
+    return rewritten === input ? [] : [{ ...cell, input: rewritten }];
+  });
+}
+
+/**
  * The cells whose formulas name a page or table that is being renamed, with
  * the new name written in. `data` is the workbook before the rename.
  */
 export function inputsAfterRename(data: WorkbookData, rename: Rename): StoredInput[] {
   const resolver = new TableResolver(data);
-  const decide = renameDecider(resolver, rename);
-  return data.cells.flatMap(({ input, ...cell }) => {
-    const rewritten = rewriteReferences(input, (reference) =>
-      decide(reference, resolver.find(reference, cell.tableId)),
-    );
-    return rewritten === input ? [] : [{ ...cell, input: rewritten }];
-  });
+  return rewriteInputs(data, resolver, renameDecider(resolver, rename));
+}
+
+/**
+ * The cells whose formulas must name a page for a table or view to move to
+ * another page without changing what any formula reads. `data` is the
+ * workbook before the move.
+ */
+export function inputsAfterMove(data: WorkbookData, move: Move): StoredInput[] {
+  return rewriteInputs(data, new TableResolver(data), moveDecider(data, move));
 }
 
 /** Inserting or deleting rows or columns of a table that sit next to each other. */
@@ -235,8 +299,9 @@ export function inputsAfterEdit(data: WorkbookData, edit: StructuralEdit): Store
   const after = new Map<string, StoredInput>();
 
   for (const cell of data.cells) {
+    const origin = { pageId: resolver.table(cell.tableId)?.pageId, tableId: cell.tableId };
     const input = rewriteReferences(cell.input, (reference) =>
-      decide(reference, resolver.find(reference, cell.tableId)),
+      decide(reference, resolver.find(reference, cell.tableId), origin),
     );
     if (cell.tableId !== edit.tableId) {
       after.set(cellKey(cell), { ...cell, input });
