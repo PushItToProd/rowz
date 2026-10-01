@@ -14,6 +14,7 @@ export type {
   Snapshot,
   SpreadsheetSummary,
   TableRecord,
+  VersionRecord,
   ViewRecord,
 } from "./repo/spreadsheets";
 

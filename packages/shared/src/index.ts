@@ -217,7 +217,82 @@ export const spreadsheetFile = z.object({
 });
 export type SpreadsheetFile = z.infer<typeof spreadsheetFile>;
 
+type FileItem = SpreadsheetFile["pages"][number]["items"][number];
+type FileTable = Extract<FileItem, { type: "table" }>;
+
+/** What `toSpreadsheetFile` needs to know of a table or a view: where it sits, and what it holds. */
+interface Placed {
+  pageId: string;
+  name: string;
+  position: number;
+}
+interface PlacedTable extends Placed {
+  rowCount: number;
+  colCount: number;
+  columns: FileTable["columns"] | null;
+  formats: NonNullable<FileTable["formats"]>;
+}
+interface PlacedView extends Placed {
+  kind: "chart" | "text";
+  source: string;
+  chartType: "bar" | "line" | "pie" | "scatter" | null;
+}
+
+/**
+ * Writes a spreadsheet as a file: what an export saves and what a version in
+ * a spreadsheet's history holds. `cellsOf` gives the filled cells of a table.
+ */
+export function toSpreadsheetFile<Table extends PlacedTable>(
+  name: string,
+  pages: readonly { id: string; name: string; position: number }[],
+  tables: readonly Table[],
+  views: readonly PlacedView[],
+  cellsOf: (table: Table) => CellInput[],
+): SpreadsheetFile {
+  const itemsOf = (pageId: string): FileItem[] =>
+    [
+      ...tables.map((table) => ({
+        pageId: table.pageId,
+        position: table.position,
+        item: {
+          type: "table",
+          name: table.name,
+          rowCount: table.rowCount,
+          colCount: table.colCount,
+          ...(table.columns ? { columns: table.columns } : {}),
+          ...(table.formats.length > 0 ? { formats: table.formats } : {}),
+          cells: cellsOf(table),
+        } satisfies FileItem,
+      })),
+      ...views.map((view) => ({
+        pageId: view.pageId,
+        position: view.position,
+        item: (view.kind === "chart"
+          ? {
+              type: "chart",
+              name: view.name,
+              source: view.source,
+              chartType: view.chartType ?? "bar",
+            }
+          : { type: "text", name: view.name, source: view.source }) satisfies FileItem,
+      })),
+    ]
+      .filter((entry) => entry.pageId === pageId)
+      .sort((a, b) => a.position - b.position)
+      .map(({ item }) => item);
+
+  return {
+    format: FILE_FORMAT,
+    version: 1,
+    name,
+    pages: pages
+      .toSorted((a, b) => a.position - b.position)
+      .map((page) => ({ name: page.name, items: itemsOf(page.id) })),
+  };
+}
+
 export const spreadsheetParam = z.object({ spreadsheetId: z.uuid() });
+export const versionParam = z.object({ spreadsheetId: z.uuid(), versionId: z.uuid() });
 export const pageParam = z.object({ pageId: z.uuid() });
 export const tableParam = z.object({ tableId: z.uuid() });
 export const columnParam = z.object({

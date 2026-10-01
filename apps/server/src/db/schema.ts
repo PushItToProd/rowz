@@ -1,4 +1,5 @@
 import type { ChartType, ColumnDefinition, Effect, FormatRule } from "@spreadsheet-app/engine";
+import type { SpreadsheetFile } from "@spreadsheet-app/shared";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -179,6 +180,30 @@ export const cells = pgTable(
     updatedAt,
   },
   (table) => [primaryKey({ columns: [table.tableId, table.row, table.col] })],
+);
+
+/**
+ * A spreadsheet as it was at some moment, kept so that it can be restored.
+ * `created_at` is the clock time of the insert, not the start of its
+ * transaction, so that versions and changes made in one transaction are in
+ * the order they happened.
+ */
+export const versions = pgTable(
+  "versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    spreadsheetId: uuid("spreadsheet_id")
+      .notNull()
+      .references(() => spreadsheets.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    /** What was about to happen when the version was kept. Null for one kept as time passed. */
+    reason: text("reason"),
+    data: jsonb("data").$type<SpreadsheetFile>().notNull(),
+  },
+  (table) => [index("versions_spreadsheet_time").on(table.spreadsheetId, table.createdAt)],
 );
 
 export type RunStatus = "pending" | "succeeded" | "failed";

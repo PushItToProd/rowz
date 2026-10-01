@@ -11,6 +11,8 @@ import {
   type TestUser,
 } from "./testing";
 
+const UNKNOWN_ID = "00000000-0000-4000-8000-000000000000";
+
 let server: TestServer;
 let owner: TestUser;
 let snapshot: Snapshot;
@@ -33,7 +35,11 @@ type Route = [method: string, path: string, body?: unknown];
 
 /** Every route that reads the spreadsheet. */
 function readRoutes(): Route[] {
-  return [["GET", `/spreadsheets/${snapshot.id}`]];
+  return [
+    ["GET", `/spreadsheets/${snapshot.id}`],
+    ["GET", `/spreadsheets/${snapshot.id}/versions`],
+    ["POST", `/spreadsheets/${snapshot.id}/versions/${UNKNOWN_ID}/copy`],
+  ];
 }
 
 /** Every route that changes the spreadsheet, least destructive first so each still has a target. */
@@ -42,6 +48,7 @@ function writeRoutes(): Route[] {
   const table = snapshot.tables[0]!.id;
   const view = snapshot.views[0]!.id;
   return [
+    ["POST", `/spreadsheets/${snapshot.id}/versions/${UNKNOWN_ID}/restore`],
     ["PATCH", `/spreadsheets/${snapshot.id}`, { name: "Taken over" }],
     ["POST", `/spreadsheets/${snapshot.id}/pages`, {}],
     ["PATCH", `/pages/${page}`, { name: "Taken over" }],
@@ -153,8 +160,8 @@ describe("an editor", () => {
     });
     // The page delete is refused because it is the last page, not for lack of access.
     expect(await statuses(editor, writeRoutes())).toEqual([
-      204, 201, 200, 204, 201, 200, 204, 200, 200, 200, 200, 200, 200, 200, 201, 200, 204, 204, 204,
-      204,
+      404, 204, 201, 200, 204, 201, 200, 204, 200, 200, 200, 200, 200, 200, 200, 201, 200, 204, 204,
+      204, 204,
     ]);
     await owner.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);
   });
