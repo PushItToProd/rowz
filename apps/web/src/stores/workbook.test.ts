@@ -193,6 +193,56 @@ describe("setCell", () => {
   });
 });
 
+describe("saving", () => {
+  it("is true from a change until the server has answered every queued one", async () => {
+    const store = await open({ A1: "1" });
+    const first = deferred();
+    const second = deferred();
+    server.setCells.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    expect(store.saving).toBe(false);
+
+    const one = store.setCell(at("A1"), "2");
+    const two = store.setCell(at("A2"), "3");
+    expect(store.saving).toBe(true);
+    first.resolve();
+    await one;
+    // The second change was waiting for the first and is still on its way.
+    expect(store.saving).toBe(true);
+    second.resolve();
+    await two;
+    expect(store.saving).toBe(false);
+  });
+
+  it("ends when a save fails", async () => {
+    const store = await open({ A1: "1" });
+    server.setCells.mockRejectedValue(new Error("offline"));
+    await store.setCell(at("A1"), "2");
+    expect(store.saving).toBe(false);
+  });
+
+  it("covers an undo the server has not answered", async () => {
+    const store = await open({ A1: "1" });
+    await store.setCell(at("A1"), "2");
+    notifyJournaled();
+    const answer = deferred();
+    server.undo.mockReturnValue(
+      answer.promise.then(() => ({
+        outcome: "nothing",
+        label: null,
+        error: null,
+        changed: { pages: [], tables: [], views: [], cells: [] },
+        undoable: false,
+        redoable: false,
+      })),
+    );
+    const undone = store.undo();
+    expect(store.saving).toBe(true);
+    answer.resolve();
+    await undone;
+    expect(store.saving).toBe(false);
+  });
+});
+
 describe("setCells", () => {
   it("shows and saves several cells of a table in one request", async () => {
     const store = await open({ A1: "1" });

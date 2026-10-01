@@ -161,7 +161,8 @@ watch(
 </script>
 
 <template>
-  <div class="editor">
+  <!-- `data-saving` is what the end-to-end tests wait on before a reload, which would drop a change not yet sent. -->
+  <div class="editor" :data-saving="store.saving ? '' : undefined">
     <div class="editor__chrome">
       <header class="editor__header">
         <RouterLink :to="{ name: 'spreadsheets' }" class="editor__back" aria-label="← Spreadsheets">

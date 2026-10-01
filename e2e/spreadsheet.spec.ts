@@ -37,6 +37,15 @@ async function enter(page: Page, address: string, text: string, table = "Table 1
 }
 
 /**
+ * Reloads the editor once the server has answered every change. Changes are
+ * sent one at a time, and a reload drops the ones still waiting.
+ */
+async function reload(page: Page): Promise<void> {
+  await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
+  await page.reload();
+}
+
+/**
  * Opens the menu of pages a block can move to. A menu closes when the page
  * scrolls, and the scroll that brings the button into view can end after the
  * click, so the click is made again until the menu stays open.
@@ -68,7 +77,7 @@ test("a button writes the sum of two cells into a third, and the result persists
   await page.getByRole("button", { name: "Sum range" }).click();
   await expect(cell(page, "A3")).toHaveText("12");
 
-  await page.reload();
+  await reload(page);
   await expect(cell(page, "A1")).toHaveText("10");
   await expect(cell(page, "A3")).toHaveText("12");
   await expect(page.getByRole("button", { name: "Sum range" })).toBeVisible();
@@ -95,7 +104,7 @@ test("formulas read other tables and other pages, and follow their changes", asy
   await pages.getByText("Page 2").click();
   await expect(cell(page, "A1")).toHaveText("8");
 
-  await page.reload();
+  await reload(page);
   await expect(cell(page, "A1")).toHaveText("8");
 });
 
@@ -135,7 +144,7 @@ test("a block moves to another page, formulas follow it, and pages are reordered
   await pages.getByRole("button", { name: "Move Page 2 left" }).click();
   await expect(pages.getByRole("button", { name: "Move Page 2 left" })).toBeDisabled();
   expect(await names()).toEqual(["Page 2", "Page 1"]);
-  await page.reload();
+  await reload(page);
   await expect(cell(page, "A1", "Table 2")).toHaveText("5");
   expect(await names()).toEqual(["Page 2", "Page 1"]);
   await pages.getByText("Page 1").click();
@@ -187,7 +196,7 @@ test("renaming a table or page rewrites the formulas that name it", async ({ pag
   await cell(page, "A2").click();
   await expect(page.getByLabel("Formula")).toHaveValue("=Summary!Sales!A1*2");
 
-  await page.reload();
+  await reload(page);
   await expect(cell(page, "A1")).toHaveText("6");
   await expect(cell(page, "A2")).toHaveText("10");
   await expect(pages.locator('[aria-current="page"]')).toHaveText(/Summary/);
@@ -218,7 +227,7 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
   await cell(page, "C1").click();
   await expect(page.getByLabel("Formula")).toHaveValue("=SUM(A1:A2)");
 
-  await page.reload();
+  await reload(page);
   await expect(cell(page, "C1")).toHaveText("4");
   await expect(cell(page, "A2")).toHaveText("3");
 
@@ -284,7 +293,7 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
   await expect(cell(page, "D1")).toHaveCount(0);
   // The formula that read a row that went says so.
   await expect(cell(page, "B1")).toHaveText("#REF!");
-  await page.reload();
+  await reload(page);
   await expect(table.locator("tbody tr")).toHaveCount(3);
   await expect(cell(page, "B1")).toHaveText("#REF!");
 });
@@ -321,7 +330,7 @@ test("a formula with several results fills the cells around it", async ({ page }
   await page.keyboard.press("Delete");
   await expect(cell(page, "D1")).toHaveText("pear");
 
-  await page.reload();
+  await reload(page);
   await expect(cell(page, "D3")).toHaveText("fig");
   await expect(cell(page, "G1")).toHaveText("70");
 });
@@ -361,7 +370,7 @@ test("a form with a checkbox and a dropdown saves rows to a log", async ({ page 
   await page.getByRole("button", { name: "Save" }).click();
   await expect(cell(page, "A2", "Table 2")).toHaveText("fig");
 
-  await page.reload();
+  await reload(page);
   await expect(cell(page, "A1", "Table 2")).toHaveText("pear");
   await expect(cell(page, "A2", "Table 2")).toHaveText("fig");
 });
@@ -447,7 +456,7 @@ test("a formula is filled down by dragging, and cells are copied and pasted", as
   await expect(cell(page, "G1")).toHaveText("");
   await expect(cell(page, "G3")).toHaveText("");
 
-  await page.reload();
+  await reload(page);
   await expect(cell(page, "B3")).toHaveText("30");
   await expect(cell(page, "E3")).toHaveText("30");
 });
@@ -540,7 +549,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await expect(chart.getByLabel("Chart data")).toHaveValue("Fruit!A1:B2");
   await expect(text.locator(".text-view")).toContainText("We have 20 pieces.");
 
-  await page.reload();
+  await reload(page);
   await expect(chart.locator(".chart__slice")).toHaveCount(2);
   await expect(chart.getByLabel("Chart type")).toHaveValue("pie");
   await expect(text.getByRole("listitem")).toHaveText(["apples: 15", "pears: 5"]);
@@ -556,17 +565,11 @@ test("a page shows a chart and a text view of its tables, and they follow change
     );
   };
   expect(await order()).toEqual(["Fruit", "Chart 1", "Text 1"]);
-  // The second move is sent when the first is answered, and a reload drops a move not yet sent.
-  let saved = 0;
-  page.on("response", (response) => {
-    if (response.request().method() === "PUT" && response.url().endsWith("/order")) saved += 1;
-  });
   await page.getByRole("button", { name: "Move Text 1 up" }).click();
   await page.getByRole("button", { name: "Move Text 1 up" }).click();
   await expect(page.getByRole("button", { name: "Move Text 1 up" })).toBeDisabled();
   expect(await order()).toEqual(["Text 1", "Fruit", "Chart 1"]);
-  await expect.poll(() => saved).toBe(2);
-  await page.reload();
+  await reload(page);
   await expect(text).toBeVisible();
   expect(await order()).toEqual(["Text 1", "Fruit", "Chart 1"]);
 
@@ -693,7 +696,7 @@ test("a table with named columns has typed columns, a formula column, and column
   await enter(page, "C3", "2");
   await expect(cell(page, "E3")).toHaveText("9");
   await expect(cell(page, "A1", "Table 2")).toHaveText("46");
-  await page.reload();
+  await reload(page);
   await expect(header("Unit price")).toBeVisible();
   await expect(cell(page, "E3")).toHaveText("9");
   await expect(cell(page, "D2").getByRole("checkbox")).toBeChecked();
@@ -732,7 +735,7 @@ test("cells are formatted from the toolbar, and the formats follow their cells",
   await expect(cell(page, "B2")).toHaveText("$1,234.50");
   await expect(cell(page, "B1")).not.toHaveCSS("background-color", "rgb(255, 243, 184)");
 
-  await page.reload();
+  await reload(page);
   await expect(cell(page, "B2")).toHaveText("$1,234.50");
   await expect(cell(page, "B3")).toHaveText("26%");
   await expect(cell(page, "A2").locator(".cell-value")).toHaveCSS("font-weight", "700");

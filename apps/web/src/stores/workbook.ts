@@ -120,13 +120,28 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const pendingBlockReorders = new Map<string, number>();
   const viewUpdates = new Map<string, Promise<boolean>>();
 
+  /** How many changes, undos, and redos the server has not answered yet. */
+  const unanswered = ref(0);
+  /** Whether a change is still on its way to the server. Leaving the page now would lose it. */
+  const saving = computed(() => unanswered.value > 0);
+
+  /** Counts a request toward `saving` until it settles. */
+  function countUnanswered<T>(request: Promise<T>): Promise<T> {
+    unanswered.value += 1;
+    const settled = (): void => {
+      unanswered.value -= 1;
+    };
+    void request.then(settled, settled);
+    return request;
+  }
+
   function trackWrite<T>(write: Promise<T>): Promise<T> {
     pendingWrites.add(write);
     void write.then(
       () => pendingWrites.delete(write),
       () => pendingWrites.delete(write),
     );
-    return write;
+    return countUnanswered(write);
   }
 
   function enqueueWrite<T>(change: () => Promise<T>): Promise<T> {
@@ -369,13 +384,13 @@ export const useWorkbookStore = defineStore("workbook", () => {
   function undo(): Promise<void> {
     const queued = historyActions.then(() => runHistory("undo"));
     historyActions = queued.catch(() => undefined);
-    return queued;
+    return countUnanswered(queued);
   }
 
   function redo(): Promise<void> {
     const queued = historyActions.then(() => runHistory("redo"));
     historyActions = queued.catch(() => undefined);
-    return queued;
+    return countUnanswered(queued);
   }
 
   function valueOf(id: CellId): CellValue {
@@ -1116,6 +1131,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     moveBlockToPage,
     canUndo,
     canRedo,
+    saving,
     undo,
     redo,
     columnOf,
