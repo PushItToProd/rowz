@@ -4,6 +4,26 @@ Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author
 
 Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions. When instructed to work autonomously, execute these items first in ascending order (do all P0s first, then P1s, etc.). Items with the same priority are co-equal unless you're instructed otherwise. Items with priority "P10" and above are backlogged and generally shouldn't be picked up unless the author says so explicitly (this is primarily about allocation of work and the author's perceived necessity of the feature). Remove these priority prefixes when checking items off. Check these items off before making commits.
 
+## To be organized
+
+- [ ] allow referencing an entire data table without naming a specific range -- I would like to be able to write s.t. like `=QUERY('Table name'!, 'select * ...')` (not wedded to that exact syntax tho)
+  - [ ] **P2** evaluate syntax options and how painful they'd be to implement
+- [ ] **P2** show cell errors in a popover on hover instead of using a native browser tooltip
+- [ ] **P5** when a spill error occurs, the popover should have a button to resize the table to fit
+- [ ] **P3** `QUERY` doesn't show col names in its output - if `Table1` is a table with named columns and we write `=QUERY(Table1!A:A, "select *")`, the output should show the column names by default
+- [ ] support optional named arguments to formula functions
+  - [ ] **P4** plan before implementing so we can see how hard this would be
+  - [ ] example use case: `=QUERY(Table1!A:A, "select *", column_headers=False)`
+- [ ] **P4** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable
+- [ ] **P4** when a chart has dates on one axis, they should be spaced out like numeric data, not categorical -- right now if I have a plot with `2018-08-22`, `2019-03-04`, `2019-12-03`, `2020-03-01`, `2021-08-25` on the X-axis, those points all appear equally horizontally spaced, but they should have variable width gaps proportional to the number of days between them just like they would if they were ordinary numbers and the X-axis should have dates at regular intervals covering the time period
+- [ ] **P6** add a `default`/`else` case to `IFS` so you could write either `IFS(x > 100, "foo", x > 0 "bar", "default value")` or, maybe for familiarity/compatibility `IFS(x > 100, "foo", x > 0 "bar", default="default value")`
+
+## Bugs
+
+- [ ] **P0** — Wildcard criteria can stall synchronous formula evaluation. [criteria.ts](packages/engine/src/functions/criteria.ts:28) turns `*` and `?` into a backtracking regular expression, then tests cell text at [line 56](packages/engine/src/functions/criteria.ts:56). A crafted criterion and long near-matching text can trigger catastrophic backtracking. Formula evaluation has no time limit, and the server evaluates workbook formulas while handling action clicks. Use a matcher with bounded runtime.
+
+- [ ] **P0** — Combined array results can exhaust memory before spill limits apply. [arrays.ts](packages/engine/src/functions/arrays.ts:129) caps each `SEQUENCE` call at 100,000 cells, but `HSTACK`, `VSTACK`, and `FLATTEN` have no aggregate output cap ([lines 155–184](packages/engine/src/functions/arrays.ts:155)). [workbook.ts](packages/engine/src/workbook.ts:654) materializes the result before checking whether it can spill into the table. Preflight the combined result against a workbook-wide cell budget before allocating it.
+
 ## Formula language and functions
 
 - [x] support more reference styles: `A:A`, `A:Z`, `1:1`, `1:4`, `A1:4`, etc.
@@ -114,7 +134,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] (Claude) Rows' data actions: `UPDATE(data, key_columns, range)` (upsert by key), `OVERWRITE(data, range)`, and `INSERT` of several rows
 - [x] (Claude) reorder the tables, charts, and text views on a page (arrows beside each one)
 - [ ] data tables: sort and filter in place, dropdown columns, hide the empty rows, and `QUERY(Sales, ...)` over a whole table with its column names as headers
-- [ ] (Claude) replace the browser prompt used for a formula column's first formula with an in-page editor
+- [ ] **P1** when updating a formula column's formula, use an in-page editor with proper formula support (modal or popover or maybe just hijack the formula bar), not a browser `input` popup
 - [ ] (Claude) pivot tables as a block or table feature (`QUERY` already has a `pivot` clause)
 - [x] move a table, chart, or text view to another page, and reorder pages
 - [ ] support chart formulas in tables
@@ -146,9 +166,9 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] formula to render Markdown in cell (`MARKDOWN(text)`; inline formatting only, since a cell is one line)
 - [x] (Claude) number formatting for cells (text views and formulas can use `TEXT(value, format)`)
 - [ ] more formatting: 
-  - [ ] **P5** borders
-  - [ ] **P6** conditional formats
-  - [ ] **P5** carrying formats through copy, fill, and paste
+  - [ ] **P6** borders
+  - [ ] **P4** basic conditional formatting
+  - [ ] **P6** carrying formats through copy, fill, and paste
   - [ ] (Claude) wrap long text within a cell
 
 ## Actions and automation
@@ -183,6 +203,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] add screenshots to the README
 - [ ] use icons to make the toolbar denser
 - [ ] **P3** plan to add keyboard shortcuts
+- [ ] **P3** identify where we should use in-app modals instead of browser-based `input` and alerts -- we have specific tasks for a couple of these already so this would just cover identifying anything I missed
 
 ## Import and export
 
@@ -256,6 +277,8 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
     - create new actions that allow creating new docs programmatically (in this case, by default, the doc that executed the creation action gets permission to edit the other doc)
     - -> then it'd be possible to have a `DO` block that makes a copy of a document and edits it
 - expose a user-facing API to create, edit, read, etc. documents
+
+- **P999** user-defined macros so you could create your own syntax -- hypothetical use case with made-up syntax (so I'm not wedded to it looking like this): `SWITCHON(x, [A]*[B]/[C])(x > 1000, "foo", x > 100, "bar", x > 0, "baz", default="nope!")` which could possibly be defined something like, uh... idk what the macro definition syntax should actually be but somehow that would get munged into `LET(x, [A]*[B]/[C], IFS(x > 1000, "foo", x > 100, "bar", x > 0, "baz", default="nope!"))`
 
 - (Claude) protected ranges: cells that only some people may change
 - (Claude) a layout for printing
