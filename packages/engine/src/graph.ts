@@ -83,6 +83,16 @@ interface RangeReader {
   dependent: CellId;
 }
 
+/** The readers of one cell or one group of ranges, keyed so that one can be removed without scanning the rest. */
+type Readers<T> = Map<string, Map<string, T>>;
+
+/**
+ * A range of at most this many columns is filed under each of its columns. A
+ * wider one, or one open to the right, goes in a list per table that every
+ * lookup in the table scans.
+ */
+const FILED_COLUMNS = 32;
+
 function isSingleCell(range: CellRange): boolean {
   return range.startRow === range.endRow && range.startCol === range.endCol;
 }
@@ -91,46 +101,54 @@ function firstCell(range: CellRange): CellId {
   return { tableId: range.tableId, row: range.startRow, col: range.startCol };
 }
 
+function columnKey(tableId: string, col: number): string {
+  return `${tableId}:${String(col)}`;
+}
+
 /**
  * Records which ranges each formula cell reads, and answers which cells must
  * be recalculated when a cell changes.
+ *
+ * A table can hold 100,000 formulas, and they may all read the same cell or
+ * range. Adding or removing one reader therefore touches no other reader, and
+ * a lookup scans only the ranges that cross the cell's column, plus the wide
+ * ones: scanning every range of the table for each cell visited made one edit
+ * take time in proportion to the square of the number of formulas.
  */
 export class DependencyIndex {
-  // Single-cell references are looked up by the cell they read. Larger ranges
-  // are kept in a list per table and scanned, so a reference to a whole column
-  // costs one entry instead of one per cell.
-  private readonly cellReaders = new Map<string, CellId[]>();
-  private readonly rangeReaders = new Map<string, RangeReader[]>();
+  /** Readers of single cells, by the cell read. */
+  private readonly cellReaders: Readers<CellId> = new Map();
+  /** Readers of ranges a few columns wide, by table and column. A reference to a whole column is one entry. */
+  private readonly columnReaders: Readers<RangeReader> = new Map();
+  /** Readers of wider ranges, by table. */
+  private readonly wideReaders: Readers<RangeReader> = new Map();
   private readonly precedents = new Map<string, readonly CellRange[]>();
 
   set(dependent: CellId, precedents: readonly CellRange[]): void {
     this.remove(dependent);
     if (precedents.length === 0) return;
-    this.precedents.set(cellKey(dependent), precedents);
-    for (const range of precedents) {
+    const key = cellKey(dependent);
+    this.precedents.set(key, precedents);
+    for (const [n, range] of precedents.entries()) {
       if (isSingleCell(range)) {
-        const key = cellKey(firstCell(range));
-        this.cellReaders.set(key, [...(this.cellReaders.get(key) ?? []), dependent]);
-      } else {
-        const readers = this.rangeReaders.get(range.tableId) ?? [];
-        this.rangeReaders.set(range.tableId, [...readers, { range, dependent }]);
+        add(this.cellReaders, cellKey(firstCell(range)), key, dependent);
+        continue;
+      }
+      for (const [readers, group] of this.groupsOf(range)) {
+        add(readers, group, `${key}#${String(n)}`, { range, dependent });
       }
     }
   }
 
   remove(dependent: CellId): void {
     const key = cellKey(dependent);
-    const isOther = (reader: CellId): boolean => cellKey(reader) !== key;
-    for (const range of this.precedents.get(key) ?? []) {
+    for (const [n, range] of (this.precedents.get(key) ?? []).entries()) {
       if (isSingleCell(range)) {
-        const read = cellKey(firstCell(range));
-        this.cellReaders.set(read, (this.cellReaders.get(read) ?? []).filter(isOther));
-      } else {
-        const readers = this.rangeReaders.get(range.tableId) ?? [];
-        this.rangeReaders.set(
-          range.tableId,
-          readers.filter((reader) => isOther(reader.dependent)),
-        );
+        drop(this.cellReaders, cellKey(firstCell(range)), key);
+        continue;
+      }
+      for (const [readers, group] of this.groupsOf(range)) {
+        drop(readers, group, `${key}#${String(n)}`);
       }
     }
     this.precedents.delete(key);
@@ -138,7 +156,8 @@ export class DependencyIndex {
 
   clear(): void {
     this.cellReaders.clear();
-    this.rangeReaders.clear();
+    this.columnReaders.clear();
+    this.wideReaders.clear();
     this.precedents.clear();
   }
 
@@ -146,22 +165,49 @@ export class DependencyIndex {
   transitiveDependents(cell: CellId): CellId[] {
     const found = new Map<string, CellId>();
     const queue = [cell];
+    const find = (key: string, dependent: CellId): void => {
+      if (found.has(key)) return;
+      found.set(key, dependent);
+      queue.push(dependent);
+    };
     for (let current = queue.pop(); current; current = queue.pop()) {
-      for (const dependent of this.readersOf(current)) {
-        const key = cellKey(dependent);
-        if (found.has(key)) continue;
-        found.set(key, dependent);
-        queue.push(dependent);
+      for (const [key, dependent] of this.cellReaders.get(cellKey(current)) ?? []) {
+        find(key, dependent);
+      }
+      const { tableId, col } = current;
+      for (const group of [
+        this.columnReaders.get(columnKey(tableId, col)),
+        this.wideReaders.get(tableId),
+      ]) {
+        for (const { range, dependent } of group?.values() ?? []) {
+          if (rangeContains(range, current)) find(cellKey(dependent), dependent);
+        }
       }
     }
     found.delete(cellKey(cell));
     return [...found.values()];
   }
 
-  private readersOf(cell: CellId): CellId[] {
-    const throughRanges = (this.rangeReaders.get(cell.tableId) ?? [])
-      .filter(({ range }) => rangeContains(range, cell))
-      .map(({ dependent }) => dependent);
-    return [...(this.cellReaders.get(cellKey(cell)) ?? []), ...throughRanges];
+  /** Where a range of more than one cell is filed: under each of its columns, or with the wide ranges of its table. */
+  private groupsOf(range: CellRange): [Readers<RangeReader>, string][] {
+    if (range.endCol - range.startCol >= FILED_COLUMNS) return [[this.wideReaders, range.tableId]];
+    const groups: [Readers<RangeReader>, string][] = [];
+    for (let col = range.startCol; col <= range.endCol; col += 1) {
+      groups.push([this.columnReaders, columnKey(range.tableId, col)]);
+    }
+    return groups;
   }
+}
+
+function add<T>(readers: Readers<T>, group: string, key: string, reader: T): void {
+  const held = readers.get(group);
+  if (held) held.set(key, reader);
+  else readers.set(group, new Map([[key, reader]]));
+}
+
+function drop<T>(readers: Readers<T>, group: string, key: string): void {
+  const held = readers.get(group);
+  if (!held) return;
+  held.delete(key);
+  if (held.size === 0) readers.delete(group);
 }

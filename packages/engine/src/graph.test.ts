@@ -139,6 +139,50 @@ describe("DependencyIndex", () => {
     expect(index.transitiveDependents(cell(0, 0))).toEqual([cell(2, 2)]);
   });
 
+  it("finds a range reader through a cell reached later in the traversal", () => {
+    const index = new DependencyIndex();
+    // The range does not hold the starting cell, only the cell that reads it.
+    index.set(cell(9, 9), [range(4, 4, 5, 5)]);
+    index.set(cell(4, 4), [single(0, 0)]);
+    expect(index.transitiveDependents(cell(0, 0))).toEqual([cell(4, 4), cell(9, 9)]);
+  });
+
+  it("matches each column of a range, and forgets them all when the reader is removed", () => {
+    const index = new DependencyIndex();
+    index.set(cell(9, 9), [range(0, 1, 2, 3)]);
+    index.set(cell(8, 8), [range(0, 2, 2, 2)]);
+    expect(index.transitiveDependents(cell(1, 0))).toEqual([]);
+    expect(index.transitiveDependents(cell(1, 1))).toEqual([cell(9, 9)]);
+    expect(index.transitiveDependents(cell(1, 2))).toEqual([cell(9, 9), cell(8, 8)]);
+    expect(index.transitiveDependents(cell(1, 3))).toEqual([cell(9, 9)]);
+    index.remove(cell(9, 9));
+    expect(index.transitiveDependents(cell(1, 1))).toEqual([]);
+    expect(index.transitiveDependents(cell(1, 2))).toEqual([cell(8, 8)]);
+    expect(index.transitiveDependents(cell(1, 3))).toEqual([]);
+  });
+
+  it("matches ranges that are many columns wide or open to the right or downward", () => {
+    const index = new DependencyIndex();
+    index.set(cell(500, 0), [range(0, 1, 2, 200)]);
+    index.set(cell(501, 0), [range(0, 1, 2, Infinity)]);
+    index.set(cell(502, 0), [range(0, 1, Infinity, 1)]);
+    expect(index.transitiveDependents(cell(2, 150))).toEqual([cell(500, 0), cell(501, 0)]);
+    expect(index.transitiveDependents(cell(2, 5000))).toEqual([cell(501, 0)]);
+    expect(index.transitiveDependents(cell(400, 1))).toEqual([cell(502, 0)]);
+    expect(index.transitiveDependents(cell(3, 150))).toEqual([]);
+    index.remove(cell(501, 0));
+    expect(index.transitiveDependents(cell(2, 5000))).toEqual([]);
+  });
+
+  it("finds a cell through either of two ranges it reads in one table", () => {
+    const index = new DependencyIndex();
+    index.set(cell(9, 9), [range(0, 0, 1, 1), range(5, 5, 6, 6)]);
+    expect(index.transitiveDependents(cell(1, 1))).toEqual([cell(9, 9)]);
+    expect(index.transitiveDependents(cell(6, 6))).toEqual([cell(9, 9)]);
+    index.remove(cell(9, 9));
+    expect(index.transitiveDependents(cell(6, 6))).toEqual([]);
+  });
+
   it("forgets everything when cleared", () => {
     const index = new DependencyIndex();
     index.set(cell(1, 1), [single(0, 0)]);
