@@ -2,6 +2,8 @@ These items are not necessarily in priority order. Triage and prioritize smaller
 
 Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author will remove the prefix if they fully endorse the idea, though agents asked to act autonomously should not consider these markers as prohibitions on implementation.
 
+Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions. When instructed to work autonomously, execute these items first in ascending order (do all P0s first, then P1s, etc.). Items with the same priority are co-equal unless you're instructed otherwise. Items with priority "P99" are backlogged. Remove these priority prefixes when checking items off. Check these items off when making commits.
+
 ## Formula language and functions
 
 - [x] support more reference styles: `A:A`, `A:Z`, `1:1`, `1:4`, `A1:4`, etc.
@@ -23,12 +25,17 @@ Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author
 - [x] (Claude) XLOOKUP and INDEX could return a whole row or column now that arrays exist
 - [x] (Claude) MIN and MAX over a range of dates; a TEXT function to show a date or number in a chosen format
 - [x] (Claude) financial functions (`PMT`, `PV`, `FV`, `NPV`, `IRR`, `RATE`, `NPER`), trig, and line fitting
-- [ ] named functions and values at the workbook level, so `=double(5)` works instead of `=D1(5)`
-- [ ] functions that expect one value (IF, UPPER, ...) do not work cell by cell on a range; only operators do. MAP is the workaround. Related: `=UPPER(A:A)` could mean this row's cell, as `=A:A & ""` now does
-- [ ] regex functions (`REGEXMATCH`, `REGEXEXTRACT`, `REGEXREPLACE`) on a regex engine with a time bound
+- [ ] **P2** named functions and values at the workbook level, so `=double(5)` works instead of `=D1(5)`
+- [ ] functions that expect one value (IF, UPPER, ...) do not work cell by cell on a range; only operators do. MAP is the workaround. 
+  - [ ] Related: `=UPPER(A:A)` could mean this row's cell, as `=A:A & ""` now does. -- that is, if e.g. D2 = `=UPPER(A:A)`, it should be equivalent to `=UPPER(A2)`
+- [ ] **P4** `MAP` doesn't take built-in function names as args - `MAP(A:A, UPPER)` should work but right now it errors with `#NAME?`
+- [ ] **P3** regex functions (`REGEXMATCH`, `REGEXEXTRACT`, `REGEXREPLACE`) on a regex engine with a time bound
 - [ ] (Claude) the smaller candidates left in docs/rows-functions.md
-- [ ] (Claude) `TEXT` writes a number of 1e21 or more as `1e+21` followed by the format's decimals
+- [ ] **P3** `TEXT` writes a number of 1e21 or more as `1e+21` followed by the format's decimals
 - [ ] (Claude) the web app's fill and chart axis build dates without `dateFromMs`, so they skip the year 0 to 9999 check
+- [ ] **P99** user-defined formula functions, evaluated client-side in a sandbox (maybe something like QuickJS or Pyodide)
+- [ ] **P4** support better operators: `&&`/`||`/`!` (or, even better, `and`/`or`/`not`) for boolean operations, `!=` in addition to `<>`, TTT
+- [ ] **P1** make the help page's navigation sticky so it stays visible as the user scrolls. update it to reflect the section they're currently looking at, too (e.g. by making the currently visible section bold)
 
 ## Grid editing and navigation
 
@@ -38,13 +45,25 @@ Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author
 - [x] add context menus for actions like inserting/deleting rows/columns
 - [x] (Claude) filling a number or date series: `1, 2` filled down should continue `3, 4`
 - [x] (Claude) select whole rows and columns by clicking their headers, and Ctrl+A
-- [ ] dragging over col/row headers should select multiple columns/rows
-- [ ] when a row/col is inserted into a range used in a formula, the formula's range should be expanded.
+
+- [ ] **P3** implement the handy tab+enter workflow from Excel and Sheets -- if you select a certain cell with the mouse or arrow keys, use tab to traverse multiple cells (optionally entering values into any or none of them), then input a value into a cell and submit that value by hitting enter, it'll drop to the next row in the column where you started
+  - example: in a table, select C3. hit tab 3 times (optionally entering values in any cells in C3:E3 along the way) - now you're in F3. hit enter to focus the cell input (or just start typing), type anything (or nothing), and hit enter to submit. the selection should move to C4.
+
+- [ ] **P2** add a long thin "+" button along the full width/height of the bottom/right side of each table for adding rows/cols. this way I can just click anywhere along the range
+- [ ] **P2** support resizing a whole table by just setting its width and height in cols/rows (warn the user and show a confirmation prompt if resizing will delete data)
+- [ ] **P2** dragging over col/row headers should select multiple full columns/rows
+- [ ] **P2** when multiple rows/columns are selected (either via row/col selection or by selecting specific cells), the context menu's "insert [row/column]" actions should become "insert N [rows/columns]", where `N` is the number of selected rows and cols as appropriate
+  - if I select C:E using the column headers and right click, I should see "Insert 3 columns left" and "Insert 3 columns right"
+- [ ] don't show "Insert row" actions in a column header's context menu and don't show "Insert column" actions in a row header's context menu
+- [ ] **P1** when a row/col is inserted into a range used in a formula, the formula's range should be auto-updated to include the range.
   - e.g. if we have A1 = 1, A2 = 2, A3 = 3, A4 = `SUM(A1:A3)` and the user right clicks and inserts a row above or below A2, the range should be updated to `A1:A4`
-- [ ] allow adding rows/cols with a long thin "+" button along the full width/height of the bottom/right side of the table
-- [ ] resizable rows/cols
-- [ ] when multiple cells/cols/rows are selected, allow deleting the columns or rows containing them from the context menu
-- [ ] merge cells across selection
+- [ ] **P3** allow resizing rows/cols
+  - [ ] by clicking and dragging on the borders of the row/col headers
+  - [ ] by a "resize [row/column]" ctx menu item shown when right clicking on row/col headers
+- [ ] **P2** when multiple cells/cols/rows are selected, allow deleting the columns or rows containing them from the context menu
+  - [ ] if I select C:E, give me a "Delete columns C-E" option. likewise for rows.
+  - [ ] if I select C3:E6 and right click on the selected range, show me both "Delete columns C-E" and "Delete rows 3-6"
+- [ ] **P4** merge cells across selection
 
 ## Tables, pages, charts, and text views
 
@@ -77,13 +96,14 @@ Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author
 - [x] (Claude) reorder the tables, charts, and text views on a page (arrows beside each one)
 - [ ] data tables: sort and filter in place, dropdown columns, hide the empty rows, and `QUERY(Sales, ...)` over a whole table with its column names as headers
 - [ ] (Claude) replace the browser prompt used for a formula column's first formula with an in-page editor
-- [ ] (Claude) move a table, chart, or text view to another page, and reorder pages
+- [ ] **P2** move a table, chart, or text view to another page, and reorder pages
 - [ ] chart formulas
   - [ ] `SPARKLINE` for a single cell
   - [ ] `PIE_CHART`, `LINE_CHART`, etc. which produce charts that spill over multiple rows and columns (size defined by the user or maybe implemented via merging cells)
 - [ ] (Claude) chart options: axis titles, stacked bars, colors
 - [ ] allow editing markdown views by just clicking on the text and save/stop editing when focus is lost instead of requiring user to hit "Done"
-- [ ] duplicate the "Add table", "Add chart", "Add text" buttons at the top and between each item so you can insert them anywhere
+- [ ] **P2** duplicate the "Add table", "Add chart", "Add text" buttons at the top and between each item so you can insert them anywhere
+- [ ] **P3** add a new type of component (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side
 
 ## Formatting
 
@@ -96,20 +116,25 @@ Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author
 
 - [ ] more actions:
   - [ ] delete a row that matches a condition
+  - [ ] targeted update of rows matching a condition as an alternative to the full replacement
+    - [ ] **P99** typed (or at least column-name-aware) updates of data tables: s.t. like `MUTATE(Products, [Category] = "GPU", [Price] = [Price] * 2)` (i.e. double the value of `Price` for all rows in `Products` where `Category` == "GPU")
   - [ ] open a URL
   - [ ] call a webhook
 - [ ] (Claude) scheduled actions: Rows' `SCHEDULE`, `REPEAT`, `REFRESH`. Needs a server scheduler and a rule for whose permissions a scheduled run uses
-- [ ] (Claude) a `BUTTON` in a text view shows only its label; it could run if views had a click endpoint
-- [ ] (Claude) a limit on the recipients of one `SEND_EMAIL`, separate from the hourly limit
+- [ ] a `BUTTON` in a text view shows only its label; it could run if views had a click endpoint
+- [ ] a limit on the recipients of one `SEND_EMAIL`, separate from the hourly limit
 
 ## Controls, mobile use, and templates
 
 - [x] mobile friendly UI (layout, touch targets, tap twice to edit)
 - [ ] more controls:
-  - [ ] a text or number input bound to a cell (esp. useful in Markdown)
-  - [ ] a date picker (after dates exist)
-  - [ ] a slider
-- [ ] cell validation - require matching a pattern, regex, or custom formula
+  - [ ] **P2** a text or number input bound to a cell (esp. useful in Markdown)
+  - [ ] **P3** a date picker
+  - [ ] **P3** a time picker
+  - [ ] **P3** a combined date and time picker
+  - [ ] **P3** a slider input for picking a value from a range
+  - [ ] **P4** a numeric value input roughly like (don't use this as a literal template; make it nicer) "<button>-</button> <input value="100"> <button>+</button>" where you can increment and decrement the value using the -/+ buttons (but also still support editing the number directly)
+- [ ] cell validation - require the value to match a pattern, regex, or custom formula
 - [ ] (Claude) touch: select a range, fill by dragging, and a long-press menu on iOS
 - [ ] create some sample/template sheets users can use - invoice, contacts list, to-do list, personal monthly budget, etc.
 - [x] add screenshots to the README
@@ -121,13 +146,13 @@ Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author
 
 ## Undo and collaboration
 
-- [ ] undo that survives structural changes (insert or delete a row, rename), and undo of formatting
+- [ ] **P0** undo that survives structural changes (insert or delete a row, rename), and undo of formatting
 - [x] (Claude) undo and redo (persistent version history): the server keeps versions, and History restores one or opens a copy
 - [x] (Claude) Ctrl+Z and Ctrl+Y for single edits within a session
 - [ ] (Claude) store versions compressed or as differences if large spreadsheets make them costly
 - [x] (Claude) live sync between sessions: open sessions re-read the spreadsheet when another changes it
-- [ ] (Claude) send the changed cells with a change event, so sessions need not re-read the whole spreadsheet; show who else has it open
-- [ ] a save names a cell by row and column, so one that crosses another person's row or column insert lands on the wrong cell. Needs the client to send the table version it saw
+- [ ] **P3** send the changed cells with a change event, so sessions need not re-read the whole spreadsheet; show who else has it open
+- [ ] **P3** a save names a cell by row and column, so one that crosses another person's row or column insert lands on the wrong cell. Needs the client to send the table version it saw
 
 ## Accounts and email
 
@@ -135,6 +160,7 @@ Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author
 - [x] (Claude) email verification at sign-up, switched on with `REQUIRE_EMAIL_VERIFICATION`
 - [x] (Claude) real email delivery behind the `Mailer` interface (set `SMTP_URL`)
 - [ ] (Claude) invitations for people without an account, password reset, and resending a confirmation link
+- [ ] **P4** allow users to create folders to organize their sheets
 
 ## Server, performance, and reliability
 
@@ -144,5 +170,10 @@ Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author
 - [ ] (Claude) trusted proxy configuration for better-auth's rate limiting, as a config variable
 - [ ] (Claude) a large table re-writes every moved cell on a row or column insert/delete; shift in SQL if this gets slow
 - [x] (Claude) code review of 2026-10-01 (`_scratch/2026-10-01-codex-review.md`): all 20 findings addressed, see DECISIONS.md
-- [ ] (Claude) run `pnpm e2e` and the server tests against Postgres (`TEST_DATABASE_URL`) after the review fixes: neither runs in the sandbox
+- [x] (Claude) run `pnpm e2e` and the server tests against Postgres (`TEST_DATABASE_URL`) after the review fixes: neither runs in the sandbox
+  - (author) e2e run and full CI run are passing as of `87b20ea`
 - [ ] (Claude) a limit on the length of text a formula builds: `REPT("x", 5e8)` is under JavaScript's string limit and still takes half a gigabyte, on the server too when a button runs
+
+## Ambitious ideas
+
+- **P9999** idea to think about: support offline work on spreadsheets, stored in local storage, and let users create and edit local spreadsheets even without an account. features like sharing, sending emails, automation, etc. would still require an account, but users could use the client side functionality freely without signing up.

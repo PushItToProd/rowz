@@ -26,7 +26,7 @@ The list was read from the Rows documentation index on 2026-09-30. Signatures fo
 1. **`SCHEDULE(task, schedule, [time_zone])`, `REPEAT`, and `REFRESH(range, [interval], [unit], [delay])`.** Run an action on a timer without a click. This needs a scheduler on the server and a decision about whose permissions a scheduled action runs with.
 2. **Regular expressions: `REGEXMATCH`, `REGEXEXTRACT`, `REGEXREPLACE`.** Held back on purpose. See below.
 3. **Reference functions: `OFFSET`, `INDIRECT`, `ADDRESS`, `ISFORMULA`, `ISREF`.** `OFFSET` and `INDIRECT` produce references at evaluation time, which the dependency graph cannot see in advance. They need the graph to re-plan after evaluation, as array spills already do.
-4. **Random numbers: `RAND`, `RANDBETWEEN`, `RANDARRAY`.** Each client and the server evaluate formulas separately, so each would see a different number. A button that used one would act on a number the user never saw. They need a seed stored with the spreadsheet.
+4. **Random numbers: `RAND`, `RANDBETWEEN`, `RANDARRAY`.** Each client and the server evaluate formulas separately, so each would see a different number. A button that used one would act on a number the user never saw. They need a seed stored with the spreadsheet and shared across all clients.
 5. **Date helpers: `YEARFRAC`, `TIMEVALUE`, `TO_DATE`, `UNIXTIME`, `UNIX2DATE`, `TO_TIMEZONE`, and the ranges `LASTXDAYS`, `LASTXWEEKS`, `LASTXMONTHS`, `DATEINTERVAL`.** Small. `TO_TIMEZONE` needs a decision first, because dates here carry no time zone.
 6. **More statistics: `SKEW RANK_AVG RANK_EQ PEARSON`.** Small. `PEARSON` is `CORREL` under another name.
 7. **Other text: `SLICE`, `SLUGIFY`, `DECODEURL`, `BASE64`, `BASE64DECODE`, `DOMAIN`, `RELATIVE_URL`.** Small.
