@@ -1,13 +1,25 @@
-export type Token =
-  | { type: "number"; value: number; position: number }
-  | { type: "string"; value: string; position: number }
-  /** A bare word: function name, cell address, boolean, or unquoted table name. */
-  | { type: "identifier"; value: string; position: number }
-  /** A single-quoted page or table name. */
-  | { type: "quotedName"; value: string; position: number }
-  | { type: "operator"; value: Operator; position: number }
-  | { type: "punctuation"; value: Punctuation; position: number }
-  | { type: "end"; position: number };
+import { ERROR_CODES, type ErrorCode } from "./values";
+
+/** Where a token sits in the formula text: `position` is its first character and `end` is one past its last. */
+interface Span {
+  position: number;
+  end: number;
+}
+
+export type Token = Span &
+  (
+    | { type: "number"; value: number }
+    | { type: "string"; value: string }
+    /** A bare word: function name, cell address, boolean, or unquoted table name. */
+    | { type: "identifier"; value: string }
+    /** A single-quoted page or table name. */
+    | { type: "quotedName"; value: string }
+    /** An error written out in a formula, such as the `#REF!` left where a deleted cell was named. */
+    | { type: "error"; value: ErrorCode }
+    | { type: "operator"; value: Operator }
+    | { type: "punctuation"; value: Punctuation }
+    | { type: "end" }
+  );
 
 export type Operator = "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | ">" | "<=" | ">=";
 export type Punctuation = "(" | ")" | "," | ":" | "!";
@@ -85,8 +97,15 @@ export function tokenize(text: string): Token[] {
     const char = text.charAt(position);
     if (char === '"' || char === "'") {
       const { value, end } = readQuoted(text, position, char);
-      tokens.push({ type: char === '"' ? "string" : "quotedName", value, position });
+      tokens.push({ type: char === '"' ? "string" : "quotedName", value, position, end });
       position = end;
+      continue;
+    }
+
+    const errorCode = ERROR_CODES.find((code) => text.startsWith(code, position));
+    if (errorCode !== undefined) {
+      tokens.push({ type: "error", value: errorCode, position, end: position + errorCode.length });
+      position += errorCode.length;
       continue;
     }
 
@@ -96,28 +115,33 @@ export function tokenize(text: string): Token[] {
       if (!Number.isFinite(value)) {
         throw new FormulaSyntaxError(`Number out of range: ${number}`, position);
       }
-      tokens.push({ type: "number", value, position });
+      tokens.push({ type: "number", value, position, end: position + number.length });
       position += number.length;
       continue;
     }
 
     const identifier = matchAt(IDENTIFIER, text, position);
     if (identifier !== undefined) {
-      tokens.push({ type: "identifier", value: identifier, position });
+      tokens.push({
+        type: "identifier",
+        value: identifier,
+        position,
+        end: position + identifier.length,
+      });
       position += identifier.length;
       continue;
     }
 
     const operator = OPERATORS.find((candidate) => text.startsWith(candidate, position));
     if (operator !== undefined) {
-      tokens.push({ type: "operator", value: operator, position });
+      tokens.push({ type: "operator", value: operator, position, end: position + operator.length });
       position += operator.length;
       continue;
     }
 
     const punctuation = PUNCTUATION.find((candidate) => candidate === char);
     if (punctuation !== undefined) {
-      tokens.push({ type: "punctuation", value: punctuation, position });
+      tokens.push({ type: "punctuation", value: punctuation, position, end: position + 1 });
       position += 1;
       continue;
     }
@@ -125,6 +149,6 @@ export function tokenize(text: string): Token[] {
     throw new FormulaSyntaxError(`Unexpected character ${char}`, position);
   }
 
-  tokens.push({ type: "end", position });
+  tokens.push({ type: "end", position, end: position });
   return tokens;
 }

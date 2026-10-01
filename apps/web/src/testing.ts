@@ -44,7 +44,7 @@ export function mockApi(): MockedApi {
     renameSpreadsheet: vi.fn().mockResolvedValue(undefined),
     deleteSpreadsheet: vi.fn().mockResolvedValue(undefined),
     createPage: vi.fn(),
-    renamePage: vi.fn().mockResolvedValue(undefined),
+    renamePage: vi.fn().mockResolvedValue({ cells: [] }),
     deletePage: vi.fn().mockResolvedValue(undefined),
     createTable: vi.fn(),
     updateTable: vi.fn(),

@@ -1,14 +1,9 @@
 import type { CellId } from "./address";
 import type { Node } from "./ast";
 
-export type ErrorCode =
-  | "#DIV/0!"
-  | "#VALUE!"
-  | "#REF!"
-  | "#NAME?"
-  | "#CYCLE!"
-  /** The formula text could not be parsed, or a function got the wrong number of arguments. */
-  | "#ERROR!";
+/** `#ERROR!` means the formula text could not be parsed, or a function got the wrong number of arguments. */
+export const ERROR_CODES = ["#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#CYCLE!", "#ERROR!"] as const;
+export type ErrorCode = (typeof ERROR_CODES)[number];
 
 export interface ErrorValue {
   kind: "error";

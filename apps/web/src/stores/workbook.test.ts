@@ -264,9 +264,30 @@ describe("structure", () => {
     const store = await open({ A1: "5", B1: "=Sales!A1" });
     expect(store.valueOf(at("B1"))).toMatchObject({ code: "#REF!" });
 
-    server.updateTable.mockResolvedValue({ ...TABLE, name: "Sales" });
+    server.updateTable.mockResolvedValue({ table: { ...TABLE, name: "Sales" }, cells: [] });
     expect(await store.updateTable("t1", { name: "Sales" })).toBe(true);
     expect(store.tables[0]?.name).toBe("Sales");
+    expect(store.valueOf(at("B1"))).toBe(5);
+  });
+
+  it("applies the formulas the server rewrote for a renamed table", async () => {
+    const store = await open({ A1: "5", B1: "='Table 1'!A1" });
+    server.updateTable.mockResolvedValue({
+      table: { ...TABLE, name: "Sales" },
+      cells: [{ ...at("B1"), input: "=Sales!A1" }],
+    });
+    await store.updateTable("t1", { name: "Sales" });
+    expect(store.inputOf(at("B1"))).toBe("=Sales!A1");
+    expect(store.valueOf(at("B1"))).toBe(5);
+  });
+
+  it("applies the formulas the server rewrote for a renamed page", async () => {
+    const store = await open({ A1: "5", B1: "='Page 1'!'Table 1'!A1" });
+    server.renamePage.mockResolvedValue({
+      cells: [{ ...at("B1"), input: "=Summary!'Table 1'!A1" }],
+    });
+    await store.renamePage("p1", "Summary");
+    expect(store.inputOf(at("B1"))).toBe("=Summary!'Table 1'!A1");
     expect(store.valueOf(at("B1"))).toBe(5);
   });
 

@@ -98,17 +98,21 @@ test("a button sends an email built from cells, and reports a bad address", asyn
   await expect(page.getByRole("alert")).toHaveText(/"nobody" is not an email address/);
 });
 
-test("renaming a table or page updates the formulas that name it", async ({ page }) => {
+test("renaming a table or page rewrites the formulas that name it", async ({ page }) => {
   await newSpreadsheet(page);
   await page.getByRole("button", { name: "Add table" }).click();
   await enter(page, "A1", "5", "Table 2");
-  await enter(page, "A1", "=Sales!A1+1");
-  await expect(cell(page, "A1")).toHaveText("#REF!");
+  await enter(page, "A1", "='Table 2'!A1+1");
+  await enter(page, "A2", "='Page 1'!'Table 2'!A1*2");
+  await expect(cell(page, "A1")).toHaveText("6");
 
   await page.locator('[data-table="Table 2"]').getByText("Table 2").dblclick();
   await page.getByLabel("Table name").fill("Sales");
   await page.getByLabel("Table name").press("Enter");
+  await expect(page.locator('[data-table="Sales"]')).toBeVisible();
   await expect(cell(page, "A1")).toHaveText("6");
+  await cell(page, "A1").click();
+  await expect(page.getByLabel("Formula")).toHaveValue("=Sales!A1+1");
 
   await page.locator('[data-table="Sales"]').getByText("Sales").dblclick();
   await page.getByLabel("Table name").fill("Table 1");
@@ -120,9 +124,13 @@ test("renaming a table or page updates the formulas that name it", async ({ page
   await page.getByLabel("Page name").fill("Summary");
   await page.getByLabel("Page name").press("Enter");
   await expect(pages.locator('[aria-current="page"]')).toHaveText(/Summary/);
+  await expect(cell(page, "A2")).toHaveText("10");
+  await cell(page, "A2").click();
+  await expect(page.getByLabel("Formula")).toHaveValue("=Summary!Sales!A1*2");
 
   await page.reload();
   await expect(cell(page, "A1")).toHaveText("6");
+  await expect(cell(page, "A2")).toHaveText("10");
   await expect(pages.locator('[aria-current="page"]')).toHaveText(/Summary/);
 });
 

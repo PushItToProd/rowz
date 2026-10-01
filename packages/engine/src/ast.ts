@@ -1,4 +1,5 @@
 import { columnLabel } from "./address";
+import type { ErrorCode } from "./values";
 
 export type BinaryOperator =
   "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | ">" | "<=" | ">=";
@@ -29,6 +30,7 @@ export type Node =
   | { type: "number"; value: number }
   | { type: "string"; value: string }
   | { type: "boolean"; value: boolean }
+  | { type: "error"; code: ErrorCode }
   | { type: "reference"; reference: Reference }
   | { type: "unary"; operator: UnaryOperator; operand: Node }
   | { type: "binary"; operator: BinaryOperator; left: Node; right: Node }
@@ -40,11 +42,15 @@ function printReferenceCell(cell: ReferenceCell): string {
   return col + row;
 }
 
+const BARE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** Writes a page or table name for a reference, in single quotes unless it is a plain word. */
 function quoteName(name: string): string {
-  return `'${name.replaceAll("'", "''")}'`;
+  return BARE_NAME.test(name) ? name : `'${name.replaceAll("'", "''")}'`;
 }
 
-function printReference(reference: Reference): string {
+/** Writes a reference the way it is typed in a formula. */
+export function formatReference(reference: Reference): string {
   const qualifiers = [reference.page, reference.table]
     .filter((name) => name !== undefined)
     .map((name) => `${quoteName(name)}!`)
@@ -66,8 +72,10 @@ export function printNode(node: Node): string {
       return `"${node.value.replaceAll('"', '""')}"`;
     case "boolean":
       return node.value ? "TRUE" : "FALSE";
+    case "error":
+      return node.code;
     case "reference":
-      return printReference(node.reference);
+      return formatReference(node.reference);
     case "unary":
       return `(${node.operator}${printNode(node.operand)})`;
     case "binary":

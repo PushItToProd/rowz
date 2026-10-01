@@ -8,7 +8,7 @@ export {
   type CellId,
   type CellRange,
 } from "./address";
-export { printNode, type Node, type Reference } from "./ast";
+export { formatReference, printNode, type Node, type Reference } from "./ast";
 export {
   errorDocs,
   EXAMPLE_CELLS,
@@ -25,7 +25,14 @@ export type {
   PlanContext,
   PureFunction,
 } from "./functions/registry";
-export { parseFormula } from "./parser";
+export { parseFormula, parseFormulaWithReferences, type LocatedReference } from "./parser";
+export {
+  inputsAfterRename,
+  rewriteReferences,
+  type Rename,
+  type Replacement,
+  type StoredInput,
+} from "./rewrite";
 export { FormulaSyntaxError } from "./tokenizer";
 export {
   formatValue,

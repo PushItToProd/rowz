@@ -170,9 +170,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   function renamePage(pageId: string, name: string): Promise<boolean> {
     return attempt(async () => {
-      await api.renamePage(pageId, name);
+      const { cells } = await api.renamePage(pageId, name);
       pages.value = pages.value.map((page) => (page.id === pageId ? { ...page, name } : page));
       syncStructure();
+      // The server rewrote the formulas that named the page.
+      for (const cell of cells) apply(cell, cell.input);
     }, "The page could not be renamed");
   }
 
@@ -198,9 +200,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
     changes: { name?: string; rowCount?: number; colCount?: number },
   ): Promise<boolean> {
     return attempt(async () => {
-      const updated = await api.updateTable(tableId, changes);
+      const { table: updated, cells } = await api.updateTable(tableId, changes);
       tables.value = tables.value.map((table) => (table.id === tableId ? updated : table));
       syncStructure();
+      // After a rename, the server rewrote the formulas that named the table.
+      for (const cell of cells) apply(cell, cell.input);
     }, "The table could not be changed");
   }
 

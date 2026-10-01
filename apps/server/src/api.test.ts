@@ -156,7 +156,9 @@ describe("pages", () => {
       { name: "Data" },
       201,
     );
-    await user.json("PATCH", `/pages/${page.id}`, { name: "Archive" }, 204);
+    expect(await user.json("PATCH", `/pages/${page.id}`, { name: "Archive" })).toEqual({
+      cells: [],
+    });
     await user.json("PATCH", `/pages/${page.id}`, { name: "page 1" }, 409);
     const after = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
     expect(after.pages.map((item) => item.name)).toEqual(["Page 1", "Archive"]);
@@ -220,7 +222,8 @@ describe("tables", () => {
     await user.json("POST", `/pages/${page.id}/tables`, { name: "Sales" }, 201);
 
     expect(await user.json("PATCH", `/tables/${table.id}`, { name: "Costs" })).toMatchObject({
-      name: "Costs",
+      table: { name: "Costs" },
+      cells: [],
     });
     expect(await user.json("PATCH", `/tables/${table.id}`, { name: "SALES" }, 409)).toEqual({
       error: { code: "conflict", message: "A table named SALES already exists" },
@@ -238,7 +241,10 @@ describe("tables", () => {
     );
 
     const resized = await user.json("PATCH", `/tables/${table.id}`, { rowCount: 4, colCount: 2 });
-    expect(resized).toMatchObject({ rowCount: 4, colCount: 2, name: "Table 1" });
+    expect(resized).toMatchObject({
+      table: { rowCount: 4, colCount: 2, name: "Table 1" },
+      cells: [],
+    });
     expect(await storedInputs(user, snapshot.id, table.id)).toEqual({
       "0:0": "keep",
       "1:1": "keep too",
@@ -268,6 +274,88 @@ describe("tables", () => {
     const after = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
     expect(after.tables).toEqual([]);
     expect(after.cells).toEqual([]);
+  });
+});
+
+describe("renaming rewrites formulas", () => {
+  it("writes a table's new name into the formulas that name it, on every page", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { page, table } = first(snapshot);
+    const sales = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
+    const other = await user.json<{ page: PageRecord; table: TableRecord }>(
+      "POST",
+      `/spreadsheets/${snapshot.id}/pages`,
+      {},
+      201,
+    );
+    await user.json(
+      "PUT",
+      `/tables/${table.id}/cells`,
+      cellsBody({ A1: "=SUM('Table 2'!A1:A3) + 1", A2: "=A1", A3: "Table 2" }),
+      204,
+    );
+    await user.json(
+      "PUT",
+      `/tables/${other.table.id}/cells`,
+      cellsBody({ B2: "='page 1'!'table 2'!A1", B3: "='Table 2'!A1" }),
+      204,
+    );
+
+    const renamed = await user.json("PATCH", `/tables/${sales.id}`, { name: "Sales" });
+    expect(renamed).toMatchObject({
+      table: { name: "Sales" },
+      cells: [
+        { tableId: table.id, row: 0, col: 0, input: "=SUM(Sales!A1:A3) + 1" },
+        { tableId: other.table.id, row: 1, col: 1, input: "='page 1'!Sales!A1" },
+      ],
+    });
+    expect(await storedInputs(user, snapshot.id, table.id)).toEqual({
+      "0:0": "=SUM(Sales!A1:A3) + 1",
+      "1:0": "=A1",
+      "2:0": "Table 2",
+    });
+    // Page 2 has no table named "Table 2", so its unqualified reference never pointed here.
+    expect(await storedInputs(user, snapshot.id, other.table.id)).toEqual({
+      "1:1": "='page 1'!Sales!A1",
+      "2:1": "='Table 2'!A1",
+    });
+  });
+
+  it("writes a page's new name into the formulas that name it", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { page, table } = first(snapshot);
+    await user.json(
+      "PUT",
+      `/tables/${table.id}/cells`,
+      cellsBody({ A1: "='Page 1'!'Table 1'!B1" }),
+      204,
+    );
+
+    expect(await user.json("PATCH", `/pages/${page.id}`, { name: "Summary" })).toEqual({
+      cells: [{ tableId: table.id, row: 0, col: 0, input: "=Summary!'Table 1'!B1" }],
+    });
+    expect(await storedInputs(user, snapshot.id, table.id)).toEqual({
+      "0:0": "=Summary!'Table 1'!B1",
+    });
+  });
+
+  it("leaves formulas alone when the rename is refused", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { page, table } = first(snapshot);
+    const second = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "='Table 2'!A1" }), 204);
+
+    await user.json("PATCH", `/tables/${second.id}`, { name: "table 1" }, 409);
+    expect(await storedInputs(user, snapshot.id, table.id)).toEqual({ "0:0": "='Table 2'!A1" });
+  });
+
+  it("does not rewrite formulas when a table is only resized", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { table } = first(snapshot);
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "='Table 1'!B1" }), 204);
+    expect(await user.json("PATCH", `/tables/${table.id}`, { rowCount: 25 })).toMatchObject({
+      cells: [],
+    });
   });
 });
 

@@ -46,6 +46,11 @@ describe("cell contents", () => {
     });
   });
 
+  it("evaluates an error written in a formula to that error", () => {
+    expectError(evaluateFormula("=#REF!+1"), "#REF!");
+    expect(evaluateFormula('=IFERROR(#DIV/0!, "caught")')).toBe("caught");
+  });
+
   it("reports unknown words and unknown functions as name errors", () => {
     expectError(evaluateFormula("=total"), "#NAME?");
     expectError(evaluateFormula("=NOPE(1)"), "#NAME?");

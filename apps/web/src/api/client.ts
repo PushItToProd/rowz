@@ -6,7 +6,7 @@ import type {
   SpreadsheetSummary,
   TableRecord,
 } from "@spreadsheet-app/server";
-import type { ApiError, CellInput } from "@spreadsheet-app/shared";
+import type { ApiError, CellInput, StoredCell } from "@spreadsheet-app/shared";
 import type { CellId } from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
@@ -81,8 +81,9 @@ export const api = {
   createPage: (spreadsheetId: string): Promise<{ page: PageRecord; table: TableRecord }> =>
     body(routes.spreadsheets[":spreadsheetId"].pages.$post({ param: { spreadsheetId }, json: {} })),
 
-  renamePage: (pageId: string, name: string): Promise<void> =>
-    done(routes.pages[":pageId"].$patch({ param: { pageId }, json: { name } })),
+  /** Resolves to the cells whose formulas named the page and were rewritten. */
+  renamePage: (pageId: string, name: string): Promise<{ cells: StoredCell[] }> =>
+    body(routes.pages[":pageId"].$patch({ param: { pageId }, json: { name } })),
 
   deletePage: (pageId: string): Promise<void> =>
     done(routes.pages[":pageId"].$delete({ param: { pageId } })),
@@ -93,7 +94,7 @@ export const api = {
   updateTable: (
     tableId: string,
     changes: { name?: string; rowCount?: number; colCount?: number },
-  ): Promise<TableRecord> =>
+  ): Promise<{ table: TableRecord; cells: StoredCell[] }> =>
     body(routes.tables[":tableId"].$patch({ param: { tableId }, json: changes })),
 
   deleteTable: (tableId: string): Promise<void> =>

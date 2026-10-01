@@ -203,8 +203,8 @@ const OPERATORS = [
         apostrophe inside a quoted name by doubling it: <code>'Joe''s table'!A1</code>.
       </p>
       <p>
-        Renaming a page or table does not rewrite formulas that name it. They show
-        <code>#REF!</code> until they are changed to the new name.
+        Renaming a page or table rewrites the formulas that name it, so they keep reading the same
+        cells.
       </p>
     </section>
 

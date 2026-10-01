@@ -1,4 +1,4 @@
-import { formatAddress } from "@spreadsheet-app/engine";
+import { formatAddress, inputsAfterRename, type Rename } from "@spreadsheet-app/engine";
 import { DEFAULT_TABLE_SIZE, type CellInput, type StoredCell } from "@spreadsheet-app/shared";
 import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
@@ -171,14 +171,23 @@ export class SpreadsheetRepository {
     });
   }
 
-  async renamePage(pageId: string, name: string): Promise<void> {
+  /** Renames a page and the formulas that name it. Returns the cells whose formulas changed. */
+  async renamePage(pageId: string, name: string): Promise<StoredCell[]> {
     const page = await this.findPage(pageId, "write");
-    await this.db
-      .update(pages)
-      .set({ name })
-      .where(eq(pages.id, pageId))
-      .catch(rethrowDuplicate("page", name));
-    await touch(this.db, page.spreadsheetId);
+    return this.db.transaction(async (tx) => {
+      const rewritten = await this.rewriteFormulas(tx, page.spreadsheetId, {
+        kind: "page",
+        pageId,
+        name,
+      });
+      await tx
+        .update(pages)
+        .set({ name })
+        .where(eq(pages.id, pageId))
+        .catch(rethrowDuplicate("page", name));
+      await touch(tx, page.spreadsheetId);
+      return rewritten;
+    });
   }
 
   async deletePage(pageId: string): Promise<void> {
@@ -221,7 +230,11 @@ export class SpreadsheetRepository {
     return table;
   }
 
-  /** Renames or resizes a table. Shrinking deletes the cells that no longer fit. */
+  /**
+   * Renames or resizes a table. Renaming rewrites the formulas that name the
+   * table, and `cells` lists the ones that changed. Shrinking deletes the
+   * cells that no longer fit.
+   */
   async updateTable(
     tableId: string,
     changes: {
@@ -229,9 +242,17 @@ export class SpreadsheetRepository {
       rowCount?: number | undefined;
       colCount?: number | undefined;
     },
-  ): Promise<TableRecord> {
+  ): Promise<{ table: TableRecord; cells: StoredCell[] }> {
     const table = await this.findTable(tableId, "write");
     return this.db.transaction(async (tx) => {
+      const rewritten =
+        changes.name === undefined
+          ? []
+          : await this.rewriteFormulas(tx, table.spreadsheetId, {
+              kind: "table",
+              tableId,
+              name: changes.name,
+            });
       const [updated] = await tx
         .update(tables)
         .set(changes)
@@ -248,7 +269,7 @@ export class SpreadsheetRepository {
           ),
         );
       await touch(tx, table.spreadsheetId);
-      return updated;
+      return { table: updated, cells: rewritten };
     });
   }
 
@@ -275,19 +296,10 @@ export class SpreadsheetRepository {
     const cleared = latest.filter((cell) => cell.input === "");
 
     await this.db.transaction(async (tx) => {
-      if (filled.length > 0) {
-        await tx
-          .insert(cells)
-          .values(filled.map((cell) => ({ tableId, ...cell, updatedBy: this.userId })))
-          .onConflictDoUpdate({
-            target: [cells.tableId, cells.row, cells.col],
-            set: {
-              input: sql`excluded.input`,
-              updatedBy: sql`excluded.updated_by`,
-              updatedAt: sql`now()`,
-            },
-          });
-      }
+      await this.upsertCells(
+        tx,
+        filled.map((cell) => ({ tableId, ...cell })),
+      );
       if (cleared.length > 0) {
         const targets = cleared.map((cell) =>
           and(eq(cells.row, cell.row), eq(cells.col, cell.col)),
@@ -359,6 +371,44 @@ export class SpreadsheetRepository {
       .innerJoin(workspaceMembers, this.membership())
       .where(eq(tables.id, tableId));
     return authorize(row, access, "Table");
+  }
+
+  /**
+   * Rewrites the formulas that name a page or table about to be renamed, and
+   * returns the cells that changed. Must run in a transaction, before the
+   * rename itself: the old name is how the formulas are recognized.
+   */
+  private async rewriteFormulas(
+    tx: Database,
+    spreadsheetId: string,
+    rename: Rename,
+  ): Promise<StoredCell[]> {
+    // Without the lock, a cell saved during the rename could keep the old name.
+    await lockSpreadsheet(tx, spreadsheetId);
+    const snapshot = await new SpreadsheetRepository(tx, this.userId).getSnapshot(spreadsheetId);
+    const rewritten = inputsAfterRename(snapshot, rename);
+    await this.upsertCells(tx, rewritten);
+    return rewritten;
+  }
+
+  private async upsertCells(db: Database, inputs: readonly StoredCell[]): Promise<void> {
+    // Each row binds four parameters, and Postgres accepts 65535 per statement.
+    const BATCH = 5000;
+    for (let start = 0; start < inputs.length; start += BATCH) {
+      await db
+        .insert(cells)
+        .values(
+          inputs.slice(start, start + BATCH).map((cell) => ({ ...cell, updatedBy: this.userId })),
+        )
+        .onConflictDoUpdate({
+          target: [cells.tableId, cells.row, cells.col],
+          set: {
+            input: sql`excluded.input`,
+            updatedBy: sql`excluded.updated_by`,
+            updatedAt: sql`now()`,
+          },
+        });
+    }
   }
 
   /** The join condition that limits a query to spreadsheets in the user's workspaces. */

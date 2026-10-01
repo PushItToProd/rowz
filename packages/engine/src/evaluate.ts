@@ -130,6 +130,8 @@ export function evaluate(node: Node, context: EvaluationContext): Evaluated {
     case "string":
     case "boolean":
       return node.value;
+    case "error":
+      return error(node.code);
     case "reference":
       return readReference(node.reference, context);
     case "call":

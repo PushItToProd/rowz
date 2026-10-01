@@ -40,8 +40,21 @@ function parseReferenceCell(text: string): ReferenceCell | undefined {
   };
 }
 
+/** A reference and where it is written in the formula text. */
+export interface LocatedReference {
+  reference: Reference;
+  /** Offset of the reference's first character. */
+  from: number;
+  /** Offset one past its last character. */
+  to: number;
+}
+
 class Parser {
+  /** Every reference in the formula, in the order written. */
+  readonly references: LocatedReference[] = [];
   private index = 0;
+  /** Where the most recently consumed token ends. */
+  private consumedTo = 0;
 
   constructor(private readonly tokens: readonly Token[]) {}
 
@@ -61,6 +74,7 @@ class Parser {
   private next(): Token {
     const token = this.peek();
     this.index += 1;
+    this.consumedTo = token.end;
     return token;
   }
 
@@ -88,7 +102,7 @@ class Parser {
       if (token.type !== "operator") return left;
       const precedence = BINARY_PRECEDENCE[token.value];
       if (precedence <= minPrecedence) return left;
-      this.index += 1;
+      this.next();
       left = { type: "binary", operator: token.value, left, right: this.expression(precedence) };
     }
   }
@@ -96,7 +110,7 @@ class Parser {
   private unary(): Node {
     const token = this.peek();
     if (token.type === "operator" && (token.value === "+" || token.value === "-")) {
-      this.index += 1;
+      this.next();
       return { type: "unary", operator: token.value, operand: this.unary() };
     }
     return this.primary();
@@ -109,11 +123,13 @@ class Parser {
         return { type: "number", value: token.value };
       case "string":
         return { type: "string", value: token.value };
+      case "error":
+        return { type: "error", code: token.value };
       case "quotedName":
         if (!this.isPunctuation("!")) {
           throw new FormulaSyntaxError("Expected ! after a quoted name", token.position);
         }
-        return this.qualifiedReference(token.value);
+        return this.qualifiedReference(token.value, token.position);
       case "identifier":
         return this.identifier(token.value, token.position);
       case "punctuation":
@@ -131,7 +147,7 @@ class Parser {
 
   private identifier(name: string, position: number): Node {
     if (this.isPunctuation("(")) return this.call(name);
-    if (this.isPunctuation("!")) return this.qualifiedReference(name);
+    if (this.isPunctuation("!")) return this.qualifiedReference(name, position);
 
     const upper = name.toUpperCase();
     if (upper === "TRUE") return { type: "boolean", value: true };
@@ -139,7 +155,12 @@ class Parser {
 
     const start = parseReferenceCell(name);
     if (!start) throw new FormulaSyntaxError(`Unknown name ${name}`, position, "#NAME?");
-    return { type: "reference", reference: this.rangeFrom(start) };
+    return this.located(this.rangeFrom(start), position);
+  }
+
+  private located(reference: Reference, from: number): Node {
+    this.references.push({ reference, from, to: this.consumedTo });
+    return { type: "reference", reference };
   }
 
   private call(name: string): Node {
@@ -156,12 +177,12 @@ class Parser {
 
   private consumePunctuation(value: Punctuation): boolean {
     if (!this.isPunctuation(value)) return false;
-    this.index += 1;
+    this.next();
     return true;
   }
 
   /** Parses `Table!A1` or `Page!Table!A1`, positioned at the first `!`. */
-  private qualifiedReference(firstName: string): Node {
+  private qualifiedReference(firstName: string, position: number): Node {
     this.expectPunctuation("!");
     const names = [firstName];
     const candidate = this.peek();
@@ -170,13 +191,14 @@ class Parser {
       this.isPunctuation("!", 1)
     ) {
       names.push(candidate.value);
-      this.index += 2;
+      this.next();
+      this.next();
     }
 
     const start = this.referenceCell();
     const qualifier =
       names.length === 2 ? { page: names[0], table: names[1] } : { table: names[0] };
-    return { type: "reference", reference: { ...qualifier, ...this.rangeFrom(start) } };
+    return this.located({ ...qualifier, ...this.rangeFrom(start) }, position);
   }
 
   private referenceCell(): ReferenceCell {
@@ -197,5 +219,14 @@ class Parser {
  * @throws FormulaSyntaxError when the text is not a valid formula.
  */
 export function parseFormula(text: string): Node {
-  return new Parser(tokenize(text)).parse();
+  return parseFormulaWithReferences(text).ast;
+}
+
+/** Parses like `parseFormula`, and also reports where each reference is written. */
+export function parseFormulaWithReferences(text: string): {
+  ast: Node;
+  references: LocatedReference[];
+} {
+  const parser = new Parser(tokenize(text));
+  return { ast: parser.parse(), references: parser.references };
 }

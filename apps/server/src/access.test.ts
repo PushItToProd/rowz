@@ -135,7 +135,7 @@ describe("an editor", () => {
     });
     // The page delete is refused because it is the last page, not for lack of access.
     expect(await statuses(editor, writeRoutes())).toEqual([
-      204, 201, 204, 201, 200, 204, 200, 204, 204, 204,
+      204, 201, 200, 201, 200, 204, 200, 204, 204, 204,
     ]);
     await owner.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);
   });

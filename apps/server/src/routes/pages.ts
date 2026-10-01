@@ -10,8 +10,11 @@ export function pageRoutes() {
       zValidator("param", pageParam, onInvalid),
       zValidator("json", nameBody, onInvalid),
       async (c) => {
-        await c.var.repository.renamePage(c.req.valid("param").pageId, c.req.valid("json").name);
-        return c.body(null, 204);
+        const { pageId } = c.req.valid("param");
+        // The cells whose formulas named the page, with the new name written in.
+        return c.json({
+          cells: await c.var.repository.renamePage(pageId, c.req.valid("json").name),
+        });
       },
     )
     .delete("/:pageId", zValidator("param", pageParam, onInvalid), async (c) => {

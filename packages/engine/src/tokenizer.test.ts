@@ -68,8 +68,30 @@ describe("tokenize", () => {
     expect(tokens.map((token) => token.position)).toEqual([0, 3, 4, 6, 7, 9, 11, 12, 14, 16, 19]);
   });
 
+  it("records where each token ends", () => {
+    expect(tokenize("'My Table'!A1 >= 10").map((token) => [token.position, token.end])).toEqual([
+      [0, 10],
+      [10, 11],
+      [11, 13],
+      [14, 16],
+      [17, 19],
+      [19, 19],
+    ]);
+  });
+
+  it.each(["#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#CYCLE!", "#ERROR!"])(
+    "reads the error literal %s",
+    (code) => {
+      expect(summarize(`1+${code}`)).toEqual([
+        ["number", 1],
+        ["operator", "+"],
+        ["error", code],
+      ]);
+    },
+  );
+
   it("returns only the end token for blank text", () => {
-    expect(tokenize("  ")).toEqual([{ type: "end", position: 2 }]);
+    expect(tokenize("  ")).toEqual([{ type: "end", position: 2, end: 2 }]);
   });
 
   it.each([

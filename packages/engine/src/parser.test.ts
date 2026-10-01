@@ -1,8 +1,9 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { printNode, type BinaryOperator, type Node, type ReferenceCell } from "./ast";
-import { parseFormula } from "./parser";
+import { parseFormula, parseFormulaWithReferences } from "./parser";
 import { FormulaSyntaxError } from "./tokenizer";
+import { ERROR_CODES } from "./values";
 
 function cell(row: number, col: number, absolute = false): ReferenceCell {
   return { row, col, rowAbsolute: absolute, colAbsolute: absolute };
@@ -21,6 +22,7 @@ describe("literals", () => {
     ["42", number(42)],
     ['"hi"', { type: "string", value: "hi" }],
     ["TRUE", { type: "boolean", value: true }],
+    ["#REF!", { type: "error", code: "#REF!" }],
     ["false", { type: "boolean", value: false }],
   ])("parses %s", (text, node) => {
     expect(parseFormula(text)).toEqual(node);
@@ -123,6 +125,33 @@ describe("references", () => {
   });
 });
 
+describe("parseFormulaWithReferences", () => {
+  function located(text: string): string[] {
+    return parseFormulaWithReferences(text).references.map(({ from, to }) => text.slice(from, to));
+  }
+
+  it("reports the text of each reference, in the order written", () => {
+    expect(located("A1 + SUM( b2:C3 ,'My Table'!$A$1) & Page!Table!A1:B2")).toEqual([
+      "A1",
+      "b2:C3",
+      "'My Table'!$A$1",
+      "Page!Table!A1:B2",
+    ]);
+  });
+
+  it("includes references inside action arguments", () => {
+    expect(located('BUTTON("x", EXECUTE(A1+1, Log!B2))')).toEqual(["A1", "Log!B2"]);
+  });
+
+  it("allows spaces inside a reference and reports the whole of it", () => {
+    expect(located("1 + Sales ! A1 : B2 + 2")).toEqual(["Sales ! A1 : B2"]);
+  });
+
+  it("reports nothing for a formula with no references", () => {
+    expect(located('SUM(1, 2) & "A1"')).toEqual([]);
+  });
+});
+
 describe("calls", () => {
   it("parses a call with no arguments", () => {
     expect(parseFormula("NOW()")).toEqual({ type: "call", name: "NOW", args: [] });
@@ -200,6 +229,7 @@ describe("printNode", () => {
         .map((value) => number(Math.abs(value))),
       fc.string().map((value): Node => ({ type: "string", value })),
       fc.boolean().map((value): Node => ({ type: "boolean", value })),
+      fc.constantFrom(...ERROR_CODES).map((code): Node => ({ type: "error", code })),
       reference.map((value): Node => ({ type: "reference", reference: value })),
       fc
         .tuple(fc.constantFrom<"+" | "-">("+", "-"), tie("node"))
