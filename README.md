@@ -9,7 +9,7 @@ An open source, web-based spreadsheet modeled on rows.com. A spreadsheet holds p
 
 The first formula shows a button that writes the sum of A1 and A2 into A3. The second shows a button that sends an email built from three cells.
 
-`SEND_EMAIL` writes the message to the server log and delivers nothing. A real mail transport plugs in behind the `Mailer` interface in `apps/server/src/mail/mailer.ts`.
+`SEND_EMAIL` delivers through a mail server when `SMTP_URL` is set. Without one it writes the message to the server log and delivers nothing.
 
 ## Quick start
 
@@ -136,15 +136,36 @@ Every spreadsheet belongs to a workspace, and users reach spreadsheets through w
 
 The server reads environment variables. Development needs none.
 
-| Variable              | Default                 | Meaning                                                                              |
-| --------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
-| `DATABASE_URL`        | `.data/pglite`          | A `postgres://` URL, or a directory for the embedded PGlite database                 |
-| `AUTH_SECRET`         | a development value     | Signs sessions. Required when `NODE_ENV=production`.                                 |
-| `BASE_URL`            | `http://localhost:5173` | The URL browsers use to reach the app                                                |
-| `PORT`                | `3000`                  | Port of the API server                                                               |
-| `EMAIL_RUNS_PER_HOUR` | `20`                    | Button clicks per user per hour that may send email. Stops use as an open mail relay |
+| Variable              | Default                              | Meaning                                                                                                                      |
+| --------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`        | `.data/pglite`                       | A `postgres://` URL, or a directory for the embedded PGlite database                                                         |
+| `AUTH_SECRET`         | a development value                  | Signs sessions. Required when `NODE_ENV=production`.                                                                         |
+| `BASE_URL`            | `http://localhost:5173`              | The URL browsers use to reach the app                                                                                        |
+| `PORT`                | `3000`                               | Port of the API server                                                                                                       |
+| `EMAIL_RUNS_PER_HOUR` | `20`                                 | Button clicks per user per hour that may send email. Stops use as an open mail relay                                         |
+| `SMTP_URL`            | none                                 | An `smtp://` or `smtps://` URL of a mail server, with any user name and password in it. Without it email is logged, not sent |
+| `MAIL_FROM`           | `Spreadsheet <no-reply@localhost>`   | The address email is sent from                                                                                               |
+| `WEB_ROOT`            | none, or `../web/dist` in production | The directory of the built web app, which the server then serves. Set it to nothing when something else serves the web app   |
 
 The server applies database migrations at startup. After changing `apps/server/src/db/schema.ts`, run `pnpm --filter @spreadsheet-app/server db:generate` and commit the new file in `apps/server/drizzle/`.
+
+## Running in production
+
+```sh
+pnpm install
+pnpm build
+NODE_ENV=production \
+  AUTH_SECRET="$(openssl rand -base64 32)" \
+  BASE_URL=https://sheets.example.com \
+  DATABASE_URL=postgres://user:password@host/database \
+  pnpm start
+```
+
+`pnpm build` builds the web app into `apps/web/dist`. With `NODE_ENV=production` the server serves that directory next to the API, so one process answers everything on `PORT`. Put it behind a reverse proxy that terminates TLS and forwards the client's address. The proxy must not buffer `/api/spreadsheets/*/events`, which is a long-lived stream.
+
+The server runs from TypeScript source through `tsx`. There is no compiled server build.
+
+One server process is assumed. Live updates between sessions are announced in the process's memory, so sessions connected to different processes would not hear each other.
 
 ## Development
 
@@ -163,9 +184,7 @@ Server tests run against PGlite in memory. Set `TEST_DATABASE_URL` to a Postgres
 
 - Merging of edits made at the same moment. Open sessions see each other's changes within a second, and the last write to a cell wins.
 - Inviting someone who has no account yet, and email verification. A spreadsheet can be shared only with an existing account.
-- Email delivery.
 - Column resizing.
-- A production build of the server and static serving of the web app. The server runs from TypeScript source through `tsx`.
 
 ## License
 

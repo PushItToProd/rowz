@@ -5,7 +5,10 @@ import { createApp } from "./app";
 import { createAuth } from "./auth";
 import { loadConfig } from "./config";
 import { openDatabase } from "./db/client";
-import { logMailer } from "./mail/mailer";
+import { resolve } from "node:path";
+import { createTransport } from "nodemailer";
+import { logMailer, smtpMailer } from "./mail/mailer";
+import { withWebApp } from "./site";
 
 const config = loadConfig(process.env);
 
@@ -14,16 +17,21 @@ if (!config.databaseUrl.includes("://")) {
 }
 const database = await openDatabase(config.databaseUrl);
 
-const app = createApp({
+const api = createApp({
   db: database.db,
   auth: createAuth(database.db, {
     secret: config.authSecret,
     baseUrl: config.baseUrl,
     trustedOrigins: [config.baseUrl],
   }),
-  mailer: logMailer(),
+  mailer:
+    config.smtpUrl === undefined
+      ? logMailer()
+      : smtpMailer(createTransport(config.smtpUrl), config.mailFrom),
   emailRunsPerHour: config.emailRunsPerHour,
 });
+
+const app = config.webRoot === undefined ? api : withWebApp(api, resolve(config.webRoot));
 
 const server = serve({ fetch: app.fetch, port: config.port }, ({ port }) => {
   console.log(`Listening on http://localhost:${String(port)}`);

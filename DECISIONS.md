@@ -2,6 +2,18 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: Running in production, and real email
+
+**Decision.** The server can serve the built web app and send email through a mail server, so the app can be deployed as one process.
+
+- **`pnpm build` then `NODE_ENV=production pnpm start`.** In production the server serves `apps/web/dist` next to the API, with the app's page as the answer for any address the web app's router owns. I started it this way and checked the page, a deep link, an asset, the API, and sign-up.
+- **The server still runs from TypeScript source through `tsx`.** A compiled or bundled server would start faster and drop a dependency, and nothing else needs it yet.
+- **No Dockerfile.** I could not build or run one here, and an untested Dockerfile is worse than none. The README gives the commands.
+- **Email goes through `SMTP_URL` when it is set** (nodemailer). Without it messages are logged as before. The body is sent as plain text. The existing limit on email per user per hour still applies.
+- **One process is assumed.** The change feed for live updates is in memory.
+
+**Before putting this on the public internet.** Turn on email verification (see Sharing), set `AUTH_SECRET` to a random value, and configure better-auth's trusted proxy headers: without the client's address its sign-in rate limit is one shared bucket, which the server logs a warning about at start.
+
 ## 2026-10-01: Live updates between sessions
 
 **Decision.** You chose "no live sync" for the MVP. Sharing made that painful, so open sessions now follow each other's changes. This is not collaborative editing: there is no merging, no cursors, and the last write to a cell wins.

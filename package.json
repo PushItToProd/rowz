@@ -9,6 +9,8 @@
   },
   "scripts": {
     "dev": "pnpm --parallel --filter @spreadsheet-app/server --filter @spreadsheet-app/web dev",
+    "build": "pnpm --filter @spreadsheet-app/web build",
+    "start": "pnpm --filter @spreadsheet-app/server start",
     "lint": "eslint . && prettier --check \"**/*.{ts,js,vue,json,md,yaml,yml,css,html}\"",
     "format": "prettier --write \"**/*.{ts,js,vue,json,md,yaml,yml,css,html}\"",
     "typecheck": "tsc --noEmit && pnpm -r typecheck",

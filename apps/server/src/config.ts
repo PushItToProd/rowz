@@ -6,6 +6,12 @@ export interface Config {
   /** The URL browsers use to reach the app. */
   baseUrl: string;
   emailRunsPerHour: number;
+  /** The directory of the built web app to serve next to the API. Unset when something else serves it. */
+  webRoot?: string;
+  /** An `smtp://` or `smtps://` URL of the mail server that delivers `SEND_EMAIL`. Unset to log messages instead. */
+  smtpUrl?: string;
+  /** The address email is sent from. */
+  mailFrom: string;
 }
 
 const DEV_SECRET = "development-only-secret-do-not-deploy";
@@ -28,7 +34,12 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   if (authSecret === undefined || authSecret === "") {
     throw new Error("AUTH_SECRET must be set in production");
   }
+  // A production server serves the built web app itself unless told there is none to serve.
+  const webRoot = env.WEB_ROOT ?? (production ? "../web/dist" : "");
   return {
+    ...(webRoot === "" ? {} : { webRoot }),
+    ...(env.SMTP_URL === undefined || env.SMTP_URL === "" ? {} : { smtpUrl: env.SMTP_URL }),
+    mailFrom: env.MAIL_FROM ?? "Spreadsheet <no-reply@localhost>",
     port: integer("PORT", env.PORT, 3000),
     databaseUrl: env.DATABASE_URL ?? ".data/pglite",
     authSecret,
