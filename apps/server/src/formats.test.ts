@@ -143,7 +143,7 @@ describe("formatting cells", () => {
       pages: [
         {
           name: "P",
-          items: [{ type: "table", name: "T", rowCount: 2, colCount: 2, formats, cells: [] }],
+          blocks: [{ type: "table", name: "T", rowCount: 2, colCount: 2, formats, cells: [] }],
         },
       ],
     };

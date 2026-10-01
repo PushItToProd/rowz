@@ -235,8 +235,8 @@ describe("reordering a page", () => {
         .sort((a, b) => a.position - b.position)
         .map((item) => item.id);
     };
-    const put = (items: string[], status = 204) =>
-      user.json("PUT", `/pages/${started.page.id}/order`, { items }, status);
+    const put = (blocks: string[], status = 204) =>
+      user.json("PUT", `/pages/${started.page.id}/order`, { blocks }, status);
     return { ...started, chart, text, order, put };
   }
 

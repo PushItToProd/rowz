@@ -21,7 +21,7 @@ import {
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import { cellStyle } from "../formatStyle";
-import { contains, fillTarget, type Block } from "../formula/fill";
+import { contains, fillTarget, type GridRange } from "../formula/fill";
 import { useFormulaAssist } from "../formula/useFormulaAssist";
 import CellView from "./CellView.vue";
 import EditableName from "./EditableName.vue";
@@ -63,10 +63,10 @@ function commit(): void {
 }
 
 /** The selected cells, when the selection is in this table. */
-const block = computed(() => (selected.value ? store.selectedBlock : null));
+const range = computed(() => (selected.value ? store.selectedRange : null));
 
-function inBlock(row: number, col: number): boolean {
-  return block.value !== null && contains(block.value, { row, col });
+function inRange(row: number, col: number): boolean {
+  return range.value !== null && contains(range.value, { row, col });
 }
 
 function select(row: number, col: number): void {
@@ -112,7 +112,7 @@ function selectAll(): void {
 function onCellContextMenu(event: MouseEvent, row: number, col: number): void {
   if (!store.canEdit) return;
   event.preventDefault();
-  if (!inBlock(row, col)) select(row, col);
+  if (!inRange(row, col)) select(row, col);
   focusGrid();
   emit("menu", { x: event.clientX, y: event.clientY });
 }
@@ -155,16 +155,16 @@ function extend(rows: number, cols: number): void {
 }
 
 /** What a mouse drag in the grid is doing: selecting a range, or filling from the fill handle. */
-const drag = ref<{ kind: "select" } | { kind: "fill"; source: Block } | null>(null);
+const drag = ref<{ kind: "select" } | { kind: "fill"; source: GridRange } | null>(null);
 /** The cells a fill in progress would cover. */
-const fillPreview = ref<Block | null>(null);
+const fillPreview = ref<GridRange | null>(null);
 
 function inFillPreview(row: number, col: number): boolean {
   return fillPreview.value !== null && contains(fillPreview.value, { row, col });
 }
 
 function isHandleCell(row: number, col: number): boolean {
-  return block.value?.endRow === row && block.value.endCol === col;
+  return range.value?.endRow === row && range.value.endCol === col;
 }
 
 /**
@@ -202,9 +202,9 @@ function onCellMouseenter(row: number, col: number): void {
 }
 
 function startFill(): void {
-  if (!block.value) return;
-  drag.value = { kind: "fill", source: block.value };
-  fillPreview.value = block.value;
+  if (!range.value) return;
+  drag.value = { kind: "fill", source: range.value };
+  fillPreview.value = range.value;
   window.addEventListener("mouseup", endDrag, { once: true });
 }
 
@@ -223,7 +223,7 @@ function endDrag(): void {
 
 /** Copies the first row of the selection down, or its first column across. */
 function fillSelection(direction: "down" | "right"): void {
-  const whole = block.value;
+  const whole = range.value;
   if (!whole || !store.canEdit) return;
   const source =
     direction === "down"
@@ -240,7 +240,7 @@ function hasGridFocus(): boolean {
 // Clipboard events go to the document unless an editable element has focus,
 // so they are caught there and handled by the grid that has focus.
 function onCopy(event: ClipboardEvent): void {
-  if (!hasGridFocus() || !block.value) return;
+  if (!hasGridFocus() || !range.value) return;
   event.clipboardData?.setData("text/plain", store.copySelection());
   event.preventDefault();
   if (event.type === "cut") void store.clearSelection();
@@ -418,7 +418,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             :aria-selected="isSelected(row - 1, col - 1)"
             :class="{
               'grid__cell--selected': isSelected(row - 1, col - 1),
-              'grid__cell--in-range': inBlock(row - 1, col - 1),
+              'grid__cell--in-range': inRange(row - 1, col - 1),
               'grid__cell--fill-preview': inFillPreview(row - 1, col - 1),
               'grid__cell--filled': store.filledBy(cell(row - 1, col - 1)) !== undefined,
               'grid__cell--computed': columnAt(col - 1)?.type === 'formula',

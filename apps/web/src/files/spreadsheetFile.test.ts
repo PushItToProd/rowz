@@ -57,7 +57,7 @@ function file() {
 }
 
 describe("toSpreadsheetFile", () => {
-  it("writes pages and the items on them in their order, by name and without ids", () => {
+  it("writes pages and the blocks on them in their order, by name and without ids", () => {
     expect(file()).toEqual({
       format: "spreadsheet-app",
       version: 1,
@@ -65,7 +65,7 @@ describe("toSpreadsheetFile", () => {
       pages: [
         {
           name: "Data",
-          items: [
+          blocks: [
             {
               type: "table",
               name: "Sales",
@@ -77,7 +77,7 @@ describe("toSpreadsheetFile", () => {
             { type: "table", name: "Costs", rowCount: 2, colCount: 2, cells: [] },
           ],
         },
-        { name: "Report", items: [{ type: "text", name: "Summary", source: "# Hi" }] },
+        { name: "Report", blocks: [{ type: "text", name: "Summary", source: "# Hi" }] },
       ],
     });
   });
@@ -98,8 +98,8 @@ describe("readSpreadsheetFile", () => {
     expect(() => readSpreadsheetFile('{"some": "json"}')).toThrow(
       /^The file is not a spreadsheet this app can read \(format: /,
     );
-    const broken = { ...file(), pages: [{ name: "P", items: [{ type: "table", name: "T" }] }] };
-    expect(() => readSpreadsheetFile(JSON.stringify(broken))).toThrow(/pages\.0\.items\.0\./);
+    const broken = { ...file(), pages: [{ name: "P", blocks: [{ type: "table", name: "T" }] }] };
+    expect(() => readSpreadsheetFile(JSON.stringify(broken))).toThrow(/pages\.0\.blocks\.0\./);
   });
 });
 

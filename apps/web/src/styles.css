@@ -1203,7 +1203,7 @@ select.cell-control--dropdown {
 
 /* A table, chart, or text view on a page, with the buttons that move it beside it. */
 
-.editor__item {
+.editor__block {
   display: flex;
   gap: 8px;
   align-items: flex-start;
@@ -1211,7 +1211,7 @@ select.cell-control--dropdown {
   min-width: 0;
 }
 
-.editor__item > :first-child {
+.editor__block > :first-child {
   min-width: 0;
 }
 
@@ -1227,7 +1227,7 @@ select.cell-control--dropdown {
 }
 
 @media (max-width: 640px) {
-  .editor__item {
+  .editor__block {
     flex-direction: column-reverse;
     gap: 4px;
     width: 100%;

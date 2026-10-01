@@ -805,14 +805,14 @@ describe("a viewer", () => {
 });
 
 describe("row and column headers, and the menu", () => {
-  const block = () => useWorkbookStore().selectedBlock;
+  const range = () => useWorkbookStore().selectedRange;
 
   it("selects a whole row or column from its header", async () => {
     await mountGrid();
     await wrapper.findAll("tbody th")[1]!.trigger("mousedown");
-    expect(block()).toEqual({ startRow: 1, endRow: 1, startCol: 0, endCol: 2 });
+    expect(range()).toEqual({ startRow: 1, endRow: 1, startCol: 0, endCol: 2 });
     await wrapper.findAll("thead th")[2]!.trigger("mousedown");
-    expect(block()).toEqual({ startRow: 0, endRow: 3, startCol: 1, endCol: 1 });
+    expect(range()).toEqual({ startRow: 0, endRow: 3, startCol: 1, endCol: 1 });
     expect(document.activeElement).toBe(wrapper.get(".grid").element);
   });
 
@@ -820,7 +820,7 @@ describe("row and column headers, and the menu", () => {
     await mountGrid();
     await select("B2");
     await press("a", { ctrlKey: true });
-    expect(block()).toEqual({ startRow: 0, endRow: 3, startCol: 0, endCol: 2 });
+    expect(range()).toEqual({ startRow: 0, endRow: 3, startCol: 0, endCol: 2 });
   });
 
   it("asks for the menu where a cell is right-clicked, and selects that cell", async () => {
@@ -836,14 +836,14 @@ describe("row and column headers, and the menu", () => {
     await select("A1");
     await cellAt("B2").trigger("mousedown", { shiftKey: true });
     await cellAt("B1").trigger("contextmenu");
-    expect(block()).toEqual({ startRow: 0, endRow: 1, startCol: 0, endCol: 1 });
+    expect(range()).toEqual({ startRow: 0, endRow: 1, startCol: 0, endCol: 1 });
     expect(wrapper.emitted("menu")).toHaveLength(1);
   });
 
   it("asks for the menu from a header after selecting its row or column", async () => {
     await mountGrid();
     await wrapper.findAll("tbody th")[2]!.trigger("contextmenu", { clientX: 5, clientY: 6 });
-    expect(block()).toEqual({ startRow: 2, endRow: 2, startCol: 0, endCol: 2 });
+    expect(range()).toEqual({ startRow: 2, endRow: 2, startCol: 0, endCol: 2 });
     expect(wrapper.emitted("menu")).toEqual([[{ x: 5, y: 6 }]]);
   });
 
@@ -948,7 +948,7 @@ describe("a data table", () => {
   it("still selects the column when its header is pressed", async () => {
     await mountData();
     await header("Done").trigger("mousedown");
-    expect(useWorkbookStore().selectedBlock).toEqual({
+    expect(useWorkbookStore().selectedRange).toEqual({
       startRow: 0,
       endRow: 3,
       startCol: 1,

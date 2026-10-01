@@ -77,7 +77,7 @@ export const formatPatch = z.strictObject({
   numberFormat: z.string().min(1).max(100).nullable().optional(),
 });
 
-/** A block of cells. A `null` end runs to the edge of the table, however far it grows. */
+/** A range of cells. A `null` end runs to the edge of the table, however far it grows. */
 const formatRange = z
   .object({
     startRow: cellIndex,
@@ -92,7 +92,7 @@ const formatRange = z
     { message: "A range ends at or after where it starts" },
   );
 
-/** Formatting a block of cells. With `reset`, the cells first lose every format they had. */
+/** Formatting a range of cells. With `reset`, the cells first lose every format they had. */
 export const formatCellsBody = z.object({
   range: formatRange,
   format: formatPatch,
@@ -148,8 +148,8 @@ export const controlInputBody = z.object({
   value: z.union([z.string().max(LIMITS.inputLength), z.number(), z.boolean(), z.null()]),
 });
 
-/** The tables, charts, and text views of a page, by id, in the order they are to sit on it. */
-export const reorderBody = z.object({ items: z.array(z.uuid()).min(1).max(1000) });
+/** The blocks of a page (its tables, charts, and text views), by id, in the order they are to sit on it. */
+export const reorderBody = z.object({ blocks: z.array(z.uuid()).min(1).max(1000) });
 
 export const createViewBody = z.object({ kind: z.enum(["chart", "text"]) });
 
@@ -168,7 +168,7 @@ export const viewParam = z.object({ viewId: z.uuid() });
 /** Limits on a spreadsheet file, which a person can write by hand or another program can produce. */
 export const FILE_LIMITS = {
   pages: 50,
-  itemsPerPage: 50,
+  blocksPerPage: 50,
   /** Cells across the whole file. */
   cells: 100_000,
   /** The size of a request body the server reads, which bounds a file. */
@@ -216,10 +216,10 @@ export const spreadsheetFile = z.object({
     .array(
       z.object({
         name,
-        /** Tables, charts, and text views, in their order on the page. */
-        items: z
+        /** The page's blocks: its tables, charts, and text views, in their order on the page. */
+        blocks: z
           .array(z.discriminatedUnion("type", [fileTable, fileChart, fileText]))
-          .max(FILE_LIMITS.itemsPerPage),
+          .max(FILE_LIMITS.blocksPerPage),
       }),
     )
     .min(1)
@@ -227,8 +227,8 @@ export const spreadsheetFile = z.object({
 });
 export type SpreadsheetFile = z.infer<typeof spreadsheetFile>;
 
-type FileItem = SpreadsheetFile["pages"][number]["items"][number];
-type FileTable = Extract<FileItem, { type: "table" }>;
+type FileBlock = SpreadsheetFile["pages"][number]["blocks"][number];
+type FileTable = Extract<FileBlock, { type: "table" }>;
 
 /** What `toSpreadsheetFile` needs to know of a table or a view: where it sits, and what it holds. */
 interface Placed {
@@ -259,12 +259,12 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
   views: readonly PlacedView[],
   cellsOf: (table: Table) => CellInput[],
 ): SpreadsheetFile {
-  const itemsOf = (pageId: string): FileItem[] =>
+  const blocksOf = (pageId: string): FileBlock[] =>
     [
       ...tables.map((table) => ({
         pageId: table.pageId,
         position: table.position,
-        item: {
+        block: {
           type: "table",
           name: table.name,
           rowCount: table.rowCount,
@@ -272,24 +272,24 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
           ...(table.columns ? { columns: table.columns } : {}),
           ...(table.formats.length > 0 ? { formats: table.formats } : {}),
           cells: cellsOf(table),
-        } satisfies FileItem,
+        } satisfies FileBlock,
       })),
       ...views.map((view) => ({
         pageId: view.pageId,
         position: view.position,
-        item: (view.kind === "chart"
+        block: (view.kind === "chart"
           ? {
               type: "chart",
               name: view.name,
               source: view.source,
               chartType: view.chartType ?? "bar",
             }
-          : { type: "text", name: view.name, source: view.source }) satisfies FileItem,
+          : { type: "text", name: view.name, source: view.source }) satisfies FileBlock,
       })),
     ]
       .filter((entry) => entry.pageId === pageId)
       .sort((a, b) => a.position - b.position)
-      .map(({ item }) => item);
+      .map(({ block }) => block);
 
   return {
     format: FILE_FORMAT,
@@ -297,7 +297,7 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
     name,
     pages: pages
       .toSorted((a, b) => a.position - b.position)
-      .map((page) => ({ name: page.name, items: itemsOf(page.id) })),
+      .map((page) => ({ name: page.name, blocks: blocksOf(page.id) })),
   };
 }
 

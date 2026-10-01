@@ -2,14 +2,14 @@ import { formatDate, parseDate, translateInput, type CellAddress } from "@spread
 import type { CellInput } from "@spreadsheet-app/shared";
 
 /** An inclusive rectangle of cells within one table. */
-export interface Block {
+export interface GridRange {
   startRow: number;
   startCol: number;
   endRow: number;
   endCol: number;
 }
 
-export function blockOf(a: CellAddress, b: CellAddress = a): Block {
+export function rangeOf(a: CellAddress, b: CellAddress = a): GridRange {
   return {
     startRow: Math.min(a.row, b.row),
     startCol: Math.min(a.col, b.col),
@@ -18,16 +18,16 @@ export function blockOf(a: CellAddress, b: CellAddress = a): Block {
   };
 }
 
-export function contains(block: Block, { row, col }: CellAddress): boolean {
+export function contains(range: GridRange, { row, col }: CellAddress): boolean {
   return (
-    row >= block.startRow && row <= block.endRow && col >= block.startCol && col <= block.endCol
+    row >= range.startRow && row <= range.endRow && col >= range.startCol && col <= range.endCol
   );
 }
 
-function cellsOf(block: Block): CellAddress[] {
+function cellsOf(range: GridRange): CellAddress[] {
   const cells: CellAddress[] = [];
-  for (let row = block.startRow; row <= block.endRow; row += 1) {
-    for (let col = block.startCol; col <= block.endCol; col += 1) cells.push({ row, col });
+  for (let row = range.startRow; row <= range.endRow; row += 1) {
+    for (let col = range.startCol; col <= range.endCol; col += 1) cells.push({ row, col });
   }
   return cells;
 }
@@ -38,11 +38,11 @@ function wrap(value: number, size: number): number {
 }
 
 /**
- * The block a fill covers when the fill handle of `source` is dragged to
+ * The range a fill covers when the fill handle of `source` is dragged to
  * `to`. A fill goes one way: down or up when the pointer has left the
  * source's rows, otherwise right or left.
  */
-export function fillTarget(source: Block, to: CellAddress): Block {
+export function fillTarget(source: GridRange, to: CellAddress): GridRange {
   if (to.row > source.endRow) return { ...source, endRow: to.row };
   if (to.row < source.startRow) return { ...source, startRow: to.row };
   if (to.col > source.endCol) return { ...source, endCol: to.col };
@@ -120,8 +120,8 @@ export function seriesOf(inputs: readonly string[]): ((position: number) => stri
  * instead of repeated: `1, 2` goes on to `3, 4`.
  */
 export function fillWrites(
-  source: Block,
-  target: Block,
+  source: GridRange,
+  target: GridRange,
   inputAt: (cell: CellAddress) => string,
   series = false,
 ): CellInput[] {
@@ -161,19 +161,19 @@ export function fillWrites(
     });
 }
 
-/** The inputs that empty every cell of a block that holds something. */
-export function clearWrites(block: Block, inputAt: (cell: CellAddress) => string): CellInput[] {
-  return cellsOf(block)
+/** The inputs that empty every cell of a range that holds something. */
+export function clearWrites(range: GridRange, inputAt: (cell: CellAddress) => string): CellInput[] {
+  return cellsOf(range)
     .filter((cell) => inputAt(cell) !== "")
     .map((cell) => ({ ...cell, input: "" }));
 }
 
-/** The inputs of a block as rows, for copying. */
-export function inputsOf(block: Block, inputAt: (cell: CellAddress) => string): string[][] {
+/** The inputs of a range as rows, for copying. */
+export function inputsOf(range: GridRange, inputAt: (cell: CellAddress) => string): string[][] {
   const rows: string[][] = [];
-  for (let row = block.startRow; row <= block.endRow; row += 1) {
+  for (let row = range.startRow; row <= range.endRow; row += 1) {
     const cells: string[] = [];
-    for (let col = block.startCol; col <= block.endCol; col += 1) cells.push(inputAt({ row, col }));
+    for (let col = range.startCol; col <= range.endCol; col += 1) cells.push(inputAt({ row, col }));
     rows.push(cells);
   }
   return rows;

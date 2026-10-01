@@ -26,7 +26,7 @@ export function pageRoutes() {
         await c.var.repository.deletePage(c.req.valid("param").pageId);
         return c.body(null, 204);
       })
-      // Puts the tables, charts, and text views of a page in a new order.
+      // Puts the blocks of a page in a new order.
       .put(
         "/:pageId/order",
         zValidator("param", pageParam, onInvalid),
@@ -34,7 +34,7 @@ export function pageRoutes() {
         async (c) => {
           await c.var.repository.reorderPage(
             c.req.valid("param").pageId,
-            c.req.valid("json").items,
+            c.req.valid("json").blocks,
           );
           return c.body(null, 204);
         },

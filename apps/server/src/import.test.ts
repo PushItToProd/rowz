@@ -24,7 +24,7 @@ function file(overrides: Partial<SpreadsheetFile> = {}): SpreadsheetFile {
     pages: [
       {
         name: "Data",
-        items: [
+        blocks: [
           {
             type: "table",
             name: "Sales",
@@ -41,8 +41,11 @@ function file(overrides: Partial<SpreadsheetFile> = {}): SpreadsheetFile {
           { type: "table", name: "Costs", rowCount: 1, colCount: 1, cells: [] },
         ],
       },
-      { name: "Report", items: [{ type: "text", name: "Summary", source: "{{ Data!Sales!A1 }}" }] },
-      { name: "Empty", items: [] },
+      {
+        name: "Report",
+        blocks: [{ type: "text", name: "Summary", source: "{{ Data!Sales!A1 }}" }],
+      },
+      { name: "Empty", blocks: [] },
     ],
     ...overrides,
   };
@@ -127,7 +130,7 @@ describe("importing a spreadsheet file", () => {
     const snapshot = await imported(
       file({
         pages: [
-          { name: "P", items: [{ type: "table", name: "T", rowCount: 600, colCount: 10, cells }] },
+          { name: "P", blocks: [{ type: "table", name: "T", rowCount: 600, colCount: 10, cells }] },
         ],
       }),
     );
@@ -137,13 +140,13 @@ describe("importing a spreadsheet file", () => {
   it.each<[string, (contents: SpreadsheetFile) => void, string]>([
     [
       "two pages with one name",
-      (contents) => contents.pages.push({ name: "data", items: [] }),
+      (contents) => contents.pages.push({ name: "data", blocks: [] }),
       "Two pages are named data",
     ],
     [
       "two tables on a page with one name",
       (contents) =>
-        contents.pages[0]!.items.push({
+        contents.pages[0]!.blocks.push({
           type: "table",
           name: "SALES",
           rowCount: 1,
@@ -155,7 +158,7 @@ describe("importing a spreadsheet file", () => {
     [
       "a cell outside its table",
       (contents) => {
-        const [table] = contents.pages[0]!.items;
+        const [table] = contents.pages[0]!.blocks;
         if (table?.type === "table") table.cells.push({ row: 5, col: 0, input: "x" });
       },
       "A6 is outside the table Sales",
@@ -163,7 +166,7 @@ describe("importing a spreadsheet file", () => {
     [
       "a cell listed twice",
       (contents) => {
-        const [table] = contents.pages[0]!.items;
+        const [table] = contents.pages[0]!.blocks;
         if (table?.type === "table") table.cells.push({ row: 0, col: 0, input: "x" });
       },
       "A1 appears twice in the table Sales",
@@ -195,7 +198,7 @@ describe("importing a spreadsheet file", () => {
       }) as const;
     expect(perTable).toBe(FILE_LIMITS.cells);
     const contents = file({
-      pages: [{ name: "P", items: [table("A", full), table("B", full.slice(0, 1))] }],
+      pages: [{ name: "P", blocks: [table("A", full), table("B", full.slice(0, 1))] }],
     });
     expect(await user.json("POST", "/spreadsheets/import", contents, 422)).toMatchObject({
       error: { code: "invalid_file" },
@@ -207,19 +210,22 @@ describe("importing a spreadsheet file", () => {
     ["a later version", { ...file(), version: 2 }],
     ["no pages", { ...file(), pages: [] }],
     ["no name", { ...file(), name: " " }],
-    ["an unknown kind of item", { ...file(), pages: [{ name: "P", items: [{ type: "map" }] }] }],
+    ["an unknown kind of block", { ...file(), pages: [{ name: "P", blocks: [{ type: "map" }] }] }],
     [
       "a table with no rows",
       {
         ...file(),
         pages: [
-          { name: "P", items: [{ type: "table", name: "T", rowCount: 0, colCount: 1, cells: [] }] },
+          {
+            name: "P",
+            blocks: [{ type: "table", name: "T", rowCount: 0, colCount: 1, cells: [] }],
+          },
         ],
       },
     ],
     [
       "a chart with no kind",
-      { ...file(), pages: [{ name: "P", items: [{ type: "chart", name: "C", source: "" }] }] },
+      { ...file(), pages: [{ name: "P", blocks: [{ type: "chart", name: "C", source: "" }] }] },
     ],
     ["something that is not a file", { hello: "world" }],
   ])("refuses a file with %s", async (_, contents) => {
@@ -228,14 +234,14 @@ describe("importing a spreadsheet file", () => {
 
   it("holds a spreadsheet to the limits of a file, so that what is exported can be imported", async () => {
     const other = await server.signUp();
-    const views = Array.from({ length: FILE_LIMITS.itemsPerPage }, (_, index) => ({
+    const views = Array.from({ length: FILE_LIMITS.blocksPerPage }, (_, index) => ({
       type: "text" as const,
       name: `Text ${String(index)}`,
       source: "",
     }));
     const pages = Array.from({ length: FILE_LIMITS.pages }, (_, index) => ({
       name: `Page ${String(index)}`,
-      items: index === 0 ? views : [],
+      blocks: index === 0 ? views : [],
     }));
     const summary = await other.json<SpreadsheetSummary>(
       "POST",
@@ -270,7 +276,7 @@ describe("importing a spreadsheet file", () => {
     const summary = await other.json<SpreadsheetSummary>(
       "POST",
       "/spreadsheets/import",
-      file({ pages: [{ name: "P", items: [full, spare] }] }),
+      file({ pages: [{ name: "P", blocks: [full, spare] }] }),
       201,
     );
     const snapshot = await other.json<Snapshot>("GET", `/spreadsheets/${summary.id}`);

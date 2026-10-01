@@ -166,9 +166,9 @@ export const api = {
   renamePage: (pageId: string, name: string): Promise<Rewritten> =>
     body(routes.pages[":pageId"].$patch({ param: { pageId }, json: { name } })),
 
-  /** Puts the tables, charts, and text views of a page in the order of their ids. */
-  reorderPage: (pageId: string, items: string[]): Promise<void> =>
-    done(routes.pages[":pageId"].order.$put({ param: { pageId }, json: { items } })),
+  /** Puts the blocks of a page in the order of their ids. */
+  reorderPage: (pageId: string, blocks: string[]): Promise<void> =>
+    done(routes.pages[":pageId"].order.$put({ param: { pageId }, json: { blocks } })),
 
   deletePage: (pageId: string): Promise<void> =>
     done(routes.pages[":pageId"].$delete({ param: { pageId } })),
@@ -189,7 +189,7 @@ export const api = {
   ): Promise<Rewritten & { table: TableRecord }> =>
     body(routes.tables[":tableId"].edits.$post({ param: { tableId }, json: edit })),
 
-  /** Changes how a block of cells is shown. With `reset`, the cells first lose every format they had. */
+  /** Changes how a range of cells is shown. With `reset`, the cells first lose every format they had. */
   formatCells: (
     tableId: string,
     range: Pick<FormatRule, "startRow" | "endRow" | "startCol" | "endCol">,

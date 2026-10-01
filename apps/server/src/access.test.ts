@@ -53,7 +53,7 @@ function writeRoutes(): Route[] {
     ["PATCH", `/spreadsheets/${snapshot.id}`, { name: "Taken over" }],
     ["POST", `/spreadsheets/${snapshot.id}/pages`, {}],
     ["PATCH", `/pages/${page}`, { name: "Taken over" }],
-    ["PUT", `/pages/${page}/order`, { items: [view, table] }],
+    ["PUT", `/pages/${page}/order`, { blocks: [view, table] }],
     ["POST", `/pages/${page}/tables`, {}],
     ["PATCH", `/tables/${table}`, { name: "Taken over" }],
     ["PUT", `/tables/${table}/cells`, cellsBody({ C3: "written" })],

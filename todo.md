@@ -121,7 +121,8 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [ ] **P10** show labels on charts on hover
 - [ ] **P2** allow editing markdown views by just double clicking on the text (instead of clicking "Edit"). save and exit edit mode when the user unfocuses the input (instead of requiring user to hit "Done")
 - [ ] **P2** duplicate the "Add table", "Add chart", "Add text" buttons at the top and between each item so you can insert them anywhere
-- [ ] **P3** add a new type of component (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side
+- [ ] **P3** add a new type of block (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side
+- [ ] **P2** update user-facing docs to use "Block" nomenclature for tables/charts/text/etc.
 
 ## Formatting
 
@@ -203,10 +204,9 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [ ] **P3** a limit on the length of text a formula builds: `REPT("x", 5e8)` is under JavaScript's string limit and still takes half a gigabyte, on the server too when a button runs
 - [ ] **P3** limits on per-block and overall document size (make sure to enforce on upload as well) to avoid gigantic docs
 
-## To organize
+## Planning/ideas
 
-- [ ] **P1** come up with a good name to refer to all "page components" - tables, charts, text templates, etc. -- I guess "page components" could work but feels kinda generic. `Card` is used in the component names. "card types"?
-- [ ] **P1** exclude todo.md and everything under my `_scratch/` dir from Prettier
+- [x] **P1** come up with a good name to refer to all "page components" - tables, charts, text templates, etc. -- I guess "page components" could work but feels kinda generic. `Card` is used in the component names. "card types"? -> Block
 
 ## Ambitious ideas - don't implement until further consideration
 

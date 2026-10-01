@@ -236,18 +236,18 @@ describe("setCells", () => {
 describe("selection", () => {
   it("is one cell until it is extended, and one cell again when another is selected", async () => {
     const store = await open();
-    expect(store.selectedBlock).toBeNull();
+    expect(store.selectedRange).toBeNull();
     store.selection = at("B2");
-    expect(store.selectedBlock).toEqual({ startRow: 1, startCol: 1, endRow: 1, endCol: 1 });
+    expect(store.selectedRange).toEqual({ startRow: 1, startCol: 1, endRow: 1, endCol: 1 });
 
     store.extendSelection({ row: 0, col: 2 });
-    expect(store.selectedBlock).toEqual({ startRow: 0, startCol: 1, endRow: 1, endCol: 2 });
+    expect(store.selectedRange).toEqual({ startRow: 0, startCol: 1, endRow: 1, endCol: 2 });
     store.extendSelection({ row: 1, col: 1 });
     expect(store.selectionEnd).toBeNull();
 
     store.extendSelection({ row: 3, col: 2 });
     store.selection = at("A1");
-    expect(store.selectedBlock).toEqual({ startRow: 0, startCol: 0, endRow: 0, endCol: 0 });
+    expect(store.selectedRange).toEqual({ startRow: 0, startCol: 0, endRow: 0, endCol: 0 });
   });
 
   it("copies shown values and pastes them back as the formulas they came from", async () => {
@@ -261,7 +261,7 @@ describe("selection", () => {
     await store.paste(text);
     expect(store.inputOf(at("B3"))).toBe("=A3*2");
     expect(store.valueOf(at("B3"))).toBe(4);
-    expect(store.selectedBlock).toEqual({ startRow: 2, startCol: 0, endRow: 2, endCol: 1 });
+    expect(store.selectedRange).toEqual({ startRow: 2, startCol: 0, endRow: 2, endCol: 1 });
   });
 
   it("pastes other text as typed, and says so when part of it cannot fit", async () => {
@@ -727,7 +727,7 @@ describe("files", () => {
       pages: [
         {
           name: "Page 1",
-          items: [
+          blocks: [
             {
               type: "table",
               name: "Table 1",
@@ -885,7 +885,7 @@ describe("data tables", () => {
 
   it("writes column definitions to a file, without cells for the formula column", async () => {
     const store = await openData({ A1: "2", B1: "10" });
-    expect(store.toFile()?.pages[0]?.items[0]).toEqual({
+    expect(store.toFile()?.pages[0]?.blocks[0]).toEqual({
       type: "table",
       name: "Table 1",
       rowCount: 4,
@@ -922,31 +922,31 @@ describe("the order of a page", () => {
 
   it("lists the tables and views of a page in their order", async () => {
     const store = await openPage();
-    expect(store.itemsOn("p1")).toEqual(["t1", "v1", "v2"]);
+    expect(store.blocksOn("p1")).toEqual(["t1", "v1", "v2"]);
   });
 
-  it("moves an item up or down, and stores the new order", async () => {
+  it("moves a block up or down, and stores the new order", async () => {
     const store = await openPage();
-    expect(await store.moveItem("p1", "v2", -1)).toBe(true);
+    expect(await store.moveBlock("p1", "v2", -1)).toBe(true);
     expect(server.reorderPage).toHaveBeenCalledExactlyOnceWith("p1", ["t1", "v2", "v1"]);
-    expect(store.itemsOn("p1")).toEqual(["t1", "v2", "v1"]);
-    await store.moveItem("p1", "t1", 1);
-    expect(store.itemsOn("p1")).toEqual(["v2", "t1", "v1"]);
+    expect(store.blocksOn("p1")).toEqual(["t1", "v2", "v1"]);
+    await store.moveBlock("p1", "t1", 1);
+    expect(store.blocksOn("p1")).toEqual(["v2", "t1", "v1"]);
   });
 
-  it("does nothing at either end of the page, or for an item that is not on it", async () => {
+  it("does nothing at either end of the page, or for a block that is not on it", async () => {
     const store = await openPage();
-    expect(await store.moveItem("p1", "t1", -1)).toBe(false);
-    expect(await store.moveItem("p1", "v2", 1)).toBe(false);
-    expect(await store.moveItem("p1", "far", 1)).toBe(false);
+    expect(await store.moveBlock("p1", "t1", -1)).toBe(false);
+    expect(await store.moveBlock("p1", "v2", 1)).toBe(false);
+    expect(await store.moveBlock("p1", "far", 1)).toBe(false);
     expect(server.reorderPage).not.toHaveBeenCalled();
   });
 
   it("keeps the order when the server refuses", async () => {
     const store = await openPage();
     server.reorderPage.mockRejectedValueOnce(new Error("The page has changed"));
-    expect(await store.moveItem("p1", "v1", 1)).toBe(false);
-    expect(store.itemsOn("p1")).toEqual(["t1", "v1", "v2"]);
+    expect(await store.moveBlock("p1", "v1", 1)).toBe(false);
+    expect(store.blocksOn("p1")).toEqual(["t1", "v1", "v2"]);
   });
 });
 

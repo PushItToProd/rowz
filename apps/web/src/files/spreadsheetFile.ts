@@ -4,7 +4,7 @@ export { toSpreadsheetFile } from "@spreadsheet-app/shared";
 
 /**
  * Whether a file is small enough to import. The server holds a spreadsheet to
- * the pages, items, and cells a file may have as it is built. It does not
+ * the pages, blocks, and cells a file may have as it is built. It does not
  * limit the text in all the cells together, so a file can outgrow the largest
  * request the server reads.
  */

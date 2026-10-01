@@ -31,7 +31,7 @@ export interface CellFormat {
 export type FormatPatch = { [Key in keyof CellFormat]?: CellFormat[Key] | null };
 
 /**
- * A format given to a block of cells. A table's formats are a list of rules,
+ * A format given to a range of cells. A table's formats are a list of rules,
  * and a cell is shown with every rule that covers it, later ones over earlier
  * ones. Formatting a whole column is then one rule, and covers rows added
  * later when the rule has no last row.

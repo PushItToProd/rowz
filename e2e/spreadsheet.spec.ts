@@ -429,7 +429,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
 
   // The text view moves above the table, and stays there.
   const order = async (): Promise<string[]> => {
-    const cards = await page.locator(".editor__item > :first-child").all();
+    const cards = await page.locator(".editor__block > :first-child").all();
     return Promise.all(
       cards.map(
         async (card) =>

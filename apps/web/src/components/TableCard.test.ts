@@ -223,7 +223,7 @@ describe("files", () => {
     ]);
     const store = useWorkbookStore();
     expect(store.valueOf(at("B2"))).toBe(2);
-    expect(store.selectedBlock).toEqual({ startRow: 0, endRow: 1, startCol: 0, endCol: 1 });
+    expect(store.selectedRange).toEqual({ startRow: 0, endRow: 1, startCol: 0, endCol: 1 });
     expect(confirm).not.toHaveBeenCalled();
   });
 

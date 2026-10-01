@@ -46,7 +46,7 @@ export function tableRoutes(dependencies: ActionDependencies) {
           return c.json(await c.var.repository.editStructure(tableId, c.req.valid("json")));
         },
       )
-      // Changes how a block of cells is shown.
+      // Changes how a range of cells is shown.
       .post(
         "/:tableId/formats",
         zValidator("param", tableParam, onInvalid),

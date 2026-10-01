@@ -37,14 +37,14 @@ import {
   type ViewRecord,
 } from "../api/client";
 import {
-  blockOf,
+  rangeOf,
   clearWrites,
   fillWrites,
   fromClipboardText,
   inputsOf,
   pasteWrites,
   toClipboardText,
-  type Block,
+  type GridRange,
 } from "../formula/fill";
 
 export interface Notice {
@@ -88,8 +88,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
   // Selecting another cell selects just that cell.
   watch(selection, () => (selectionEnd.value = null), { flush: "sync" });
   /** The selected cells as a rectangle within the selected cell's table. */
-  const selectedBlock = computed<Block | null>(() =>
-    selection.value ? blockOf(selection.value, selectionEnd.value ?? selection.value) : null,
+  const selectedRange = computed<GridRange | null>(() =>
+    selection.value ? rangeOf(selection.value, selectionEnd.value ?? selection.value) : null,
   );
   /** What was last copied here, to recognize it when it is pasted back. */
   let copied: { text: string; rows: string[][]; from: CellAddress } | undefined;
@@ -295,16 +295,16 @@ export const useWorkbookStore = defineStore("workbook", () => {
    * columns added later are shown the same way.
    */
   function formatSelection(patch: FormatPatch, reset = false): Promise<boolean> {
-    const block = selectedBlock.value;
+    const selected = selectedRange.value;
     const table = tables.value.find((candidate) => candidate.id === selection.value?.tableId);
-    if (!block || !table || !canEdit.value) return Promise.resolve(false);
-    const wholeRows = block.startRow === 0 && block.endRow >= table.rowCount - 1;
-    const wholeCols = block.startCol === 0 && block.endCol >= table.colCount - 1;
+    if (!selected || !table || !canEdit.value) return Promise.resolve(false);
+    const wholeRows = selected.startRow === 0 && selected.endRow >= table.rowCount - 1;
+    const wholeCols = selected.startCol === 0 && selected.endCol >= table.colCount - 1;
     const range = {
-      startRow: block.startRow,
-      endRow: wholeRows ? null : block.endRow,
-      startCol: block.startCol,
-      endCol: wholeCols ? null : block.endCol,
+      startRow: selected.startRow,
+      endRow: wholeRows ? null : selected.endRow,
+      startCol: selected.startCol,
+      endCol: wholeCols ? null : selected.endCol,
     };
     return attempt(async () => {
       const updated = await api.formatCells(table.id, range, patch, reset);
@@ -397,19 +397,24 @@ export const useWorkbookStore = defineStore("workbook", () => {
   }
 
   /** Fills `target` with the pattern of the cells in `source`, moving formula references. */
-  function fill(tableId: string, source: Block, target: Block, series = false): Promise<void> {
+  function fill(
+    tableId: string,
+    source: GridRange,
+    target: GridRange,
+    series = false,
+  ): Promise<void> {
     const inputAt = (cell: CellAddress): string => engine.value.getInput({ tableId, ...cell });
     return setCells(tableId, fillWrites(source, target, inputAt, series));
   }
 
   /** Empties the selected cells. */
   function clearSelection(): Promise<void> {
-    const block = selectedBlock.value;
+    const selected = selectedRange.value;
     const tableId = selection.value?.tableId;
-    if (!block || tableId === undefined || !canEdit.value) return Promise.resolve();
+    if (!selected || tableId === undefined || !canEdit.value) return Promise.resolve();
     return setCells(
       tableId,
-      clearWrites(block, (cell) => engine.value.getInput({ tableId, ...cell })),
+      clearWrites(selected, (cell) => engine.value.getInput({ tableId, ...cell })),
     );
   }
 
@@ -419,17 +424,17 @@ export const useWorkbookStore = defineStore("workbook", () => {
    * app can use. Pasting that text back here pastes the formulas.
    */
   function copySelection(): string {
-    const block = selectedBlock.value;
+    const selected = selectedRange.value;
     const tableId = selection.value?.tableId;
-    if (!block || tableId === undefined) return "";
-    const shown = inputsOf(block, (cell) =>
+    if (!selected || tableId === undefined) return "";
+    const shown = inputsOf(selected, (cell) =>
       formatValue(engine.value.getValue({ tableId, ...cell })),
     );
     const text = toClipboardText(shown);
     copied = {
       text,
-      rows: inputsOf(block, (cell) => engine.value.getInput({ tableId, ...cell })),
-      from: { row: block.startRow, col: block.startCol },
+      rows: inputsOf(selected, (cell) => engine.value.getInput({ tableId, ...cell })),
+      from: { row: selected.startRow, col: selected.startCol },
     };
     return text;
   }
@@ -443,7 +448,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     if (!at || !canEdit.value) return;
     // Text this app put on the clipboard stands for the cells it was copied from.
     const own = copied?.text === text ? copied : undefined;
-    await writeBlock(at, pasteWrites(own?.rows ?? fromClipboardText(text), at, own?.from));
+    await writeCells(at, pasteWrites(own?.rows ?? fromClipboardText(text), at, own?.from));
   }
 
   /**
@@ -455,7 +460,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const at = { tableId, row: 0, col: 0 };
     selection.value = at;
     selectionEnd.value = null;
-    await writeBlock(at, pasteWrites(rows, at));
+    await writeCells(at, pasteWrites(rows, at));
   }
 
   /** The values a table shows, row by row, for writing to a file. Rows and columns that are empty at the end are left out. */
@@ -500,7 +505,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
   }
 
   /** Writes cells into a table that grows to fit them, up to its size limit, and selects what was written. */
-  async function writeBlock(at: CellId, writes: readonly CellInput[]): Promise<void> {
+  async function writeCells(at: CellId, writes: readonly CellInput[]): Promise<void> {
     const table = tables.value.find((candidate) => candidate.id === at.tableId);
     if (!table) return;
     if (writes.length === 0) return;
@@ -634,39 +639,39 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }, "The page could not be renamed");
   }
 
-  /** The ids of the tables, charts, and text views of a page, in the order they sit on it. */
-  function itemsOn(pageId: string): string[] {
+  /** The ids of the blocks of a page, in the order they sit on it. */
+  function blocksOn(pageId: string): string[] {
     return [...tables.value, ...views.value]
-      .filter((item) => item.pageId === pageId)
+      .filter((block) => block.pageId === pageId)
       .sort((a, b) => a.position - b.position)
-      .map((item) => item.id);
+      .map((block) => block.id);
   }
 
   /** The last request to reorder a page, which the next one waits for. */
   let reorders: Promise<void> = Promise.resolve();
 
-  /** Shows the items of a page in the order of their ids. */
+  /** Shows the blocks of a page in the order of their ids. */
   function showOrder(order: readonly string[]): void {
     const position = new Map(order.map((id, index) => [id, index]));
-    const placed = <T extends { id: string; position: number }>(item: T): T => ({
-      ...item,
-      position: position.get(item.id) ?? item.position,
+    const placed = <T extends { id: string; position: number }>(block: T): T => ({
+      ...block,
+      position: position.get(block.id) ?? block.position,
     });
     tables.value = tables.value.map(placed);
     views.value = views.value.map(placed);
   }
 
   /**
-   * Moves a table, chart, or text view one place up or down its page. The
+   * Moves a block one place up or down its page. The
    * move shows at once, so a second click moves on from where the first left
-   * the item, and it is undone if the server refuses.
+   * the block, and it is undone if the server refuses.
    */
-  function moveItem(pageId: string, itemId: string, by: -1 | 1): Promise<boolean> {
-    const before = itemsOn(pageId);
-    const from = before.indexOf(itemId);
+  function moveBlock(pageId: string, blockId: string, by: -1 | 1): Promise<boolean> {
+    const before = blocksOn(pageId);
+    const from = before.indexOf(blockId);
     const to = from + by;
     if (from === -1 || to < 0 || to >= before.length) return Promise.resolve(false);
-    const order = before.with(from, before[to] ?? itemId).with(to, itemId);
+    const order = before.with(from, before[to] ?? blockId).with(to, blockId);
     showOrder(order);
     // One request at a time, so the server ends on the order of the last click.
     const sent = reorders.then(() => api.reorderPage(pageId, order));
@@ -815,7 +820,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     deleteView,
     selection,
     selectionEnd,
-    selectedBlock,
+    selectedRange,
     extendSelection,
     setCells,
     fill,
@@ -841,8 +846,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     editTable,
     deleteTable,
     refresh,
-    itemsOn,
-    moveItem,
+    blocksOn,
+    moveBlock,
     canUndo,
     canRedo,
     undo,

@@ -36,11 +36,11 @@ function remove(): void {
 }
 
 /** What the view shows. While editing, it follows what is being typed. */
-const blocks = computed(() =>
+const parts = computed(() =>
   renderTemplate(editing.value ? draft.value : props.view.source, (expression, names) =>
     store.evaluateOnPage(props.view.pageId, expression, names),
-  ).map((block) =>
-    block.type === "markdown" ? { ...block, html: markdown.render(block.text) } : block,
+  ).map((part) =>
+    part.type === "markdown" ? { ...part, html: markdown.render(part.text) } : part,
   ),
 );
 </script>
@@ -74,12 +74,12 @@ const blocks = computed(() =>
     ></textarea>
 
     <div class="text-view">
-      <template v-for="(block, index) in blocks" :key="index">
+      <template v-for="(part, index) in parts" :key="index">
         <!-- eslint-disable-next-line vue/no-v-html -- markdown-it output with raw HTML disabled -->
-        <div v-if="block.type === 'markdown'" class="text-view__markdown" v-html="block.html"></div>
-        <table v-else-if="block.type === 'table'" class="text-view__table">
+        <div v-if="part.type === 'markdown'" class="text-view__markdown" v-html="part.html"></div>
+        <table v-else-if="part.type === 'table'" class="text-view__table">
           <tbody>
-            <tr v-for="(cells, row) in block.rows" :key="row">
+            <tr v-for="(cells, row) in part.rows" :key="row">
               <td
                 v-for="(cell, col) in cells"
                 :key="col"
@@ -91,14 +91,14 @@ const blocks = computed(() =>
           </tbody>
         </table>
         <ChartView
-          v-else-if="block.type === 'chart'"
-          :chart="block.chart.chart"
-          :rows="block.chart.rows"
-          :title="block.chart.title"
+          v-else-if="part.type === 'chart'"
+          :chart="part.chart.chart"
+          :rows="part.chart.rows"
+          :title="part.chart.title"
         />
-        <p v-else class="view-card__problem" role="alert">{{ block.message }}</p>
+        <p v-else class="view-card__problem" role="alert">{{ part.message }}</p>
       </template>
-      <p v-if="blocks.length === 0" class="view-card__problem">This view is empty.</p>
+      <p v-if="parts.length === 0" class="view-card__problem">This view is empty.</p>
     </div>
   </section>
 </template>

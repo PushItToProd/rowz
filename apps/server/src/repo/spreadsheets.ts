@@ -213,8 +213,8 @@ function checkFile(file: SpreadsheetFile): void {
   if (page !== undefined) invalid(`Two pages are named ${page}`);
 
   let total = 0;
-  for (const { name: pageName, items } of file.pages) {
-    const fileTables = items.filter((item) => item.type === "table");
+  for (const { name: pageName, blocks } of file.pages) {
+    const fileTables = blocks.filter((block) => block.type === "table");
     const table = repeated(fileTables.map(({ name }) => name));
     if (table !== undefined) invalid(`Two tables on ${pageName} are named ${table}`);
     for (const { name, rowCount, colCount, cells: fileCells, columns } of fileTables) {
@@ -490,31 +490,31 @@ export class SpreadsheetRepository {
         .values({ spreadsheetId, name: page.name, position: pagePosition })
         .returning({ id: pages.id });
       if (!created) throw new Error("Insert returned no page");
-      for (const [position, item] of page.items.entries()) {
-        const placed = { pageId: created.id, name: item.name, position };
-        if (item.type !== "table") {
+      for (const [position, block] of page.blocks.entries()) {
+        const placed = { pageId: created.id, name: block.name, position };
+        if (block.type !== "table") {
           await tx.insert(views).values({
             ...placed,
-            kind: item.type,
-            source: item.source,
-            chartType: item.type === "chart" ? item.chartType : null,
+            kind: block.type,
+            source: block.source,
+            chartType: block.type === "chart" ? block.chartType : null,
           });
           continue;
         }
-        const columns = item.columns?.map(normalized) ?? null;
+        const columns = block.columns?.map(normalized) ?? null;
         const [table] = await tx
           .insert(tables)
           .values({
             ...placed,
-            rowCount: item.rowCount,
-            colCount: item.colCount,
+            rowCount: block.rowCount,
+            colCount: block.colCount,
             columns,
-            formats: item.formats ?? [],
+            formats: block.formats ?? [],
           })
           .returning({ id: tables.id });
         if (!table) throw new Error("Insert returned no table");
         // A formula column computes its cells, so none are stored for it.
-        const filled = item.cells.filter(
+        const filled = block.cells.filter(
           (cell) => cell.input !== "" && columns?.[cell.col]?.type !== "formula",
         );
         for (let from = 0; from < filled.length; from += INSERT_BATCH) {
@@ -781,11 +781,11 @@ export class SpreadsheetRepository {
   }
 
   /**
-   * Puts the tables, charts, and text views of a page in the order given. The
+   * Puts the blocks of a page in the order given. The
    * list must name every one of them once, so that a stale client cannot
-   * leave two items in one place.
+   * leave two blocks in one place.
    */
-  async reorderPage(pageId: string, items: readonly string[]): Promise<void> {
+  async reorderPage(pageId: string, blocks: readonly string[]): Promise<void> {
     await this.changePage(pageId, async (_page, tx) => {
       const [tableRows, viewRows] = await Promise.all([
         tx.select({ id: tables.id }).from(tables).where(eq(tables.pageId, pageId)),
@@ -794,13 +794,13 @@ export class SpreadsheetRepository {
       const tableIds = new Set(tableRows.map((row) => row.id));
       const present = new Set([...tableIds, ...viewRows.map((row) => row.id)]);
       const complete =
-        items.length === present.size &&
-        new Set(items).size === items.length &&
-        items.every((id) => present.has(id));
+        blocks.length === present.size &&
+        new Set(blocks).size === blocks.length &&
+        blocks.every((id) => present.has(id));
       if (!complete) {
         throw conflict("The page has changed. Reload it and try again");
       }
-      for (const [position, id] of items.entries()) {
+      for (const [position, id] of blocks.entries()) {
         const target = tableIds.has(id) ? tables : views;
         await tx.update(target).set({ position }).where(eq(target.id, id));
       }
@@ -947,7 +947,7 @@ export class SpreadsheetRepository {
     });
   }
 
-  /** Changes how a block of cells is shown. The format is added to whatever the cells already have. */
+  /** Changes how a range of cells is shown. The format is added to whatever the cells already have. */
   async formatCells(tableId: string, rule: FormatRule): Promise<TableRecord> {
     return this.changeTable(tableId, async (table, tx) => {
       const formats = addFormatRule(table.formats, rule);
@@ -1406,7 +1406,7 @@ export class SpreadsheetRepository {
   }
 
   /**
-   * The position that puts a new table or view after everything else on its
+   * The position that puts a new block after everything else on its
    * page. Refuses when the page already holds as many as a file of it may.
    */
   private async nextPosition(pageId: string): Promise<number> {
@@ -1414,14 +1414,14 @@ export class SpreadsheetRepository {
       this.db.select({ position: tables.position }).from(tables).where(eq(tables.pageId, pageId)),
       this.db.select({ position: views.position }).from(views).where(eq(views.pageId, pageId)),
     ]);
-    const items = taken.flat();
-    if (items.length >= FILE_LIMITS.itemsPerPage) {
+    const blocks = taken.flat();
+    if (blocks.length >= FILE_LIMITS.blocksPerPage) {
       throw unprocessable(
         "page_full",
-        `A page can have at most ${String(FILE_LIMITS.itemsPerPage)} tables, charts, and text views`,
+        `A page can have at most ${String(FILE_LIMITS.blocksPerPage)} tables, charts, and text views`,
       );
     }
-    return Math.max(-1, ...items.map((item) => item.position)) + 1;
+    return Math.max(-1, ...blocks.map((block) => block.position)) + 1;
   }
 
   /**

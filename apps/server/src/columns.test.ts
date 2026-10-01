@@ -406,7 +406,7 @@ describe("columns in a spreadsheet file", () => {
     pages: [
       {
         name: "P",
-        items: [
+        blocks: [
           {
             type: "table",
             name: "T",

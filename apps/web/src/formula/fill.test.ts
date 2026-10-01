@@ -1,7 +1,7 @@
 import { parseAddress, type CellAddress } from "@spreadsheet-app/engine";
 import { describe, expect, it } from "vitest";
 import {
-  blockOf,
+  rangeOf,
   clearWrites,
   contains,
   fillTarget,
@@ -10,7 +10,7 @@ import {
   inputsOf,
   pasteWrites,
   toClipboardText,
-  type Block,
+  type GridRange,
 } from "./fill";
 
 function at(address: string): CellAddress {
@@ -19,9 +19,9 @@ function at(address: string): CellAddress {
   return parsed;
 }
 
-function block(range: string): Block {
-  const [start = "", end = start] = range.split(":");
-  return blockOf(at(start), at(end));
+function range(text: string): GridRange {
+  const [start = "", end = start] = text.split(":");
+  return rangeOf(at(start), at(end));
 }
 
 /** Looks up inputs given as `{ A1: "..." }`. */
@@ -40,16 +40,16 @@ function byAddress(writes: { row: number; col: number; input: string }[]): Recor
   );
 }
 
-describe("blockOf and contains", () => {
+describe("rangeOf and contains", () => {
   it("orders the corners whichever way they are given", () => {
-    expect(blockOf(at("C3"), at("A1"))).toEqual({ startRow: 0, startCol: 0, endRow: 2, endCol: 2 });
-    expect(blockOf(at("B2"))).toEqual({ startRow: 1, startCol: 1, endRow: 1, endCol: 1 });
+    expect(rangeOf(at("C3"), at("A1"))).toEqual({ startRow: 0, startCol: 0, endRow: 2, endCol: 2 });
+    expect(rangeOf(at("B2"))).toEqual({ startRow: 1, startCol: 1, endRow: 1, endCol: 1 });
   });
 
   it("tests whether a cell is inside", () => {
-    expect(contains(block("B2:C3"), at("C3"))).toBe(true);
-    expect(contains(block("B2:C3"), at("A2"))).toBe(false);
-    expect(contains(block("B2:C3"), at("B4"))).toBe(false);
+    expect(contains(range("B2:C3"), at("C3"))).toBe(true);
+    expect(contains(range("B2:C3"), at("A2"))).toBe(false);
+    expect(contains(range("B2:C3"), at("B4"))).toBe(false);
   });
 });
 
@@ -62,53 +62,53 @@ describe("fillTarget", () => {
     ["C2:D3", "A2", "A2:D3"],
     ["B2:C3", "C2", "B2:C3"],
   ])("dragging the handle of %s to %s fills %s", (source, to, expected) => {
-    expect(fillTarget(block(source), at(to))).toEqual(block(expected));
+    expect(fillTarget(range(source), at(to))).toEqual(range(expected));
   });
 });
 
 describe("fillWrites", () => {
   it("copies a formula down and moves its relative references", () => {
-    const writes = fillWrites(block("C1"), block("C1:C3"), sheet({ C1: "=A1*$B$1" }));
+    const writes = fillWrites(range("C1"), range("C1:C3"), sheet({ C1: "=A1*$B$1" }));
     expect(byAddress(writes)).toEqual({ C2: "=A2*$B$1", C3: "=A3*$B$1" });
   });
 
   it("copies across, up, and to the left", () => {
-    expect(byAddress(fillWrites(block("B2"), block("B2:D2"), sheet({ B2: "=B1" })))).toEqual({
+    expect(byAddress(fillWrites(range("B2"), range("B2:D2"), sheet({ B2: "=B1" })))).toEqual({
       C2: "=C1",
       D2: "=D1",
     });
-    expect(byAddress(fillWrites(block("B3"), block("B1:B3"), sheet({ B3: "=A3" })))).toEqual({
+    expect(byAddress(fillWrites(range("B3"), range("B1:B3"), sheet({ B3: "=A3" })))).toEqual({
       B1: "=A1",
       B2: "=A2",
     });
-    expect(byAddress(fillWrites(block("C1"), block("A1:C1"), sheet({ C1: "=C2" })))).toEqual({
+    expect(byAddress(fillWrites(range("C1"), range("A1:C1"), sheet({ C1: "=C2" })))).toEqual({
       A1: "=A2",
       B1: "=B2",
     });
   });
 
   it("repeats a source of several cells as a pattern", () => {
-    const writes = fillWrites(block("A1:A2"), block("A1:A5"), sheet({ A1: "x", A2: "=B2" }));
+    const writes = fillWrites(range("A1:A2"), range("A1:A5"), sheet({ A1: "x", A2: "=B2" }));
     expect(byAddress(writes)).toEqual({ A3: "x", A4: "=B4", A5: "x" });
   });
 
   it("repeats a pattern backward when filling up", () => {
-    const writes = fillWrites(block("A4:A5"), block("A1:A5"), sheet({ A4: "first", A5: "second" }));
+    const writes = fillWrites(range("A4:A5"), range("A1:A5"), sheet({ A4: "first", A5: "second" }));
     expect(byAddress(writes)).toEqual({ A1: "second", A2: "first", A3: "second" });
   });
 
   it("clears target cells when the source cell is empty", () => {
-    expect(byAddress(fillWrites(block("A1"), block("A1:A2"), sheet({ A2: "old" })))).toEqual({
+    expect(byAddress(fillWrites(range("A1"), range("A1:A2"), sheet({ A2: "old" })))).toEqual({
       A2: "",
     });
   });
 
   it("writes nothing when the target is the source", () => {
-    expect(fillWrites(block("A1:B2"), block("A1:B2"), sheet({ A1: "x" }))).toEqual([]);
+    expect(fillWrites(range("A1:B2"), range("A1:B2"), sheet({ A1: "x" }))).toEqual([]);
   });
 
   it("writes #REF! into a formula filled past the edge it reads across", () => {
-    expect(byAddress(fillWrites(block("A2"), block("A1:A2"), sheet({ A2: "=A1" })))).toEqual({
+    expect(byAddress(fillWrites(range("A2"), range("A1:A2"), sheet({ A2: "=A1" })))).toEqual({
       A1: "=#REF!",
     });
   });
@@ -118,12 +118,12 @@ describe("clearWrites and inputsOf", () => {
   const cells = sheet({ A1: "1", B2: "=A1" });
 
   it("empties only the cells that hold something", () => {
-    expect(byAddress(clearWrites(block("A1:B2"), cells))).toEqual({ A1: "", B2: "" });
-    expect(clearWrites(block("C1:D4"), cells)).toEqual([]);
+    expect(byAddress(clearWrites(range("A1:B2"), cells))).toEqual({ A1: "", B2: "" });
+    expect(clearWrites(range("C1:D4"), cells)).toEqual([]);
   });
 
-  it("reads a block's inputs as rows", () => {
-    expect(inputsOf(block("A1:B2"), cells)).toEqual([
+  it("reads a range's inputs as rows", () => {
+    expect(inputsOf(range("A1:B2"), cells)).toEqual([
       ["1", ""],
       ["", "=A1"],
     ]);
@@ -195,7 +195,7 @@ describe("clipboard text", () => {
 
 describe("continuing a series", () => {
   const values = (source: string, target: string, cells: Record<string, string>): string[] =>
-    fillWrites(block(source), block(target), sheet(cells), true).map((write) => write.input);
+    fillWrites(range(source), range(target), sheet(cells), true).map((write) => write.input);
 
   it.each<[string, Record<string, string>, string, string, string[]]>([
     ["numbers an even step apart", { A1: "1", A2: "2" }, "A1:A2", "A1:A5", ["3", "4", "5"]],
@@ -264,8 +264,8 @@ describe("continuing a series", () => {
 
   it("decides for each column of the source on its own", () => {
     const writes = fillWrites(
-      block("A1:B2"),
-      block("A1:B4"),
+      range("A1:B2"),
+      range("A1:B4"),
       sheet({ A1: "1", A2: "2", B1: "x", B2: "y" }),
       true,
     );
@@ -277,7 +277,7 @@ describe("continuing a series", () => {
   });
 
   it("repeats without the series flag, as Ctrl+D does", () => {
-    const writes = fillWrites(block("A1:A2"), block("A1:A4"), sheet({ A1: "1", A2: "2" }));
+    const writes = fillWrites(range("A1:A2"), range("A1:A4"), sheet({ A1: "1", A2: "2" }));
     expect(writes.map((write) => write.input)).toEqual(["1", "2"]);
   });
 });

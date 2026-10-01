@@ -57,13 +57,13 @@ const loaded = computed(() => store.spreadsheet?.id === props.spreadsheetId);
 // The store may still hold the spreadsheet that was open before this one.
 usePageTitle(() => (loaded.value ? store.spreadsheet?.name : undefined));
 const page = computed(() => store.pages.find((candidate) => candidate.id === props.pageId));
-/** The tables, charts, and text views of the page, in the order they sit on it. */
-const items = computed(() =>
+/** The blocks of the page, in the order they sit on it. */
+const blocks = computed(() =>
   [
     ...store.tables.map((table) => ({ table, view: null, record: table })),
     ...store.views.map((view) => ({ table: null, view, record: view })),
   ]
-    .filter((item) => item.record.pageId === props.pageId)
+    .filter((block) => block.record.pageId === props.pageId)
     .sort((a, b) => a.record.position - b.record.position),
 );
 
@@ -170,32 +170,32 @@ watch(
     <p v-if="loadError" class="notice notice--error" role="alert">{{ loadError }}</p>
     <p v-else-if="!loaded" class="editor__loading">Loading…</p>
     <main v-else-if="page" class="editor__page">
-      <div v-for="(item, index) in items" :key="item.record.id" class="editor__item">
-        <TableCard v-if="item.table" :table="item.table" />
-        <ChartCard v-else-if="item.view.kind === 'chart'" :view="item.view" />
-        <TextCard v-else :view="item.view" />
-        <div v-if="store.canEdit && items.length > 1" class="editor__move">
+      <div v-for="(block, index) in blocks" :key="block.record.id" class="editor__block">
+        <TableCard v-if="block.table" :table="block.table" />
+        <ChartCard v-else-if="block.view.kind === 'chart'" :view="block.view" />
+        <TextCard v-else :view="block.view" />
+        <div v-if="store.canEdit && blocks.length > 1" class="editor__move">
           <button
             type="button"
             title="Move up"
-            :aria-label="`Move ${item.record.name} up`"
+            :aria-label="`Move ${block.record.name} up`"
             :disabled="index === 0"
-            @click="store.moveItem(page.id, item.record.id, -1)"
+            @click="store.moveBlock(page.id, block.record.id, -1)"
           >
             ↑
           </button>
           <button
             type="button"
             title="Move down"
-            :aria-label="`Move ${item.record.name} down`"
-            :disabled="index === items.length - 1"
-            @click="store.moveItem(page.id, item.record.id, 1)"
+            :aria-label="`Move ${block.record.name} down`"
+            :disabled="index === blocks.length - 1"
+            @click="store.moveBlock(page.id, block.record.id, 1)"
           >
             ↓
           </button>
         </div>
       </div>
-      <p v-if="items.length === 0" class="editor__empty">This page is empty.</p>
+      <p v-if="blocks.length === 0" class="editor__empty">This page is empty.</p>
       <div v-if="store.canEdit" class="editor__add">
         <button type="button" @click="store.addTable(page.id)">Add table</button>
         <button type="button" @click="store.addView(page.id, 'chart')">Add chart</button>
