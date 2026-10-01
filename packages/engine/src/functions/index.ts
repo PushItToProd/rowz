@@ -4,6 +4,7 @@ import { chartFunctions } from "./charts";
 import { conditionalFunctions } from "./conditional";
 import { controlFunctions } from "./controls";
 import { dateFunctions } from "./dates";
+import { financialFunctions } from "./financial";
 import { informationFunctions } from "./information";
 import { logicFunctions } from "./logic";
 import { lookupFunctions } from "./lookup";
@@ -18,6 +19,7 @@ export const defaultFunctions: FunctionRegistry = new Map(
   Object.entries({
     ...mathFunctions,
     ...statisticsFunctions,
+    ...financialFunctions,
     ...conditionalFunctions,
     ...logicFunctions,
     ...informationFunctions,

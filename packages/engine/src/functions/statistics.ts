@@ -51,6 +51,30 @@ function pairs(first: Evaluated, second: Evaluated): [number, number][] {
   });
 }
 
+function covariance(both: readonly [number, number][], sample: boolean): number {
+  const divisor = sample ? both.length - 1 : both.length;
+  if (divisor < 1) {
+    fail(
+      "#DIV/0!",
+      sample ? "A sample needs at least two pairs of numbers" : "No pairs of numbers were given",
+    );
+  }
+  const [meanX, meanY] = [mean(both.map(([x]) => x)), mean(both.map(([, y]) => y))];
+  return both.reduce((total, [x, y]) => total + (x - meanX) * (y - meanY), 0) / divisor;
+}
+
+/** The straight line through pairs of numbers that leaves the least squared distance to them. */
+function fit(ys: Evaluated, xs: Evaluated): { slope: number; intercept: number } {
+  // `pairs` gives each pair in the order of its arguments: y first here.
+  const both = pairs(ys, xs);
+  if (both.length < 2) fail("#DIV/0!", "A line needs at least two pairs of numbers");
+  const [meanY, meanX] = [mean(both.map(([y]) => y)), mean(both.map(([, x]) => x))];
+  const spreadX = both.reduce((total, [, x]) => total + (x - meanX) ** 2, 0);
+  if (spreadX === 0) fail("#DIV/0!", "The x values are all the same");
+  const slope = both.reduce((total, [y, x]) => total + (x - meanX) * (y - meanY), 0) / spreadX;
+  return { slope, intercept: meanY - slope * meanX };
+}
+
 export const statisticsFunctions: Record<string, FunctionDefinition> = {
   /** The number that occurs most often. Of several that tie, the one that appears first. */
   MODE: eager(1, Infinity, (...values) => {
@@ -90,6 +114,20 @@ export const statisticsFunctions: Record<string, FunctionDefinition> = {
     const together = both.reduce((total, [x, y]) => total + (x - meanX) * (y - meanY), 0);
     const scale = Math.sqrt(squaredDeviations(xs) * squaredDeviations(ys));
     return scale === 0 ? fail("#DIV/0!", "One of the ranges does not vary") : together / scale;
+  }),
+
+  /** How much two ranges vary together, for a sample or for a whole population. */
+  COVARIANCE_S: eager(2, 2, (first, second) => covariance(pairs(first, second), true)),
+  COVARIANCE_P: eager(2, 2, (first, second) => covariance(pairs(first, second), false)),
+
+  /** The slope of the straight line that best fits ys against xs. */
+  SLOPE: eager(2, 2, (ys, xs) => fit(ys, xs).slope),
+  /** Where that line crosses x = 0. */
+  INTERCEPT: eager(2, 2, (ys, xs) => fit(ys, xs).intercept),
+  /** The y that line gives for an x. */
+  FORECAST: eager(3, 3, (x, ys, xs) => {
+    const { slope, intercept } = fit(ys, xs);
+    return intercept + slope * number(x);
   }),
 
   /** How many different values there are. Empty cells are not counted, and text is compared without regard to case. */

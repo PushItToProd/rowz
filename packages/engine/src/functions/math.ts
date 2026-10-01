@@ -82,6 +82,21 @@ function logarithm(value: Evaluated, base: number): number {
   return base === Math.E ? Math.log(given) : Math.log(given) / Math.log(base);
 }
 
+/** A function of one number, such as a trigonometric function of an angle in radians. */
+function angle(compute: (value: number) => number): FunctionDefinition {
+  return eager(1, 1, (value) => finite(compute(number(value))));
+}
+
+/** An inverse trigonometric function, which is defined only from -1 to 1. */
+function unit(name: string, compute: (value: number) => number): FunctionDefinition {
+  return eager(1, 1, (value) => {
+    const given = number(value);
+    return given < -1 || given > 1
+      ? fail("#VALUE!", `${name} needs a number from -1 to 1`)
+      : compute(given);
+  });
+}
+
 function finite(value: number): number {
   return Number.isFinite(value) ? value : fail("#VALUE!", "The result is not a number");
 }
@@ -120,6 +135,19 @@ export const mathFunctions: Record<string, FunctionDefinition> = {
   LN: eager(1, 1, (value) => logarithm(value, Math.E)),
   LOG: eager(1, 2, (value, base = 10) => logarithm(value, number(base))),
   PI: eager(0, 0, () => Math.PI),
+  SIN: angle(Math.sin),
+  COS: angle(Math.cos),
+  TAN: angle(Math.tan),
+  ASIN: unit("ASIN", Math.asin),
+  ACOS: unit("ACOS", Math.acos),
+  ATAN: angle(Math.atan),
+  SINH: angle(Math.sinh),
+  COSH: angle(Math.cosh),
+  TANH: angle(Math.tanh),
+  /** Turns an angle in radians into degrees. */
+  DEGREES: angle((radians) => (radians * 180) / Math.PI),
+  /** Turns an angle in degrees into radians. */
+  RADIANS: angle((degrees) => (degrees * Math.PI) / 180),
   EVEN: eager(1, 1, (value) => toParity(number(value), false)),
   ODD: eager(1, 1, (value) => toParity(number(value), true)),
   ISEVEN: eager(1, 1, (value) => integer(value) % 2 === 0),

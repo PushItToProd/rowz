@@ -1,6 +1,6 @@
 import { compare, isScalar, kindOf, type CellValue, type Evaluated, type Scalar } from "../values";
 import type { CellRange } from "../address";
-import { boolean, eager, fail, grid, integer, lazy, scalar } from "./arguments";
+import { array, boolean, eager, fail, grid, integer, lazy, scalar } from "./arguments";
 import type { FunctionDefinition } from "./registry";
 
 /** `ROW` or `COLUMN`: the position of a referenced cell, or of the formula's own cell. */
@@ -22,8 +22,8 @@ function position(
 }
 
 /** The cells of a range that is one row or one column, in order. */
-function line(value: Evaluated, what: string): CellValue[] {
-  const cells = grid(value);
+function line(value: Evaluated | CellValue[][], what: string): CellValue[] {
+  const cells = Array.isArray(value) ? value : grid(value);
   if (cells.length === 1) return cells[0] ?? [];
   if (cells.every((row) => row.length === 1)) return cells.map(([cell]) => cell ?? null);
   return fail("#VALUE!", `${what} must be a single row or column`);
@@ -68,17 +68,24 @@ export const lookupFunctions: Record<string, FunctionDefinition> = {
     return found(mode === 0 ? exact(wanted, cells) : nearest(wanted, cells, mode < 0)) + 1;
   }),
 
-  /** The cell at a 1-based row and column of a range. A single row or column needs only one position. */
+  /**
+   * The cell at a 1-based row and column of a range. A single row or column
+   * needs only one position. Leaving the column out, or giving 0 for the row
+   * or the column, takes the whole row or column.
+   */
   INDEX: lazy(2, 3, ([range, first, second]) => {
     const cells = grid(range?.() ?? null);
     const position = integer(first?.() ?? null);
     // One position into a single row counts along the row.
     const alongRow = cells.length === 1 && !second;
     const row = alongRow ? 1 : position;
-    const col = alongRow ? position : second ? integer(second()) : 1;
-    if (row < 1 || col < 1) fail("#VALUE!", "Positions start at 1");
-    const cell = cells[row - 1]?.[col - 1];
-    return cell === undefined ? fail("#REF!", "The position is outside the range") : cell;
+    const col = alongRow ? position : second ? integer(second()) : 0;
+    if (row < 0 || col < 0) fail("#VALUE!", "Positions start at 1");
+    const width = cells[0]?.length ?? 0;
+    if (row > cells.length || col > width) fail("#REF!", "The position is outside the range");
+    const rows = row === 0 ? cells : [cells[row - 1] ?? []];
+    const picked = col === 0 ? rows : rows.map((line) => [line[col - 1] ?? null]);
+    return picked.length === 1 && picked[0]?.length === 1 ? (picked[0][0] ?? null) : array(picked);
   }),
 
   /**
@@ -115,18 +122,25 @@ export const lookupFunctions: Record<string, FunctionDefinition> = {
   COLUMN: position("COLUMN", (place) => ("col" in place ? place.col : place.startCol)),
 
   /**
-   * Finds a key in one row or column and gives the cell at the same position
-   * of another. The match is exact. The fourth argument, evaluated only when
-   * nothing matches, is the result in that case.
+   * Finds a key in one row or column and gives what is at the same position
+   * of another range: a cell, or a whole row or column when the range of
+   * results is wider. The match is exact. The fourth argument, evaluated only
+   * when nothing matches, is the result in that case.
    */
   XLOOKUP: lazy(3, 4, ([key, lookup, result, otherwise]) => {
-    const keys = line(lookup?.() ?? null, "The range to search");
-    const results = line(result?.() ?? null, "The range of results");
-    if (keys.length !== results.length) {
+    const searched = grid(lookup?.() ?? null);
+    const keys = line(searched, "The range to search");
+    const results = grid(result?.() ?? null);
+    // Keys down a column pair with the rows of the results, and keys along a row with the columns.
+    const vertical = searched.length > 1;
+    const count = vertical ? results.length : (results[0]?.length ?? 0);
+    if (keys.length !== count) {
       fail("#VALUE!", "The range to search and the range of results must be the same size");
     }
     const index = exact(scalar(key?.() ?? null), keys);
     if (index === -1 && otherwise) return otherwise();
-    return results[found(index)] ?? null;
+    const at = found(index);
+    const picked = vertical ? [results[at] ?? []] : results.map((cells) => [cells[at] ?? null]);
+    return picked.length === 1 && picked[0]?.length === 1 ? (picked[0][0] ?? null) : array(picked);
   }),
 };

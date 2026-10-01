@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateFormula } from "../testing";
+import { at, evaluateFormula, workbookWith } from "../testing";
 import type { CellValue } from "../values";
 
 function expectError(formula: string, code: string, cells: Record<string, string> = {}): void {
@@ -269,6 +269,27 @@ describe("lookups", () => {
     expect(evaluateFormula(formula, cells)).toBe(expected);
   });
 
+  it("takes a whole row or column with INDEX when a position is left out or 0", () => {
+    const rows = (formula: string): CellValue[][] =>
+      workbookWith({ t1: { ...cells, I1: formula } }).getArray(at("I1"));
+    expect(rows("=INDEX(A1:C3, 2)")).toEqual([[20, "twenty", 2.5]]);
+    expect(rows("=INDEX(A1:C3, 2, 0)")).toEqual([[20, "twenty", 2.5]]);
+    expect(rows("=INDEX(A1:C3, 0, 2)")).toEqual([["ten"], ["twenty"], ["thirty"]]);
+    expect(rows("=INDEX(A1:B2, 0, 0)")).toEqual([
+      [10, "ten"],
+      [20, "twenty"],
+    ]);
+    expect(rows("=SUM(INDEX(A1:C3, 0, 1))")).toEqual([[60]]);
+  });
+
+  it("gives a whole row or column with XLOOKUP when the results are wider than the keys", () => {
+    const rows = (formula: string): CellValue[][] =>
+      workbookWith({ t1: { ...cells, I1: formula } }).getArray(at("I1"));
+    expect(rows("=XLOOKUP(20, A1:A3, B1:C3)")).toEqual([["twenty", 2.5]]);
+    expect(rows('=XLOOKUP("plum", E1:G1, E1:G2)')).toEqual([["plum"], [20]]);
+    expect(rows('=XLOOKUP(99, A1:A3, B1:C3, "none")')).toEqual([["none"]]);
+  });
+
   it.each([
     ["=MATCH(15, A1:A3, 0)", "#N/A"],
     ["=MATCH(5, A1:A3)", "#N/A"],
@@ -276,7 +297,7 @@ describe("lookups", () => {
     ["=MATCH(20, A1:C3, 0)", "#VALUE!"],
     ["=INDEX(A1:C3, 4, 1)", "#REF!"],
     ["=INDEX(A1:C3, 1, 4)", "#REF!"],
-    ["=INDEX(A1:C3, 0, 1)", "#VALUE!"],
+    ["=INDEX(A1:C3, -1, 1)", "#VALUE!"],
     ["=VLOOKUP(15, A1:C3, 2, FALSE)", "#N/A"],
     ["=VLOOKUP(5, A1:C3, 2)", "#N/A"],
     ["=VLOOKUP(20, A1:C3, 4, FALSE)", "#REF!"],

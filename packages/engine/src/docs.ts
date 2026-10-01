@@ -4,6 +4,7 @@ import type { ErrorCode } from "./values";
 export const FUNCTION_CATEGORIES = [
   "Math",
   "Statistics",
+  "Financial",
   "Logic",
   "Lookup",
   "Text",
@@ -271,7 +272,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Lookup",
     syntax: "XLOOKUP(key, lookup_range, result_range, [if_not_found])",
     summary:
-      "Finds the key in one row or column and gives the cell at the same position of another. The match is exact.",
+      "Finds the key in one row or column and gives the cell at the same position of another. The match is exact. When the range of results is wider than the keys, it gives the whole matching row or column.",
     example: 'XLOOKUP("cherry", B1:B3, A1:A3, 0)',
   },
   {
@@ -287,7 +288,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Lookup",
     syntax: "INDEX(range, row, [column])",
     summary:
-      "The cell at a row and column of the range, counting from 1. A single row or column needs only one position.",
+      "The cell at a row and column of the range, counting from 1. A single row or column needs only one position. Leave the column out, or give 0 for the row or column, to take the whole row or column.",
     example: "INDEX(B1:B3, 3)",
   },
   {
@@ -1142,6 +1143,171 @@ const ENTRIES: readonly FunctionDoc[] = [
     summary:
       "Shows text with Markdown formatting: `**bold**`, `*italic*`, `` `code` ``, `~~struck~~`, and `[a link](https://example.com)`. A cell shows one line. A text view shows the formatting too.",
     example: 'MARKDOWN("**" & B1 & "** costs " & A1)',
+  },
+  {
+    name: "SIN",
+    category: "Math",
+    syntax: "SIN(angle)",
+    summary: "The sine of an angle in radians.",
+    example: "ROUND(SIN(PI() / 2), 4)",
+  },
+  {
+    name: "COS",
+    category: "Math",
+    syntax: "COS(angle)",
+    summary: "The cosine of an angle in radians.",
+    example: "ROUND(COS(0), 4)",
+  },
+  {
+    name: "TAN",
+    category: "Math",
+    syntax: "TAN(angle)",
+    summary: "The tangent of an angle in radians.",
+    example: "ROUND(TAN(PI() / 4), 4)",
+  },
+  {
+    name: "ASIN",
+    category: "Math",
+    syntax: "ASIN(number)",
+    summary: "The angle, in radians, whose sine is the number.",
+    example: "ROUND(DEGREES(ASIN(1)), 4)",
+  },
+  {
+    name: "ACOS",
+    category: "Math",
+    syntax: "ACOS(number)",
+    summary: "The angle, in radians, whose cosine is the number.",
+    example: "ROUND(DEGREES(ACOS(0)), 4)",
+  },
+  {
+    name: "ATAN",
+    category: "Math",
+    syntax: "ATAN(number)",
+    summary: "The angle, in radians, whose tangent is the number.",
+    example: "ROUND(DEGREES(ATAN(1)), 4)",
+  },
+  {
+    name: "SINH",
+    category: "Math",
+    syntax: "SINH(number)",
+    summary: "The hyperbolic sine.",
+    example: "ROUND(SINH(1), 4)",
+  },
+  {
+    name: "COSH",
+    category: "Math",
+    syntax: "COSH(number)",
+    summary: "The hyperbolic cosine.",
+    example: "ROUND(COSH(1), 4)",
+  },
+  {
+    name: "TANH",
+    category: "Math",
+    syntax: "TANH(number)",
+    summary: "The hyperbolic tangent.",
+    example: "ROUND(TANH(1), 4)",
+  },
+  {
+    name: "DEGREES",
+    category: "Math",
+    syntax: "DEGREES(radians)",
+    summary: "Turns an angle in radians into degrees.",
+    example: "DEGREES(PI())",
+  },
+  {
+    name: "RADIANS",
+    category: "Math",
+    syntax: "RADIANS(degrees)",
+    summary: "Turns an angle in degrees into radians.",
+    example: "ROUND(RADIANS(180), 4)",
+  },
+  {
+    name: "COVARIANCE_S",
+    category: "Statistics",
+    syntax: "COVARIANCE_S(range, range)",
+    summary: "How much two ranges vary together, when the numbers are a sample.",
+    example: "COVARIANCE_S(A1:A3, A1:A3 * 2)",
+  },
+  {
+    name: "COVARIANCE_P",
+    category: "Statistics",
+    syntax: "COVARIANCE_P(range, range)",
+    summary: "How much two ranges vary together, when the numbers are the whole population.",
+    example: "ROUND(COVARIANCE_P(A1:A3, A1:A3 * 2), 3)",
+  },
+  {
+    name: "SLOPE",
+    category: "Statistics",
+    syntax: "SLOPE(ys, xs)",
+    summary: "The slope of the straight line that best fits the ys against the xs.",
+    example: "SLOPE(A1:A3 * 2 + 1, A1:A3)",
+  },
+  {
+    name: "INTERCEPT",
+    category: "Statistics",
+    syntax: "INTERCEPT(ys, xs)",
+    summary: "Where the straight line that best fits the ys against the xs crosses x = 0.",
+    example: "INTERCEPT(A1:A3 * 2 + 1, A1:A3)",
+  },
+  {
+    name: "FORECAST",
+    category: "Statistics",
+    syntax: "FORECAST(x, ys, xs)",
+    summary: "The y that the best-fitting straight line gives for an x.",
+    example: "FORECAST(10, A1:A3 * 2 + 1, A1:A3)",
+  },
+  {
+    name: "PMT",
+    category: "Financial",
+    syntax: "PMT(rate, periods, present_value, [future_value], [type])",
+    summary:
+      "The payment each period that pays off a loan. The rate is per period, so a yearly rate is divided by 12 for monthly payments. Money paid out is negative and money received is positive. `type` is 1 when payments fall at the start of each period.",
+    example: "ROUND(PMT(0.05 / 12, 60, 20000), 2)",
+  },
+  {
+    name: "FV",
+    category: "Financial",
+    syntax: "FV(rate, periods, payment, [present_value], [type])",
+    summary:
+      "What savings will be worth after a number of periods of equal payments. Money paid out is negative and money received is positive.",
+    example: "ROUND(FV(0.04 / 12, 120, -100), 2)",
+  },
+  {
+    name: "PV",
+    category: "Financial",
+    syntax: "PV(rate, periods, payment, [future_value], [type])",
+    summary:
+      "What a series of equal future payments is worth today. Money paid out is negative and money received is positive.",
+    example: "ROUND(PV(0.05 / 12, 60, -377.42), 2)",
+  },
+  {
+    name: "NPER",
+    category: "Financial",
+    syntax: "NPER(rate, payment, present_value, [future_value], [type])",
+    summary: "How many periods it takes to pay off a loan with equal payments.",
+    example: "ROUND(NPER(0.05 / 12, -377.42, 20000), 1)",
+  },
+  {
+    name: "RATE",
+    category: "Financial",
+    syntax: "RATE(periods, payment, present_value, [future_value], [type], [guess])",
+    summary: "The interest rate per period of a loan with equal payments.",
+    example: "ROUND(RATE(60, -377.42, 20000) * 12, 4)",
+  },
+  {
+    name: "NPV",
+    category: "Financial",
+    syntax: "NPV(rate, value, ...)",
+    summary:
+      "What a series of cash flows, one at the end of each period, is worth today at a discount rate.",
+    example: "ROUND(NPV(0.1, 100, 100, 100), 2)",
+  },
+  {
+    name: "IRR",
+    category: "Financial",
+    syntax: "IRR(values, [guess])",
+    summary: "The rate of return of a series of cash flows, starting with the amount paid out.",
+    example: "ROUND(IRR(VSTACK(-100, 60, 60)), 4)",
   },
 ];
 
