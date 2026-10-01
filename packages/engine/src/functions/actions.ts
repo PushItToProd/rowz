@@ -1,7 +1,7 @@
 import type { Node } from "../ast";
 import type { Effect } from "../effects";
 import { isAction, isError, literalInput, type Evaluated } from "../values";
-import { fail, lazy, scalar, text } from "./arguments";
+import { fail, grid, lazy, scalar, text } from "./arguments";
 import type { FunctionDefinition, PlanContext } from "./registry";
 
 const ADDRESS_SEPARATOR = /[,;]/;
@@ -34,7 +34,10 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
     return { kind: "button", label: shown, action: run };
   }),
 
-  /** `EXECUTE(expression, target)` writes the value of the expression into the target cell. */
+  /**
+   * `EXECUTE(expression, target)` writes the value of the expression into the
+   * target cell. An array is written as a block whose first cell is the target.
+   */
   EXECUTE: {
     kind: "action",
     minArgs: 2,
@@ -45,10 +48,15 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
       }
       const cell = context.resolve(target.reference);
       if (!cell) fail("#REF!", "The cell to write to does not exist");
-      const input = literalInput(scalar(argument(expression, context)));
-      return [
-        { type: "setCell", tableId: cell.tableId, row: cell.startRow, col: cell.startCol, input },
-      ];
+      return grid(argument(expression, context)).flatMap((cells, rowOffset) =>
+        cells.map((value, colOffset) => ({
+          type: "setCell" as const,
+          tableId: cell.tableId,
+          row: cell.startRow + rowOffset,
+          col: cell.startCol + colOffset,
+          input: literalInput(scalar(value)),
+        })),
+      );
     },
   },
 

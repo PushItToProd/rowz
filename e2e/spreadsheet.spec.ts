@@ -164,6 +164,43 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
   await expect(cell(page, "A2")).toHaveText("3");
 });
 
+test("a formula with several results fills the cells around it", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "pear");
+  await enter(page, "A2", "apple");
+  await enter(page, "A3", "fig");
+  await enter(page, "B1", "5");
+  await enter(page, "B2", "12");
+  await enter(page, "B3", "8");
+
+  await enter(page, "D1", "=SORT(FILTER(A1:B3, B1:B3 > 6), 2, FALSE)");
+  await expect(cell(page, "D1")).toHaveText("apple");
+  await expect(cell(page, "E1")).toHaveText("12");
+  await expect(cell(page, "D2")).toHaveText("fig");
+  await expect(cell(page, "E2")).toHaveText("8");
+  await expect(cell(page, "E2")).toHaveClass(/grid__cell--filled/);
+
+  await enter(page, "G1", "=SUM(E:E)");
+  await expect(cell(page, "G1")).toHaveText("20");
+
+  // The result follows its inputs.
+  await enter(page, "B1", "50");
+  await expect(cell(page, "D1")).toHaveText("pear");
+  await expect(cell(page, "D3")).toHaveText("fig");
+  await expect(cell(page, "G1")).toHaveText("70");
+
+  // Typing into a filled cell blocks the result until the cell is cleared.
+  await enter(page, "D2", "in the way");
+  await expect(cell(page, "D1")).toHaveText("#SPILL!");
+  await cell(page, "D2").click();
+  await page.keyboard.press("Delete");
+  await expect(cell(page, "D1")).toHaveText("pear");
+
+  await page.reload();
+  await expect(cell(page, "D3")).toHaveText("fig");
+  await expect(cell(page, "G1")).toHaveText("70");
+});
+
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "=1/0");

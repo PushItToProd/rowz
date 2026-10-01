@@ -8,6 +8,7 @@ export const FUNCTION_CATEGORIES = [
   "Text",
   "Information",
   "Names",
+  "Arrays",
   "Actions",
 ] as const;
 export type FunctionCategory = (typeof FUNCTION_CATEGORIES)[number];
@@ -439,6 +440,104 @@ export const functionDocs: readonly FunctionDoc[] = [
     example: "LAMBDA(price, count, price * count)(A2, A3)",
   },
   {
+    name: "FILTER",
+    category: "Arrays",
+    syntax: "FILTER(range, condition, ...)",
+    summary:
+      "Keeps the rows of the range where every condition is true. A condition is a column as tall as the range, usually a comparison.",
+    example: "FILTER(B1:B3, A1:A3 > 1)",
+  },
+  {
+    name: "SORT",
+    category: "Arrays",
+    syntax: "SORT(range, [column], [ascending], ...)",
+    summary:
+      "Sorts the rows of the range by a column, counting from 1. Without a column it sorts by the first, ascending. FALSE sorts descending. More column and direction pairs break ties.",
+    example: "SORT(A1:B3, 1, FALSE)",
+  },
+  {
+    name: "UNIQUE",
+    category: "Arrays",
+    syntax: "UNIQUE(range)",
+    summary: "The rows of the range with repeats removed.",
+    example: "UNIQUE(MAP(B1:B3, LAMBDA(name, LEN(name))))",
+  },
+  {
+    name: "SEQUENCE",
+    category: "Arrays",
+    syntax: "SEQUENCE(rows, [columns], [start], [step])",
+    summary:
+      "A block of counting numbers, filled row by row. It starts at 1 and counts by 1 unless told otherwise.",
+    example: "SEQUENCE(2, 3)",
+  },
+  {
+    name: "TRANSPOSE",
+    category: "Arrays",
+    syntax: "TRANSPOSE(range)",
+    summary: "Turns rows into columns and columns into rows.",
+    example: "TRANSPOSE(A1:A3)",
+  },
+  {
+    name: "TAKE",
+    category: "Arrays",
+    syntax: "TAKE(range, rows, [columns])",
+    summary:
+      "The first rows of the range, or the last rows when the count is negative. A third value does the same for columns.",
+    example: "TAKE(SORT(A1:B3, 1, FALSE), 2)",
+  },
+  {
+    name: "DROP",
+    category: "Arrays",
+    syntax: "DROP(range, rows, [columns])",
+    summary:
+      "The range without its first rows, or without its last rows when the count is negative.",
+    example: "DROP(B1:B3, 1)",
+  },
+  {
+    name: "ROWS",
+    category: "Arrays",
+    syntax: "ROWS(range)",
+    summary: "How many rows the range has.",
+    example: "ROWS(A1:B3)",
+  },
+  {
+    name: "COLUMNS",
+    category: "Arrays",
+    syntax: "COLUMNS(range)",
+    summary: "How many columns the range has.",
+    example: "COLUMNS(A1:B3)",
+  },
+  {
+    name: "MAP",
+    category: "Arrays",
+    syntax: "MAP(range, ..., function)",
+    summary:
+      "Calls a function on each cell and gives the results in the same arrangement. With several ranges of one size, the function receives one cell of each.",
+    example: 'MAP(A1:A3, B1:B3, LAMBDA(n, name, n & " " & name))',
+  },
+  {
+    name: "REDUCE",
+    category: "Arrays",
+    syntax: "REDUCE(start, range, function)",
+    summary:
+      "Folds a range into one value. The function receives the value so far and the next cell, and gives the new value so far.",
+    example: "REDUCE(0, A1:A3, LAMBDA(total, n, total + n * n))",
+  },
+  {
+    name: "BYROW",
+    category: "Arrays",
+    syntax: "BYROW(range, function)",
+    summary: "Calls a function on each row and gives a column of the results.",
+    example: 'BYROW(A1:B3, LAMBDA(row, TEXTJOIN("-", TRUE, row)))',
+  },
+  {
+    name: "BYCOL",
+    category: "Arrays",
+    syntax: "BYCOL(range, function)",
+    summary: "Calls a function on each column and gives a row of the results.",
+    example: "BYCOL(A1:B3, LAMBDA(col, COUNTA(col)))",
+  },
+  {
     name: "BUTTON",
     category: "Actions",
     syntax: "BUTTON(label, action)",
@@ -471,6 +570,8 @@ export const errorDocs: Record<ErrorCode, string> = {
   "#REF!": "The formula names a page or table that does not exist.",
   "#NAME?": "The formula uses a function or a word that is not known.",
   "#N/A": "A lookup found no match, or no case of IFS or SWITCH applied.",
+  "#SPILL!":
+    "The result is several values, and a cell they would fill is not empty or is outside the table.",
   "#CYCLE!": "The formula depends on its own cell, directly or through other cells.",
   "#ERROR!": "The formula could not be read, or a function was given the wrong number of values.",
 };

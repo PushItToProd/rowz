@@ -100,10 +100,6 @@ describe("operators", () => {
     ['=-"a"', "#VALUE!"],
     ["=10^400", "#VALUE!"],
     ["=(-1)^0.5", "#VALUE!"],
-    ["=A1:A2+1", "#VALUE!"],
-    ["=1+A1:A2", "#VALUE!"],
-    ["=-A1:A2", "#VALUE!"],
-    ["=A1:A2", "#VALUE!"],
     ["=1/0+1", "#DIV/0!"],
     ["=1+1/0", "#DIV/0!"],
     ["=-(1/0)", "#DIV/0!"],
@@ -225,8 +221,9 @@ describe("ranges with an open side", () => {
     expect(workbookWith({ t1: { A1: "4", B1: "=SUM(A:A)" } }).getValue(at("B1"))).toBe(4);
   });
 
-  it("cannot be held by a cell, like any range", () => {
-    expectError(evaluateFormula("=A:A"), "#VALUE!");
+  it("fills cells like any range when a formula's result is the range itself", () => {
+    const workbook = workbookWith({ t1: { A1: "1", A2: "2", C1: "=A:A" } });
+    expect(workbook.getArray(at("C1"))).toEqual([[1], [2]]);
   });
 });
 

@@ -8,6 +8,7 @@ import {
   functionDocs,
   isButton,
   parseAddress,
+  type CellValue,
   type FunctionCategory,
   type FunctionDoc,
 } from "@spreadsheet-app/engine";
@@ -30,11 +31,22 @@ function exampleResults(): Map<string, string> {
   return new Map(
     functionDocs.map((doc) => {
       workbook.setCell(SCRATCH, `=${doc.example}`);
-      const value = workbook.getValue(SCRATCH);
-      const shown = isButton(value) ? `a button labeled “${value.label}”` : formatValue(value);
-      return [doc.name, shown];
+      return [doc.name, describeResult(workbook.getArray(SCRATCH))];
     }),
   );
+}
+
+/** Says what a formula shows: one value, or the cells an array fills. */
+function describeResult(rows: CellValue[][]): string {
+  const [first = []] = rows;
+  const [single = null] = first;
+  if (rows.length === 1 && first.length === 1) {
+    return isButton(single) ? `a button labeled “${single.label}”` : formatValue(single);
+  }
+  const lines = rows.map((cells) => cells.map(formatValue).join(", "));
+  if (rows.length === 1) return `${lines.join("")} across a row`;
+  if (first.length === 1) return `${lines.join(", ")} down a column`;
+  return `${String(rows.length)} rows: ${lines.join(" / ")}`;
 }
 
 const results = exampleResults();
@@ -59,6 +71,7 @@ const SECTIONS = [
   ["operators", "Operators"],
   ["functions", "Functions"],
   ["names", "Names and your own functions"],
+  ["arrays", "Formulas that fill several cells"],
   ["actions", "Buttons and actions"],
   ["errors", "Errors"],
 ] as const;
@@ -350,6 +363,42 @@ const OPERATORS = [
         <li>
           Because a cell address before parentheses calls that cell, no function is named like one.
         </li>
+      </ul>
+    </section>
+
+    <section id="arrays">
+      <h2>Formulas that fill several cells</h2>
+      <p>
+        Some formulas give several values. <code>=SEQUENCE(3)</code> gives 1, 2, and 3, and
+        <code>=FILTER(A1:B9, B1:B9 &gt; 5)</code> gives every row that passes the test. The
+        formula's own cell shows the first value, and the rest fill the cells below it and to its
+        right. Filled cells have a tinted background.
+      </p>
+      <ul>
+        <li>
+          Other formulas read filled cells like any others: <code>=SUM(D:D)</code> adds a column
+          that a formula in D1 filled.
+        </li>
+        <li>
+          The cells to fill must be empty and inside the table. Otherwise the formula shows
+          <code>#SPILL!</code>. Typing into a filled cell causes the same error until that cell is
+          cleared.
+        </li>
+        <li>
+          Arithmetic and comparisons work cell by cell on a range: <code>=A1:A3 * 2</code> gives
+          three values, and <code>=A1:A3 &gt; 1</code> gives three TRUE or FALSE values, which is
+          what <code>FILTER</code> takes as a condition.
+        </li>
+        <li>
+          A function that expects a single value, such as <code>UPPER</code> or <code>IF</code>,
+          does not work cell by cell. Use <code>MAP</code> for that:
+          <code>=MAP(A1:A3, LAMBDA(n, IF(n &gt; 1, "many", "one")))</code>.
+        </li>
+        <li>
+          A function that takes a range also takes an array, so results can be combined without
+          filling any cells: <code>=SUM(A1:A3 * B1:B3)</code>.
+        </li>
+        <li><code>EXECUTE</code> writes an array as a block of cells starting at its target.</li>
       </ul>
     </section>
 

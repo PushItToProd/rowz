@@ -1,12 +1,13 @@
 import type { CellId, CellRange } from "./address";
 import type { BinaryOperator, Node, Reference } from "./ast";
-import { fail, Failure, number, scalar } from "./functions/arguments";
+import { array, element, fail, Failure, number, scalar } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
 import {
   compare,
   error,
   isError,
   isLambda,
+  isRange,
   toText,
   type CellValue,
   type Evaluated,
@@ -89,6 +90,36 @@ function readReference(reference: Reference, context: EvaluationContext): Evalua
 }
 
 /**
+ * Applies an operator to its operands. With only single values that is one
+ * computation. When an operand is an array, the operator is applied cell by
+ * cell and the result is an array: a single value pairs with every cell, and
+ * an array of one row or one column pairs with every row or column of a
+ * larger one. A cell with no partner is `#N/A`.
+ */
+function elementwise(
+  operands: readonly Evaluated[],
+  operate: (...values: Scalar[]) => Scalar,
+): Evaluated {
+  if (!operands.some(isRange)) return operate(...operands.map(scalar));
+
+  const grids = operands.map((operand) => (isRange(operand) ? operand.rows : [[scalar(operand)]]));
+  const height = Math.max(...grids.map((rows) => rows.length));
+  const width = Math.max(...grids.map((rows) => rows[0]?.length ?? 0));
+  const cellAt = (rows: readonly CellValue[][], row: number, col: number): CellValue => {
+    const cells = rows.length === 1 ? rows[0] : rows[row];
+    const cell = cells?.length === 1 ? cells[0] : cells?.[col];
+    return cell === undefined ? error("#N/A", "The arrays are not the same size") : cell;
+  };
+  return array(
+    Array.from({ length: height }, (_, row) =>
+      Array.from({ length: width }, (_, col) =>
+        element(() => operate(...grids.map((rows) => scalar(cellAt(rows, row, col))))),
+      ),
+    ),
+  );
+}
+
+/**
  * Calls a function made by `LAMBDA` with values for its parameters. The body
  * runs in the context the function was made in, with the parameters bound.
  */
@@ -139,7 +170,10 @@ function call(name: string, args: readonly Node[], context: EvaluationContext): 
     case "special":
       return definition.evaluate(args, context);
     case "pure":
-      return definition.call(args.map((arg) => () => evaluate(arg, context)));
+      return definition.call(
+        args.map((arg) => () => evaluate(arg, context)),
+        context,
+      );
   }
 }
 
@@ -163,14 +197,13 @@ function compute(node: Node, context: EvaluationContext): Evaluated {
     case "apply":
       return applyValue(compute(node.target, context), node.args, context);
     case "unary": {
-      const operand = number(compute(node.operand, context));
-      return node.operator === "-" ? -operand : operand;
+      const sign = node.operator === "-" ? -1 : 1;
+      return elementwise([compute(node.operand, context)], (operand) => sign * number(operand));
     }
     case "binary":
-      return binary(
-        node.operator,
-        scalar(compute(node.left, context)),
-        scalar(compute(node.right, context)),
+      return elementwise(
+        [compute(node.left, context), compute(node.right, context)],
+        (left = null, right = null) => binary(node.operator, left, right),
       );
   }
 }

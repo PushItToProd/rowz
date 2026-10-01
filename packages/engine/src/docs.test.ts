@@ -71,6 +71,45 @@ describe("functionDocs", () => {
   });
 });
 
+describe("array examples", () => {
+  it.each([
+    ["FILTER", [["banana"], ["cherry"]]],
+    [
+      "SORT",
+      [
+        [3, "cherry"],
+        [2, "banana"],
+        [1, "apple"],
+      ],
+    ],
+    ["UNIQUE", [[5], [6]]],
+    [
+      "SEQUENCE",
+      [
+        [1, 2, 3],
+        [4, 5, 6],
+      ],
+    ],
+    ["TRANSPOSE", [[1, 2, 3]]],
+    [
+      "TAKE",
+      [
+        [3, "cherry"],
+        [2, "banana"],
+      ],
+    ],
+    ["DROP", [["banana"], ["cherry"]]],
+    ["MAP", [["1 apple"], ["2 banana"], ["3 cherry"]]],
+    ["REDUCE", [[14]]],
+    ["BYROW", [["1-apple"], ["2-banana"], ["3-cherry"]]],
+    ["BYCOL", [[3, 3]]],
+  ])("the %s example gives %j", (name, expected) => {
+    const doc = functionDocs.find((candidate) => candidate.name === name);
+    const { workbook } = evaluateExample(doc!.example);
+    expect(workbook.getArray(at("Z99"))).toEqual(expected);
+  });
+});
+
 describe("errorDocs", () => {
   it("explains every error code in a sentence", () => {
     for (const [code, explanation] of Object.entries(errorDocs)) {

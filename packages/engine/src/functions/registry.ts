@@ -16,7 +16,8 @@ export interface PureFunction {
   kind: "pure";
   minArgs: number;
   maxArgs: number;
-  call(args: readonly Argument[]): Evaluated;
+  /** `context` is for the few functions that call a function passed to them, such as `MAP`. */
+  call(args: readonly Argument[], context: EvaluationContext): Evaluated;
 }
 
 export interface PlanContext {

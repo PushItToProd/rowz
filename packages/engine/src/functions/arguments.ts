@@ -1,6 +1,7 @@
 import {
   error,
   isError,
+  isLambda,
   isRange,
   isScalar,
   toBoolean,
@@ -10,9 +11,11 @@ import {
   type ErrorCode,
   type ErrorValue,
   type Evaluated,
+  type LambdaValue,
+  type RangeValue,
   type Scalar,
 } from "../values";
-import type { Argument, PureFunction } from "./registry";
+import type { PureFunction } from "./registry";
 
 /**
  * Thrown inside a function to make the call evaluate to an error. The
@@ -64,12 +67,30 @@ export function grid(value: Evaluated): CellValue[][] {
   return isRange(given) ? given.rows : [[given]];
 }
 
+/** Makes an array result from rows of cells. */
+export function array(rows: CellValue[][]): RangeValue {
+  return { kind: "range", rows };
+}
+
+/** A function made by `LAMBDA`, which functions such as `MAP` take as an argument. */
+export function lambda(value: Evaluated): LambdaValue {
+  const given = unwrap(value);
+  return isLambda(given) ? given : fail("#VALUE!", "Expected a function made with LAMBDA");
+}
+
+/** A value fit to be one cell of an array. A failure becomes that cell's error, and a nested array its first value. */
+export function element(compute: () => Evaluated): CellValue {
+  try {
+    const value = compute();
+    return isRange(value) ? (value.rows[0]?.[0] ?? null) : value;
+  } catch (cause) {
+    if (cause instanceof Failure) return cause.error;
+    throw cause;
+  }
+}
+
 /** Defines a function that receives its arguments unevaluated, to evaluate only the ones it needs. */
-export function lazy(
-  minArgs: number,
-  maxArgs: number,
-  call: (args: readonly Argument[]) => Evaluated,
-): PureFunction {
+export function lazy(minArgs: number, maxArgs: number, call: PureFunction["call"]): PureFunction {
   return { kind: "pure", minArgs, maxArgs, call };
 }
 

@@ -28,17 +28,18 @@ A cell whose input starts with `=` is a formula. A leading apostrophe forces tex
 
 The app has a help page at `/help` with the full reference. It lists every function with an example whose result the engine computes when the page loads.
 
-| Kind        | Supported                                                                                                                                              |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Operators   | `+ - * / ^`, `&` for joining text, `= <> < > <= >=`                                                                                                    |
-| References  | `A1`, `A1:B2`, `A:A`, `2:5`, `A2:A`, `$A$1`, `Table2!A1` for a table on the same page, `'Page 1'!'Table 2'!A1:B2` for a table on another page          |
-| Math        | `SUM AVERAGE MIN MAX COUNT COUNTA PRODUCT MEDIAN ROUND ROUNDUP ROUNDDOWN FLOOR CEILING INT ABS SQRT POWER MOD COUNTIF COUNTIFS SUMIF SUMIFS AVERAGEIF` |
-| Logic       | `IF IFS SWITCH AND OR NOT IFERROR`                                                                                                                     |
-| Lookup      | `VLOOKUP XLOOKUP MATCH INDEX`                                                                                                                          |
-| Text        | `CONCATENATE TEXTJOIN LEN UPPER LOWER TRIM LEFT RIGHT MID FIND SEARCH SUBSTITUTE REPT VALUE`                                                           |
-| Information | `ISBLANK ISNUMBER ISTEXT ISLOGICAL ISERROR`                                                                                                            |
-| Names       | `LET LAMBDA`. A function kept in a cell is called by the cell's address: `=D1(21)`                                                                     |
-| Errors      | `#DIV/0! #VALUE! #REF! #NAME? #N/A #CYCLE! #ERROR!`                                                                                                    |
+| Kind        | Supported                                                                                                                                                      |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Operators   | `+ - * / ^`, `&` for joining text, `= <> < > <= >=`                                                                                                            |
+| References  | `A1`, `A1:B2`, `A:A`, `2:5`, `A2:A`, `$A$1`, `Table2!A1` for a table on the same page, `'Page 1'!'Table 2'!A1:B2` for a table on another page                  |
+| Math        | `SUM AVERAGE MIN MAX COUNT COUNTA PRODUCT MEDIAN ROUND ROUNDUP ROUNDDOWN FLOOR CEILING INT ABS SQRT POWER MOD COUNTIF COUNTIFS SUMIF SUMIFS AVERAGEIF`         |
+| Logic       | `IF IFS SWITCH AND OR NOT IFERROR`                                                                                                                             |
+| Lookup      | `VLOOKUP XLOOKUP MATCH INDEX`                                                                                                                                  |
+| Text        | `CONCATENATE TEXTJOIN LEN UPPER LOWER TRIM LEFT RIGHT MID FIND SEARCH SUBSTITUTE REPT VALUE`                                                                   |
+| Information | `ISBLANK ISNUMBER ISTEXT ISLOGICAL ISERROR`                                                                                                                    |
+| Arrays      | `FILTER SORT UNIQUE SEQUENCE TRANSPOSE TAKE DROP ROWS COLUMNS MAP REDUCE BYROW BYCOL`. A result of several values fills the cells below and beside the formula |
+| Names       | `LET LAMBDA`. A function kept in a cell is called by the cell's address: `=D1(21)`                                                                             |
+| Errors      | `#DIV/0! #VALUE! #REF! #NAME? #N/A #SPILL! #CYCLE! #ERROR!`                                                                                                    |
 
 Page and table names in references ignore case. Names with spaces need single quotes.
 

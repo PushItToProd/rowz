@@ -23,6 +23,15 @@ describe("HelpView", () => {
       "gives a button labeled “Add one”",
     );
     expect(wrapper.text()).toContain("A1 holds 1, A2 holds 2, A3 holds 3");
+    expect(wrapper.get('[data-function="FILTER"]').text()).toContain(
+      "gives banana, cherry down a column",
+    );
+    expect(wrapper.get('[data-function="TRANSPOSE"]').text()).toContain(
+      "gives 1, 2, 3 across a row",
+    );
+    expect(wrapper.get('[data-function="SEQUENCE"]').text()).toContain(
+      "gives 2 rows: 1, 2, 3 / 4, 5, 6",
+    );
   });
 
   it("shows parameter names in a summary as code", () => {
@@ -44,7 +53,7 @@ describe("HelpView", () => {
   it("links each contents entry to a section on the page", () => {
     const wrapper = render();
     const targets = wrapper.findAll(".help__contents a").map((link) => link.attributes("href"));
-    expect(targets).toHaveLength(8);
+    expect(targets).toHaveLength(9);
     for (const target of targets)
       expect(wrapper.find(`section${target ?? ""}`).exists()).toBe(true);
   });

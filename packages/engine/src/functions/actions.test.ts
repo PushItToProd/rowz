@@ -176,7 +176,6 @@ describe("EXECUTE", () => {
 
   it.each([
     ["EXECUTE(1/0, C1)", "#DIV/0!"],
-    ["EXECUTE(A1:A2, C1)", "#VALUE!"],
     ['EXECUTE(SEND_EMAIL("a@b.co", "s", "b"), C1)', "#VALUE!"],
     ["EXECUTE(1, C1:C2)", "#VALUE!"],
     ["EXECUTE(1, C:C)", "#VALUE!"],

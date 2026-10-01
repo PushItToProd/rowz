@@ -78,6 +78,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return engine.value.getValue(id);
   }
 
+  /** The cell whose array formula filled this cell, if one did. */
+  function filledBy(id: CellId): CellId | undefined {
+    return engine.value.spillAnchor(id);
+  }
+
   function inputOf(id: CellId): string {
     return engine.value.getInput(id);
   }
@@ -249,6 +254,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     canEdit,
     load,
     valueOf,
+    filledBy,
     inputOf,
     setCell,
     click,

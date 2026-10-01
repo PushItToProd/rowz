@@ -157,7 +157,10 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             role="gridcell"
             :data-cell="formatAddress({ row: row - 1, col: col - 1 })"
             :aria-selected="isSelected(row - 1, col - 1)"
-            :class="{ 'grid__cell--selected': isSelected(row - 1, col - 1) }"
+            :class="{
+              'grid__cell--selected': isSelected(row - 1, col - 1),
+              'grid__cell--filled': store.filledBy(cell(row - 1, col - 1)) !== undefined,
+            }"
             @mousedown="select(row - 1, col - 1)"
             @dblclick="edit()"
           >

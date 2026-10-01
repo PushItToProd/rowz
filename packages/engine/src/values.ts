@@ -9,6 +9,7 @@ export const ERROR_CODES = [
   "#REF!",
   "#NAME?",
   "#N/A",
+  "#SPILL!",
   "#CYCLE!",
   "#ERROR!",
 ] as const;
@@ -57,13 +58,16 @@ export interface LambdaValue {
 export type Scalar = number | string | boolean | null;
 export type CellValue = Scalar | ErrorValue | ActionValue | ButtonValue | LambdaValue;
 
-/** The values of a range reference, as rows of cells. */
+/** Several values as rows of cells: what a range reference reads, or an array a function made. */
 export interface RangeValue {
   kind: "range";
   rows: CellValue[][];
 }
 
-/** What an expression can evaluate to. A cell cannot hold a range. */
+/**
+ * What an expression can evaluate to. A formula whose result is a range puts
+ * the first value in its own cell and the rest in the cells around it.
+ */
 export type Evaluated = CellValue | RangeValue;
 
 export function error(code: ErrorCode, message?: string): ErrorValue {

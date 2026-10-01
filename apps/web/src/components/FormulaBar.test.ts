@@ -86,6 +86,16 @@ describe("FormulaBar", () => {
     expect(field(wrapper).element.value).toBe("50");
   });
 
+  it("says which formula filled a cell that an array result reached", async () => {
+    const wrapper = await render({ A1: "=SEQUENCE(3)" });
+    await select(wrapper, "A2");
+    expect(field(wrapper).element.value).toBe("");
+    expect(field(wrapper).attributes("placeholder")).toBe("Filled by the formula in A1");
+
+    await select(wrapper, "A1");
+    expect(field(wrapper).attributes("placeholder")).toContain("Select a cell");
+  });
+
   it("is disabled for a viewer", async () => {
     const wrapper = await render({ A1: "2" }, "viewer");
     await select(wrapper, "A1");

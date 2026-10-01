@@ -2,6 +2,24 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-09-30: Array results fill neighboring cells
+
+**Decision.** A formula whose result is several values shows the first in its own cell and fills the cells below and to its right, as in Excel and Google Sheets. `FILTER`, `SORT`, `UNIQUE`, `SEQUENCE`, `TRANSPOSE`, `TAKE`, `DROP`, `MAP`, `REDUCE`, `BYROW`, and `BYCOL` build on this. A bare range such as `=A1:A3` now fills cells too; it used to be `#VALUE!`.
+
+**Choices.**
+
+- **Operators work cell by cell on arrays; functions do not.** `=A1:A3 * 2` and `=B1:B9 > 5` give arrays, which is what `FILTER` conditions need. A function that expects one value, such as `IF` or `UPPER`, still fails on a range. `MAP` covers that case. Lifting every function over arrays is possible later.
+- **A blocked result is `#SPILL!`.** The cells to fill must be empty and inside the table. The message names the first cell in the way.
+- **A formula that reads a cell its own result fills is `#CYCLE!`.** Two array formulas that keep undoing each other's inputs are stopped after 20 rounds and marked `#CYCLE!`.
+- **`FILTER` with no matching rows is `#N/A`.** Excel uses `#CALC!` and Sheets uses `#N/A`.
+- **`SORT` puts empty cells last in both directions** and orders numbers before text.
+- **`EXECUTE` writes an array as a block** starting at its target cell. This gives a button that copies a filtered or sorted result into plain cells.
+- **Filled cells are tinted**, and the formula bar names the formula that filled the selected cell.
+
+**Cost.** The engine used to compute a cell only when it was read. It now computes every stale formula before answering any read, because a reader of an empty cell cannot know whether some formula not yet computed will fill it. After an edit only the affected cells are stale, so the cost shows up on first load and on a button click, where the server builds the workbook: all formulas are computed once.
+
+**To change.** `Workbook.place` and `Workbook.settle` in `packages/engine/src/workbook.ts`. Operators over arrays are in `elementwise` in `evaluate.ts`.
+
 ## 2026-09-30: LET, LAMBDA, and calling a function kept in a cell
 
 **Decision.** `LET(name, value, ..., result)` and `LAMBDA(parameter, ..., body)` work as in Excel. A function kept in a cell is called by the cell's address: with `=LAMBDA(x, x * 2)` in D1, another cell writes `=D1(21)`.

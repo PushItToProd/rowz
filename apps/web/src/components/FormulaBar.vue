@@ -18,6 +18,13 @@ const label = computed(() => {
   return `${table?.name ?? ""} · ${formatAddress(selection)}`;
 });
 
+const placeholder = computed(() => {
+  const anchor = store.selection ? store.filledBy(store.selection) : undefined;
+  return anchor
+    ? `Filled by the formula in ${formatAddress(anchor)}`
+    : "Select a cell, then type a value or a formula such as =SUM(A1:A3)";
+});
+
 function commit(): void {
   if (store.selection && draft.value !== stored.value) {
     void store.setCell(store.selection, draft.value);
@@ -37,7 +44,7 @@ function revert(event: Event): void {
       v-model="draft"
       class="formula-bar__input"
       aria-label="Formula"
-      placeholder="Select a cell, then type a value or a formula such as =SUM(A1:A3)"
+      :placeholder="placeholder"
       :disabled="!store.selection || !store.canEdit"
       :maxlength="LIMITS.inputLength"
       @keydown.enter="commit"

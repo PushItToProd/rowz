@@ -97,8 +97,8 @@ describe("logic functions", () => {
     expect(evaluateFormula("=IFERROR(1, 1/0)")).toBe(1);
   });
 
-  it("IFERROR passes a range through, which a cell then cannot hold", () => {
-    expectError(evaluateFormula("=IFERROR(A1:A2, 0)"), "#VALUE!");
+  it("IFERROR passes a range through", () => {
+    expect(evaluateFormula("=SUM(IFERROR(A1:A2, 0))", { A1: "1", A2: "2" })).toBe(3);
   });
 
   it.each([

@@ -394,6 +394,11 @@ input.editable-name--editing {
   cursor: cell;
 }
 
+/* A cell showing a value that an array formula in another cell put there. */
+.grid__cell--filled {
+  background: var(--accent-soft);
+}
+
 .grid .grid__cell--selected {
   outline: 2px solid var(--accent);
   outline-offset: -1px;

@@ -64,6 +64,35 @@ describe("rendering", () => {
   });
 });
 
+describe("array results", () => {
+  it("shows the values an array formula fills, and marks the filled cells", async () => {
+    await mountGrid({ A1: "=SEQUENCE(2, 2)", C3: "=SUM(A1:B2)" });
+    expect(["A1", "B1", "A2", "B2"].map((address) => cellAt(address).text())).toEqual([
+      "1",
+      "2",
+      "3",
+      "4",
+    ]);
+    expect(cellAt("C3").text()).toBe("10");
+    expect(cellAt("A1").classes()).not.toContain("grid__cell--filled");
+    expect(cellAt("B2").classes()).toContain("grid__cell--filled");
+    expect(cellAt("C1").classes()).not.toContain("grid__cell--filled");
+  });
+
+  it("shows #SPILL! once something is typed into a filled cell, and recovers when it is cleared", async () => {
+    await mountGrid({ A1: "=SEQUENCE(3)" });
+    await select("A2");
+    await press("x");
+    await press("Enter");
+    expect(cellAt("A1").text()).toBe("#SPILL!");
+    expect(cellAt("A3").text()).toBe("");
+
+    await select("A2");
+    await press("Delete");
+    expect(["A1", "A2", "A3"].map((address) => cellAt(address).text())).toEqual(["1", "2", "3"]);
+  });
+});
+
 describe("selection", () => {
   it("selects the cell under the mouse", async () => {
     await mountGrid();
