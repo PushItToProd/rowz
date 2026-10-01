@@ -699,6 +699,19 @@ describe("buttons", () => {
     expect(selectedAddress()).toBe("A1");
   });
 
+  it("takes the keyboard when the store asks, if the selected cell is in this table", async () => {
+    await mountGrid();
+    const store = useWorkbookStore();
+    store.focusGrid();
+    await wrapper.vm.$nextTick();
+    expect(document.activeElement).not.toBe(wrapper.get(".grid").element);
+
+    store.selection = at("B2");
+    store.focusGrid();
+    await wrapper.vm.$nextTick();
+    expect(document.activeElement).toBe(wrapper.get(".grid").element);
+  });
+
   it("scrolls the selected cell into view when the selection moves", async () => {
     await mountGrid();
     await select("B2");

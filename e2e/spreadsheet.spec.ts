@@ -672,6 +672,20 @@ test("editing shows errors, the formula bar, and keyboard navigation", async ({ 
   await formula.press("Enter");
   await expect(cell(page, "B2")).toHaveText("5");
 
+  // Enter in the formula bar moves down and hands the keyboard back to the grid.
+  await expect(cell(page, "B3")).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.type("typed in the grid");
+  await page.keyboard.press("Enter");
+  await expect(cell(page, "B3")).toHaveText("typed in the grid");
+
+  // What is typed in the formula bar is saved when another cell is clicked.
+  await cell(page, "B2").click();
+  await formula.fill("=A2+2");
+  await cell(page, "A1").click();
+  await expect(cell(page, "B2")).toHaveText("6");
+  await expect(cell(page, "A1")).toHaveText("#DIV/0!");
+  await expect(formula).toHaveValue("=1/0");
+
   await cell(page, "B2").click();
   await page.keyboard.press("Delete");
   await expect(cell(page, "B2")).toHaveText("");

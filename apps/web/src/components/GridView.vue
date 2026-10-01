@@ -276,6 +276,14 @@ function focusGrid(): void {
   grid.value?.focus({ preventScroll: true });
 }
 
+// The formula bar hands the keyboard back when it is done with the selected cell.
+watch(
+  () => store.gridFocusRequests,
+  () => {
+    if (selected.value) focusGrid();
+  },
+);
+
 // Keep the selected cell in view when the keyboard moves it past the visible part of the table.
 watch(selected, async (current) => {
   if (!current) return;

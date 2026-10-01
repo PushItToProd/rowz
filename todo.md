@@ -57,8 +57,8 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] (Claude) filling a number or date series: `1, 2` filled down should continue `3, 4`
 - [x] (Claude) select whole rows and columns by clicking their headers, and Ctrl+A
 
-- [ ] **P1** bug: the formula bar doesn't save changes when it loses focus
-- [ ] **P1** hitting enter with the formula bar focused should return focus to the cell -- you can type input and try to hit enter and it'll just stay focused instead of acting like you hit enter in the cell input (I suspect possibly b/c of a conflict with the suggestion behavior)
+- [x] bug: the formula bar doesn't save changes when it loses focus
+- [x] hitting enter with the formula bar focused should return focus to the cell -- you can type input and try to hit enter and it'll just stay focused instead of acting like you hit enter in the cell input (I suspect possibly b/c of a conflict with the suggestion behavior)
 
 - [ ] **P3** implement the handy tab+enter workflow from Excel and Sheets -- if you select a certain cell with the mouse or arrow keys, use tab to traverse multiple cells (optionally entering values into any or none of them), then input a value into a cell and submit that value by hitting enter, it'll drop to the next row in the column where you started
   - example: in a table, select C3. hit tab 3 times (optionally entering values in any cells in C3:E3 along the way) - now you're in F3. hit enter to focus the cell input (or just start typing), type anything (or nothing), and hit enter to submit. the selection should move to C4.

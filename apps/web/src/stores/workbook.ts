@@ -91,6 +91,15 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const selectedRange = computed<GridRange | null>(() =>
     selection.value ? rangeOf(selection.value, selectionEnd.value ?? selection.value) : null,
   );
+  /** Counts the requests to put the keyboard in the grid of the selected cell. */
+  const gridFocusRequests = ref(0);
+  /**
+   * Puts the keyboard in the grid of the selected cell. Something outside the
+   * grid that edits the cell, as the formula bar does, calls this when it is done.
+   */
+  function focusGrid(): void {
+    gridFocusRequests.value += 1;
+  }
   /** What was last copied here, to recognize it when it is pasted back. */
   let copied: { text: string; rows: string[][]; from: CellAddress } | undefined;
   const notice = ref<Notice | null>(null);
@@ -822,6 +831,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     selectionEnd,
     selectedRange,
     extendSelection,
+    gridFocusRequests,
+    focusGrid,
     setCells,
     fill,
     clearSelection,

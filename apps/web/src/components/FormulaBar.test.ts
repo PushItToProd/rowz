@@ -51,50 +51,87 @@ describe("FormulaBar", () => {
     expect(field(wrapper).element.value).toBe("2");
   });
 
-  it("saves the typed input on Enter", async () => {
-    const wrapper = await render({ A1: "2" });
+  it("saves the typed input on Enter, and moves on to the cell below", async () => {
+    const wrapper = await render({ A1: "2", A2: "7" });
+    const store = useWorkbookStore();
     await select(wrapper, "A1");
+    await field(wrapper).trigger("focus");
     await field(wrapper).setValue("=1+1");
     await field(wrapper).trigger("keydown", { key: "Enter" });
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
       { row: 0, col: 0, input: "=1+1" },
     ]);
-    expect(useWorkbookStore().valueOf(at("A1"))).toBe(2);
+    expect(store.valueOf(at("A1"))).toBe(2);
+    expect(store.selection).toEqual(at("A2"));
+    expect(store.gridFocusRequests).toBe(1);
+    expect(field(wrapper).element.value).toBe("7");
+
+    // The grid takes the keyboard, and nothing more is saved.
+    await field(wrapper).trigger("blur");
+    expect(server.setCells).toHaveBeenCalledOnce();
+    expect(store.inputOf(at("A2"))).toBe("7");
+  });
+
+  it("stays on the last row when Enter is pressed there", async () => {
+    const wrapper = await render();
+    await select(wrapper, "B4");
+    await field(wrapper).trigger("focus");
+    await field(wrapper).setValue("end");
+    await field(wrapper).trigger("keydown", { key: "Enter" });
+    expect(useWorkbookStore().inputOf(at("B4"))).toBe("end");
+    expect(useWorkbookStore().selection).toEqual(at("B4"));
   });
 
   it("saves on losing focus, and sends nothing when unchanged", async () => {
     const wrapper = await render({ A1: "2" });
     await select(wrapper, "A1");
+    await field(wrapper).trigger("focus");
     await field(wrapper).trigger("blur");
     expect(server.setCells).not.toHaveBeenCalled();
 
+    await field(wrapper).trigger("focus");
     await field(wrapper).setValue("3");
     await field(wrapper).trigger("blur");
     expect(server.setCells).toHaveBeenCalledOnce();
   });
 
   it("saves what was typed to the cell it was typed for when another cell is clicked", async () => {
-    const wrapper = await render({ A1: "2", B1: "2" });
+    const wrapper = await render({ A1: "2", B1: "5" });
     await select(wrapper, "A1");
     await field(wrapper).trigger("focus");
     await field(wrapper).setValue("typed for A1");
-    // A click on a cell selects it on mousedown, before the field loses focus.
-    useWorkbookStore().selection = at("B1");
+    // A click on a cell selects it on mousedown, and the field loses focus after that.
+    await select(wrapper, "B1");
+    expect(field(wrapper).element.value).toBe("typed for A1");
     await field(wrapper).trigger("blur");
 
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
       { row: 0, col: 0, input: "typed for A1" },
     ]);
-    expect(useWorkbookStore().inputOf(at("B1"))).toBe("2");
+    expect(useWorkbookStore().inputOf(at("B1"))).toBe("5");
+    expect(field(wrapper).element.value).toBe("5");
+  });
+
+  it("shows the clicked cell's input after saving, when it matches what the edited cell held", async () => {
+    const wrapper = await render({ A1: "2", B1: "2" });
+    await select(wrapper, "A1");
+    await field(wrapper).trigger("focus");
+    await field(wrapper).setValue("999");
+    await select(wrapper, "B1");
+    await field(wrapper).trigger("blur");
+    expect(useWorkbookStore().inputOf(at("A1"))).toBe("999");
     expect(field(wrapper).element.value).toBe("2");
   });
 
-  it("restores the stored input on Escape", async () => {
+  it("restores the stored input on Escape, and hands the keyboard to the grid", async () => {
     const wrapper = await render({ A1: "2" });
     await select(wrapper, "A1");
+    await field(wrapper).trigger("focus");
     await field(wrapper).setValue("999");
     await field(wrapper).trigger("keydown", { key: "Escape" });
     expect(field(wrapper).element.value).toBe("2");
+    expect(useWorkbookStore().gridFocusRequests).toBe(1);
+    await field(wrapper).trigger("blur");
     expect(server.setCells).not.toHaveBeenCalled();
   });
 
