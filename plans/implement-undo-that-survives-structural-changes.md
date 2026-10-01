@@ -19,17 +19,17 @@ Not covered: renaming the spreadsheet and sharing, which do not go through `chan
 
 New table `journal` in `apps/server/src/db/schema.ts`, with a migration from `pnpm --filter @spreadsheet-app/server db:generate`.
 
-| Column | Purpose |
-| --- | --- |
-| `seq` bigint identity, primary key | Order of changes. Changes to one spreadsheet run under its lock, so `seq` order is the order they happened. |
-| `spreadsheet_id` | Cascade delete. |
-| `step` uuid | Entries undone together by one Ctrl+Z. |
-| `user_id`, `client_id` | The stack the entry is on. `client_id` is null for a request without the header, and for a step taken off its stack. |
-| `undone` boolean | Whether the entry is currently reversed. |
-| `rewrites` boolean | The change rewrote references: a row or column insert or delete, or a rename. |
-| `label` text | "Delete row 3 of Sales", for the notice after an undo. |
-| `data` jsonb | What the change replaced. See below. |
-| `created_at` | For pruning. |
+| Column                             | Purpose                                                                                                              |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `seq` bigint identity, primary key | Order of changes. Changes to one spreadsheet run under its lock, so `seq` order is the order they happened.          |
+| `spreadsheet_id`                   | Cascade delete.                                                                                                      |
+| `step` uuid                        | Entries undone together by one Ctrl+Z.                                                                               |
+| `user_id`, `client_id`             | The stack the entry is on. `client_id` is null for a request without the header, and for a step taken off its stack. |
+| `undone` boolean                   | Whether the entry is currently reversed.                                                                             |
+| `rewrites` boolean                 | The change rewrote references: a row or column insert or delete, or a rename.                                        |
+| `label` text                       | "Delete row 3 of Sales", for the notice after an undo.                                                               |
+| `data` jsonb                       | What the change replaced. See below.                                                                                 |
+| `created_at`                       | For pruning.                                                                                                         |
 
 Index on `(spreadsheet_id, seq)`.
 
