@@ -273,7 +273,7 @@ describe("recalculation", () => {
       },
     };
     const functions: FunctionRegistry = new Map([...defaultFunctions, ["PROBE", probe]]);
-    const workbook = new Workbook(functions);
+    const workbook = new Workbook({ functions });
     workbook.setStructure(STRUCTURE);
     workbook.setCell(at("A1"), "1");
     workbook.setCell(at("A2"), "2");

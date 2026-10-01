@@ -1,5 +1,13 @@
 import { callLambda } from "../evaluate";
-import { compare, isError, isScalar, type CellValue, type Evaluated } from "../values";
+import {
+  compare,
+  isError,
+  isScalar,
+  kindOf,
+  toText,
+  type CellValue,
+  type Evaluated,
+} from "../values";
 import {
   array,
   boolean,
@@ -35,7 +43,7 @@ function cellOrder(a: CellValue, b: CellValue, direction: number): number {
 /** A key under which two cells that compare as equal are the same. Text ignores letter case. */
 function identity(cell: CellValue): string {
   if (typeof cell === "string") return `s:${cell.toLowerCase()}`;
-  if (isScalar(cell)) return `${typeof cell}:${String(cell)}`;
+  if (isScalar(cell)) return `${kindOf(cell)}:${toText(cell)}`;
   return isError(cell) ? `e:${cell.code}` : "other";
 }
 

@@ -1,5 +1,6 @@
 import { cellKey, formatAddress, rangeContains, type CellId, type CellRange } from "./address";
 import type { Node, Reference } from "./ast";
+import { formatDate, isDate } from "./dates";
 import type { Effect } from "./effects";
 import { evaluate, referencesOf, type EvaluationContext } from "./evaluate";
 import { defaultFunctions } from "./functions";
@@ -13,6 +14,7 @@ import {
   compare,
   error,
   isFormulaInput,
+  kindOf,
   literalInput,
   toText,
   type ControlValue,
@@ -60,6 +62,24 @@ function span(start: number | null, end: number | null): [first: number, last: n
   return [Math.min(start, end), Math.max(start, end)];
 }
 
+export interface WorkbookOptions {
+  functions?: FunctionRegistry;
+  /**
+   * The current date and time on the user's clock, as the milliseconds a
+   * `DateValue` holds. `TODAY` and `NOW` read it. The default is this
+   * machine's local time, which on a server is not the user's.
+   */
+  now?: () => number;
+}
+
+const MINUTE_MS = 60_000;
+
+/** This machine's local date and time. */
+function localClock(): number {
+  const moment = new Date();
+  return moment.getTime() - moment.getTimezoneOffset() * MINUTE_MS;
+}
+
 // How many times one settling pass may recompute a cell before its value is
 // declared a cycle. Array results that fill each other's inputs can undo one
 // another forever, and this is what stops them.
@@ -96,7 +116,13 @@ export class Workbook {
   /** Counts calls to `invalidate`, so a computing pass can tell that one happened under it. */
   private invalidations = 0;
 
-  constructor(private readonly functions: FunctionRegistry = defaultFunctions) {}
+  private readonly functions: FunctionRegistry;
+  private readonly now: () => number;
+
+  constructor({ functions = defaultFunctions, now = localClock }: WorkbookOptions = {}) {
+    this.functions = functions;
+    this.now = now;
+  }
 
   /**
    * Replaces the pages and tables. Cells of tables that still exist are kept.
@@ -214,15 +240,19 @@ export class Workbook {
     if (control.control === "checkbox" && typeof value !== "boolean") {
       return refuse("A checkbox takes TRUE or FALSE");
     }
-    const isChoice = control.options.some(
-      (option) => typeof option === typeof value && compare(option, value) === 0,
+    // A date choice arrives as text, because the request that carries it has no date type.
+    const given = typeof value === "string" ? value.trim() : value;
+    const choice = control.options.find(
+      (option) =>
+        (kindOf(option) === kindOf(value) && compare(option, value) === 0) ||
+        (isDate(option) && formatDate(option) === given),
     );
-    if (control.control === "dropdown" && value !== null && !isChoice) {
+    if (control.control === "dropdown" && value !== null && choice === undefined) {
       return refuse(`${toText(value)} is not one of the choices`);
     }
     return {
       ok: true,
-      effects: [{ type: "setCell", ...control.target, input: literalInput(value) }],
+      effects: [{ type: "setCell", ...control.target, input: literalInput(choice ?? value) }],
     };
   }
 
@@ -307,6 +337,7 @@ export class Workbook {
       resolve: (reference) => this.resolve(reference, origin.tableId),
       read: (cell) => this.current(cell),
       extent: (tableId) => this.extent(tableId),
+      now: this.now,
     };
   }
 
@@ -481,8 +512,8 @@ export class Workbook {
   }
 }
 
-export function createWorkbook(data: WorkbookData, functions?: FunctionRegistry): Workbook {
-  const workbook = new Workbook(functions);
+export function createWorkbook(data: WorkbookData, options?: WorkbookOptions): Workbook {
+  const workbook = new Workbook(options);
   workbook.setStructure(data);
   for (const { input, ...id } of data.cells) workbook.setCell(id, input);
   return workbook;

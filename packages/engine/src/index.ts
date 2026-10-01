@@ -17,6 +17,7 @@ export {
   type FunctionCategory,
   type FunctionDoc,
 } from "./docs";
+export { dateFromParts, dateParts, formatDate, isDate, parseDate, type DateValue } from "./dates";
 export type { Effect, EnsureRowsEffect, SendEmailEffect, SetCellEffect } from "./effects";
 export { defaultFunctions } from "./functions";
 export type {
@@ -64,4 +65,4 @@ export {
   type WorkbookData,
   type WorkbookStructure,
 } from "./structure";
-export { createWorkbook, Workbook, type ActionPlan } from "./workbook";
+export { createWorkbook, Workbook, type ActionPlan, type WorkbookOptions } from "./workbook";

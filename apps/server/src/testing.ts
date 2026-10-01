@@ -23,7 +23,12 @@ export interface TestServer {
 }
 
 export interface TestClient {
-  request(method: string, path: string, body?: unknown): Promise<Response>;
+  request(
+    method: string,
+    path: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ): Promise<Response>;
   /** Sends a request, asserts the status, and returns the parsed JSON body. */
   json<T>(method: string, path: string, body?: unknown, status?: number): Promise<T>;
 }
@@ -118,13 +123,14 @@ export async function startTestServer(
   });
 
   const client = (cookie: string | undefined): TestClient => {
-    const request: TestClient["request"] = async (method, path, body) =>
+    const request: TestClient["request"] = async (method, path, body, headers = {}) =>
       app.request(`/api${path}`, {
         method,
         headers: {
           origin: BASE_URL,
           ...(cookie === undefined ? {} : { cookie }),
           ...(body === undefined ? {} : { "content-type": "application/json" }),
+          ...headers,
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });

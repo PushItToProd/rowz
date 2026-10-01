@@ -2,6 +2,24 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-09-30: Dates
+
+**Decision.** Dates are their own kind of value, next to numbers, text, and TRUE/FALSE. A cell typed as `2026-09-30` or `2026-09-30 14:05` is a date. 15 functions work with dates, including `TODAY` and `NOW`.
+
+**Why a separate kind and not a number with a format.** Excel stores a date as a day count and relies on cell formatting to show it as a date. This app has no cell formatting, so a date stored as a number would show as `20726`. A date kind shows as a date everywhere with no formatting step, and `ISDATE`, sorting, and criteria can tell dates from numbers.
+
+**Choices.**
+
+- **Only `YYYY-MM-DD` is read as a date.** `3/4/2026` is March 4 in one country and April 3 in another, so it stays text. This matches your date preference.
+- **Arithmetic.** date + number and date - number give a date, counting days. date - date gives days. Anything else uses the date's day count, so `=A1 * 1` is a number.
+- **No time zones.** A date is a wall-clock value. `2026-09-30 14:05` means that reading on the clock, wherever you are.
+- **`TODAY` and `NOW` use the viewer's clock.** In the browser that is the browser's local time. When the server runs a button, the browser sends its offset from UTC in a request header and the server uses it, so a row stamped by `NOW()` shows the time the person who clicked saw. Without the header the server uses UTC.
+- **`TODAY` and `NOW` are computed when the sheet loads or the formula's inputs change.** They do not tick while the page is open.
+- **Ordering between kinds:** number < date < text < TRUE/FALSE.
+- **`SUM`, `MIN`, and `MAX` skip dates in a range**, as they skip text. `MAX` of a date column is a reasonable thing to want and is listed in the todo file.
+
+**To change.** `packages/engine/src/dates.ts` holds the value, parsing, and display. Arithmetic rules are in `dateArithmetic` in `evaluate.ts`.
+
 ## 2026-09-30: Range selection, filling, and copy and paste
 
 **Decision.** The todo item was "dragging and bulk applying formulas". That needed a way to select several cells, so this adds:

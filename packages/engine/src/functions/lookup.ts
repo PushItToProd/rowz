@@ -1,4 +1,4 @@
-import { compare, isScalar, type CellValue, type Evaluated, type Scalar } from "../values";
+import { compare, isScalar, kindOf, type CellValue, type Evaluated, type Scalar } from "../values";
 import { boolean, eager, fail, grid, integer, lazy, scalar } from "./arguments";
 import type { FunctionDefinition } from "./registry";
 
@@ -11,7 +11,7 @@ function line(value: Evaluated, what: string): CellValue[] {
 }
 
 function comparable(key: Scalar, cell: CellValue): cell is Scalar {
-  return isScalar(cell) && cell !== null && typeof cell === typeof key;
+  return isScalar(cell) && cell !== null && kindOf(cell) === kindOf(key);
 }
 
 /** The index of the first cell equal to the key, or -1. Text is matched without regard to letter case. */

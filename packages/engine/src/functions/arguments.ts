@@ -15,6 +15,7 @@ import {
   type RangeValue,
   type Scalar,
 } from "../values";
+import { isDate, parseDate, type DateValue } from "../dates";
 import type { PureFunction } from "./registry";
 
 /**
@@ -55,6 +56,14 @@ export function integer(value: Evaluated): number {
 
 export function text(value: Evaluated): string {
   return toText(scalar(value));
+}
+
+/** A date. Text written as a date is read as one. */
+export function dateOf(value: Evaluated): DateValue {
+  const given = scalar(value);
+  if (isDate(given)) return given;
+  const read = typeof given === "string" ? parseDate(given) : undefined;
+  return read ?? fail("#VALUE!", `${toText(given) || "An empty cell"} is not a date`);
 }
 
 export function boolean(value: Evaluated): boolean {

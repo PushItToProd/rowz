@@ -1,5 +1,6 @@
 import type { CellId } from "./address";
 import type { Node } from "./ast";
+import { DAY_MS, formatDate, isDate, parseDate, type DateValue } from "./dates";
 import type { EvaluationContext } from "./evaluate";
 
 /** `#ERROR!` means the formula text could not be parsed, or a function got the wrong number of arguments. */
@@ -55,7 +56,7 @@ export interface LambdaValue {
 }
 
 /** `null` is an empty cell. */
-export type Scalar = number | string | boolean | null;
+export type Scalar = number | string | boolean | DateValue | null;
 
 /**
  * An input the cell shows, such as a checkbox, bound to another cell. It
@@ -122,7 +123,17 @@ export function isRange(value: unknown): value is RangeValue {
 }
 
 export function isScalar(value: Evaluated): value is Scalar {
-  return typeof value !== "object" || value === null;
+  return typeof value !== "object" || value === null || isDate(value);
+}
+
+export type ScalarKind = "empty" | "number" | "text" | "boolean" | "date";
+
+/** Which kind of value a scalar is. Two values can only be equal when they are of one kind. */
+export function kindOf(value: Scalar): ScalarKind {
+  if (value === null) return "empty";
+  if (isDate(value)) return "date";
+  if (typeof value === "string") return "text";
+  return typeof value === "number" ? "number" : "boolean";
 }
 
 const NUMERIC_TEXT = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
@@ -135,7 +146,9 @@ export function parseNumber(text: string): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
+/** A value as a number. A date is its count of days from the start of 1970, so dates can be subtracted. */
 export function toNumber(value: Scalar): number | ErrorValue {
+  if (isDate(value)) return value.ms / DAY_MS;
   switch (typeof value) {
     case "number":
       return value;
@@ -149,6 +162,7 @@ export function toNumber(value: Scalar): number | ErrorValue {
 }
 
 export function toText(value: Scalar): string {
+  if (isDate(value)) return formatDate(value);
   switch (typeof value) {
     case "number":
       return formatNumber(value);
@@ -162,6 +176,7 @@ export function toText(value: Scalar): string {
 }
 
 export function toBoolean(value: Scalar): boolean | ErrorValue {
+  if (isDate(value)) return error("#VALUE!", "A date is not TRUE or FALSE");
   switch (typeof value) {
     case "boolean":
       return value;
@@ -215,7 +230,7 @@ export function parseLiteralInput(input: string): Scalar {
   const upper = input.trim().toUpperCase();
   if (upper === "TRUE") return true;
   if (upper === "FALSE") return false;
-  return input;
+  return parseDate(input) ?? input;
 }
 
 /**
@@ -226,15 +241,16 @@ export function literalInput(value: Scalar): string {
   if (value === null) return "";
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   if (typeof value === "number") return String(value);
+  if (isDate(value)) return formatDate(value);
   const readsBackAsText = !isFormulaInput(value) && parseLiteralInput(value) === value;
   return readsBackAsText ? value : TEXT_PREFIX + value;
 }
 
-// Values of different types order as number < text < boolean.
-const TYPE_RANK = { number: 0, string: 1, boolean: 2 } as const;
+// Values of different kinds order as number < date < text < boolean.
+const KIND_RANK: Record<ScalarKind, number> = { empty: 0, number: 0, date: 1, text: 2, boolean: 3 };
 
-/** An empty cell compares as the empty value of the other side's type. */
-function fillEmpty(value: Scalar, other: Scalar): number | string | boolean {
+/** An empty cell compares as the empty value of the other side's kind. */
+function fillEmpty(value: Scalar, other: Scalar): Exclude<Scalar, null> {
   if (value !== null) return value;
   if (typeof other === "string") return "";
   if (typeof other === "boolean") return false;
@@ -250,14 +266,12 @@ export function compare(leftValue: Scalar, rightValue: Scalar): number {
   const left = fillEmpty(leftValue, rightValue);
   const right = fillEmpty(rightValue, leftValue);
   if (typeof left === "number" && typeof right === "number") return left - right;
+  if (isDate(left) && isDate(right)) return left.ms - right.ms;
   if (typeof left === "string" && typeof right === "string") {
     // Text comparison ignores case.
     const [a, b] = [left.toLowerCase(), right.toLowerCase()];
     return a < b ? -1 : Number(a > b);
   }
   if (typeof left === "boolean" && typeof right === "boolean") return Number(left) - Number(right);
-  return (
-    TYPE_RANK[typeof left as keyof typeof TYPE_RANK] -
-    TYPE_RANK[typeof right as keyof typeof TYPE_RANK]
-  );
+  return KIND_RANK[kindOf(left)] - KIND_RANK[kindOf(right)];
 }

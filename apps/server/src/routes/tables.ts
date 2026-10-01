@@ -8,7 +8,13 @@ import {
   updateTableBody,
 } from "@spreadsheet-app/shared";
 import { Hono } from "hono";
-import { runButton, runControl, type ActionDependencies } from "../actions/run";
+import {
+  clientClock,
+  runButton,
+  runControl,
+  UTC_OFFSET_HEADER,
+  type ActionDependencies,
+} from "../actions/run";
 import { onInvalid, type Env } from "../http";
 
 export function tableRoutes(dependencies: ActionDependencies) {
@@ -50,10 +56,20 @@ export function tableRoutes(dependencies: ActionDependencies) {
       zValidator("json", controlInputBody, onInvalid),
       async (c) => {
         const { value } = c.req.valid("json");
-        return c.json(await runControl(dependencies, c.var.userId, c.req.valid("param"), value));
+        const now = clientClock(c.req.header(UTC_OFFSET_HEADER));
+        return c.json(
+          await runControl(dependencies, c.var.userId, c.req.valid("param"), value, now),
+        );
       },
     )
     .post("/:tableId/cells/:row/:col/click", zValidator("param", cellParam, onInvalid), async (c) =>
-      c.json(await runButton(dependencies, c.var.userId, c.req.valid("param"))),
+      c.json(
+        await runButton(
+          dependencies,
+          c.var.userId,
+          c.req.valid("param"),
+          clientClock(c.req.header(UTC_OFFSET_HEADER)),
+        ),
+      ),
     );
 }

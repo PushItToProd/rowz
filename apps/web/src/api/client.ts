@@ -7,10 +7,13 @@ import type {
   TableRecord,
 } from "@spreadsheet-app/server";
 import type { ApiError, CellInput, StoredCell, StructuralEditBody } from "@spreadsheet-app/shared";
-import type { CellId, Scalar } from "@spreadsheet-app/engine";
+import type { CellId } from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
 export type { ClickResult, PageRecord, Snapshot, TableRecord };
+
+/** A value a control can send. A date is sent as the text it is written as. */
+export type ControlInput = string | number | boolean | null;
 
 /** `updatedAt` arrives as an ISO string: JSON has no date type. */
 export type SpreadsheetListItem = Omit<SpreadsheetSummary, "updatedAt"> & { updatedAt: string };
@@ -56,6 +59,14 @@ async function done(request: Promise<Response>): Promise<void> {
 }
 
 const { api: routes } = hc<AppType>("/");
+
+/**
+ * Tells the server what time it is here, so `TODAY` and `NOW` in an action it
+ * runs mean this person's day and not the server's.
+ */
+function clock(): { headers: Record<string, string> } {
+  return { headers: { "x-utc-offset-minutes": String(new Date().getTimezoneOffset()) } };
+}
 
 /**
  * Every call the app makes to the server. Each returns the parsed body or
@@ -111,18 +122,19 @@ export const api = {
     done(routes.tables[":tableId"].cells.$put({ param: { tableId }, json: { cells } })),
 
   /** Stores a value chosen through the checkbox or dropdown in a cell. */
-  input: ({ tableId, row, col }: CellId, value: Scalar): Promise<ClickResult> =>
+  input: ({ tableId, row, col }: CellId, value: ControlInput): Promise<ClickResult> =>
     body(
-      routes.tables[":tableId"].cells[":row"][":col"].input.$post({
-        param: { tableId, row: String(row), col: String(col) },
-        json: { value },
-      }),
+      routes.tables[":tableId"].cells[":row"][":col"].input.$post(
+        { param: { tableId, row: String(row), col: String(col) }, json: { value } },
+        clock(),
+      ),
     ),
 
   click: ({ tableId, row, col }: CellId): Promise<ClickResult> =>
     body(
-      routes.tables[":tableId"].cells[":row"][":col"].click.$post({
-        param: { tableId, row: String(row), col: String(col) },
-      }),
+      routes.tables[":tableId"].cells[":row"][":col"].click.$post(
+        { param: { tableId, row: String(row), col: String(col) } },
+        clock(),
+      ),
     ),
 };

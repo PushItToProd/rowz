@@ -1,3 +1,4 @@
+import { isDate } from "../dates";
 import { isError } from "../values";
 import { lazy, scalar } from "./arguments";
 import type { FunctionDefinition } from "./registry";
@@ -15,5 +16,6 @@ export const informationFunctions: Record<string, FunctionDefinition> = {
   ISNUMBER: check((value) => typeof value === "number"),
   ISTEXT: check((value) => typeof value === "string"),
   ISLOGICAL: check((value) => typeof value === "boolean"),
+  ISDATE: check(isDate),
   ISERROR: check(isError),
 };

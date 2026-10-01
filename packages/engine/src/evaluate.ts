@@ -1,5 +1,6 @@
 import type { CellId, CellRange } from "./address";
 import type { BinaryOperator, Node, Reference } from "./ast";
+import { DAY_MS, dateFromMs, isDate } from "./dates";
 import { array, element, fail, Failure, number, scalar } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
 import {
@@ -28,6 +29,8 @@ export interface EvaluationContext {
   names?: ReadonlyMap<string, Evaluated>;
   /** How many function calls deep the evaluation is. */
   depth?: number;
+  /** The current date and time on the user's clock, in the milliseconds a `DateValue` holds. */
+  now?: () => number;
 }
 
 // Deep enough for real formulas, and far short of overflowing the call stack.
@@ -40,7 +43,27 @@ function arity(name: string, min: number, max: number): string {
   return `${name} takes ${String(min)} to ${count(max)}`;
 }
 
-function arithmetic(operator: "+" | "-" | "*" | "/" | "^", left: Scalar, right: Scalar): number {
+/**
+ * Arithmetic that involves a date. A number added to or taken from a date is
+ * a count of days and gives a date. One date taken from another gives the
+ * days between them. Anything else treats a date as its day count.
+ */
+function dateArithmetic(operator: string, left: Scalar, right: Scalar): Scalar | undefined {
+  if (operator !== "+" && operator !== "-") return undefined;
+  const sign = operator === "+" ? 1 : -1;
+  if (isDate(left) && isDate(right)) {
+    return operator === "-"
+      ? (left.ms - right.ms) / DAY_MS
+      : fail("#VALUE!", "Two dates cannot be added");
+  }
+  if (isDate(left)) return dateFromMs(left.ms + sign * number(right) * DAY_MS);
+  if (isDate(right) && operator === "+") return dateFromMs(right.ms + number(left) * DAY_MS);
+  return undefined;
+}
+
+function arithmetic(operator: "+" | "-" | "*" | "/" | "^", left: Scalar, right: Scalar): Scalar {
+  const withDate = dateArithmetic(operator, left, right);
+  if (withDate !== undefined) return withDate;
   const a = number(left);
   const b = number(right);
   if (operator === "/" && b === 0) fail("#DIV/0!", "Division by zero");

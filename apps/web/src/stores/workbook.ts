@@ -2,7 +2,9 @@ import {
   cellKey,
   createWorkbook,
   formatAddress,
+  formatDate,
   formatValue,
+  isDate,
   Workbook,
   type CellAddress,
   type CellId,
@@ -292,7 +294,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   /** Stores a value chosen through the checkbox or dropdown in a cell. Success is silent. */
   async function input(id: CellId, value: Scalar): Promise<void> {
-    const result = await run(id, () => api.input(id, value));
+    // JSON has no date, so a chosen date travels as its text and the server reads it back.
+    const sent = isDate(value) ? formatDate(value) : value;
+    const result = await run(id, () => api.input(id, sent));
     if (result?.status === "failed") notice.value = describe(result, id.tableId);
   }
 

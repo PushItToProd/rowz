@@ -406,6 +406,41 @@ describe("actions that add rows, clear cells, and combine", () => {
   });
 });
 
+describe("the clock an action sees", () => {
+  function clickAt(sheet: Sheet, offsetMinutes: string | undefined): Promise<Response> {
+    const headers: Record<string, string> =
+      offsetMinutes === undefined ? {} : { "x-utc-offset-minutes": offsetMinutes };
+    return user.request("POST", `/tables/${sheet.tableId}/cells/0/0/click`, undefined, headers);
+  }
+
+  async function stamped(sheet: Sheet): Promise<string> {
+    return (await storedInputs(user, sheet.spreadsheetId, sheet.tableId))["0:1"] ?? "";
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("is the clock of the browser that sent the request", async () => {
+    const sheet = await sheetWith({ A1: '=BUTTON("Stamp", EXECUTE(NOW(), B1))' });
+    vi.useFakeTimers({ now: new Date("2026-10-01T02:30:00Z"), toFake: ["Date"] });
+
+    // 420 minutes behind UTC: still the evening of September 30.
+    await clickAt(sheet, "420");
+    expect(await stamped(sheet)).toBe("2026-09-30 19:30");
+    // 120 minutes ahead of UTC.
+    await clickAt(sheet, "-120");
+    expect(await stamped(sheet)).toBe("2026-10-01 04:30");
+  });
+
+  it.each([undefined, "soon", "99999", "1.5"])("is UTC when the offset is %j", async (offset) => {
+    const sheet = await sheetWith({ A1: '=BUTTON("Stamp", EXECUTE(TODAY(), B1))' });
+    vi.useFakeTimers({ now: new Date("2026-10-01T02:30:00Z"), toFake: ["Date"] });
+    await clickAt(sheet, offset);
+    expect(await stamped(sheet)).toBe("2026-10-01");
+  });
+});
+
 describe("changing a control", () => {
   function choose(sheet: Sheet, row: number, col: number, value: unknown, status = 200) {
     return user.json<ClickResult>(

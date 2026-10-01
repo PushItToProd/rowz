@@ -1,7 +1,14 @@
 import type { Node } from "../ast";
 import { evaluate, type EvaluationContext } from "../evaluate";
 import type { CellId } from "../address";
-import { compare, isScalar, type ControlValue, type Evaluated, type Scalar } from "../values";
+import {
+  compare,
+  isScalar,
+  kindOf,
+  type ControlValue,
+  type Evaluated,
+  type Scalar,
+} from "../values";
 import { fail, grid, scalar, text } from "./arguments";
 import type { FunctionDefinition } from "./registry";
 
@@ -36,7 +43,7 @@ function choices(given: Evaluated): Scalar[] {
   for (const choice of listed) {
     if (choice === null || choice === "") continue;
     const seen = distinct.some(
-      (other) => typeof other === typeof choice && compare(other, choice) === 0,
+      (other) => kindOf(other) === kindOf(choice) && compare(other, choice) === 0,
     );
     if (!seen) distinct.push(choice);
   }

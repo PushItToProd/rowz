@@ -1,4 +1,5 @@
-import { compare, isScalar, parseNumber, type CellValue, type Scalar } from "../values";
+import { parseDate } from "../dates";
+import { compare, isScalar, kindOf, parseNumber, type CellValue, type Scalar } from "../values";
 
 type Comparison = "=" | "<>" | "<" | ">" | "<=" | ">=";
 
@@ -21,7 +22,7 @@ function operand(text: string): Scalar {
   const upper = text.trim().toUpperCase();
   if (upper === "TRUE") return true;
   if (upper === "FALSE") return false;
-  return text;
+  return parseDate(text) ?? text;
 }
 
 /** Turns text with `*` (any run of characters) and `?` (any one character) into a whole-text matcher. */
@@ -59,7 +60,7 @@ export function criterion(given: Scalar): (cell: CellValue) => boolean {
   }
 
   return (cell) => {
-    if (!isScalar(cell) || typeof cell !== typeof target) return comparison === "<>";
+    if (!isScalar(cell) || kindOf(cell) !== kindOf(target)) return comparison === "<>";
     return HOLDS[comparison](compare(cell, target));
   };
 }

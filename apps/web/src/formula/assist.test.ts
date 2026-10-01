@@ -88,6 +88,7 @@ describe("suggestionsAt", () => {
       "total",
       "TAKE",
       "TEXTJOIN",
+      "TODAY",
       "TRANSPOSE",
       "TRIM",
     ]);

@@ -36,7 +36,8 @@ The app has a help page at `/help` with the full reference. It lists every funct
 | Logic       | `IF IFS SWITCH AND OR NOT IFERROR`                                                                                                                             |
 | Lookup      | `VLOOKUP XLOOKUP MATCH INDEX`                                                                                                                                  |
 | Text        | `CONCATENATE TEXTJOIN LEN UPPER LOWER TRIM LEFT RIGHT MID FIND SEARCH SUBSTITUTE REPT VALUE`                                                                   |
-| Information | `ISBLANK ISNUMBER ISTEXT ISLOGICAL ISERROR`                                                                                                                    |
+| Dates       | `TODAY NOW DATE DATEVALUE YEAR MONTH DAY HOUR MINUTE SECOND WEEKDAY DAYS EDATE EOMONTH`. A cell typed as `2026-09-30` is a date                                |
+| Information | `ISBLANK ISNUMBER ISTEXT ISLOGICAL ISDATE ISERROR`                                                                                                             |
 | Arrays      | `FILTER SORT UNIQUE SEQUENCE TRANSPOSE TAKE DROP ROWS COLUMNS MAP REDUCE BYROW BYCOL`. A result of several values fills the cells below and beside the formula |
 | Names       | `LET LAMBDA`. A function kept in a cell is called by the cell's address: `=D1(21)`                                                                             |
 | Errors      | `#DIV/0! #VALUE! #REF! #NAME? #N/A #SPILL! #CYCLE! #ERROR!`                                                                                                    |

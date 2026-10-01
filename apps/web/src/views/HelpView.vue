@@ -155,6 +155,10 @@ const OPERATORS = [
             <td>A number.</td>
           </tr>
           <tr>
+            <td><code>2026-09-30</code>, <code>2026-09-30 14:05</code></td>
+            <td>A date, written year, month, day, optionally with a time.</td>
+          </tr>
+          <tr>
             <td><code>TRUE</code>, <code>false</code></td>
             <td>A true-or-false value, in any letter case.</td>
           </tr>
@@ -175,6 +179,12 @@ const OPERATORS = [
       <p>
         Inside a formula, write text in double quotes: <code>"hello"</code>. Write a double quote
         inside text by doubling it: <code>"say ""hi"""</code>.
+      </p>
+      <p>
+        Dates can be compared, sorted, and used in arithmetic. Adding a number to a date moves it by
+        that many days: <code>=A1 + 7</code>. Taking one date from another gives the days between
+        them. Only the year-month-day form is read as a date, because forms such as
+        <code>3/4/2026</code> mean different days in different countries.
       </p>
       <p>
         Changes are saved as you make them. Someone else with the spreadsheet open sees them after
@@ -306,8 +316,8 @@ const OPERATORS = [
         </li>
         <li>Negation is applied before a power, so <code>=-2^2</code> is 4.</li>
         <li>
-          Comparing text ignores letter case. Between kinds, any number is less than any text, and
-          any text is less than TRUE or FALSE.
+          Comparing text ignores letter case. Between kinds, any number is less than any date, any
+          date is less than any text, and any text is less than TRUE or FALSE.
         </li>
       </ul>
     </section>
@@ -475,6 +485,11 @@ const OPERATORS = [
         <li>
           When an action cannot run, a message says why and nothing is changed. Examples are a
           recipient that is not an email address, and a target cell outside its table.
+        </li>
+        <li>
+          <code>TODAY()</code> and <code>NOW()</code> inside an action give the time of the click on
+          your clock, so <code>=BUTTON("Log", APPEND_ROW(Log!A:B, NOW(), A1))</code> stamps each
+          row.
         </li>
         <li>
           This version records each email in the server's log and does not deliver it. The server

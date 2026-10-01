@@ -2,6 +2,7 @@ import { actionFunctions } from "./actions";
 import { arrayFunctions } from "./arrays";
 import { conditionalFunctions } from "./conditional";
 import { controlFunctions } from "./controls";
+import { dateFunctions } from "./dates";
 import { informationFunctions } from "./information";
 import { logicFunctions } from "./logic";
 import { lookupFunctions } from "./lookup";
@@ -20,6 +21,7 @@ export const defaultFunctions: FunctionRegistry = new Map(
     ...nameFunctions,
     ...arrayFunctions,
     ...textFunctions,
+    ...dateFunctions,
     ...controlFunctions,
     ...actionFunctions,
   }),

@@ -4,6 +4,7 @@ import {
   isAction,
   isButton,
   isControl,
+  isDate,
   isError,
   isLambda,
   type CellValue,
@@ -28,6 +29,7 @@ const kind = computed(() => {
   if (isAction(value)) return "action";
   if (isLambda(value)) return "function";
   if (isError(value)) return "error";
+  if (isDate(value)) return "date";
   return typeof value === "string" || value === null ? "text" : typeof value;
 });
 const hint = computed(() => (isError(props.value) ? props.value.message : undefined));

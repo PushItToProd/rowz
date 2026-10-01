@@ -125,7 +125,16 @@ describe("DROPDOWN", () => {
     ]);
     expect(choose(workbook, "C1", "ten")).toMatchObject([{ input: "ten" }]);
     expect(choose(workbook, "C1", "10")).toMatchObject([{ input: "'10" }]);
-    expect(choose(workbook, "C1", "TEN")).toMatchObject([{ input: "TEN" }]);
+    // The choice is written as the list has it, whatever letter case was sent.
+    expect(choose(workbook, "C1", "TEN")).toMatchObject([{ input: "ten" }]);
+  });
+
+  it("accepts a date choice given as the text it is written as", () => {
+    const workbook = workbookWith({
+      t1: { A1: "2026-09-30", A2: "2026-10-01", C1: "=DROPDOWN(A1:A2, B1)" },
+    });
+    expect(choose(workbook, "C1", "2026-10-01")).toMatchObject([{ input: "2026-10-01" }]);
+    expect(choose(workbook, "C1", "2026-12-25")).toMatchObject({ code: "#VALUE!" });
   });
 
   it("clears the target when nothing is chosen", () => {

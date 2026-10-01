@@ -22,6 +22,23 @@ import { ApiFailure, unprocessable } from "../errors";
 import type { Mailer } from "../mail/mailer";
 import { SpreadsheetRepository, type TableRecord } from "../repo/spreadsheets";
 
+/** The header in which the browser says how many minutes its clock is behind UTC. */
+export const UTC_OFFSET_HEADER = "x-utc-offset-minutes";
+
+const MINUTE_MS = 60_000;
+// No place on Earth is further from UTC than this.
+const MAX_OFFSET_MINUTES = 14 * 60;
+
+/**
+ * The clock of the person who made a request, for `TODAY` and `NOW` in the
+ * action being run. Without a usable offset it is UTC.
+ */
+export function clientClock(offsetHeader: string | undefined): () => number {
+  const minutes = Number(offsetHeader ?? 0);
+  const usable = Number.isInteger(minutes) && Math.abs(minutes) <= MAX_OFFSET_MINUTES;
+  return () => Date.now() - (usable ? minutes : 0) * MINUTE_MS;
+}
+
 export interface ActionDependencies {
   db: Database;
   mailer: Mailer;
@@ -83,8 +100,9 @@ export function runButton(
   dependencies: ActionDependencies,
   userId: string,
   cell: CellId,
+  now: () => number,
 ): Promise<ClickResult> {
-  return runCell(dependencies, userId, cell, (workbook, value) => {
+  return runCell(dependencies, userId, cell, now, (workbook, value) => {
     if (!isButton(value)) {
       throw unprocessable("not_a_button", `${formatAddress(cell)} does not hold a button`);
     }
@@ -102,8 +120,9 @@ export function runControl(
   userId: string,
   cell: CellId,
   input: Scalar,
+  now: () => number,
 ): Promise<ClickResult> {
-  return runCell(dependencies, userId, cell, (workbook, value) => {
+  return runCell(dependencies, userId, cell, now, (workbook, value) => {
     if (!isControl(value)) {
       throw unprocessable(
         "not_a_control",
@@ -123,6 +142,7 @@ async function runCell(
   { db, mailer, emailRunsPerHour }: ActionDependencies,
   userId: string,
   cell: CellId,
+  now: () => number,
   decide: Decide,
 ): Promise<ClickResult> {
   const planned = await db.transaction(async (tx): Promise<Planned> => {
@@ -130,7 +150,7 @@ async function runCell(
     const { spreadsheetId } = await repository.findTable(cell.tableId, "write");
     await repository.lockSpreadsheet(spreadsheetId);
 
-    const workbook = createWorkbook(await repository.getSnapshot(spreadsheetId));
+    const workbook = createWorkbook(await repository.getSnapshot(spreadsheetId), { now });
     const plan = decide(workbook, workbook.getValue(cell));
 
     const record = async (

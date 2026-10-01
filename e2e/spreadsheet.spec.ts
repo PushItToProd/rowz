@@ -327,6 +327,29 @@ test("a formula is filled down by dragging, and cells are copied and pasted", as
   await expect(cell(page, "E3")).toHaveText("30");
 });
 
+test("dates are typed, computed with, and stamped by a button", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "2026-09-30");
+  await enter(page, "A2", "=A1 + 7");
+  await enter(page, "A3", '=DAYS(A2, A1) & " days"');
+  await enter(page, "A4", "=EOMONTH(A1, 1)");
+  await expect(cell(page, "A2")).toHaveText("2026-10-07");
+  await expect(cell(page, "A3")).toHaveText("7 days");
+  await expect(cell(page, "A4")).toHaveText("2026-10-31");
+
+  // The server stamps the row with the time on this browser's clock.
+  await enter(page, "C1", '=BUTTON("Stamp", EXECUTE(TODAY(), D1))');
+  await page.getByRole("button", { name: "Stamp" }).click();
+  const today = await page.evaluate(() => {
+    const now = new Date();
+    const pad = (value: number): string => String(value).padStart(2, "0");
+    return `${String(now.getFullYear())}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  });
+  await expect(cell(page, "D1")).toHaveText(today);
+  await enter(page, "E1", "=ISDATE(D1)");
+  await expect(cell(page, "E1")).toHaveText("TRUE");
+});
+
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "=1/0");

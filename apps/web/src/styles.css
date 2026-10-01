@@ -447,7 +447,8 @@ input.editable-name--editing {
   white-space: nowrap;
 }
 
-.cell-value--number {
+.cell-value--number,
+.cell-value--date {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
