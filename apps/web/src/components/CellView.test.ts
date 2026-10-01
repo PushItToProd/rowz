@@ -82,6 +82,12 @@ describe("CellView", () => {
     expect(wrapper.emitted("choose")).toEqual([[2]]);
   });
 
+  it("names a chart, and says where it can be shown", () => {
+    const wrapper = render({ kind: "chart", chart: "bar", rows: [["a", 1]], title: "" });
+    expect(wrapper.text()).toBe("bar chart");
+    expect(wrapper.get("span").attributes("title")).toContain("text view");
+  });
+
   it("shows an error code with its explanation as a tooltip", () => {
     const span = render({ kind: "error", code: "#DIV/0!", message: "Division by zero" }).get(
       "span",

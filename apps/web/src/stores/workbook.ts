@@ -9,12 +9,21 @@ import {
   type CellAddress,
   type CellId,
   type CellValue,
+  type ChartType,
+  type Evaluated,
   type Scalar,
 } from "@spreadsheet-app/engine";
 import { LIMITS, type CellInput, type StructuralEditBody } from "@spreadsheet-app/shared";
 import { defineStore } from "pinia";
 import { computed, reactive, ref, shallowRef, triggerRef, watch } from "vue";
-import { api, type ClickResult, type PageRecord, type TableRecord } from "../api/client";
+import {
+  api,
+  type ClickResult,
+  type PageRecord,
+  type Rewritten,
+  type TableRecord,
+  type ViewRecord,
+} from "../api/client";
 import {
   blockOf,
   clearWrites,
@@ -48,6 +57,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const spreadsheet = ref<{ id: string; name: string; role: string } | null>(null);
   const pages = ref<PageRecord[]>([]);
   const tables = ref<TableRecord[]>([]);
+  /** Charts and text views: the things on a page that are not tables. */
+  const views = ref<ViewRecord[]>([]);
   /** The selected cell: the one the keyboard edits and the formula bar shows. */
   const selection = ref<CellId | null>(null);
   /** The far corner of a selected range, when more than one cell is selected. */
@@ -99,8 +110,32 @@ export const useWorkbookStore = defineStore("workbook", () => {
     spreadsheet.value = { id: snapshot.id, name: snapshot.name, role: snapshot.role };
     pages.value = snapshot.pages;
     tables.value = snapshot.tables;
+    views.value = snapshot.views;
     selection.value = null;
     notice.value = null;
+  }
+
+  /**
+   * Evaluates a formula written on a page and not in a cell: a chart's data,
+   * or an expression in a text view.
+   */
+  function evaluateOnPage(
+    pageId: string,
+    formula: string,
+    names?: ReadonlyMap<string, Evaluated>,
+  ): Evaluated {
+    return engine.value.evaluateOnPage(pageId, formula, names);
+  }
+
+  /** Shows what the server rewrote after a rename or a row or column edit. */
+  function applyRewritten({ cells, views: sources }: Rewritten): void {
+    for (const cell of cells) apply(cell, cell.input);
+    if (sources.length === 0) return;
+    const rewritten = new Map(sources.map(({ id, source }) => [id, source]));
+    views.value = views.value.map((view) => ({
+      ...view,
+      source: rewritten.get(view.id) ?? view.source,
+    }));
   }
 
   function valueOf(id: CellId): CellValue {
@@ -336,11 +371,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   function renamePage(pageId: string, name: string): Promise<boolean> {
     return attempt(async () => {
-      const { cells } = await api.renamePage(pageId, name);
+      const rewritten = await api.renamePage(pageId, name);
       pages.value = pages.value.map((page) => (page.id === pageId ? { ...page, name } : page));
       syncStructure();
       // The server rewrote the formulas that named the page.
-      for (const cell of cells) apply(cell, cell.input);
+      applyRewritten(rewritten);
     }, "The page could not be renamed");
   }
 
@@ -349,6 +384,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
       await api.deletePage(pageId);
       pages.value = pages.value.filter((page) => page.id !== pageId);
       tables.value = tables.value.filter((table) => table.pageId !== pageId);
+      views.value = views.value.filter((view) => view.pageId !== pageId);
       if (selection.value && !hasTable(selection.value.tableId)) selection.value = null;
       syncStructure();
     }, "The page could not be deleted");
@@ -366,11 +402,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
     changes: { name?: string; rowCount?: number; colCount?: number },
   ): Promise<boolean> {
     return attempt(async () => {
-      const { table: updated, cells } = await api.updateTable(tableId, changes);
+      const { table: updated, ...rewritten } = await api.updateTable(tableId, changes);
       tables.value = tables.value.map((table) => (table.id === tableId ? updated : table));
       syncStructure();
       // After a rename, the server rewrote the formulas that named the table.
-      for (const cell of cells) apply(cell, cell.input);
+      applyRewritten(rewritten);
     }, "The table could not be changed");
   }
 
@@ -379,10 +415,10 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return attempt(async () => {
       // The server shifts stored cells, so pending edits must be stored first.
       await saves;
-      const { table: updated, cells } = await api.editTable(tableId, edit);
+      const { table: updated, ...rewritten } = await api.editTable(tableId, edit);
       tables.value = tables.value.map((table) => (table.id === tableId ? updated : table));
       syncStructure();
-      for (const cell of cells) apply(cell, cell.input);
+      applyRewritten(rewritten);
 
       const selected = selection.value;
       if (selected?.tableId === tableId) {
@@ -393,6 +429,29 @@ export const useWorkbookStore = defineStore("workbook", () => {
         };
       }
     }, "The table could not be changed");
+  }
+
+  function addView(pageId: string, kind: ViewRecord["kind"]): Promise<boolean> {
+    return attempt(async () => {
+      views.value = [...views.value, await api.createView(pageId, kind)];
+    }, "The view could not be added");
+  }
+
+  function updateView(
+    viewId: string,
+    changes: { name?: string; source?: string; chartType?: ChartType },
+  ): Promise<boolean> {
+    return attempt(async () => {
+      const updated = await api.updateView(viewId, changes);
+      views.value = views.value.map((view) => (view.id === viewId ? updated : view));
+    }, "The view could not be changed");
+  }
+
+  function deleteView(viewId: string): Promise<boolean> {
+    return attempt(async () => {
+      await api.deleteView(viewId);
+      views.value = views.value.filter((view) => view.id !== viewId);
+    }, "The view could not be deleted");
   }
 
   function deleteTable(tableId: string): Promise<boolean> {
@@ -408,6 +467,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
     spreadsheet,
     pages,
     tables,
+    views,
+    evaluateOnPage,
+    addView,
+    updateView,
+    deleteView,
     selection,
     selectionEnd,
     selectedBlock,

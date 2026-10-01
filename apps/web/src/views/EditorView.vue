@@ -4,7 +4,9 @@ import { useRouter } from "vue-router";
 import EditableName from "../components/EditableName.vue";
 import FormulaBar from "../components/FormulaBar.vue";
 import PageTabs from "../components/PageTabs.vue";
+import ChartCard from "../components/ChartCard.vue";
 import TableCard from "../components/TableCard.vue";
+import TextCard from "../components/TextCard.vue";
 import { useWorkbookStore } from "../stores/workbook";
 
 const props = defineProps<{ spreadsheetId: string; pageId?: string }>();
@@ -14,7 +16,15 @@ const router = useRouter();
 const loadError = ref<string | null>(null);
 const loaded = computed(() => store.spreadsheet?.id === props.spreadsheetId);
 const page = computed(() => store.pages.find((candidate) => candidate.id === props.pageId));
-const pageTables = computed(() => store.tables.filter((table) => table.pageId === props.pageId));
+/** The tables, charts, and text views of the page, in the order they sit on it. */
+const items = computed(() =>
+  [
+    ...store.tables.map((table) => ({ table, view: null, record: table })),
+    ...store.views.map((view) => ({ table: null, view, record: view })),
+  ]
+    .filter((item) => item.record.pageId === props.pageId)
+    .sort((a, b) => a.record.position - b.record.position),
+);
 
 watch(
   () => props.spreadsheetId,
@@ -87,9 +97,17 @@ watch(
     <p v-if="loadError" class="notice notice--error" role="alert">{{ loadError }}</p>
     <p v-else-if="!loaded" class="editor__loading">Loading…</p>
     <main v-else-if="page" class="editor__page">
-      <TableCard v-for="table in pageTables" :key="table.id" :table="table" />
-      <p v-if="pageTables.length === 0" class="editor__empty">This page has no tables.</p>
-      <button v-if="store.canEdit" type="button" @click="store.addTable(page.id)">Add table</button>
+      <template v-for="item in items" :key="item.record.id">
+        <TableCard v-if="item.table" :table="item.table" />
+        <ChartCard v-else-if="item.view.kind === 'chart'" :view="item.view" />
+        <TextCard v-else :view="item.view" />
+      </template>
+      <p v-if="items.length === 0" class="editor__empty">This page is empty.</p>
+      <div v-if="store.canEdit" class="editor__add">
+        <button type="button" @click="store.addTable(page.id)">Add table</button>
+        <button type="button" @click="store.addView(page.id, 'chart')">Add chart</button>
+        <button type="button" @click="store.addView(page.id, 'text')">Add text</button>
+      </div>
     </main>
 
     <div

@@ -57,6 +57,31 @@ An action is a function that describes a side effect. It does nothing until a bu
 | `CLEAR(range)`                      | Empties the cells of the range.                                                                  |
 | `DO(action, ...)`                   | Runs several actions from one click.                                                             |
 
+### Charts and text views
+
+A page holds charts and text views next to its tables.
+
+A chart draws a range as bars, lines, a pie, or a scatter. Its data is a formula such as `Sales!A1:C9`. The first column labels the points and each other column is a series.
+
+A text view is Markdown with tags that put spreadsheet values into it:
+
+```
+## Sales report
+
+{% let total = SUM(Sales!B2:B) %}
+We sold **{{ total }}** in all.
+
+{% for name, amount in Sales!A2:B4 %}
+- {{ name }}: {{ amount }}{% if amount > 100 %} (a big one){% end %}
+{% end %}
+
+{{ BAR_CHART(Sales!A2:B4, "Sales by person") }}
+```
+
+`{{ }}` shows one value in the sentence, a range as a table, and the result of `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, or `SCATTER_CHART` as a chart. A formula in a chart or text view is written on a page and not in a table, so it names the table of every cell it reads.
+
+### Controls
+
 A control is a cell that shows an input bound to another cell. `CHECKBOX(cell, label)` and `DROPDOWN(choices, cell)` show that cell's value and write a change back to it.
 
 An action's arguments are evaluated when the button is clicked, not when the sheet recalculates. `=BUTTON("Add one", EXECUTE(A1+1, A1))` is a counter, not a circular reference.
@@ -111,7 +136,7 @@ Server tests run against PGlite in memory. Set `TEST_DATABASE_URL` to a Postgres
 - Live sync between sessions. Edits are saved over HTTP and the last write wins. Another session sees changes after a reload.
 - Sharing. The data model has workspaces and roles, and the server enforces them, but there is no way to invite someone.
 - Email delivery.
-- Undo, cell formatting, column resizing, charts, import and export.
+- Undo, cell formatting, column resizing, import and export.
 - A production build of the server and static serving of the web app. The server runs from TypeScript source through `tsx`.
 
 ## License

@@ -2,15 +2,17 @@ import type {
   AppType,
   ClickResult,
   PageRecord,
+  Rewritten,
   Snapshot,
   SpreadsheetSummary,
   TableRecord,
+  ViewRecord,
 } from "@spreadsheet-app/server";
-import type { ApiError, CellInput, StoredCell, StructuralEditBody } from "@spreadsheet-app/shared";
-import type { CellId } from "@spreadsheet-app/engine";
+import type { ApiError, CellInput, StructuralEditBody } from "@spreadsheet-app/shared";
+import type { CellId, ChartType } from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
-export type { ClickResult, PageRecord, Snapshot, TableRecord };
+export type { ClickResult, PageRecord, Rewritten, Snapshot, TableRecord, ViewRecord };
 
 /** A value a control can send. A date is sent as the text it is written as. */
 export type ControlInput = string | number | boolean | null;
@@ -92,8 +94,8 @@ export const api = {
   createPage: (spreadsheetId: string): Promise<{ page: PageRecord; table: TableRecord }> =>
     body(routes.spreadsheets[":spreadsheetId"].pages.$post({ param: { spreadsheetId }, json: {} })),
 
-  /** Resolves to the cells whose formulas named the page and were rewritten. */
-  renamePage: (pageId: string, name: string): Promise<{ cells: StoredCell[] }> =>
+  /** Resolves to the cells and views whose formulas named the page and were rewritten. */
+  renamePage: (pageId: string, name: string): Promise<Rewritten> =>
     body(routes.pages[":pageId"].$patch({ param: { pageId }, json: { name } })),
 
   deletePage: (pageId: string): Promise<void> =>
@@ -105,15 +107,28 @@ export const api = {
   updateTable: (
     tableId: string,
     changes: { name?: string; rowCount?: number; colCount?: number },
-  ): Promise<{ table: TableRecord; cells: StoredCell[] }> =>
+  ): Promise<Rewritten & { table: TableRecord }> =>
     body(routes.tables[":tableId"].$patch({ param: { tableId }, json: changes })),
 
   /** Inserts or deletes a row or column. Resolves to the resized table and every cell that changed. */
   editTable: (
     tableId: string,
     edit: StructuralEditBody,
-  ): Promise<{ table: TableRecord; cells: StoredCell[] }> =>
+  ): Promise<Rewritten & { table: TableRecord }> =>
     body(routes.tables[":tableId"].edits.$post({ param: { tableId }, json: edit })),
+
+  /** Adds a chart or a text view to the end of a page. */
+  createView: (pageId: string, kind: ViewRecord["kind"]): Promise<ViewRecord> =>
+    body(routes.pages[":pageId"].views.$post({ param: { pageId }, json: { kind } })),
+
+  updateView: (
+    viewId: string,
+    changes: { name?: string; source?: string; chartType?: ChartType },
+  ): Promise<ViewRecord> =>
+    body(routes.views[":viewId"].$patch({ param: { viewId }, json: changes })),
+
+  deleteView: (viewId: string): Promise<void> =>
+    done(routes.views[":viewId"].$delete({ param: { viewId } })),
 
   deleteTable: (tableId: string): Promise<void> =>
     done(routes.tables[":tableId"].$delete({ param: { tableId } })),

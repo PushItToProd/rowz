@@ -7,6 +7,7 @@ import {
   FUNCTION_CATEGORIES,
   functionDocs,
   isButton,
+  isChart,
   isControl,
   parseAddress,
   type CellValue,
@@ -43,6 +44,11 @@ function describeResult(rows: CellValue[][]): string {
   const [single = null] = first;
   if (rows.length === 1 && first.length === 1) {
     if (isButton(single)) return `a button labeled “${single.label}”`;
+    if (isChart(single)) {
+      return single.title === ""
+        ? `a ${single.chart} chart`
+        : `a ${single.chart} chart titled “${single.title}”`;
+    }
     if (!isControl(single)) return formatValue(single);
     return single.control === "checkbox"
       ? `a checkbox labeled “${single.label}”`
@@ -80,6 +86,8 @@ const SECTIONS = [
   ["arrays", "Formulas that fill several cells"],
   ["actions", "Buttons and actions"],
   ["controls", "Checkboxes and dropdowns"],
+  ["charts", "Charts"],
+  ["text-views", "Text views"],
   ["errors", "Errors"],
 ] as const;
 
@@ -114,6 +122,31 @@ const REFERENCES = [
   ["'Table 2'!A1:A9", "A table whose name has a space needs single quotes."],
   ["'Page 2'!Sales!A1", "Cell A1 of the table Sales on the page named Page 2."],
 ] as const;
+
+const TEMPLATE_TAGS = [
+  ["{{ SUM(Sales!B:B) }}", "The value of a formula, written without the leading =."],
+  ["{% let total = SUM(Sales!B:B) %}", "Gives a value a name that later formulas can use."],
+  [
+    "{% for name, amount in Sales!A2:B9 %} … {% end %}",
+    "Repeats what is between the tags once for each row, naming the cells of the row in order.",
+  ],
+  [
+    "{% if total > 100 %} … {% else %} … {% end %}",
+    "Shows the first part when the formula is true, and the second when it is not. The else part is optional.",
+  ],
+  ["{# note #}", "A comment. It is not shown."],
+] as const;
+
+const TEMPLATE_EXAMPLE = `## Sales report
+
+{% let total = SUM(Sales!B2:B) %}
+We sold **{{ total }}** in all.
+
+{% for name, amount in Sales!A2:B4 %}
+- {{ name }}: {{ amount }}{% if amount > 100 %} (a big one){% end %}
+{% end %}
+
+{{ BAR_CHART(Sales!A2:B4, "Sales by person") }}`;
 
 const OPERATORS = [
   ["-x", "Negation", "-A1"],
@@ -527,6 +560,81 @@ const OPERATORS = [
           Formulas read the bound cell, not the control: <code>=IF(B1, "thanks", "waiting")</code>.
         </li>
         <li>A control cannot be bound to its own cell.</li>
+      </ul>
+    </section>
+
+    <section id="charts">
+      <h2>Charts</h2>
+      <p>
+        <strong>Add chart</strong> puts a chart on a page. Type the cells to draw into its
+        <strong>Data</strong> box, and choose bar, line, pie, or scatter. The chart redraws when the
+        cells change.
+      </p>
+      <ul>
+        <li>
+          A chart is on a page and not in a table, so its data names the table:
+          <code>Sales!A1:C9</code>, not <code>A1:C9</code>.
+        </li>
+        <li>
+          The first column labels the points and each other column is a series. A first row of text
+          names the series.
+        </li>
+        <li>
+          The data can be any formula that gives a range, such as
+          <code>FILTER(Sales!A2:B99, Sales!B2:B99 &gt; 0)</code> or
+          <code>HSTACK(Sales!A:A, Sales!D:D)</code> to chart columns that are not side by side.
+        </li>
+        <li>
+          A pie chart draws the first series. A scatter chart needs numbers or dates in its first
+          column.
+        </li>
+        <li>
+          Renaming a table or page, or inserting or deleting rows and columns, rewrites the data so
+          the chart keeps reading the same cells.
+        </li>
+      </ul>
+    </section>
+
+    <section id="text-views">
+      <h2>Text views</h2>
+      <p>
+        <strong>Add text</strong> puts a block of text on a page. Choose <strong>Edit</strong> to
+        write it. The text is
+        <a href="https://commonmark.org/help/" target="_blank" rel="noreferrer">Markdown</a>, and
+        tags put values from the spreadsheet into it. The view shows the result as you type.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Tag</th>
+            <th scope="col">What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="[tag, meaning] in TEMPLATE_TAGS" :key="tag">
+            <td>
+              <code>{{ tag }}</code>
+            </td>
+            <td>{{ meaning }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <pre><code>{{ TEMPLATE_EXAMPLE }}</code></pre>
+      <ul>
+        <li>As in a chart, a formula in a text view names the table of every cell it reads.</li>
+        <li>
+          A formula that gives one value puts it into the sentence. A formula that gives a range
+          shows it as a table, and a chart function such as <code>BAR_CHART</code> shows the chart.
+        </li>
+        <li>
+          A formula that fails shows its error, such as <code>#DIV/0!</code>, where its value would
+          have been. A tag that is written wrong replaces the view with a message naming the line.
+        </li>
+        <li>
+          A name from <code>let</code> or <code>for</code> lasts to the end of the part it was made
+          in. A cell address such as <code>A1</code> cannot be used as a name.
+        </li>
+        <li>HTML written in a text view is shown as text.</li>
       </ul>
     </section>
 

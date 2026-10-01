@@ -19,6 +19,7 @@ export function snapshotWith(inputs: Record<string, string> = {}, role = "owner"
     role: role as Snapshot["role"],
     pages: [{ id: "p1", name: "Page 1", position: 0 }],
     tables: [TABLE],
+    views: [],
     cells: Object.entries(inputs).map(([address, input]) => ({ ...at(address), input })),
   };
 }
@@ -52,7 +53,10 @@ export function mockApi(): MockedApi {
     renameSpreadsheet: vi.fn().mockResolvedValue(undefined),
     deleteSpreadsheet: vi.fn().mockResolvedValue(undefined),
     createPage: vi.fn(),
-    renamePage: vi.fn().mockResolvedValue({ cells: [] }),
+    renamePage: vi.fn().mockResolvedValue({ cells: [], views: [] }),
+    createView: vi.fn(),
+    updateView: vi.fn(),
+    deleteView: vi.fn().mockResolvedValue(undefined),
     deletePage: vi.fn().mockResolvedValue(undefined),
     createTable: vi.fn(),
     updateTable: vi.fn(),

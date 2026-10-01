@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { computed } from "vue";
-import { api } from "../api/client";
+import { api, type ViewRecord } from "../api/client";
 import { at, clickResult, snapshotWith, TABLE, type MockedApi } from "../testing";
 import { useWorkbookStore } from "./workbook";
 
@@ -185,6 +185,7 @@ describe("setCells", () => {
     server.updateTable.mockResolvedValue({
       table: { ...TABLE, rowCount: 1000, colCount: 3 },
       cells: [],
+      views: [],
     });
     await store.updateTable("t1", { rowCount: 1000 });
     const writes = Array.from({ length: 1500 }, (_, index) => ({
@@ -235,7 +236,11 @@ describe("selection", () => {
   it("pastes other text as typed, and says so when part of it cannot fit", async () => {
     const store = await open();
     const cols = Array.from({ length: 101 }, (_, index) => String(index)).join("\t");
-    server.updateTable.mockResolvedValue({ table: { ...TABLE, colCount: 100 }, cells: [] });
+    server.updateTable.mockResolvedValue({
+      table: { ...TABLE, colCount: 100 },
+      cells: [],
+      views: [],
+    });
     store.selection = at("A1");
     await store.paste(cols);
     expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
@@ -416,7 +421,11 @@ describe("structure", () => {
     const store = await open({ A1: "5", B1: "=Sales!A1" });
     expect(store.valueOf(at("B1"))).toMatchObject({ code: "#REF!" });
 
-    server.updateTable.mockResolvedValue({ table: { ...TABLE, name: "Sales" }, cells: [] });
+    server.updateTable.mockResolvedValue({
+      table: { ...TABLE, name: "Sales" },
+      cells: [],
+      views: [],
+    });
     expect(await store.updateTable("t1", { name: "Sales" })).toBe(true);
     expect(store.tables[0]?.name).toBe("Sales");
     expect(store.valueOf(at("B1"))).toBe(5);
@@ -427,6 +436,7 @@ describe("structure", () => {
     server.updateTable.mockResolvedValue({
       table: { ...TABLE, name: "Sales" },
       cells: [{ ...at("B1"), input: "=Sales!A1" }],
+      views: [],
     });
     await store.updateTable("t1", { name: "Sales" });
     expect(store.inputOf(at("B1"))).toBe("=Sales!A1");
@@ -437,6 +447,7 @@ describe("structure", () => {
     const store = await open({ A1: "5", B1: "='Page 1'!'Table 1'!A1" });
     server.renamePage.mockResolvedValue({
       cells: [{ ...at("B1"), input: "=Summary!'Table 1'!A1" }],
+      views: [],
     });
     await store.renamePage("p1", "Summary");
     expect(store.inputOf(at("B1"))).toBe("=Summary!'Table 1'!A1");
@@ -454,6 +465,7 @@ describe("structure", () => {
         { ...at("A3"), input: "=#REF!+A1" },
         { ...at("A4"), input: "" },
       ],
+      views: [],
     });
 
     expect(await store.editTable("t1", { axis: "row", kind: "delete", index: 0 })).toBe(true);
@@ -468,7 +480,7 @@ describe("structure", () => {
     const store = await open({ A1: "1" });
     const save = deferred();
     server.setCells.mockReturnValue(save.promise);
-    server.editTable.mockResolvedValue({ table: TABLE, cells: [] });
+    server.editTable.mockResolvedValue({ table: TABLE, cells: [], views: [] });
 
     void store.setCell(at("A1"), "5");
     const edited = store.editTable("t1", { axis: "row", kind: "insert", index: 0 });
@@ -540,5 +552,102 @@ describe("structure", () => {
     expect(await store.addPage()).toBeUndefined();
     expect(server.renameSpreadsheet).not.toHaveBeenCalled();
     expect(store.canEdit).toBe(false);
+  });
+});
+
+describe("views", () => {
+  const CHART: ViewRecord = {
+    id: "v1",
+    pageId: "p1",
+    kind: "chart",
+    name: "Chart 1",
+    position: 1,
+    source: "'Table 1'!A1:B2",
+    chartType: "bar",
+  };
+  const TEXT: ViewRecord = { ...CHART, id: "v2", kind: "text", name: "Text 1", position: 2 };
+
+  async function openWith(views: ViewRecord[], inputs: Record<string, string> = {}) {
+    server.getSnapshot.mockResolvedValue({ ...snapshotWith(inputs), views });
+    const store = useWorkbookStore();
+    await store.load("s1");
+    return store;
+  }
+
+  it("loads the views of a spreadsheet", async () => {
+    const store = await openWith([CHART, TEXT]);
+    expect(store.views.map((view) => view.name)).toEqual(["Chart 1", "Text 1"]);
+  });
+
+  it("evaluates a formula written on a page against the cells", async () => {
+    const store = await openWith([], { A1: "2", A2: "3" });
+    expect(store.evaluateOnPage("p1", "SUM('Table 1'!A1:A2) * n", new Map([["n", 10]]))).toBe(50);
+    expect(store.evaluateOnPage("p1", "A1")).toMatchObject({ code: "#REF!" });
+  });
+
+  it("re-evaluates a page formula when a cell it reads changes", async () => {
+    const store = await openWith([], { A1: "2" });
+    const doubled = computed(() => store.evaluateOnPage("p1", "'Table 1'!A1 * 2"));
+    expect(doubled.value).toBe(4);
+    await store.setCell(at("A1"), "5");
+    expect(doubled.value).toBe(10);
+  });
+
+  it("adds a view to the page", async () => {
+    const store = await openWith([]);
+    server.createView.mockResolvedValue(CHART);
+    expect(await store.addView("p1", "chart")).toBe(true);
+    expect(server.createView).toHaveBeenCalledWith("p1", "chart");
+    expect(store.views).toEqual([CHART]);
+  });
+
+  it("replaces a view with what the server stored", async () => {
+    const store = await openWith([CHART, TEXT]);
+    server.updateView.mockResolvedValue({ ...CHART, chartType: "pie" });
+    expect(await store.updateView("v1", { chartType: "pie" })).toBe(true);
+    expect(store.views).toEqual([{ ...CHART, chartType: "pie" }, TEXT]);
+  });
+
+  it("deletes a view", async () => {
+    const store = await openWith([CHART, TEXT]);
+    expect(await store.deleteView("v1")).toBe(true);
+    expect(store.views).toEqual([TEXT]);
+  });
+
+  it("reports a refused change and keeps the views as they were", async () => {
+    const store = await openWith([CHART]);
+    server.updateView.mockRejectedValue(new Error("nope"));
+    server.createView.mockRejectedValue(new Error("nope"));
+    server.deleteView.mockRejectedValueOnce(new Error("nope"));
+    expect(await store.updateView("v1", { name: "x" })).toBe(false);
+    expect(await store.addView("p1", "text")).toBe(false);
+    expect(await store.deleteView("v1")).toBe(false);
+    expect(store.views).toEqual([CHART]);
+    expect(store.notice).toEqual({ kind: "error", text: "nope" });
+  });
+
+  it("applies the view sources the server rewrote, and leaves the others alone", async () => {
+    const store = await openWith([CHART, { ...TEXT, source: "plain" }]);
+    server.renamePage.mockResolvedValue({
+      cells: [],
+      views: [{ id: "v1", source: "Data!'Table 1'!A1:B2" }],
+    });
+    await store.renamePage("p1", "Data");
+    expect(store.views.map((view) => view.source)).toEqual(["Data!'Table 1'!A1:B2", "plain"]);
+  });
+
+  it("drops the views of a deleted page", async () => {
+    server.getSnapshot.mockResolvedValue({
+      ...snapshotWith(),
+      pages: [
+        { id: "p1", name: "Page 1", position: 0 },
+        { id: "p2", name: "Page 2", position: 1 },
+      ],
+      views: [CHART, { ...TEXT, pageId: "p2" }],
+    });
+    const store = useWorkbookStore();
+    await store.load("s1");
+    await store.deletePage("p2");
+    expect(store.views).toEqual([CHART]);
   });
 });

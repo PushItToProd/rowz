@@ -7,6 +7,8 @@ export const LIMITS = {
   cellsPerRequest: 1000,
   tableRows: 1000,
   tableCols: 100,
+  /** Characters in a chart's formula or a text view's template. */
+  viewSourceLength: 50_000,
 } as const;
 
 export const DEFAULT_TABLE_SIZE = { rowCount: 20, colCount: 8 } as const;
@@ -53,6 +55,20 @@ export const setCellsBody = z.object({
 export const controlInputBody = z.object({
   value: z.union([z.string().max(LIMITS.inputLength), z.number(), z.boolean(), z.null()]),
 });
+
+export const createViewBody = z.object({ kind: z.enum(["chart", "text"]) });
+
+export const updateViewBody = z
+  .object({
+    name: name.optional(),
+    source: z.string().max(LIMITS.viewSourceLength).optional(),
+    chartType: z.enum(["bar", "line", "pie", "scatter"]).optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "Give at least one of name, source, chartType",
+  });
+
+export const viewParam = z.object({ viewId: z.uuid() });
 
 export const spreadsheetParam = z.object({ spreadsheetId: z.uuid() });
 export const pageParam = z.object({ pageId: z.uuid() });

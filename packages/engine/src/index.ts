@@ -45,6 +45,7 @@ export {
   isAction,
   isButton,
   isChart,
+  isRange,
   isControl,
   isError,
   isLambda,

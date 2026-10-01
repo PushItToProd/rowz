@@ -2,6 +2,45 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-09-30: Charts and text views
+
+**Decision.** A page holds three kinds of item: tables, charts, and text views. A chart or text view is a row in a `views` table with a `source`: the data formula for a chart, the Markdown template for a text view. Views and tables share one ordering on the page.
+
+**Template syntax.** Your Jinja-style example, with these tags:
+
+| Tag                                                | Meaning                                                 |
+| -------------------------------------------------- | ------------------------------------------------------- |
+| `{{ expression }}`                                 | The value of a formula, written without the leading `=` |
+| `{% let name = expression %}`                      | Names a value                                           |
+| `{% for a, b in expression %} ... {% end %}`       | Once per row, naming the row's cells                    |
+| `{% if expression %} ... {% else %} ... {% end %}` | Conditional                                             |
+| `{# ... #}`                                        | Comment                                                 |
+
+`{% endfor %}` and `{% endif %}` are accepted for `{% end %}`. I kept Jinja over JSX-style tags because the expressions inside the tags are the app's own formulas, and the tag delimiters do not collide with Markdown or with formula syntax.
+
+**Differences from your example.**
+
+- **No slice syntax.** `SORT(x, 2)[:10]` is written `TAKE(SORT(x, 2), 10)`. The formula language already has `TAKE` and `DROP`, and a second way to say it would exist only inside templates.
+- **Chart functions are ordinary functions:** `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, `SCATTER_CHART`. They work in a cell too, where they show as a chip, because a cell has no room to draw one. Function names ignore case, so `pie_chart(...)` works.
+- **`${{ amount }}` works** and shows a dollar sign followed by the value. There is no number formatting yet, so there is no way to ask for two decimals.
+
+**Choices.**
+
+- **A formula on a page must name its table.** `A1` alone is `#REF!` in a chart or text view. A page can hold several tables, so there is no table for a bare address to mean. The alternative was to let a bare address mean the first table on the page, which would silently change meaning when tables are reordered.
+- **What `{{ }}` shows depends on the value:** one value goes into the sentence, a range becomes a table, a chart is drawn.
+- **Values are escaped.** A cell holding `**bold**` or `<script>` shows those characters. Raw HTML in the template itself is also shown as text. A view can be written by one person and read by another, so nothing a view or cell contains can become markup or script.
+- **An error in a formula shows in place** as `#DIV/0!` and the rest of the view still renders. A malformed tag replaces the view with one message naming the line.
+- **A `for` loop stops at 10,000 repetitions** across the view, with a message, so `A:A` over a large table cannot hang the page.
+- **Renames and row or column edits rewrite view sources** the same way they rewrite cell formulas.
+- **Two views may share a name.** Nothing refers to a view by name.
+- **Charts are drawn as SVG by the app's own code,** about 300 lines, with no chart library. The four kinds asked for did not justify a dependency, and the drawing is testable as plain DOM. If charts grow (stacking, axes titles, tooltips, zoom), switching to a library is the better path.
+- **A standalone chart item takes its kind from the dropdown.** If its data formula is itself a chart function, the dropdown still decides the kind.
+- **Views do not act.** A `BUTTON` in a text view shows its label as text. Buttons run from cells because the server derives an action from a stored cell.
+
+**Not done.** Dragging items to reorder them. Number formatting in templates. Data tables with named, typed columns are still on the todo list.
+
+**To change.** The template engine is `packages/engine/src/template.ts`. Rewriting of sources is `packages/engine/src/views.ts`. Drawing is `apps/web/src/components/ChartView.vue` with the arithmetic in `apps/web/src/charts/geometry.ts`.
+
 ## 2026-09-30: Dates
 
 **Decision.** Dates are their own kind of value, next to numbers, text, and TRUE/FALSE. A cell typed as `2026-09-30` or `2026-09-30 14:05` is a date. 15 functions work with dates, including `TODAY` and `NOW`.

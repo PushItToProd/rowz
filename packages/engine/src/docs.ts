@@ -562,7 +562,7 @@ export const functionDocs: readonly FunctionDoc[] = [
     category: "Arrays",
     syntax: "SORT(range, [column], [ascending], ...)",
     summary:
-      "Sorts the rows of the range by a column, counting from 1. Without a column it sorts by the first, ascending. FALSE sorts descending. More column and direction pairs break ties.",
+      "Sorts the rows of the range by a column, counting from 1. Without a column it sorts by the first, ascending. FALSE or -1 sorts descending. More column and direction pairs break ties.",
     example: "SORT(A1:B3, 1, FALSE)",
   },
   {

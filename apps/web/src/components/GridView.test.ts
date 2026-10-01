@@ -506,7 +506,11 @@ describe("copy and paste", () => {
 
   it("grows the table when what is pasted does not fit", async () => {
     await mountGrid();
-    server.updateTable.mockResolvedValue({ table: { ...TABLE, rowCount: 6 }, cells: [] });
+    server.updateTable.mockResolvedValue({
+      table: { ...TABLE, rowCount: 6 },
+      cells: [],
+      views: [],
+    });
     await focusAndSelect("C4");
     clipboard("paste", "one\ntwo\nthree");
     await vi.waitFor(() => {

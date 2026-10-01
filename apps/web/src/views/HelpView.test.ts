@@ -49,6 +49,15 @@ describe("HelpView", () => {
     expect(codes).toEqual(["then", "else"]);
   });
 
+  it("says a chart example gives a chart, and documents the tags of a text view", () => {
+    const wrapper = render();
+    expect(wrapper.get('[data-function="BAR_CHART"]').text()).toContain(
+      "a bar chart titled “Fruit”",
+    );
+    expect(wrapper.get("#text-views").text()).toContain("{% for name, amount in Sales!A2:B9 %}");
+    expect(wrapper.get("#text-views pre").text()).toContain("{{ total }}");
+  });
+
   it("explains every error code", () => {
     const wrapper = render();
     for (const [code, explanation] of Object.entries(errorDocs)) {
@@ -59,7 +68,7 @@ describe("HelpView", () => {
   it("links each contents entry to a section on the page", () => {
     const wrapper = render();
     const targets = wrapper.findAll(".help__contents a").map((link) => link.attributes("href"));
-    expect(targets).toHaveLength(11);
+    expect(targets).toHaveLength(13);
     for (const target of targets)
       expect(wrapper.find(`section${target ?? ""}`).exists()).toBe(true);
   });

@@ -12,6 +12,8 @@ export interface ChartData {
   labels: string[];
   /** The labels as numbers, for a chart that places points along a number line. */
   x: (number | null)[];
+  /** Whether those numbers are dates, counted in days, which decides how the axis is labeled. */
+  xIsDate: boolean;
   series: ChartSeries[];
 }
 
@@ -41,7 +43,9 @@ export function chartData(rows: readonly (readonly CellValue[])[]): ChartData {
   const hasHeader = !numbersIn(first) && rest.some(numbersIn);
   const body = hasHeader ? rest : rows;
 
+  const labelCells = width === 1 ? [] : body.map((cells) => cells[0] ?? null);
   return {
+    xIsDate: labelCells.some(isDate) && labelCells.every((cell) => cell === null || isDate(cell)),
     labels: body.map((cells, index) =>
       width === 1 ? String(index + 1) : formatValue(cells[0] ?? null),
     ),

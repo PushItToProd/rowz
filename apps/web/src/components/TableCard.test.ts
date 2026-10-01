@@ -33,7 +33,7 @@ beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
   confirm.mockReturnValue(true);
-  server.editTable.mockResolvedValue({ table: TABLE, cells: [] });
+  server.editTable.mockResolvedValue({ table: TABLE, cells: [], views: [] });
 });
 afterEach(() => {
   wrapper.unmount();
@@ -102,7 +102,7 @@ describe("row and column actions", () => {
 describe("table actions", () => {
   it("adds a row and a column at the end", async () => {
     await render();
-    server.updateTable.mockResolvedValue({ table: TABLE, cells: [] });
+    server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [] });
     await button("Add row").trigger("click");
     await button("Add column").trigger("click");
     expect(server.updateTable.mock.calls).toEqual([

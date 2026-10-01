@@ -14,6 +14,7 @@ describe("chartData", () => {
     ).toEqual({
       labels: ["apple", "pear"],
       x: [null, null],
+      xIsDate: false,
       series: [
         { name: "Series 1", values: [5, 12] },
         { name: "Series 2", values: [1.5, 0.5] },
@@ -57,6 +58,7 @@ describe("chartData", () => {
     expect(chartData([[5], [12], [8]])).toEqual({
       labels: ["1", "2", "3"],
       x: [1, 2, 3],
+      xIsDate: false,
       series: [{ name: "Series 1", values: [5, 12, 8] }],
     });
     expect(chartData([["sold"], [5], [12]])).toMatchObject({
@@ -87,6 +89,13 @@ describe("chartData", () => {
       ["later", 30],
     ]);
     expect(data.x).toEqual([1.5, 10, null]);
+    expect(data.xIsDate).toBe(false);
+    const dated = chartData([
+      [parseDate("2026-01-01") ?? null, 1],
+      [null, 2],
+      [parseDate("2026-01-03") ?? null, 3],
+    ]);
+    expect(dated.xIsDate).toBe(true);
     expect(data.labels).toEqual(["1.5", "1970-01-11", "later"]);
   });
 
@@ -94,6 +103,7 @@ describe("chartData", () => {
     expect(chartData([])).toEqual({
       labels: [],
       x: [],
+      xIsDate: false,
       series: [{ name: "Series 1", values: [] }],
     });
   });

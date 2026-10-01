@@ -3,9 +3,17 @@ import { onError, requireSession, type AppDependencies, type Env } from "./http"
 import { pageRoutes } from "./routes/pages";
 import { spreadsheetRoutes } from "./routes/spreadsheets";
 import { tableRoutes } from "./routes/tables";
+import { viewRoutes } from "./routes/views";
 
 export type { ClickResult } from "./actions/run";
-export type { PageRecord, Snapshot, SpreadsheetSummary, TableRecord } from "./repo/spreadsheets";
+export type {
+  PageRecord,
+  Rewritten,
+  Snapshot,
+  SpreadsheetSummary,
+  TableRecord,
+  ViewRecord,
+} from "./repo/spreadsheets";
 
 export function createApp(dependencies: AppDependencies) {
   const api = new Hono<Env>()
@@ -14,7 +22,8 @@ export function createApp(dependencies: AppDependencies) {
     .use(requireSession(dependencies))
     .route("/spreadsheets", spreadsheetRoutes())
     .route("/pages", pageRoutes())
-    .route("/tables", tableRoutes(dependencies));
+    .route("/tables", tableRoutes(dependencies))
+    .route("/views", viewRoutes());
 
   return new Hono().onError(onError).route("/api", api);
 }

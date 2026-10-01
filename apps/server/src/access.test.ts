@@ -24,6 +24,7 @@ beforeAll(async () => {
     cellsBody({ A1: '=BUTTON("Go", EXECUTE(1, B1))', A2: "=CHECKBOX(B2)" }),
     204,
   );
+  await owner.json("POST", `/pages/${created.pages[0]!.id}/views`, { kind: "chart" }, 201);
   snapshot = await owner.json<Snapshot>("GET", `/spreadsheets/${created.id}`);
 });
 afterAll(() => server.close());
@@ -39,6 +40,7 @@ function readRoutes(): Route[] {
 function writeRoutes(): Route[] {
   const page = snapshot.pages[0]!.id;
   const table = snapshot.tables[0]!.id;
+  const view = snapshot.views[0]!.id;
   return [
     ["PATCH", `/spreadsheets/${snapshot.id}`, { name: "Taken over" }],
     ["POST", `/spreadsheets/${snapshot.id}/pages`, {}],
@@ -50,6 +52,9 @@ function writeRoutes(): Route[] {
     ["POST", `/tables/${table}/edits`, { axis: "row", kind: "insert", index: 5 }],
     ["POST", `/tables/${table}/cells/0/0/click`],
     ["POST", `/tables/${table}/cells/1/0/input`, { value: true }],
+    ["POST", `/pages/${page}/views`, { kind: "text" }],
+    ["PATCH", `/views/${view}`, { source: "A1:B2", chartType: "pie" }],
+    ["DELETE", `/views/${view}`],
     ["DELETE", `/tables/${table}`],
     ["DELETE", `/pages/${page}`],
     ["DELETE", `/spreadsheets/${snapshot.id}`],
@@ -138,7 +143,7 @@ describe("an editor", () => {
     });
     // The page delete is refused because it is the last page, not for lack of access.
     expect(await statuses(editor, writeRoutes())).toEqual([
-      204, 201, 200, 201, 200, 204, 200, 200, 200, 204, 204, 204,
+      204, 201, 200, 201, 200, 204, 200, 200, 200, 201, 200, 204, 204, 204, 204,
     ]);
     await owner.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);
   });

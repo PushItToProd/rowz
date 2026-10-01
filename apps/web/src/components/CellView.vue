@@ -3,6 +3,7 @@ import {
   formatValue,
   isAction,
   isButton,
+  isChart,
   isControl,
   isDate,
   isError,
@@ -28,6 +29,7 @@ const kind = computed(() => {
   if (isControl(value)) return value.control;
   if (isAction(value)) return "action";
   if (isLambda(value)) return "function";
+  if (isChart(value)) return "chart";
   if (isError(value)) return "error";
   if (isDate(value)) return "date";
   return typeof value === "string" || value === null ? "text" : typeof value;
@@ -90,6 +92,13 @@ function onChoice(event: Event): void {
     v-else-if="kind === 'function'"
     class="cell-value cell-value--action"
     title="A function. Call it from another cell by this cell's address, such as =A1(5)"
+  >
+    {{ text }}
+  </span>
+  <span
+    v-else-if="kind === 'chart'"
+    class="cell-value cell-value--action"
+    title="A chart. Add a text view to the page and show it there with {{ }}"
   >
     {{ text }}
   </span>

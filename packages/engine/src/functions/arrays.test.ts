@@ -78,6 +78,11 @@ describe("SORT", () => {
     expect(run("=SORT(A1:A5)").flat()).toEqual(["apple", "Apple", "banana", "cherry", "date"]);
   });
 
+  it("takes -1 for descending and 1 for ascending, as Excel does", () => {
+    expect(run("=SORT(A1:C5, 3, -1)")).toEqual(run("=SORT(A1:C5, 3, FALSE)"));
+    expect(run("=SORT(A1:C5, 3, 1)")).toEqual(run("=SORT(A1:C5, 3, TRUE)"));
+  });
+
   it("sorts by a chosen column and direction", () => {
     expect(run("=SORT(A1:C5, 3, FALSE)").map(([fruit]) => fruit)).toEqual([
       "cherry",

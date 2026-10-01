@@ -3,6 +3,9 @@ import {
   formatAddress,
   inputsAfterEdit,
   inputsAfterRename,
+  viewsAfterEdit,
+  viewsAfterRename,
+  type ChartType,
   type Rename,
 } from "@spreadsheet-app/engine";
 import {
@@ -21,9 +24,11 @@ import {
   spreadsheets,
   tables,
   users,
+  views,
   workspaceMembers,
   workspaces,
   type Role,
+  type ViewKind,
 } from "../db/schema";
 import { conflict, forbidden, isUniqueViolation, notFound, unprocessable } from "../errors";
 
@@ -50,6 +55,25 @@ export interface TableRecord {
   colCount: number;
 }
 
+export interface ViewRecord {
+  id: string;
+  pageId: string;
+  kind: ViewKind;
+  name: string;
+  position: number;
+  source: string;
+  /** `null` for a text view. */
+  chartType: ChartType | null;
+}
+
+/** What a rename or a row or column edit rewrote, for the client to apply. */
+export interface Rewritten {
+  /** Cells that changed. An empty input means the cell is now empty. */
+  cells: StoredCell[];
+  /** Charts and text views whose sources changed. */
+  views: { id: string; source: string }[];
+}
+
 /** A whole spreadsheet: everything the editor and the formula engine need. */
 export interface Snapshot {
   id: string;
@@ -57,6 +81,7 @@ export interface Snapshot {
   role: Role;
   pages: PageRecord[];
   tables: TableRecord[];
+  views: ViewRecord[];
   cells: StoredCell[];
 }
 
@@ -69,6 +94,21 @@ const tableColumns = {
   rowCount: tables.rowCount,
   colCount: tables.colCount,
 };
+
+const viewColumns = {
+  id: views.id,
+  pageId: views.pageId,
+  kind: views.kind,
+  name: views.name,
+  position: views.position,
+  source: views.source,
+  chartType: views.chartType,
+};
+
+const STARTER_TEMPLATE = `## New text view
+
+Write Markdown here. A formula in double braces puts its value into the text: {{ 1 + 1 }}
+`;
 
 /** The first of `Page 1`, `Page 2`, ... that no existing name matches, ignoring case. */
 function nextName(prefix: string, existing: readonly string[]): string {
@@ -134,7 +174,13 @@ export class SpreadsheetRepository {
       .innerJoin(tables, eq(tables.id, cells.tableId))
       .innerJoin(pages, eq(pages.id, tables.pageId))
       .where(eq(pages.spreadsheetId, spreadsheetId));
-    return { ...spreadsheet, pages: pageRows, tables: tableRows, cells: cellRows };
+    const viewRows = await this.db
+      .select(viewColumns)
+      .from(views)
+      .innerJoin(pages, eq(pages.id, views.pageId))
+      .where(eq(pages.spreadsheetId, spreadsheetId))
+      .orderBy(asc(views.position));
+    return { ...spreadsheet, pages: pageRows, tables: tableRows, views: viewRows, cells: cellRows };
   }
 
   async renameSpreadsheet(spreadsheetId: string, name: string): Promise<void> {
@@ -183,8 +229,8 @@ export class SpreadsheetRepository {
     });
   }
 
-  /** Renames a page and the formulas that name it. Returns the cells whose formulas changed. */
-  async renamePage(pageId: string, name: string): Promise<StoredCell[]> {
+  /** Renames a page and the formulas that name it. Returns what was rewritten. */
+  async renamePage(pageId: string, name: string): Promise<Rewritten> {
     const page = await this.findPage(pageId, "write");
     return this.db.transaction(async (tx) => {
       const rewritten = await this.rewriteFormulas(tx, page.spreadsheetId, {
@@ -218,7 +264,7 @@ export class SpreadsheetRepository {
   async createTable(pageId: string, name?: string): Promise<TableRecord> {
     const page = await this.findPage(pageId, "write");
     const siblings = await this.db
-      .select({ name: tables.name, position: tables.position })
+      .select({ name: tables.name })
       .from(tables)
       .where(eq(tables.pageId, pageId));
     const values = {
@@ -229,7 +275,7 @@ export class SpreadsheetRepository {
           "Table",
           siblings.map((table) => table.name),
         ),
-      position: Math.max(-1, ...siblings.map((table) => table.position)) + 1,
+      position: await this.nextPosition(pageId),
       ...DEFAULT_TABLE_SIZE,
     };
     const [table] = await this.db
@@ -254,12 +300,12 @@ export class SpreadsheetRepository {
       rowCount?: number | undefined;
       colCount?: number | undefined;
     },
-  ): Promise<{ table: TableRecord; cells: StoredCell[] }> {
+  ): Promise<Rewritten & { table: TableRecord }> {
     const table = await this.findTable(tableId, "write");
     return this.db.transaction(async (tx) => {
       const rewritten =
         changes.name === undefined
-          ? []
+          ? { cells: [], views: [] }
           : await this.rewriteFormulas(tx, table.spreadsheetId, {
               kind: "table",
               tableId,
@@ -281,8 +327,60 @@ export class SpreadsheetRepository {
           ),
         );
       await touch(tx, table.spreadsheetId);
-      return { table: updated, cells: rewritten };
+      return { table: updated, ...rewritten };
     });
+  }
+
+  /** Adds a chart or a text view to the end of a page. */
+  async createView(pageId: string, kind: ViewKind): Promise<ViewRecord> {
+    const page = await this.findPage(pageId, "write");
+    const siblings = await this.db
+      .select({ name: views.name })
+      .from(views)
+      .where(and(eq(views.pageId, pageId), eq(views.kind, kind)));
+    const names = siblings.map((view) => view.name);
+    const [view] = await this.db
+      .insert(views)
+      .values({
+        pageId,
+        kind,
+        position: await this.nextPosition(pageId),
+        ...(kind === "chart"
+          ? { name: nextName("Chart", names), source: "", chartType: "bar" as const }
+          : { name: nextName("Text", names), source: STARTER_TEMPLATE }),
+      })
+      .returning(viewColumns);
+    if (!view) throw new Error("Insert returned no view");
+    await touch(this.db, page.spreadsheetId);
+    return view;
+  }
+
+  async updateView(
+    viewId: string,
+    changes: {
+      name?: string | undefined;
+      source?: string | undefined;
+      chartType?: ChartType | undefined;
+    },
+  ): Promise<ViewRecord> {
+    const view = await this.findView(viewId, "write");
+    if (changes.chartType !== undefined && view.kind !== "chart") {
+      throw unprocessable("not_a_chart", `${view.name} is not a chart`);
+    }
+    const [updated] = await this.db
+      .update(views)
+      .set(changes)
+      .where(eq(views.id, viewId))
+      .returning(viewColumns);
+    if (!updated) throw notFound("View");
+    await touch(this.db, view.spreadsheetId);
+    return updated;
+  }
+
+  async deleteView(viewId: string): Promise<void> {
+    const view = await this.findView(viewId, "write");
+    await this.db.delete(views).where(eq(views.id, viewId));
+    await touch(this.db, view.spreadsheetId);
   }
 
   async deleteTable(tableId: string): Promise<void> {
@@ -338,13 +436,12 @@ export class SpreadsheetRepository {
   /**
    * Inserts or deletes one row or column. Cells past it move by one, and
    * formulas anywhere in the spreadsheet that read the table are rewritten to
-   * keep reading the same cells. `cells` lists every cell that changed, with
-   * an empty input for a cell that is now empty.
+   * keep reading the same cells, as are charts and text views.
    */
   async editStructure(
     tableId: string,
     edit: StructuralEditBody,
-  ): Promise<{ table: TableRecord; cells: StoredCell[] }> {
+  ): Promise<Rewritten & { table: TableRecord }> {
     const { spreadsheetId } = await this.findTable(tableId, "write");
     return this.db.transaction(async (tx) => {
       // The edit is computed from a snapshot, so nothing may change under it.
@@ -375,6 +472,8 @@ export class SpreadsheetRepository {
 
       const written = inputsAfterEdit(snapshot, { tableId, ...edit });
       await this.storeCells(tx, written);
+      const rewrittenViews = viewsAfterEdit(snapshot, snapshot.views, { tableId, ...edit });
+      await this.storeViewSources(tx, rewrittenViews);
       const newCount = count + (edit.kind === "insert" ? 1 : -1);
       const [updated] = await tx
         .update(tables)
@@ -383,7 +482,7 @@ export class SpreadsheetRepository {
         .returning(tableColumns);
       if (!updated) throw notFound("Table");
       await touch(tx, spreadsheetId);
-      return { table: updated, cells: written };
+      return { table: updated, cells: written, views: rewrittenViews };
     });
   }
 
@@ -459,13 +558,35 @@ export class SpreadsheetRepository {
     tx: Database,
     spreadsheetId: string,
     rename: Rename,
-  ): Promise<StoredCell[]> {
+  ): Promise<Rewritten> {
     // Without the lock, a cell saved during the rename could keep the old name.
     await lockSpreadsheet(tx, spreadsheetId);
     const snapshot = await new SpreadsheetRepository(tx, this.userId).getSnapshot(spreadsheetId);
-    const rewritten = inputsAfterRename(snapshot, rename);
-    await this.storeCells(tx, rewritten);
+    const rewritten = {
+      cells: inputsAfterRename(snapshot, rename),
+      views: viewsAfterRename(snapshot, snapshot.views, rename),
+    };
+    await this.storeCells(tx, rewritten.cells);
+    await this.storeViewSources(tx, rewritten.views);
     return rewritten;
+  }
+
+  private async storeViewSources(
+    db: Database,
+    changed: readonly { id: string; source: string }[],
+  ): Promise<void> {
+    for (const { id, source } of changed) {
+      await db.update(views).set({ source }).where(eq(views.id, id));
+    }
+  }
+
+  /** The position that puts a new table or view after everything else on its page. */
+  private async nextPosition(pageId: string): Promise<number> {
+    const taken = await Promise.all([
+      this.db.select({ position: tables.position }).from(tables).where(eq(tables.pageId, pageId)),
+      this.db.select({ position: views.position }).from(views).where(eq(views.pageId, pageId)),
+    ]);
+    return Math.max(-1, ...taken.flat().map((item) => item.position)) + 1;
   }
 
   /**
@@ -501,6 +622,20 @@ export class SpreadsheetRepository {
         );
       await db.delete(cells).where(or(...targets));
     }
+  }
+
+  async findView(
+    viewId: string,
+    access: Access,
+  ): Promise<ViewRecord & { spreadsheetId: string; role: Role }> {
+    const [row] = await this.db
+      .select({ ...viewColumns, spreadsheetId: spreadsheets.id, role: workspaceMembers.role })
+      .from(views)
+      .innerJoin(pages, eq(pages.id, views.pageId))
+      .innerJoin(spreadsheets, eq(spreadsheets.id, pages.spreadsheetId))
+      .innerJoin(workspaceMembers, this.membership())
+      .where(eq(views.id, viewId));
+    return authorize(row, access, "View");
   }
 
   /** The join condition that limits a query to spreadsheets in the user's workspaces. */

@@ -692,3 +692,179 @@ select.cell-control--dropdown {
   color: var(--ink);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
+
+/* Charts */
+
+.chart {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.chart__title {
+  margin-bottom: 4px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart__axis line {
+  stroke: var(--line);
+}
+
+.chart__axis text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.chart__line {
+  fill: none;
+  stroke-width: 2;
+}
+
+.chart__slice {
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+.chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  justify-content: center;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.chart__swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border-radius: 2px;
+}
+
+.chart__empty {
+  margin: 0;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Charts and text views on a page */
+
+.view-card {
+  width: 100%;
+  max-width: 760px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.view-card__header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.view-card__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.view-card__actions select {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font: inherit;
+}
+
+.view-card__source {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+  color: var(--muted);
+}
+
+.view-card__source input {
+  flex: 1;
+  color: var(--ink);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.view-card__problem {
+  margin: 0;
+  padding: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.text-view__source {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.92rem;
+  resize: vertical;
+}
+
+.text-view {
+  line-height: 1.55;
+}
+
+.text-view__markdown > :first-child {
+  margin-top: 0;
+}
+
+.text-view__markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.text-view__markdown h1,
+.text-view__markdown h2,
+.text-view__markdown h3 {
+  margin: 1em 0 0.4em;
+  font-size: 1.1rem;
+}
+
+.text-view__markdown h1 {
+  font-size: 1.35rem;
+}
+
+.text-view__markdown table,
+.text-view__table {
+  margin: 10px 0;
+  border-collapse: collapse;
+}
+
+.text-view__markdown th,
+.text-view__markdown td,
+.text-view__table td {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+}
+
+.text-view__number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.editor__add {
+  display: flex;
+  gap: 8px;
+}

@@ -1,4 +1,4 @@
-import type { Effect } from "@spreadsheet-app/engine";
+import type { ChartType, Effect } from "@spreadsheet-app/engine";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -140,6 +140,26 @@ export const tables = pgTable(
   },
   (table) => [uniqueIndex("tables_name").on(table.pageId, sql`lower(${table.name})`)],
 );
+
+export type ViewKind = "chart" | "text";
+
+/**
+ * Things on a page that show data without being tables. A chart's source is
+ * the formula for its data, and a text view's source is its Markdown
+ * template. Views share one ordering with the page's tables.
+ */
+export const views = pgTable("views", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  pageId: uuid("page_id")
+    .notNull()
+    .references(() => pages.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<ViewKind>().notNull(),
+  name: text("name").notNull(),
+  position: integer("position").notNull(),
+  source: text("source").notNull(),
+  /** Set for charts only. */
+  chartType: text("chart_type").$type<ChartType>(),
+});
 
 /** Holds what the user typed. Computed values are derived by the engine. Empty cells have no row. */
 export const cells = pgTable(

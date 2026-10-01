@@ -97,7 +97,8 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
   /**
    * Sorts the rows of a range. Without more arguments it sorts by the first
    * column, ascending. Otherwise the arguments are pairs of a column number
-   * and TRUE for ascending or FALSE for descending.
+   * and TRUE for ascending or FALSE for descending. -1 also means descending,
+   * as it does in Excel.
    */
   SORT: eager(1, Infinity, (source, ...keys) => {
     const rows = grid(source);
@@ -106,7 +107,8 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
       const column = keys[index] === undefined ? 1 : integer(keys[index] ?? null);
       if (column < 1 || column > width(rows))
         fail("#VALUE!", "The column to sort by is not in the range");
-      const ascending = keys[index + 1] === undefined || boolean(keys[index + 1] ?? null);
+      const order = keys[index + 1] ?? null;
+      const ascending = keys[index + 1] === undefined || (order !== -1 && boolean(order));
       criteria.push({ col: column - 1, direction: ascending ? 1 : -1 });
     }
     return array(

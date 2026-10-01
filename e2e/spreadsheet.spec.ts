@@ -350,6 +350,71 @@ test("dates are typed, computed with, and stamped by a button", async ({ page })
   await expect(cell(page, "E1")).toHaveText("TRUE");
 });
 
+test("a page shows a chart and a text view of its tables, and they follow changes", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "apples");
+  await enter(page, "B1", "3");
+  await enter(page, "A2", "pears");
+  await enter(page, "B2", "5");
+
+  await page.getByRole("button", { name: "Add chart" }).click();
+  const chart = page.locator('[data-view="Chart 1"]');
+  await expect(chart).toContainText("Enter the cells to chart");
+  await chart.getByLabel("Chart data").fill("'Table 1'!A1:B2");
+  await chart.getByLabel("Chart data").press("Enter");
+  await expect(chart.locator(".chart__bar")).toHaveCount(2);
+
+  await chart.getByLabel("Chart type").selectOption("pie");
+  await expect(chart.locator(".chart__slice")).toHaveCount(2);
+  await expect(chart).toContainText("pears 63%");
+
+  await page.getByRole("button", { name: "Add text" }).click();
+  const text = page.locator('[data-view="Text 1"]');
+  await expect(text.getByRole("heading", { name: "New text view" })).toBeVisible();
+  await text.getByRole("button", { name: "Edit" }).click();
+  await text
+    .getByLabel("Text view source")
+    .fill(
+      [
+        "## Fruit",
+        "",
+        "We have **{{ SUM('Table 1'!B1:B2) }}** pieces.",
+        "",
+        "{% for name, count in 'Table 1'!A1:B2 %}",
+        "- {{ name }}: {{ count }}",
+        "{% end %}",
+      ].join("\n"),
+    );
+  // The view shows the result while the source is still being edited.
+  await expect(text.locator(".text-view")).toContainText("We have 8 pieces.");
+  await text.getByRole("button", { name: "Done" }).click();
+  await expect(text.getByRole("listitem")).toHaveText(["apples: 3", "pears: 5"]);
+
+  // Both follow a cell change.
+  await enter(page, "B1", "15");
+  await expect(text.locator(".text-view")).toContainText("We have 20 pieces.");
+  await expect(chart).toContainText("apples 75%");
+
+  // Both follow a table rename.
+  await page.locator('[data-table="Table 1"] h2').getByText("Table 1").dblclick();
+  await page.getByLabel("Table name").fill("Fruit");
+  await page.getByLabel("Table name").press("Enter");
+  await expect(chart.getByLabel("Chart data")).toHaveValue("Fruit!A1:B2");
+  await expect(text.locator(".text-view")).toContainText("We have 20 pieces.");
+
+  await page.reload();
+  await expect(chart.locator(".chart__slice")).toHaveCount(2);
+  await expect(chart.getByLabel("Chart type")).toHaveValue("pie");
+  await expect(text.getByRole("listitem")).toHaveText(["apples: 15", "pears: 5"]);
+
+  page.once("dialog", (dialog) => void dialog.accept());
+  await chart.getByRole("button", { name: "Delete chart" }).click();
+  await expect(chart).toHaveCount(0);
+  await expect(text).toBeVisible();
+});
+
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "=1/0");
