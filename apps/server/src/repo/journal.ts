@@ -1,5 +1,5 @@
 import { LIMITS, type CellInput, type StoredCell } from "@spreadsheet-app/shared";
-import { and, asc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { cells, pages, tables, views } from "../db/schema";
 import { notFound, unprocessable } from "../errors";
@@ -61,8 +61,80 @@ const viewColumns = {
   chartType: views.chartType,
 };
 
+/** A statement binds a few parameters per cell, and Postgres accepts 65535. */
 const BATCH = 5000;
-const CLEAR_BATCH = 256;
+/**
+ * Up to this many cells of a table are read by address. More are read as the
+ * rectangle that holds them: a condition per cell takes the database seconds
+ * to plan once there are thousands, and a change that large is a paste, a
+ * fill, or cells moved by a row or column, which fill their rectangle.
+ */
+const READ_BY_ADDRESS = 100;
+
+const addressKey = ({ row, col }: Pick<CellInput, "row" | "col">): string =>
+  `${String(row)}:${String(col)}`;
+
+/** The stored inputs of cells of one table, keyed by `row:col`. A cell that holds nothing has no entry. */
+export async function readInputs(
+  db: Database,
+  tableId: string,
+  addresses: readonly Pick<CellInput, "row" | "col">[],
+): Promise<{ get(address: Pick<CellInput, "row" | "col">): string }> {
+  const inputs = new Map<string, string>();
+  if (addresses.length > 0) {
+    const rows = addresses.map(({ row }) => row);
+    const cols = addresses.map(({ col }) => col);
+    // Spread arguments have a limit that a full table of addresses passes.
+    const least = (values: number[]): number => values.reduce((a, b) => Math.min(a, b));
+    const most = (values: number[]): number => values.reduce((a, b) => Math.max(a, b));
+    const wanted =
+      addresses.length <= READ_BY_ADDRESS
+        ? or(...addresses.map(({ row, col }) => and(eq(cells.row, row), eq(cells.col, col))))
+        : and(
+            gte(cells.row, least(rows)),
+            lte(cells.row, most(rows)),
+            gte(cells.col, least(cols)),
+            lte(cells.col, most(cols)),
+          );
+    const found = await db
+      .select({ row: cells.row, col: cells.col, input: cells.input })
+      .from(cells)
+      .where(and(eq(cells.tableId, tableId), wanted));
+    for (const cell of found) inputs.set(addressKey(cell), cell.input);
+  }
+  return { get: (address) => inputs.get(addressKey(address)) ?? "" };
+}
+
+/** Stores cell inputs, each cell given once. An empty input deletes the cell. */
+async function storeCells(
+  db: Database,
+  userId: string,
+  inputs: readonly StoredCell[],
+): Promise<void> {
+  const filled = inputs.filter((cell) => cell.input !== "");
+  for (let start = 0; start < filled.length; start += BATCH) {
+    await db
+      .insert(cells)
+      .values(filled.slice(start, start + BATCH).map((cell) => ({ ...cell, updatedBy: userId })))
+      .onConflictDoUpdate({
+        target: [cells.tableId, cells.row, cells.col],
+        set: {
+          input: sql`excluded.input`,
+          updatedBy: sql`excluded.updated_by`,
+          updatedAt: sql`now()`,
+        },
+      });
+  }
+  const cleared = inputs.filter((cell) => cell.input === "");
+  for (let start = 0; start < cleared.length; start += BATCH) {
+    const targets = cleared
+      .slice(start, start + BATCH)
+      .map((cell) =>
+        and(eq(cells.tableId, cell.tableId), eq(cells.row, cell.row), eq(cells.col, cell.col)),
+      );
+    await db.delete(cells).where(or(...targets));
+  }
+}
 
 /**
  * Writes spreadsheet content and remembers its first and final states for
@@ -227,92 +299,36 @@ export class ContentWriter {
   async setCells(inputs: readonly StoredCell[]): Promise<void> {
     const latest = [...new Map(inputs.map((cell) => [this.cellKey(cell), cell])).values()];
     for (const cell of latest) this.checkCellInput(cell.input);
-
-    for (let start = 0; start < latest.length; start += BATCH) {
-      const batch = latest.slice(start, start + BATCH);
-      const targets = batch.map((cell) =>
-        and(eq(cells.tableId, cell.tableId), eq(cells.row, cell.row), eq(cells.col, cell.col)),
-      );
-      const beforeRows = await this.db
-        .select({ tableId: cells.tableId, row: cells.row, col: cells.col, input: cells.input })
-        .from(cells)
-        .where(or(...targets));
-      const before = new Map(beforeRows.map((cell) => [this.cellKey(cell), cell.input]));
-      const filled = batch.filter((cell) => cell.input !== "");
-      for (let offset = 0; offset < filled.length; offset += BATCH) {
-        await this.db
-          .insert(cells)
-          .values(
-            filled
-              .slice(offset, offset + BATCH)
-              .map((cell) => ({ ...cell, updatedBy: this.userId })),
-          )
-          .onConflictDoUpdate({
-            target: [cells.tableId, cells.row, cells.col],
-            set: {
-              input: sql`excluded.input`,
-              updatedBy: sql`excluded.updated_by`,
-              updatedAt: sql`now()`,
-            },
-          });
-      }
-      const cleared = batch.filter((cell) => cell.input === "");
-      for (let offset = 0; offset < cleared.length; offset += BATCH) {
-        await this.db
-          .delete(cells)
-          .where(
-            or(
-              ...cleared
-                .slice(offset, offset + BATCH)
-                .map((cell) =>
-                  and(
-                    eq(cells.tableId, cell.tableId),
-                    eq(cells.row, cell.row),
-                    eq(cells.col, cell.col),
-                  ),
-                ),
-            ),
-          );
-      }
-      for (const cell of batch) {
-        this.recordCell(
-          cell.tableId,
-          cell.row,
-          cell.col,
-          before.get(this.cellKey(cell)) ?? "",
-          cell.input,
-        );
+    for (const [tableId, written] of Map.groupBy(latest, (cell) => cell.tableId)) {
+      const before = await readInputs(this.db, tableId, written);
+      await storeCells(this.db, this.userId, written);
+      for (const cell of written) {
+        this.recordCell(tableId, cell.row, cell.col, before.get(cell), cell.input);
       }
     }
   }
 
   /** Clears cells matching `where`, retaining their inputs for undo. */
   async clearCells(tableId: string, where: SQL): Promise<void> {
-    if (!this.tooLarge) {
-      let offset = 0;
-      let more = true;
-      while (more) {
-        const found = await this.db
-          .select({ row: cells.row, col: cells.col, input: cells.input })
-          .from(cells)
-          .where(and(eq(cells.tableId, tableId), where))
-          .orderBy(asc(cells.row), asc(cells.col))
-          .limit(CLEAR_BATCH)
-          .offset(offset);
-        if (found.length === 0) {
-          more = false;
-          continue;
-        }
-        let stopped = false;
-        for (const cell of found) {
-          if (this.recordCell(tableId, cell.row, cell.col, cell.input, "")) {
-            stopped = true;
-            break;
-          }
-        }
-        if (stopped) more = false;
-        else offset += found.length;
-      }
+    // Read in address order, a batch at a time, and no further once the change is too large to keep.
+    let last: { row: number; col: number } | undefined;
+    while (!this.tooLarge) {
+      const found = await this.db
+        .select({ row: cells.row, col: cells.col, input: cells.input })
+        .from(cells)
+        .where(
+          and(
+            eq(cells.tableId, tableId),
+            where,
+            last &&
+              or(gt(cells.row, last.row), and(eq(cells.row, last.row), gt(cells.col, last.col))),
+          ),
+        )
+        .orderBy(asc(cells.row), asc(cells.col))
+        .limit(BATCH);
+      for (const cell of found) this.recordCell(tableId, cell.row, cell.col, cell.input, "");
+      last = found.at(-1);
+      if (found.length < BATCH) break;
     }
     await this.db.delete(cells).where(and(eq(cells.tableId, tableId), where));
   }
@@ -375,8 +391,8 @@ export class ContentWriter {
     col: number,
     before: string,
     after: string,
-  ): boolean {
-    if (this.tooLarge) return true;
+  ): void {
+    if (this.tooLarge) return;
     const key = `${tableId}\u0000${String(row)}\u0000${String(col)}`;
     const previous = this.cellChanges.get(key);
     const original = previous ? previous.before : before;
@@ -389,7 +405,6 @@ export class ContentWriter {
       this.cellChanges.delete(key);
     }
     this.checkEstimatedSize();
-    return this.tooLarge;
   }
 
   private cellKey(cell: Pick<CellInput, "row" | "col"> & { tableId: string }): string {
@@ -542,51 +557,6 @@ export async function applyRecorded(
         },
       });
   }
-  await applyCells(db, userId, changed.cells);
+  await storeCells(db, userId, changed.cells);
   return changed;
-}
-
-async function applyCells(
-  db: Database,
-  userId: string,
-  inputs: readonly StoredCell[],
-): Promise<void> {
-  const latest = [
-    ...new Map(
-      inputs.map((cell) => [`${cell.tableId}:${String(cell.row)}:${String(cell.col)}`, cell]),
-    ).values(),
-  ];
-  for (let start = 0; start < latest.length; start += BATCH) {
-    const batch = latest.slice(start, start + BATCH);
-    const filled = batch.filter((cell) => cell.input !== "");
-    if (filled.length > 0) {
-      await db
-        .insert(cells)
-        .values(filled.map((cell) => ({ ...cell, updatedBy: userId })))
-        .onConflictDoUpdate({
-          target: [cells.tableId, cells.row, cells.col],
-          set: {
-            input: sql`excluded.input`,
-            updatedBy: sql`excluded.updated_by`,
-            updatedAt: sql`now()`,
-          },
-        });
-    }
-    const cleared = batch.filter((cell) => cell.input === "");
-    if (cleared.length > 0) {
-      await db
-        .delete(cells)
-        .where(
-          or(
-            ...cleared.map((cell) =>
-              and(
-                eq(cells.tableId, cell.tableId),
-                eq(cells.row, cell.row),
-                eq(cells.col, cell.col),
-              ),
-            ),
-          ),
-        );
-    }
-  }
 }

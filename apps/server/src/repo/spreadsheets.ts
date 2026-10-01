@@ -46,6 +46,7 @@ import {
   ContentWriter,
   type ChangedContent,
   type JournalData,
+  readInputs,
   UndoRefusal,
 } from "./journal";
 import {
@@ -1726,26 +1727,15 @@ export class SpreadsheetRepository {
         throw new UndoRefusal("This view has changed since this step");
       }
     }
-    for (const group of data.cells) {
-      for (let start = 0; start < group.changes.length; start += INSERT_BATCH) {
-        const changes = group.changes.slice(start, start + INSERT_BATCH);
-        const current = await db
-          .select({ row: cells.row, col: cells.col, input: cells.input })
-          .from(cells)
-          .where(
-            or(
-              ...changes.map(([row, col]) =>
-                and(eq(cells.tableId, group.tableId), eq(cells.row, row), eq(cells.col, col)),
-              ),
-            ),
-          );
-        const inputs = new Map(
-          current.map((cell) => [`${String(cell.row)}:${String(cell.col)}`, cell.input]),
-        );
-        for (const [row, col, before, after] of changes) {
-          if ((inputs.get(`${String(row)}:${String(col)}`) ?? "") !== expected(before, after)) {
-            throw new UndoRefusal("A cell has changed since this step");
-          }
+    for (const { tableId, changes } of data.cells) {
+      const inputs = await readInputs(
+        db,
+        tableId,
+        changes.map(([row, col]) => ({ row, col })),
+      );
+      for (const [row, col, before, after] of changes) {
+        if (inputs.get({ row, col }) !== expected(before, after)) {
+          throw new UndoRefusal("A cell has changed since this step");
         }
       }
     }
