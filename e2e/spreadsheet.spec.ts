@@ -275,6 +275,58 @@ test("typing a formula offers completions and shows what a function expects", as
   await expect(cell(page, "B3")).toHaveText("7");
 });
 
+test("a formula is filled down by dragging, and cells are copied and pasted", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await newSpreadsheet(page);
+  await enter(page, "A1", "1");
+  await enter(page, "A2", "2");
+  await enter(page, "A3", "3");
+  await enter(page, "B1", "=A1*10");
+
+  // Drag the fill handle of B1 down to B3.
+  await cell(page, "B1").click();
+  await cell(page, "B1").locator(".grid__fill-handle").hover();
+  await page.mouse.down();
+  await cell(page, "B2").hover();
+  await cell(page, "B3").hover();
+  await page.mouse.up();
+  await expect(cell(page, "B2")).toHaveText("20");
+  await expect(cell(page, "B3")).toHaveText("30");
+  await cell(page, "B3").click();
+  await expect(page.getByLabel("Formula")).toHaveValue("=A3*10");
+
+  // Select A1:B3 by dragging, copy it, and paste it at D1.
+  await cell(page, "A1").hover();
+  await page.mouse.down();
+  await cell(page, "B3").hover();
+  await page.mouse.up();
+  await page.keyboard.press("ControlOrMeta+C");
+  await cell(page, "D1").click();
+  await page.keyboard.press("ControlOrMeta+V");
+  await expect(cell(page, "D3")).toHaveText("3");
+  await expect(cell(page, "E3")).toHaveText("30");
+  await cell(page, "E3").click();
+  await expect(page.getByLabel("Formula")).toHaveValue("=D3*10");
+
+  // Shift+Down extends the selection, Ctrl+D fills it, and Delete clears it.
+  await enter(page, "G1", "=A1+1");
+  await cell(page, "G1").click();
+  await page.keyboard.press("Shift+ArrowDown");
+  await page.keyboard.press("Shift+ArrowDown");
+  await page.keyboard.press("ControlOrMeta+D");
+  await expect(cell(page, "G3")).toHaveText("4");
+  await page.keyboard.press("Delete");
+  await expect(cell(page, "G1")).toHaveText("");
+  await expect(cell(page, "G3")).toHaveText("");
+
+  await page.reload();
+  await expect(cell(page, "B3")).toHaveText("30");
+  await expect(cell(page, "E3")).toHaveText("30");
+});
+
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "=1/0");

@@ -5,6 +5,7 @@ import {
   inputsAfterEdit,
   inputsAfterRename,
   rewriteReferences,
+  translateInput,
   type Rename,
   type StructuralEdit,
 } from "./rewrite";
@@ -69,6 +70,49 @@ describe("rewriteReferences", () => {
 
   it("returns the input unchanged when no reference is replaced", () => {
     expect(rewriteReferences("= a1 + b2", renameTables)).toBe("= a1 + b2");
+  });
+});
+
+describe("translateInput", () => {
+  it.each([
+    ["=A1", 1, 0, "=A2"],
+    ["=A1", 0, 1, "=B1"],
+    ["=A1+B2", 2, 3, "=D3+E4"],
+    ["=B2", -1, -1, "=A1"],
+    ["=$A$1", 5, 5, "=$A$1"],
+    ["=$A1", 2, 2, "=$A3"],
+    ["=A$1", 2, 2, "=C$1"],
+    ["=SUM(A1:A3)", 0, 1, "=SUM(B1:B3)"],
+    ["=SUM($A$1:A3)", 1, 0, "=SUM($A$1:A4)"],
+    ["=SUM(A:A)", 3, 1, "=SUM(B:B)"],
+    ["=SUM(2:2)", 3, 1, "=SUM(5:5)"],
+    ["=SUM(A2:A)", 1, 1, "=SUM(B3:B)"],
+    ["=Sales!A1 * 'Page 2'!Costs!B2", 1, 1, "=Sales!B2 * 'Page 2'!Costs!C3"],
+    ['=IF(A1 > 0, "A1", a1)', 1, 0, '=IF(A2 > 0, "A1", A2)'],
+    ['=BUTTON("Add", EXECUTE(A1 + 1, A1))', 1, 0, '=BUTTON("Add", EXECUTE(A2 + 1, A2))'],
+    ["=A1(B1)", 1, 1, "=B2(C2)"],
+  ])("moves %s by %i rows and %i columns to %s", (input, rows, cols, expected) => {
+    expect(translateInput(input, rows, cols)).toBe(expected);
+  });
+
+  it.each([
+    ["=A1", -1, 0, "=#REF!"],
+    ["=A1 + B2", 0, -1, "=#REF! + A2"],
+    ["=SUM(A1:B2)", -1, 0, "=SUM(#REF!)"],
+    ["=SUM(B1:B3)", 0, -2, "=SUM(#REF!)"],
+  ])(
+    "writes #REF! where %s moved by %i, %i would leave the table",
+    (input, rows, cols, expected) => {
+      expect(translateInput(input, rows, cols)).toBe(expected);
+    },
+  );
+
+  it.each(["text", "42", "'=A1", "", "=A1 +"])("leaves %j as it is", (input) => {
+    expect(translateInput(input, 3, 3)).toBe(input);
+  });
+
+  it("returns the same input for no movement", () => {
+    expect(translateInput("= a1", 0, 0)).toBe("= a1");
   });
 });
 

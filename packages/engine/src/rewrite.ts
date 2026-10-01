@@ -38,6 +38,27 @@ export function rewriteReferences(
   return `=${text}`;
 }
 
+/**
+ * Rewrites a cell input for a cell some rows and columns away from where it
+ * was written, the way copying or filling a formula does. Each part of a
+ * reference moves by the same distance unless a `$` pins it. A reference
+ * pushed past the first row or column becomes `#REF!`.
+ */
+export function translateInput(input: string, rows: number, cols: number): string {
+  if (rows === 0 && cols === 0) return input;
+  const move = (cell: ReferenceCell): ReferenceCell | undefined => {
+    const row = cell.row === null || cell.rowAbsolute ? cell.row : cell.row + rows;
+    const col = cell.col === null || cell.colAbsolute ? cell.col : cell.col + cols;
+    return (row ?? 0) < 0 || (col ?? 0) < 0 ? undefined : { ...cell, row, col };
+  };
+  return rewriteReferences(input, (reference) => {
+    const start = move(reference.start);
+    const end = reference.end ? move(reference.end) : undefined;
+    if (!start || (reference.end && !end)) return "#REF!";
+    return end ? { ...reference, start, end } : { ...reference, start };
+  });
+}
+
 export type Rename =
   { kind: "page"; pageId: string; name: string } | { kind: "table"; tableId: string; name: string };
 

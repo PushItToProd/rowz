@@ -152,6 +152,120 @@ describe("setCell", () => {
   });
 });
 
+describe("setCells", () => {
+  it("shows and saves several cells of a table in one request", async () => {
+    const store = await open({ A1: "1" });
+    await store.setCells("t1", [
+      { row: 0, col: 0, input: "1" },
+      { row: 0, col: 1, input: "=A1+1" },
+      { row: 1, col: 0, input: "x" },
+    ]);
+    expect(store.valueOf(at("B1"))).toBe(2);
+    // A1 already held "1", so it is not sent.
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
+      { row: 0, col: 1, input: "=A1+1" },
+      { row: 1, col: 0, input: "x" },
+    ]);
+  });
+
+  it("puts every cell back when the save fails", async () => {
+    const store = await open({ A1: "old" });
+    server.setCells.mockRejectedValue(new Error("offline"));
+    await store.setCells("t1", [
+      { row: 0, col: 0, input: "new" },
+      { row: 0, col: 1, input: "also new" },
+    ]);
+    expect(store.inputOf(at("A1"))).toBe("old");
+    expect(store.inputOf(at("B1"))).toBe("");
+    expect(store.notice).toEqual({ kind: "error", text: "offline" });
+  });
+
+  it("splits a large change into requests the server accepts, and keeps what was saved if a later one fails", async () => {
+    const store = await open();
+    server.updateTable.mockResolvedValue({
+      table: { ...TABLE, rowCount: 1000, colCount: 3 },
+      cells: [],
+    });
+    await store.updateTable("t1", { rowCount: 1000 });
+    const writes = Array.from({ length: 1500 }, (_, index) => ({
+      row: index % 1000,
+      col: Math.floor(index / 1000),
+      input: String(index),
+    }));
+    server.setCells.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("too slow"));
+
+    await store.setCells("t1", writes);
+    expect(server.setCells.mock.calls.map(([, cells]) => cells.length)).toEqual([1000, 500]);
+    expect(store.inputOf({ tableId: "t1", row: 999, col: 0 })).toBe("999");
+    expect(store.inputOf({ tableId: "t1", row: 0, col: 1 })).toBe("");
+  });
+});
+
+describe("selection", () => {
+  it("is one cell until it is extended, and one cell again when another is selected", async () => {
+    const store = await open();
+    expect(store.selectedBlock).toBeNull();
+    store.selection = at("B2");
+    expect(store.selectedBlock).toEqual({ startRow: 1, startCol: 1, endRow: 1, endCol: 1 });
+
+    store.extendSelection({ row: 0, col: 2 });
+    expect(store.selectedBlock).toEqual({ startRow: 0, startCol: 1, endRow: 1, endCol: 2 });
+    store.extendSelection({ row: 1, col: 1 });
+    expect(store.selectionEnd).toBeNull();
+
+    store.extendSelection({ row: 3, col: 2 });
+    store.selection = at("A1");
+    expect(store.selectedBlock).toEqual({ startRow: 0, startCol: 0, endRow: 0, endCol: 0 });
+  });
+
+  it("copies shown values and pastes them back as the formulas they came from", async () => {
+    const store = await open({ A1: "2", B1: "=A1*2", A2: "10" });
+    store.selection = at("A1");
+    store.extendSelection({ row: 0, col: 1 });
+    const text = store.copySelection();
+    expect(text).toBe("2\t4");
+
+    store.selection = at("A3");
+    await store.paste(text);
+    expect(store.inputOf(at("B3"))).toBe("=A3*2");
+    expect(store.valueOf(at("B3"))).toBe(4);
+    expect(store.selectedBlock).toEqual({ startRow: 2, startCol: 0, endRow: 2, endCol: 1 });
+  });
+
+  it("pastes other text as typed, and says so when part of it cannot fit", async () => {
+    const store = await open();
+    const cols = Array.from({ length: 101 }, (_, index) => String(index)).join("\t");
+    server.updateTable.mockResolvedValue({ table: { ...TABLE, colCount: 100 }, cells: [] });
+    store.selection = at("A1");
+    await store.paste(cols);
+    expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
+      rowCount: 4,
+      colCount: 100,
+    });
+    expect(store.inputOf({ tableId: "t1", row: 0, col: 99 })).toBe("99");
+    expect(store.notice).toEqual({
+      kind: "error",
+      text: "Some pasted cells did not fit in the table",
+    });
+  });
+
+  it("does not paste when the table could not be grown", async () => {
+    const store = await open();
+    server.updateTable.mockRejectedValue(new Error("no"));
+    store.selection = at("A4");
+    await store.paste("a\nb");
+    expect(server.setCells).not.toHaveBeenCalled();
+  });
+
+  it("copies nothing and clears nothing without a selection", async () => {
+    const store = await open({ A1: "x" });
+    expect(store.copySelection()).toBe("");
+    await store.clearSelection();
+    await store.paste("y");
+    expect(server.setCells).not.toHaveBeenCalled();
+  });
+});
+
 describe("click", () => {
   const BUTTON = '=BUTTON("Sum", EXECUTE(SUM(A1,A2),A3))';
 

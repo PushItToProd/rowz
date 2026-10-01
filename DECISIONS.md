@@ -2,6 +2,28 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-09-30: Range selection, filling, and copy and paste
+
+**Decision.** The todo item was "dragging and bulk applying formulas". That needed a way to select several cells, so this adds:
+
+- **Range selection** by dragging, Shift+click, and Shift+arrows.
+- **A fill handle** on the last cell of the selection. Dragging it down, up, or across repeats the selection's cells as a pattern.
+- **Ctrl+D and Ctrl+R**, which copy the first row of the selection down or its first column across.
+- **Copy, cut, and paste**, and Delete over a range.
+
+**How formulas move.** A filled or pasted formula has each relative reference moved by the distance the formula moved. `$` pins a row or column. This is what gives the `$` markers their meaning; before this they were parsed and ignored.
+
+**Choices.**
+
+- **No series guessing.** Filling `1, 2` gives `1, 2, 1, 2`, not `3, 4`. Excel and Sheets extend number and date series. Use `=A1+1` and fill that instead. Worth adding later.
+- **Copy puts shown values on the clipboard**, so pasting into another app gives results, not formula text. The app remembers what it last copied, and pasting that same text back pastes the formulas.
+- **Paste grows the table** to fit, up to its size limit, and says so when part of the paste did not fit.
+- **Cut clears at once** and then behaves like copy. It does not wait for the paste, and the formulas' references move as with copy. Excel moves cut formulas without changing them.
+- **A fill or paste is one save** of all its cells, in requests of at most 1,000 cells.
+- Cell text can no longer be selected by dragging, because dragging selects cells.
+
+**To change.** `translateInput` in `packages/engine/src/rewrite.ts` moves a formula. `apps/web/src/formula/fill.ts` decides which cells a fill or paste writes.
+
 ## 2026-09-30: Formula autocompletion
 
 **Decision.** While a formula is typed, in a cell or in the formula bar, a list offers what could complete the word at the caret: function names, the tables of the cell's page, page names, and names the formula already uses (such as those bound by `LET`). Inside a function's parentheses, a hint shows the function's syntax and summary.

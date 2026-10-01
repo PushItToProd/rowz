@@ -110,7 +110,7 @@ Server tests run against PGlite in memory. Set `TEST_DATABASE_URL` to a Postgres
 - Live sync between sessions. Edits are saved over HTTP and the last write wins. Another session sees changes after a reload.
 - Sharing. The data model has workspaces and roles, and the server enforces them, but there is no way to invite someone.
 - Email delivery.
-- Copy and paste, fill handle, undo, cell formatting, column resizing, inserting or removing rows and columns, charts, import and export.
+- Undo, cell formatting, column resizing, charts, import and export.
 - A production build of the server and static serving of the web app. The server runs from TypeScript source through `tsx`.
 
 ## License

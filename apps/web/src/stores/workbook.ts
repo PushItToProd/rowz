@@ -2,15 +2,27 @@ import {
   cellKey,
   createWorkbook,
   formatAddress,
+  formatValue,
   Workbook,
+  type CellAddress,
   type CellId,
   type CellValue,
   type Scalar,
 } from "@spreadsheet-app/engine";
-import type { StructuralEditBody } from "@spreadsheet-app/shared";
+import { LIMITS, type CellInput, type StructuralEditBody } from "@spreadsheet-app/shared";
 import { defineStore } from "pinia";
-import { computed, reactive, ref, shallowRef, triggerRef } from "vue";
+import { computed, reactive, ref, shallowRef, triggerRef, watch } from "vue";
 import { api, type ClickResult, type PageRecord, type TableRecord } from "../api/client";
+import {
+  blockOf,
+  clearWrites,
+  fillWrites,
+  fromClipboardText,
+  inputsOf,
+  pasteWrites,
+  toClipboardText,
+  type Block,
+} from "../formula/fill";
 
 export interface Notice {
   kind: "success" | "error";
@@ -34,7 +46,18 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const spreadsheet = ref<{ id: string; name: string; role: string } | null>(null);
   const pages = ref<PageRecord[]>([]);
   const tables = ref<TableRecord[]>([]);
+  /** The selected cell: the one the keyboard edits and the formula bar shows. */
   const selection = ref<CellId | null>(null);
+  /** The far corner of a selected range, when more than one cell is selected. */
+  const selectionEnd = ref<CellAddress | null>(null);
+  // Selecting another cell selects just that cell.
+  watch(selection, () => (selectionEnd.value = null), { flush: "sync" });
+  /** The selected cells as a rectangle within the selected cell's table. */
+  const selectedBlock = computed<Block | null>(() =>
+    selection.value ? blockOf(selection.value, selectionEnd.value ?? selection.value) : null,
+  );
+  /** What was last copied here, to recognize it when it is pasted back. */
+  let copied: { text: string; rows: string[][]; from: CellAddress } | undefined;
   const notice = ref<Notice | null>(null);
   /** Keys of the button cells whose click is in flight. */
   const running = reactive(new Set<string>());
@@ -93,20 +116,120 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   /** Shows the new input at once and saves it. A failed save puts the old input back. */
   function setCell(id: CellId, input: string): Promise<void> {
-    const previous = engine.value.getInput(id);
-    if (previous === input) return Promise.resolve();
-    apply(id, input);
+    return setCells(id.tableId, [{ row: id.row, col: id.col, input }]);
+  }
+
+  /**
+   * Shows new inputs for cells of one table at once and saves them. Inputs
+   * that fail to save are put back as they were.
+   */
+  function setCells(tableId: string, writes: readonly CellInput[]): Promise<void> {
+    const changes = writes
+      .map((write) => ({ ...write, previous: engine.value.getInput({ tableId, ...write }) }))
+      .filter((change) => change.previous !== change.input);
+    if (changes.length === 0) return Promise.resolve();
+    for (const { row, col, input } of changes) apply({ tableId, row, col }, input);
 
     saves = saves.then(async () => {
+      let saved = 0;
       try {
-        await api.setCells(id.tableId, [{ row: id.row, col: id.col, input }]);
+        // The server takes a limited number of cells per request.
+        for (; saved < changes.length; saved += LIMITS.cellsPerRequest) {
+          const batch = changes.slice(saved, saved + LIMITS.cellsPerRequest);
+          await api.setCells(
+            tableId,
+            batch.map(({ row, col, input }) => ({ row, col, input })),
+          );
+        }
       } catch (cause) {
-        // A later edit to the same cell has its own save. Leave it alone.
-        if (engine.value.getInput(id) === input) apply(id, previous);
+        for (const { row, col, input, previous } of changes.slice(saved)) {
+          // A later edit to the same cell has its own save. Leave it alone.
+          if (engine.value.getInput({ tableId, row, col }) === input) {
+            apply({ tableId, row, col }, previous);
+          }
+        }
         fail(cause, "The change could not be saved");
       }
     });
     return saves;
+  }
+
+  /** Makes the selection a range from the selected cell to `address`. */
+  function extendSelection(address: CellAddress): void {
+    const anchor = selection.value;
+    if (!anchor) return;
+    const single = anchor.row === address.row && anchor.col === address.col;
+    selectionEnd.value = single ? null : { row: address.row, col: address.col };
+  }
+
+  /** Fills `target` with the pattern of the cells in `source`, moving formula references. */
+  function fill(tableId: string, source: Block, target: Block): Promise<void> {
+    const inputAt = (cell: CellAddress): string => engine.value.getInput({ tableId, ...cell });
+    return setCells(tableId, fillWrites(source, target, inputAt));
+  }
+
+  /** Empties the selected cells. */
+  function clearSelection(): Promise<void> {
+    const block = selectedBlock.value;
+    const tableId = selection.value?.tableId;
+    if (!block || tableId === undefined || !canEdit.value) return Promise.resolve();
+    return setCells(
+      tableId,
+      clearWrites(block, (cell) => engine.value.getInput({ tableId, ...cell })),
+    );
+  }
+
+  /**
+   * Remembers the selected cells for pasting and returns the text to put on
+   * the system clipboard: the values the cells show, which is what another
+   * app can use. Pasting that text back here pastes the formulas.
+   */
+  function copySelection(): string {
+    const block = selectedBlock.value;
+    const tableId = selection.value?.tableId;
+    if (!block || tableId === undefined) return "";
+    const shown = inputsOf(block, (cell) =>
+      formatValue(engine.value.getValue({ tableId, ...cell })),
+    );
+    const text = toClipboardText(shown);
+    copied = {
+      text,
+      rows: inputsOf(block, (cell) => engine.value.getInput({ tableId, ...cell })),
+      from: { row: block.startRow, col: block.startCol },
+    };
+    return text;
+  }
+
+  /**
+   * Pastes clipboard text with its top-left corner at the selected cell. The
+   * table grows to fit, up to its size limit.
+   */
+  async function paste(text: string): Promise<void> {
+    const at = selection.value;
+    const table = tables.value.find((candidate) => candidate.id === at?.tableId);
+    if (!at || !table || !canEdit.value) return;
+
+    // Text this app put on the clipboard stands for the cells it was copied from.
+    const own = copied?.text === text ? copied : undefined;
+    const writes = pasteWrites(own?.rows ?? fromClipboardText(text), at, own?.from);
+    if (writes.length === 0) return;
+    const rowCount = Math.min(LIMITS.tableRows, Math.max(...writes.map((write) => write.row + 1)));
+    const colCount = Math.min(LIMITS.tableCols, Math.max(...writes.map((write) => write.col + 1)));
+    if (rowCount > table.rowCount || colCount > table.colCount) {
+      const grown = await updateTable(table.id, {
+        rowCount: Math.max(rowCount, table.rowCount),
+        colCount: Math.max(colCount, table.colCount),
+      });
+      if (!grown) return;
+    }
+
+    const fitting = writes.filter((write) => write.row < rowCount && write.col < colCount);
+    await setCells(table.id, fitting);
+    // Leave what was pasted selected.
+    extendSelection({ row: rowCount - 1, col: colCount - 1 });
+    if (fitting.length < writes.length) {
+      notice.value = { kind: "error", text: "Some pasted cells did not fit in the table" };
+    }
   }
 
   /** Names a written cell, with its table when that is not the table the button is in. */
@@ -282,6 +405,14 @@ export const useWorkbookStore = defineStore("workbook", () => {
     pages,
     tables,
     selection,
+    selectionEnd,
+    selectedBlock,
+    extendSelection,
+    setCells,
+    fill,
+    clearSelection,
+    copySelection,
+    paste,
     notice,
     running,
     canEdit,

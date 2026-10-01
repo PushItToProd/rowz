@@ -71,6 +71,7 @@ function segments(text: string): { text: string; code: boolean }[] {
 
 const SECTIONS = [
   ["basics", "Typing into cells"],
+  ["filling", "Selecting, filling, and copying"],
   ["structure", "Pages and tables"],
   ["references", "References"],
   ["operators", "Operators"],
@@ -92,7 +93,10 @@ const KEYS = [
   ["Escape", "Stop editing and discard what was typed."],
   ["Tab, while a list of suggestions shows", "Complete the word with the highlighted suggestion."],
   ["Up or Down, while suggestions show", "Move the highlight. Enter then accepts it."],
-  ["Delete or Backspace", "Clear the selected cell."],
+  ["Delete or Backspace", "Clear the selected cells."],
+  ["Shift with an arrow key", "Select a range of cells."],
+  ["Ctrl+C, Ctrl+X, Ctrl+V", "Copy, cut, and paste the selected cells."],
+  ["Ctrl+D, Ctrl+R", "Copy the first row of the selection down, or its first column across."],
 ] as const;
 
 const REFERENCES = [
@@ -102,7 +106,10 @@ const REFERENCES = [
   ["2:2", "All of row 2. 2:5 is rows 2 to 5."],
   ["A2:A", "Column A from row 2 to the bottom of the table."],
   ["A1:4", "Rows 1 to 4, from column A to the last column of the table."],
-  ["$A$1", "The same cell as A1. The $ marks are accepted and have no effect yet."],
+  [
+    "$A$1",
+    "The same cell as A1. The $ marks keep it from moving when the formula is filled or pasted.",
+  ],
   ["Sales!A1", "Cell A1 of the table named Sales on the formula's own page."],
   ["'Table 2'!A1:A9", "A table whose name has a space needs single quotes."],
   ["'Page 2'!Sales!A1", "Cell A1 of the table Sales on the page named Page 2."],
@@ -183,6 +190,32 @@ const OPERATORS = [
           </tr>
         </tbody>
       </table>
+    </section>
+
+    <section id="filling">
+      <h2>Selecting, filling, and copying</h2>
+      <p>
+        Drag across cells, or hold Shift and click or press the arrow keys, to select a range. The
+        last cell of the selection has a small square at its corner. Drag that square down or across
+        to fill more cells with what the selection holds.
+      </p>
+      <ul>
+        <li>
+          Filling and pasting move a formula's references by the distance the formula moved.
+          <code>=A1*10</code> filled one row down becomes <code>=A2*10</code>.
+        </li>
+        <li>
+          A <code>$</code> pins the part of a reference that follows it.
+          <code>=A1*$B$1</code> filled down becomes <code>=A2*$B$1</code>, and
+          <code>=$A1</code> filled across stays <code>=$A1</code>.
+        </li>
+        <li>A selection of several cells repeats as a pattern when it is filled.</li>
+        <li>
+          Copying puts the values the cells show on the clipboard, which is what other apps can use.
+          Pasting them back here pastes the formulas. Text copied from another spreadsheet app is
+          pasted cell by cell, and the table grows to fit it.
+        </li>
+      </ul>
     </section>
 
     <section id="structure">

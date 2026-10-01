@@ -17,6 +17,13 @@ async function mountGrid(inputs: Record<string, string> = {}, role = "owner"): P
   wrapper = mount(GridView, { props: { table: TABLE }, attachTo: document.body });
 }
 
+/** Replaces the mounted grid with one over other cells, within one test. */
+async function mountGridAgain(inputs: Record<string, string>): Promise<void> {
+  wrapper.unmount();
+  setActivePinia(createPinia());
+  await mountGrid(inputs);
+}
+
 function cellAt(address: string) {
   return wrapper.get(`[data-cell="${address}"]`);
 }
@@ -270,6 +277,277 @@ describe("editing", () => {
     await select("A1");
     await press("c", { ctrlKey: true });
     expect(wrapper.find(".grid__editor").exists()).toBe(false);
+  });
+});
+
+describe("selecting a range", () => {
+  function rangeAddresses(): (string | undefined)[] {
+    return wrapper.findAll(".grid__cell--in-range").map((cell) => cell.attributes("data-cell"));
+  }
+
+  it("extends from the selected cell with Shift and the arrows, and shrinks back", async () => {
+    await mountGrid();
+    await select("B2");
+    await press("ArrowDown", { shiftKey: true });
+    await press("ArrowRight", { shiftKey: true });
+    expect(rangeAddresses()).toEqual(["B2", "C2", "B3", "C3"]);
+    expect(selectedAddress()).toBe("B2");
+
+    await press("ArrowUp", { shiftKey: true });
+    expect(rangeAddresses()).toEqual(["B2", "C2"]);
+    // Past the table's edge the range stops growing.
+    await press("ArrowRight", { shiftKey: true });
+    await press("ArrowRight", { shiftKey: true });
+    expect(rangeAddresses()).toEqual(["B2", "C2"]);
+  });
+
+  it("extends to a cell clicked with Shift, and to cells the mouse is dragged over", async () => {
+    await mountGrid();
+    await select("A1");
+    await cellAt("B3").trigger("mousedown", { shiftKey: true });
+    expect(rangeAddresses()).toHaveLength(6);
+    window.dispatchEvent(new MouseEvent("mouseup"));
+
+    await select("C1");
+    await cellAt("C2").trigger("mouseenter");
+    await cellAt("B4").trigger("mouseenter");
+    expect(rangeAddresses()).toEqual(["B1", "C1", "B2", "C2", "B3", "C3", "B4", "C4"]);
+    expect(selectedAddress()).toBe("C1");
+
+    // After the button is released, moving the mouse changes nothing.
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await cellAt("A1").trigger("mouseenter");
+    expect(rangeAddresses()).toHaveLength(8);
+  });
+
+  it("goes back to one cell when another cell is selected or the arrows move", async () => {
+    await mountGrid();
+    await select("A1");
+    await press("ArrowDown", { shiftKey: true });
+    await press("ArrowRight");
+    expect(rangeAddresses()).toEqual(["B1"]);
+    expect(selectedAddress()).toBe("B1");
+  });
+
+  it("selects the selected cell alone when it is clicked as part of a range", async () => {
+    await mountGrid();
+    await select("A1");
+    await press("ArrowDown", { shiftKey: true });
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await select("A1");
+    expect(rangeAddresses()).toEqual(["A1"]);
+  });
+
+  it("clears every cell of the range with Delete, in one save", async () => {
+    await mountGrid({ A1: "1", A2: "2", B1: "3", C3: "kept" });
+    await select("A1");
+    await cellAt("B2").trigger("mousedown", { shiftKey: true });
+    await press("Delete");
+    expect(["A1", "A2", "B1", "C3"].map((address) => cellAt(address).text())).toEqual([
+      "",
+      "",
+      "",
+      "kept",
+    ]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
+      { row: 0, col: 0, input: "" },
+      { row: 0, col: 1, input: "" },
+      { row: 1, col: 0, input: "" },
+    ]);
+  });
+
+  it("ignores the right mouse button", async () => {
+    await mountGrid();
+    await cellAt("B2").trigger("mousedown", { button: 2 });
+    expect(selectedAddress()).toBeUndefined();
+  });
+});
+
+describe("filling", () => {
+  async function selectRange(from: string, to: string): Promise<void> {
+    await select(from);
+    await cellAt(to).trigger("mousedown", { shiftKey: true });
+    window.dispatchEvent(new MouseEvent("mouseup"));
+  }
+
+  it("fills down from the handle, moving formula references, and leaves the filled cells selected", async () => {
+    await mountGrid({ A1: "1", A2: "2", A3: "3", B1: "=A1*10" });
+    await select("B1");
+    window.dispatchEvent(new MouseEvent("mouseup"));
+
+    await wrapper.get(".grid__fill-handle").trigger("mousedown");
+    await cellAt("B2").trigger("mouseenter");
+    await cellAt("B3").trigger("mouseenter");
+    expect(
+      wrapper.findAll(".grid__cell--fill-preview").map((cell) => cell.attributes("data-cell")),
+    ).toEqual(["B1", "B2", "B3"]);
+    // Nothing is written until the mouse is released.
+    expect(server.setCells).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await wrapper.vm.$nextTick();
+    expect(["B1", "B2", "B3"].map((address) => cellAt(address).text())).toEqual(["10", "20", "30"]);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
+      { row: 1, col: 1, input: "=A2*10" },
+      { row: 2, col: 1, input: "=A3*10" },
+    ]);
+    expect(wrapper.findAll(".grid__cell--in-range")).toHaveLength(3);
+    expect(wrapper.find(".grid__cell--fill-preview").exists()).toBe(false);
+  });
+
+  it("fills across when the handle is dragged sideways", async () => {
+    await mountGrid({ A1: "=A2+1", A2: "1", B2: "5", C2: "9" });
+    await select("A1");
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await wrapper.get(".grid__fill-handle").trigger("mousedown");
+    await cellAt("C1").trigger("mouseenter");
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await wrapper.vm.$nextTick();
+    expect(["A1", "B1", "C1"].map((address) => cellAt(address).text())).toEqual(["2", "6", "10"]);
+  });
+
+  it("writes nothing when the handle is released where it started", async () => {
+    await mountGrid({ A1: "1" });
+    await select("A1");
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await wrapper.get(".grid__fill-handle").trigger("mousedown");
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    expect(server.setCells).not.toHaveBeenCalled();
+  });
+
+  it("puts the handle on the last cell of a range", async () => {
+    await mountGrid();
+    await selectRange("A1", "B2");
+    expect(wrapper.findAll(".grid__fill-handle")).toHaveLength(1);
+    expect(cellAt("B2").find(".grid__fill-handle").exists()).toBe(true);
+  });
+
+  it("copies the first row down with Ctrl+D and the first column across with Ctrl+R", async () => {
+    await mountGrid({ A1: "=B1+1", B1: "5", B2: "6", B3: "7" });
+    await selectRange("A1", "A3");
+    await press("d", { ctrlKey: true });
+    expect(["A1", "A2", "A3"].map((address) => cellAt(address).text())).toEqual(["6", "7", "8"]);
+
+    await mountGridAgain({ A1: "x", A2: "y" });
+    await selectRange("A1", "C2");
+    await press("r", { ctrlKey: true });
+    expect(["B1", "C1", "B2", "C2"].map((address) => cellAt(address).text())).toEqual([
+      "x",
+      "x",
+      "y",
+      "y",
+    ]);
+  });
+
+  it("offers no handle and fills nothing for a viewer", async () => {
+    await mountGrid({ A1: "1" }, "viewer");
+    await selectRange("A1", "A3");
+    expect(wrapper.find(".grid__fill-handle").exists()).toBe(false);
+    await press("d", { ctrlKey: true });
+    await press("Delete");
+    expect(server.setCells).not.toHaveBeenCalled();
+  });
+});
+
+describe("copy and paste", () => {
+  /** Fires a clipboard event at the document, as the browser does when the grid has focus. */
+  function clipboard(
+    type: "copy" | "cut" | "paste",
+    text = "",
+  ): { text: string; prevented: boolean } {
+    const data = new Map<string, string>([["text/plain", text]]);
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.assign(event, {
+      clipboardData: {
+        getData: (format: string) => data.get(format) ?? "",
+        setData: (format: string, value: string) => data.set(format, value),
+      },
+    });
+    document.dispatchEvent(event);
+    return { text: data.get("text/plain") ?? "", prevented: event.defaultPrevented };
+  }
+
+  async function focusAndSelect(from: string, to = from): Promise<void> {
+    await select(from);
+    if (to !== from) await cellAt(to).trigger("mousedown", { shiftKey: true });
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    wrapper.get<HTMLElement>(".grid").element.focus();
+  }
+
+  it("copies the values the cells show, for other apps to use", async () => {
+    await mountGrid({ A1: "2", B1: "=A1*3", A2: "text" });
+    await focusAndSelect("A1", "B2");
+    expect(clipboard("copy")).toEqual({ text: "2\t6\ntext\t", prevented: true });
+  });
+
+  it("pastes its own copy as formulas, moved to the new place", async () => {
+    await mountGrid({ A1: "2", A2: "5", B1: "=A1*3" });
+    await focusAndSelect("B1");
+    const { text } = clipboard("copy");
+
+    await focusAndSelect("B2");
+    clipboard("paste", text);
+    await vi.waitFor(() => {
+      expect(cellAt("B2").text()).toBe("15");
+    });
+    expect(useWorkbookStore().inputOf(at("B2"))).toBe("=A2*3");
+  });
+
+  it("pastes text from another app as typed values, and selects what it pasted", async () => {
+    await mountGrid();
+    await focusAndSelect("B2");
+    clipboard("paste", "a\tb\r\n1\t=B2\r\n");
+    await vi.waitFor(() => {
+      expect(cellAt("C3").text()).toBe("a");
+    });
+    expect(["B2", "C2", "B3"].map((address) => cellAt(address).text())).toEqual(["a", "b", "1"]);
+    expect(wrapper.findAll(".grid__cell--in-range")).toHaveLength(4);
+  });
+
+  it("grows the table when what is pasted does not fit", async () => {
+    await mountGrid();
+    server.updateTable.mockResolvedValue({ table: { ...TABLE, rowCount: 6 }, cells: [] });
+    await focusAndSelect("C4");
+    clipboard("paste", "one\ntwo\nthree");
+    await vi.waitFor(() => {
+      expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
+        rowCount: 6,
+        colCount: 3,
+      });
+    });
+    await vi.waitFor(() => {
+      expect(server.setCells).toHaveBeenCalledOnce();
+    });
+  });
+
+  it("cuts by copying and then clearing", async () => {
+    await mountGrid({ A1: "moved" });
+    await focusAndSelect("A1");
+    expect(clipboard("cut").text).toBe("moved");
+    await wrapper.vm.$nextTick();
+    expect(cellAt("A1").text()).toBe("");
+  });
+
+  it("leaves the clipboard to the browser while a cell is being edited or the grid lacks focus", async () => {
+    await mountGrid({ A1: "x" });
+    await focusAndSelect("A1");
+    await press("y");
+    expect(clipboard("copy").prevented).toBe(false);
+    expect(clipboard("paste", "z").prevented).toBe(false);
+    await press("Escape");
+
+    wrapper.get<HTMLElement>(".grid").element.blur();
+    expect(clipboard("copy").prevented).toBe(false);
+    expect(clipboard("paste", "z").prevented).toBe(false);
+    expect(server.setCells).not.toHaveBeenCalled();
+  });
+
+  it("does not paste for a viewer", async () => {
+    await mountGrid({}, "viewer");
+    await focusAndSelect("A1");
+    clipboard("paste", "x");
+    await wrapper.vm.$nextTick();
+    expect(server.setCells).not.toHaveBeenCalled();
   });
 });
 

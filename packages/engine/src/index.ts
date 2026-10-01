@@ -32,6 +32,7 @@ export {
   inputsAfterEdit,
   inputsAfterRename,
   rewriteReferences,
+  translateInput,
   type Rename,
   type Replacement,
   type StructuralEdit,

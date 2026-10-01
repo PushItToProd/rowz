@@ -383,6 +383,8 @@ input.editable-name--editing {
 }
 
 .grid td {
+  /* Dragging across cells selects a range of them, not their text. */
+  user-select: none;
   /* Room for the pinned toolbar when a cell is scrolled into view. */
   scroll-margin-top: 150px;
   position: relative;
@@ -397,6 +399,27 @@ input.editable-name--editing {
 /* A cell showing a value that an array formula in another cell put there. */
 .grid__cell--filled {
   background: var(--accent-soft);
+}
+
+/* Every cell of a selected range. The selected cell itself also has the outline below. */
+.grid__cell--in-range {
+  box-shadow: inset 0 0 0 9999px rgb(47 91 234 / 10%);
+}
+
+/* The cells a fill in progress would cover. */
+.grid .grid__cell--fill-preview {
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+}
+
+.grid__fill-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+  cursor: crosshair;
 }
 
 .grid .grid__cell--selected {
