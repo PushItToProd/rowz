@@ -82,6 +82,31 @@ describe("CellView", () => {
     expect(wrapper.emitted("choose")).toEqual([[2]]);
   });
 
+  it("shows Markdown with its formatting, on one line", () => {
+    const wrapper = render({
+      kind: "markdown",
+      text: "**bold** and [a link](https://example.com)\n\n# not a heading",
+    });
+    expect(wrapper.get("strong").text()).toBe("bold");
+    expect(wrapper.get("a").attributes()).toMatchObject({
+      href: "https://example.com",
+      target: "_blank",
+      rel: "noopener noreferrer",
+    });
+    expect(wrapper.find("h1").exists()).toBe(false);
+    expect(wrapper.find("p").exists()).toBe(false);
+  });
+
+  it("shows HTML in Markdown as text, and makes no link out of a javascript: address", () => {
+    const wrapper = render({
+      kind: "markdown",
+      text: "<img src=x onerror=alert(1)> [x](javascript:alert(1))",
+    });
+    expect(wrapper.find("img").exists()).toBe(false);
+    expect(wrapper.find("a").exists()).toBe(false);
+    expect(wrapper.text()).toContain("<img src=x onerror=alert(1)>");
+  });
+
   it("names a chart, and says where it can be shown", () => {
     const wrapper = render({ kind: "chart", chart: "bar", rows: [["a", 1]], title: "" });
     expect(wrapper.text()).toBe("bar chart");

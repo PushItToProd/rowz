@@ -8,10 +8,12 @@ import {
   isDate,
   isError,
   isLambda,
+  isMarkdown,
   type CellValue,
   type Scalar,
 } from "@spreadsheet-app/engine";
 import { computed } from "vue";
+import { markdown } from "../markdown";
 
 const props = defineProps<{
   value: CellValue;
@@ -30,10 +32,15 @@ const kind = computed(() => {
   if (isAction(value)) return "action";
   if (isLambda(value)) return "function";
   if (isChart(value)) return "chart";
+  if (isMarkdown(value)) return "markdown";
   if (isError(value)) return "error";
   if (isDate(value)) return "date";
   return typeof value === "string" || value === null ? "text" : typeof value;
 });
+/** The HTML of a Markdown value. A cell is one line, so only formatting within a line applies. */
+const formatted = computed(() =>
+  isMarkdown(props.value) ? markdown.renderInline(props.value.text) : "",
+);
 const hint = computed(() => (isError(props.value) ? props.value.message : undefined));
 
 const control = computed(() => (isControl(props.value) ? props.value : undefined));
@@ -102,5 +109,12 @@ function onChoice(event: Event): void {
   >
     {{ text }}
   </span>
+  <!-- eslint-disable vue/no-v-html -- markdown-it output with raw HTML disabled -->
+  <span
+    v-else-if="kind === 'markdown'"
+    class="cell-value cell-value--markdown"
+    v-html="formatted"
+  ></span>
+  <!-- eslint-enable vue/no-v-html -->
   <span v-else class="cell-value" :class="`cell-value--${kind}`" :title="hint">{{ text }}</span>
 </template>

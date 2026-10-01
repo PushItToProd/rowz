@@ -1,13 +1,17 @@
 import { isDate } from "../dates";
-import { isError } from "../values";
+import { isError, isRange } from "../values";
 import { lazy, scalar } from "./arguments";
 import type { FunctionDefinition } from "./registry";
 
-/** Defines a check on a single value. An error is a value here, not a failure of the call. */
+/**
+ * Defines a check on a single value. An error is a value here, not a failure
+ * of the call, and so is a button, a chart, or anything else a cell can hold.
+ * Only a range is refused.
+ */
 function check(test: (value: unknown) => boolean): FunctionDefinition {
   return lazy(1, 1, ([argument]) => {
     const value = argument?.() ?? null;
-    return isError(value) ? test(value) : test(scalar(value));
+    return isRange(value) ? test(scalar(value)) : test(value);
   });
 }
 

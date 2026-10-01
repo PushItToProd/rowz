@@ -945,3 +945,10 @@ select.cell-control--dropdown {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+
+.cell-value--markdown code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--canvas);
+  font-size: 0.9em;
+}

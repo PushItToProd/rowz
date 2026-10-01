@@ -1,19 +1,15 @@
 <script setup lang="ts">
 import { formatValue, renderTemplate } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import MarkdownIt from "markdown-it";
 import { computed, ref, watch } from "vue";
 import type { ViewRecord } from "../api/client";
+import { markdown } from "../markdown";
 import { useWorkbookStore } from "../stores/workbook";
 import ChartView from "./ChartView.vue";
 import EditableName from "./EditableName.vue";
 
 const props = defineProps<{ view: ViewRecord }>();
 const store = useWorkbookStore();
-
-// Raw HTML in the source is shown as text, not run: a view can be written by
-// one person and read by another. markdown-it also refuses unsafe link targets.
-const markdown = new MarkdownIt({ html: false, linkify: true });
 
 const editing = ref(false);
 const draft = ref(props.view.source);

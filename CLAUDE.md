@@ -21,7 +21,7 @@ TypeScript is pinned to 6.0 because typescript-eslint and vue-tsc need its JavaS
 - **The client names a cell; the server decides the effect.** The click endpoint takes an address and derives the action from stored inputs. The input endpoint for checkboxes and dropdowns also takes the chosen value, which the server checks against what the stored formula allows.
 - **Cells store inputs only.** Computed values are never persisted.
 - **Anything that holds a formula is rewritten with the cells.** A rename or a row or column edit rewrites cell inputs (`rewrite.ts`) and the sources of charts and text views (`views.ts`) in one transaction, and the server returns both for the client to apply. A new place to keep formulas needs the same treatment.
-- **A text view never renders HTML it was given.** `TextCard.vue` runs markdown-it with `html: false`, and the template engine escapes Markdown in the values it writes in, so neither a view's author nor a cell's content can inject markup.
+- **Markdown never renders HTML it was given.** Text views and `MARKDOWN` cells share the renderer in `apps/web/src/markdown.ts`, which has `html: false`. The template engine escapes Markdown in the values it writes in, except a value made with `MARKDOWN`, so neither a view's author nor a cell's content can inject markup.
 - **Page and table names are unique within their parent, ignoring case,** because formulas resolve them that way. The database enforces it with unique indexes on `lower(name)`.
 - Packages export TypeScript source. There is no build step between packages.
 

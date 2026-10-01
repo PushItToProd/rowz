@@ -121,6 +121,16 @@ describe("TextCard", () => {
     ).toEqual(["https://example.com"]);
   });
 
+  it("formats Markdown that a formula made on purpose", async () => {
+    await render(`{{ MARKDOWN("**" & 'Table 1'!A1 & "**") }} and {{ "**plain**" }}`);
+    expect(
+      shown()
+        .findAll("strong")
+        .map((found) => found.text()),
+    ).toEqual(["apples"]);
+    expect(shown().text()).toBe("apples and **plain**");
+  });
+
   it("does not let a cell's text become Markdown", async () => {
     await render("{{ 'Table 1'!C1 }}");
     await useWorkbookStore().setCell(at("C1"), "[x](https://example.com) **bold**");

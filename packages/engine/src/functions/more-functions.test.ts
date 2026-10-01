@@ -363,6 +363,9 @@ describe("more math", () => {
 describe("more text", () => {
   it.each<[string, CellValue]>([
     ['=CONCAT("a", 1, TRUE)', "a1TRUE"],
+    ['=ISTEXT(MARKDOWN("**x**"))', false],
+    ['=ISNONTEXT(BUTTON("Go", EXECUTE(1, A1)))', true],
+    ["=ISBLANK(PIE_CHART(A1:A3))", false],
     ['=JOIN("-", A1:A3)', "1-2-3"],
     ['=JOIN(", ", "a", "", "b")', "a, , b"],
     ['=PROPER("ada LOVELACE")', "Ada Lovelace"],
@@ -388,6 +391,8 @@ describe("more text", () => {
 
   it.each([
     ['=SPLIT("abc", "")', "#VALUE!"],
+    ['=MARKDOWN("a") & "b"', "#VALUE!"],
+    ["=MARKDOWN(1/0)", "#DIV/0!"],
     ["=CHAR(0)", "#VALUE!"],
     ["=CHAR(1114112)", "#VALUE!"],
     ['=CODE("")', "#VALUE!"],
@@ -450,5 +455,15 @@ describe("more lookups and information", () => {
     ["=ROW(Missing!A1)", "#REF!"],
   ])("%s is %s", (formula, code) => {
     expectError(formula, code, cells);
+  });
+});
+
+describe("MARKDOWN", () => {
+  it("gives a value that holds the text to format, and shows as that text", () => {
+    expect(evaluateFormula('=MARKDOWN("**" & A1 & "**")', { A1: "hi" })).toEqual({
+      kind: "markdown",
+      text: "**hi**",
+    });
+    expect(evaluateFormula("=MARKDOWN(12)")).toEqual({ kind: "markdown", text: "12" });
   });
 });

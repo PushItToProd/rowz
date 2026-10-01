@@ -49,6 +49,7 @@ export {
   isControl,
   isError,
   isLambda,
+  isMarkdown,
   isFormulaInput,
   literalInput,
   type ActionValue,

@@ -5,6 +5,7 @@ import {
   formatValue,
   isChart,
   isError,
+  isMarkdown,
   isRange,
   isScalar,
   toBoolean,
@@ -309,7 +310,9 @@ export function renderNodes(
     const rows = rowsOf(value);
     const [[single = null] = []] = rows;
     if (rows.length <= 1 && (rows[0]?.length ?? 0) <= 1) {
-      if (!isChart(single)) markdown += escapeMarkdown(formatValue(single));
+      // Markdown made by a formula is meant to be formatted, so it goes in as written.
+      if (isMarkdown(single)) markdown += single.text;
+      else if (!isChart(single)) markdown += escapeMarkdown(formatValue(single));
       else {
         flush();
         blocks.push({ type: "chart", chart: single });

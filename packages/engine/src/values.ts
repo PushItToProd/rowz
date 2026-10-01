@@ -85,8 +85,21 @@ export interface ChartValue {
   title: string;
 }
 
+/** Text to show with its Markdown formatting applied, such as bold and links. */
+export interface MarkdownValue {
+  kind: "markdown";
+  text: string;
+}
+
 export type CellValue =
-  Scalar | ErrorValue | ActionValue | ButtonValue | LambdaValue | ControlValue | ChartValue;
+  | Scalar
+  | ErrorValue
+  | ActionValue
+  | ButtonValue
+  | LambdaValue
+  | ControlValue
+  | ChartValue
+  | MarkdownValue;
 
 /** Several values as rows of cells: what a range reference reads, or an array a function made. */
 export interface RangeValue {
@@ -130,6 +143,10 @@ export function isControl(value: unknown): value is ControlValue {
 
 export function isChart(value: unknown): value is ChartValue {
   return hasKind(value, "chart");
+}
+
+export function isMarkdown(value: unknown): value is MarkdownValue {
+  return hasKind(value, "markdown");
 }
 
 export function isRange(value: unknown): value is RangeValue {
@@ -223,6 +240,7 @@ export function formatValue(value: CellValue): string {
   if (isLambda(value)) return `LAMBDA(${value.params.join(", ")})`;
   if (isControl(value)) return value.control === "checkbox" ? value.label : toText(value.value);
   if (isChart(value)) return value.title === "" ? `${value.chart} chart` : value.title;
+  if (isMarkdown(value)) return value.text;
   return toText(value);
 }
 

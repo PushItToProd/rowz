@@ -1135,6 +1135,14 @@ const ENTRIES: readonly FunctionDoc[] = [
       "Selects, filters, groups, and sorts the rows of a range with a query written like SQL. Columns are named by letter, counting from the first column of the range, or by their header. `headers` is how many rows at the top are headings.",
     example: 'QUERY(A1:B3, "select B where A > 1 order by A desc")',
   },
+  {
+    name: "MARKDOWN",
+    category: "Text",
+    syntax: "MARKDOWN(text)",
+    summary:
+      "Shows text with Markdown formatting: `**bold**`, `*italic*`, `` `code` ``, `~~struck~~`, and `[a link](https://example.com)`. A cell shows one line. A text view shows the formatting too.",
+    example: 'MARKDOWN("**" & B1 & "** costs " & A1)',
+  },
 ];
 
 /**

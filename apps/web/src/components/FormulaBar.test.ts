@@ -104,15 +104,15 @@ describe("FormulaBar", () => {
     const wrapper = await render({ A1: "2" }, "owner", true);
     await select(wrapper, "A1");
     await field(wrapper).trigger("focus");
-    await field(wrapper).setValue("=ma");
+    await field(wrapper).setValue("=roundu");
     const labels = [...document.querySelectorAll('.formula-assist [role="option"]')].map(
       (option) => option.querySelector(".formula-assist__label")?.textContent,
     );
-    expect(labels).toEqual(["MAP", "MATCH", "MAX", "MAXIFS"]);
-
+    expect(labels).toEqual(["ROUNDUP"]);
+    await field(wrapper).setValue("=round");
     await field(wrapper).trigger("keydown", { key: "ArrowDown" });
     await field(wrapper).trigger("keydown", { key: "Tab" });
-    expect(field(wrapper).element.value).toBe("=MATCH(");
+    expect(field(wrapper).element.value).toBe("=ROUNDDOWN(");
     expect(server.setCells).not.toHaveBeenCalled();
 
     await field(wrapper).trigger("blur");

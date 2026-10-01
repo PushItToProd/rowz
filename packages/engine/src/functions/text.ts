@@ -111,6 +111,8 @@ export const textFunctions: Record<string, FunctionDefinition> = {
     return target === "" ? text(value) : text(value).replaceAll(target, text(replacement));
   }),
   REPT: eager(2, 2, (value, times) => text(value).repeat(count(times, "The count"))),
+  /** Text that a cell or a text view shows with its Markdown formatting applied. */
+  MARKDOWN: eager(1, 1, (value) => ({ kind: "markdown", text: text(value) })),
   /** Writes a number or date as text in a chosen format. Text and TRUE or FALSE are returned as they are. */
   TEXT: eager(2, 2, (value, format) => {
     const given = scalar(value);
