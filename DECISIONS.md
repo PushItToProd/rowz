@@ -1,6 +1,6 @@
 # Decisions
 
-Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
+Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
 ## 2026-10-01: Fixes from a code review
 
