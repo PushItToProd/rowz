@@ -107,8 +107,6 @@ export interface VersionRecord {
 
 /** A version is kept when a change is made this long after the last one was. */
 const VERSION_INTERVAL_MS = 10 * 60_000;
-/** The versions kept for one spreadsheet. Older ones are dropped. */
-export const MAX_VERSIONS = 50;
 /** A request that writes this many cells, as a paste or an import does, keeps a version first. */
 const BULK_WRITE_CELLS = 20;
 
@@ -427,7 +425,7 @@ export class SpreadsheetRepository {
       .from(versions)
       .where(eq(versions.spreadsheetId, spreadsheetId))
       .orderBy(desc(versions.createdAt))
-      .offset(MAX_VERSIONS);
+      .offset(LIMITS.versions);
     if (stale.length > 0) {
       await db.delete(versions).where(
         inArray(

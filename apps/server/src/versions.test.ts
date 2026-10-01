@@ -1,8 +1,8 @@
+import { LIMITS } from "@spreadsheet-app/shared";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PageRecord, Snapshot, SpreadsheetSummary, TableRecord, VersionRecord } from "./app";
 import { versions } from "./db/schema";
-import { MAX_VERSIONS } from "./repo/spreadsheets";
 import {
   cellsBody,
   createSpreadsheet,
@@ -157,7 +157,7 @@ describe("keeping versions", () => {
   it("drops the oldest versions past the limit", async () => {
     const { id, table, history } = await start();
     const [first] = await history();
-    const padding = Array.from({ length: MAX_VERSIONS }, (_, index) => ({
+    const padding = Array.from({ length: LIMITS.versions }, (_, index) => ({
       spreadsheetId: id,
       reason: `filler ${String(index)}`,
       data: { format: "spreadsheet-app" as const, version: 1 as const, name: "x", pages: [] },
@@ -166,10 +166,10 @@ describe("keeping versions", () => {
     await server.db.insert(versions).values(padding);
     await user.json("POST", `/tables/${table.id}/edits`, { axis: "row", kind: "delete", index: 0 });
     const kept = await history();
-    expect(kept).toHaveLength(MAX_VERSIONS);
+    expect(kept).toHaveLength(LIMITS.versions);
     expect(kept[0]?.reason).toBe("Before deleting row 1 of Table 1");
     expect(kept.map((version) => version.id)).toContain(first!.id);
-    expect(reasons(kept)).not.toContain(`filler ${String(MAX_VERSIONS - 1)}`);
+    expect(reasons(kept)).not.toContain(`filler ${String(LIMITS.versions - 1)}`);
   });
 });
 

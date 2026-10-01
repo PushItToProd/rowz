@@ -6,6 +6,7 @@ import FormulaBar from "../components/FormulaBar.vue";
 import PageTabs from "../components/PageTabs.vue";
 import ChartCard from "../components/ChartCard.vue";
 import FormatBar from "../components/FormatBar.vue";
+import HistoryPanel from "../components/HistoryPanel.vue";
 import { download, fileName } from "../files/download";
 import TableCard from "../components/TableCard.vue";
 import TextCard from "../components/TextCard.vue";
@@ -23,6 +24,20 @@ function exportFile(): void {
   if (file)
     download(fileName(file.name, "json"), JSON.stringify(file, null, 1), "application/json");
 }
+
+const historyOpen = ref(false);
+
+/** Reads the spreadsheet again after a version was restored. Its pages are new, so the first one opens. */
+async function reload(): Promise<void> {
+  await store.load(props.spreadsheetId);
+  store.notice = { kind: "success", text: "The version was restored" };
+}
+
+async function openCopy(spreadsheetId: string): Promise<void> {
+  historyOpen.value = false;
+  await router.push({ name: "editor", params: { spreadsheetId } });
+}
+
 const loaded = computed(() => store.spreadsheet?.id === props.spreadsheetId);
 const page = computed(() => store.pages.find((candidate) => candidate.id === props.pageId));
 /** The tables, charts, and text views of the page, in the order they sit on it. */
@@ -96,9 +111,10 @@ watch(
           />
         </h1>
         <span v-if="loaded && !store.canEdit" class="badge">View only</span>
-        <button v-if="loaded" type="button" class="editor__export" @click="exportFile">
-          Export
+        <button v-if="loaded" type="button" class="editor__export" @click="historyOpen = true">
+          History
         </button>
+        <button v-if="loaded" type="button" @click="exportFile">Export</button>
         <!-- A new tab, so reading about a formula does not take the user away from the sheet. -->
         <RouterLink :to="{ name: 'help' }" target="_blank" class="editor__help">Help</RouterLink>
       </header>
@@ -144,6 +160,15 @@ watch(
         <button type="button" @click="store.addView(page.id, 'text')">Add text</button>
       </div>
     </main>
+
+    <HistoryPanel
+      v-if="historyOpen && loaded"
+      :spreadsheet-id="spreadsheetId"
+      :can-restore="store.canEdit"
+      @close="historyOpen = false"
+      @restored="reload"
+      @copied="openCopy"
+    />
 
     <div
       v-if="store.notice"

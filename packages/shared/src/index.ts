@@ -9,6 +9,8 @@ export const LIMITS = {
   tableCols: 100,
   /** Characters in a chart's formula or a text view's template. */
   viewSourceLength: 50_000,
+  /** Kept versions of one spreadsheet. Older ones are dropped. */
+  versions: 50,
 } as const;
 
 export const DEFAULT_TABLE_SIZE = { rowCount: 20, colCount: 8 } as const;

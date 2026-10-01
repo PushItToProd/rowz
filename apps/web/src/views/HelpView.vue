@@ -89,6 +89,7 @@ const SECTIONS = [
   ["actions", "Buttons and actions"],
   ["controls", "Checkboxes and dropdowns"],
   ["formats", "Formats"],
+  ["history", "History"],
   ["files", "Files"],
   ["charts", "Charts"],
   ["text-views", "Text views"],
@@ -772,6 +773,31 @@ const OPERATORS = [
           For a formatted value as text inside a formula, use
           <code>TEXT(A1, "#,##0.00")</code>.
         </li>
+      </ul>
+    </section>
+
+    <section id="history">
+      <h2>History</h2>
+      <p>
+        The app keeps versions of a spreadsheet as it changes. <strong>History</strong>, at the top
+        of a spreadsheet, lists them.
+      </p>
+      <ul>
+        <li>
+          A version is kept before anything is deleted: a row, a column, a table, a chart, a text
+          view, or a page. One is also kept before a paste or an import that changes many cells, and
+          every ten minutes while the spreadsheet is being changed.
+        </li>
+        <li>
+          <strong>Restore</strong> puts the whole spreadsheet back as the version has it. What the
+          spreadsheet held is kept as a version first, so a restore can be undone by restoring that
+          one.
+        </li>
+        <li>
+          <strong>Open a copy</strong> makes a new spreadsheet of the version and leaves this one
+          alone. Use it to look at an old version, or to take one table from it.
+        </li>
+        <li>The newest {{ LIMITS.versions }} versions are kept.</li>
       </ul>
     </section>
 

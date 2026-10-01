@@ -75,6 +75,10 @@ It supports `select`, `where`, `group by`, `having`, `pivot`, `order by`, `limit
 
 The toolbar under the formula bar gives the selected cells bold, italic, an alignment, a number format, a text color, or a fill color. Formats are stored per table as rules over ranges, so a whole column is one rule.
 
+### History
+
+The server keeps versions of a spreadsheet: before anything is deleted, before a change to many cells at once, and every ten minutes while it is edited. **History** in the editor restores a version or opens it as a new spreadsheet.
+
 ### Files
 
 **Export** in the editor saves a spreadsheet as a JSON file holding its pages, tables, charts, text views, and cell inputs. **Import** on the spreadsheet list creates a spreadsheet from one. The format is the `spreadsheetFile` schema in `packages/shared/src/index.ts`. It identifies things by name and order, with no ids.
@@ -160,7 +164,8 @@ Server tests run against PGlite in memory. Set `TEST_DATABASE_URL` to a Postgres
 - Live sync between sessions. Edits are saved over HTTP and the last write wins. Another session sees changes after a reload.
 - Sharing. The data model has workspaces and roles, and the server enforces them, but there is no way to invite someone.
 - Email delivery.
-- Undo, column resizing.
+- Undo of single edits with Ctrl+Z. The History panel restores whole versions.
+- Column resizing.
 - A production build of the server and static serving of the web app. The server runs from TypeScript source through `tsx`.
 
 ## License

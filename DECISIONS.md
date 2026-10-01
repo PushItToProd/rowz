@@ -2,6 +2,34 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: Version history
+
+**Decision.** The todo item read "undo and redo (persistent version history)". I built the persistent history: the server keeps whole-spreadsheet versions, and a History panel restores one or opens it as a copy. Ctrl+Z for single edits is not built and stays in the todo file.
+
+**When a version is kept.**
+
+- Before a change that cannot be taken back by hand: deleting a row, column, table, page, chart, or text view; making a table smaller; removing column names; turning a column into a formula column; naming columns from the first row.
+- Before a request that writes 20 or more cells, which is what a paste, a fill, or a CSV import sends.
+- After a change that arrives more than ten minutes after the last version. This one holds the spreadsheet as that change left it.
+- Before a restore, so a restore can be undone.
+
+A version is skipped when nothing changed since the last one.
+
+**Choices.**
+
+- **A version is the whole spreadsheet in the export file format,** stored as JSON in a `versions` table. The alternative was a log of changes that could be replayed backward. Whole snapshots are simple to make correct, restore is the import code path, and a version can be opened as a copy for free. The cost is size: each version is as large as the spreadsheet.
+- **The newest 50 versions are kept** per spreadsheet. With versions only at deletions and ten-minute intervals, that is several hours of active work or a long tail of occasional edits.
+- **Restore replaces everything,** including the spreadsheet's name. Pages and tables get new ids, so the editor reloads. To take one table from an old version, open the version as a copy.
+- **A button click does not keep a version,** although an action can clear cells. A counter button would otherwise make a version on every click. The ten-minute rule still applies.
+- **Viewers can list versions and open copies,** which land in their own workspace. Only editors can restore.
+
+**Risks.**
+
+- A spreadsheet near the size limits (100,000 cells) stores up to 50 copies of itself. If that matters, the next step is to store versions compressed, or as differences.
+- Version timestamps use the database clock at insert, not the transaction's start time. The rule "nothing changed since the last version" depends on that ordering, and the comment on the `versions` table says so.
+
+**To change.** `keepVersion`, `saveVersion`, and `touch` in `apps/server/src/repo/spreadsheets.ts`.
+
 ## 2026-10-01: Cell formatting
 
 **Decision.** Cells can be bold, italic, aligned, colored (text and fill), and given a number format. A toolbar under the formula bar applies a format to the selection.

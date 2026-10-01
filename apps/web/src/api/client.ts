@@ -6,6 +6,7 @@ import type {
   Snapshot,
   SpreadsheetSummary,
   TableRecord,
+  VersionRecord,
   ViewRecord,
 } from "@spreadsheet-app/server";
 import type {
@@ -29,6 +30,7 @@ export type { ClickResult, PageRecord, Rewritten, Snapshot, TableRecord, ViewRec
 export type ControlInput = string | number | boolean | null;
 
 /** `updatedAt` arrives as an ISO string: JSON has no date type. */
+export type VersionListItem = Omit<VersionRecord, "createdAt"> & { createdAt: string };
 export type SpreadsheetListItem = Omit<SpreadsheetSummary, "updatedAt"> & { updatedAt: string };
 
 /** A response with an error status. `message` is written for the person using the app. */
@@ -97,6 +99,26 @@ export const api = {
 
   getSnapshot: (spreadsheetId: string): Promise<Snapshot> =>
     body(routes.spreadsheets[":spreadsheetId"].$get({ param: { spreadsheetId } })),
+
+  /** The kept versions of a spreadsheet, newest first. */
+  listVersions: (spreadsheetId: string): Promise<VersionListItem[]> =>
+    body(routes.spreadsheets[":spreadsheetId"].versions.$get({ param: { spreadsheetId } })),
+
+  /** Puts a spreadsheet back as a kept version has it. */
+  restoreVersion: (spreadsheetId: string, versionId: string): Promise<void> =>
+    done(
+      routes.spreadsheets[":spreadsheetId"].versions[":versionId"].restore.$post({
+        param: { spreadsheetId, versionId },
+      }),
+    ),
+
+  /** Makes a new spreadsheet of a kept version. */
+  copyVersion: (spreadsheetId: string, versionId: string): Promise<SpreadsheetListItem> =>
+    body(
+      routes.spreadsheets[":spreadsheetId"].versions[":versionId"].copy.$post({
+        param: { spreadsheetId, versionId },
+      }),
+    ),
 
   renameSpreadsheet: (spreadsheetId: string, name: string): Promise<void> =>
     done(

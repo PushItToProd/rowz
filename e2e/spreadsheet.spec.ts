@@ -617,6 +617,40 @@ test("cells are formatted from the toolbar, and the formats follow their cells",
   await expect(cell(page, "B2")).toHaveText("1234.5");
 });
 
+test("a deleted row is brought back from the history, and a version opens as a copy", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "keep me");
+  await enter(page, "A2", "and me");
+  await cell(page, "A1").click();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "Delete row" }).click();
+  await expect(cell(page, "A1")).toHaveText("and me");
+
+  await page.getByRole("button", { name: "History" }).click();
+  const history = page.getByRole("dialog", { name: "History" });
+  const version = history
+    .getByRole("listitem")
+    .filter({ hasText: "Before deleting row 1 of Table 1" });
+  await expect(version).toBeVisible();
+
+  page.once("dialog", (dialog) => void dialog.accept());
+  await version.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByRole("status")).toHaveText(/The version was restored/);
+  await expect(cell(page, "A1")).toHaveText("keep me");
+  await expect(cell(page, "A2")).toHaveText("and me");
+  // Restoring kept what it replaced, so the restore can be undone too.
+  await expect(history.getByRole("listitem").first()).toContainText(
+    "Before restoring an earlier version",
+  );
+
+  await history.getByRole("listitem").first().getByRole("button", { name: "Open a copy" }).click();
+  await expect(history).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Untitled spreadsheet (copy)");
+  await expect(cell(page, "A1")).toHaveText("and me");
+});
+
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "=1/0");
