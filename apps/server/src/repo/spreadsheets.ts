@@ -38,7 +38,7 @@ import {
 } from "@spreadsheet-app/shared";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, asc, count, desc, eq, gte, gt, inArray, or, sql, sum } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, gt, inArray, notInArray, or, sql, sum } from "drizzle-orm";
 import { noteChange, noteJournaled, requestContext } from "../changes";
 import type { Database } from "../db/client";
 import {
@@ -1586,32 +1586,36 @@ export class SpreadsheetRepository {
       .from(journal)
       .where(group)
       .orderBy(direction === "undo" ? desc(journal.seq) : asc(journal.seq));
-    const newestSequence = Math.max(...entries.map((entry) => entry.seq));
+    const own = entries.map((entry) => entry.seq);
 
     try {
-      const later = await tx
-        .select({ rewrites: journal.rewrites, undone: journal.undone })
+      // Changes in effect that came after any part of the step. The requests
+      // of one step are separate changes, so another tab's can fall between them.
+      const others = await tx
+        .select({ seq: journal.seq, rewrites: journal.rewrites })
         .from(journal)
         .where(
           and(
             eq(journal.spreadsheetId, spreadsheetId),
-            gt(journal.seq, newestSequence),
+            gt(journal.seq, Math.min(...own)),
+            notInArray(journal.seq, own),
             eq(journal.undone, false),
           ),
         );
-      const structural = entries.some(
-        (entry) =>
+      for (const entry of entries) {
+        const later = others.filter((other) => other.seq > entry.seq);
+        const structural =
           entry.rewrites ||
           (entry.data !== null &&
             [...entry.data.pages, ...entry.data.tables, ...entry.data.views].some(
               ({ before, after }) => before === null || after === null,
-            )),
-      );
-      if (structural && later.length > 0) {
-        throw new UndoRefusal("A later change prevents undoing this structural change");
-      }
-      if (later.some((entry) => entry.rewrites)) {
-        throw new UndoRefusal("A later structural change prevents undoing this change");
+            ));
+        if (structural && later.length > 0) {
+          throw new UndoRefusal("A later change prevents undoing this structural change");
+        }
+        if (later.some((other) => other.rewrites)) {
+          throw new UndoRefusal("A later structural change prevents undoing this change");
+        }
       }
 
       const changed = await tx.transaction(async (writes) => {

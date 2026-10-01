@@ -559,6 +559,32 @@ describe("refused history operations", () => {
     });
   });
 
+  it("refuses a step when a reference rewrite came between its requests", async () => {
+    const fixture = await fresh();
+    const first = withClientId(owner);
+    const second = withClientId(owner);
+    const step = { [STEP_ID_HEADER]: randomUUID() };
+    const cells = `/tables/${fixture.tableId}/cells`;
+    await first.request("PUT", cells, cellsBody({ A1: "one" }), step);
+    // Below the cells of the step, so every one of them still holds what the step wrote.
+    await second.request("POST", `/tables/${fixture.tableId}/edits`, {
+      axis: "row",
+      kind: "insert",
+      index: 5,
+    });
+    await first.request("PUT", cells, cellsBody({ B1: "two" }), step);
+
+    expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
+      outcome: "refused",
+      error: "A later structural change prevents undoing this change",
+      undoable: false,
+    });
+    expect((await snapshot(owner, fixture.id)).cells.map((cell) => cell.input)).toEqual([
+      "one",
+      "two",
+    ]);
+  });
+
   it("refuses undo of a structural change after a later active write", async () => {
     const fixture = await fresh();
     const first = withClientId(owner);
