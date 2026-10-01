@@ -1,0 +1,445 @@
+:root {
+  --ink: #1d2433;
+  --muted: #667085;
+  --line: #d9dee7;
+  --surface: #ffffff;
+  --canvas: #f4f6fa;
+  --accent: #2f5bea;
+  --accent-soft: #e8eeff;
+  --danger: #c0362c;
+  --danger-soft: #fdecea;
+  --success-soft: #e7f6ec;
+  --radius: 6px;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 1rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+button.primary,
+.cell-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+button.danger {
+  color: var(--danger);
+}
+
+input {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+.notice {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+}
+
+.notice--error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.notice--success {
+  background: var(--success-soft);
+}
+
+.notice--floating {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  max-width: 420px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
+}
+
+.notice--floating button {
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+}
+
+/* Sign in and sign up */
+
+.auth {
+  width: 340px;
+  margin: 12vh auto 0;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.auth form {
+  display: grid;
+  gap: 14px;
+  margin: 20px 0 16px;
+}
+
+.auth label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.auth input {
+  color: var(--ink);
+}
+
+/* Spreadsheet list */
+
+.list {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+}
+
+.list__header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.list__header h1 {
+  flex: 1;
+}
+
+.list__user,
+.list__empty,
+.list__items time {
+  color: var(--muted);
+}
+
+.list__items {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.list__items li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+}
+
+.list__items li + li {
+  border-top: 1px solid var(--line);
+}
+
+.list__items a {
+  flex: 1;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+/* Editor */
+
+/* The name, formula bar, and page tabs stay in view while tables scroll under them. */
+.editor__chrome {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.editor__header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.editor__back {
+  text-decoration: none;
+}
+
+.editor__loading,
+.editor__empty {
+  padding: 16px;
+  color: var(--muted);
+}
+
+/* One column no wider than the window: a wide table scrolls inside its card, not the page. */
+.editor__page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  justify-items: start;
+  padding: 16px;
+}
+
+.editable-name {
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: text;
+}
+
+.editable-name:hover:not(.editable-name--locked) {
+  border-color: var(--line);
+}
+
+.editable-name--locked {
+  cursor: default;
+}
+
+input.editable-name--editing {
+  width: 16em;
+  border-color: var(--accent);
+  font-weight: inherit;
+}
+
+.formula-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.formula-bar__cell {
+  min-width: 9em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.formula-bar__input {
+  flex: 1;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.page-tabs {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+  padding: 8px 16px 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.page-tabs__tab {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.page-tabs__tab--active {
+  margin-bottom: -1px;
+  border-color: var(--line);
+  background: var(--canvas);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.page-tabs__delete {
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+}
+
+.page-tabs__add {
+  margin: 0 0 6px 8px;
+}
+
+.table-card {
+  max-width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.table-card__header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.table-card__actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Grid */
+
+.grid {
+  max-width: 100%;
+  overflow: auto;
+}
+
+.grid table {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.grid th,
+.grid td {
+  height: 30px;
+  border: 1px solid var(--line);
+}
+
+.grid th {
+  min-width: 36px;
+  padding: 0 8px;
+  background: var(--canvas);
+  color: var(--muted);
+  font-weight: 500;
+  user-select: none;
+}
+
+.grid td {
+  /* Room for the pinned toolbar when a cell is scrolled into view. */
+  scroll-margin-top: 150px;
+  position: relative;
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
+  padding: 0;
+  overflow: hidden;
+  cursor: cell;
+}
+
+.grid .grid__cell--selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.grid__editor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  padding: 0 6px;
+  border: none;
+  border-radius: 0;
+  outline: none;
+  background: var(--surface);
+}
+
+.cell-value {
+  display: block;
+  padding: 0 6px;
+  overflow: hidden;
+  line-height: 28px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-value--number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-value--boolean {
+  text-align: center;
+}
+
+.cell-value--error {
+  color: var(--danger);
+}
+
+.cell-value--action {
+  color: var(--muted);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+.cell-button {
+  display: block;
+  width: calc(100% - 8px);
+  margin: 3px 4px;
+  padding: 2px 6px;
+  overflow: hidden;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

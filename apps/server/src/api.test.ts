@@ -1,0 +1,332 @@
+import { DEFAULT_TABLE_SIZE, LIMITS } from "@spreadsheet-app/shared";
+import { inArray } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { PageRecord, Snapshot, SpreadsheetSummary, TableRecord } from "./app";
+import { spreadsheets, workspaceMembers } from "./db/schema";
+import {
+  cellsBody,
+  createSpreadsheet,
+  startTestServer,
+  storedInputs,
+  type TestServer,
+  type TestUser,
+} from "./testing";
+
+const UNKNOWN_ID = "00000000-0000-4000-8000-000000000000";
+
+let server: TestServer;
+let user: TestUser;
+beforeAll(async () => {
+  server = await startTestServer();
+  user = await server.signUp();
+});
+afterAll(() => server.close());
+
+/** The first page and table of a new spreadsheet. */
+function first(snapshot: Snapshot): { page: PageRecord; table: TableRecord } {
+  return { page: snapshot.pages[0]!, table: snapshot.tables[0]! };
+}
+
+describe("spreadsheets", () => {
+  it("creates a spreadsheet with one page holding one empty table", async () => {
+    const snapshot = await createSpreadsheet(user, "  Budget  ");
+    expect(snapshot).toMatchObject({ name: "Budget", role: "owner", cells: [] });
+    expect(snapshot.pages).toEqual([{ id: expect.any(String), name: "Page 1", position: 0 }]);
+    expect(snapshot.tables).toEqual([
+      {
+        id: expect.any(String),
+        pageId: snapshot.pages[0]!.id,
+        name: "Table 1",
+        position: 0,
+        ...DEFAULT_TABLE_SIZE,
+      },
+    ]);
+  });
+
+  it("lists the user's spreadsheets, most recently changed first", async () => {
+    const lister = await server.signUp();
+    const older = await createSpreadsheet(lister, "Older");
+    const newer = await createSpreadsheet(lister, "Newer");
+    const names = async (): Promise<string[]> =>
+      (await lister.json<SpreadsheetSummary[]>("GET", "/spreadsheets")).map((item) => item.name);
+
+    expect(await names()).toEqual(["Newer", "Older"]);
+    await lister.json("PUT", `/tables/${first(older).table.id}/cells`, cellsBody({ A1: "1" }), 204);
+    expect(await names()).toEqual(["Older", "Newer"]);
+    expect(newer.id).not.toBe(older.id);
+  });
+
+  it("puts all of a user's spreadsheets in one workspace, even when created at once", async () => {
+    const creator = await server.signUp();
+    const created = await Promise.all([
+      createSpreadsheet(creator, "One"),
+      createSpreadsheet(creator, "Two"),
+      createSpreadsheet(creator, "Three"),
+    ]);
+    const rows = await server.db
+      .select({ workspaceId: spreadsheets.workspaceId })
+      .from(spreadsheets)
+      .where(
+        inArray(
+          spreadsheets.id,
+          created.map((snapshot) => snapshot.id),
+        ),
+      );
+    expect(new Set(rows.map((row) => row.workspaceId)).size).toBe(1);
+    const memberships = await server.db
+      .select()
+      .from(workspaceMembers)
+      .where(inArray(workspaceMembers.userId, [creator.userId]));
+    expect(memberships).toMatchObject([{ role: "owner" }]);
+  });
+
+  it("renames a spreadsheet", async () => {
+    const { id } = await createSpreadsheet(user);
+    await user.json("PATCH", `/spreadsheets/${id}`, { name: "Renamed" }, 204);
+    expect(await user.json("GET", `/spreadsheets/${id}`)).toMatchObject({ name: "Renamed" });
+  });
+
+  it("deletes a spreadsheet", async () => {
+    const { id } = await createSpreadsheet(user);
+    await user.json("DELETE", `/spreadsheets/${id}`, undefined, 204);
+    await user.json("GET", `/spreadsheets/${id}`, undefined, 404);
+  });
+
+  it.each([{ name: "" }, { name: "   " }, { name: "x".repeat(LIMITS.nameLength + 1) }, {}])(
+    "rejects the name in %j",
+    async (body) => {
+      const response = await user.json("POST", "/spreadsheets", body, 400);
+      expect(response).toMatchObject({ error: { code: "invalid_request" } });
+    },
+  );
+
+  it("answers 400 for an id that is not a UUID and 404 for one that does not exist", async () => {
+    await user.json("GET", "/spreadsheets/not-a-uuid", undefined, 400);
+    expect(await user.json("GET", `/spreadsheets/${UNKNOWN_ID}`, undefined, 404)).toEqual({
+      error: { code: "not_found", message: "Spreadsheet not found" },
+    });
+    await user.json("PATCH", `/pages/${UNKNOWN_ID}`, { name: "x" }, 404);
+    await user.json("DELETE", `/tables/${UNKNOWN_ID}`, undefined, 404);
+  });
+});
+
+describe("pages", () => {
+  it("creates a page with the next free name and one table", async () => {
+    const { id } = await createSpreadsheet(user);
+    const created = await user.json<{ page: PageRecord; table: TableRecord }>(
+      "POST",
+      `/spreadsheets/${id}/pages`,
+      {},
+      201,
+    );
+    expect(created.page).toMatchObject({ name: "Page 2", position: 1 });
+    expect(created.table).toMatchObject({ name: "Table 1", pageId: created.page.id });
+
+    const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${id}`);
+    expect(snapshot.pages.map((page) => page.name)).toEqual(["Page 1", "Page 2"]);
+    expect(snapshot.tables).toHaveLength(2);
+  });
+
+  it("skips default names that are taken", async () => {
+    const { id } = await createSpreadsheet(user);
+    await user.json("POST", `/spreadsheets/${id}/pages`, { name: "page 2" }, 201);
+    const created = await user.json<{ page: PageRecord }>(
+      "POST",
+      `/spreadsheets/${id}/pages`,
+      {},
+      201,
+    );
+    expect(created.page.name).toBe("Page 3");
+  });
+
+  it("refuses a page name already used in the spreadsheet, ignoring case", async () => {
+    const { id } = await createSpreadsheet(user);
+    expect(await user.json("POST", `/spreadsheets/${id}/pages`, { name: "PAGE 1" }, 409)).toEqual({
+      error: { code: "conflict", message: "A page named PAGE 1 already exists" },
+    });
+    const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${id}`);
+    expect(snapshot.pages).toHaveLength(1);
+  });
+
+  it("renames a page, and refuses a name another page has", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { page } = await user.json<{ page: PageRecord }>(
+      "POST",
+      `/spreadsheets/${snapshot.id}/pages`,
+      { name: "Data" },
+      201,
+    );
+    await user.json("PATCH", `/pages/${page.id}`, { name: "Archive" }, 204);
+    await user.json("PATCH", `/pages/${page.id}`, { name: "page 1" }, 409);
+    const after = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
+    expect(after.pages.map((item) => item.name)).toEqual(["Page 1", "Archive"]);
+  });
+
+  it("deletes a page with its tables and cells", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const created = await user.json<{ page: PageRecord; table: TableRecord }>(
+      "POST",
+      `/spreadsheets/${snapshot.id}/pages`,
+      {},
+      201,
+    );
+    await user.json("PUT", `/tables/${created.table.id}/cells`, cellsBody({ A1: "gone" }), 204);
+
+    await user.json("DELETE", `/pages/${created.page.id}`, undefined, 204);
+    const after = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
+    expect(after.pages).toHaveLength(1);
+    expect(after.tables).toHaveLength(1);
+    expect(after.cells).toEqual([]);
+  });
+
+  it("refuses to delete the last page", async () => {
+    const snapshot = await createSpreadsheet(user);
+    expect(await user.json("DELETE", `/pages/${first(snapshot).page.id}`, undefined, 409)).toEqual({
+      error: { code: "conflict", message: "A spreadsheet needs at least one page" },
+    });
+  });
+});
+
+describe("tables", () => {
+  it("creates a table with the next free name", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const table = await user.json<TableRecord>(
+      "POST",
+      `/pages/${first(snapshot).page.id}/tables`,
+      {},
+      201,
+    );
+    expect(table).toMatchObject({ name: "Table 2", position: 1, ...DEFAULT_TABLE_SIZE });
+  });
+
+  it("refuses a table name already used on the page, and allows it on another page", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const pageId = first(snapshot).page.id;
+    await user.json("POST", `/pages/${pageId}/tables`, { name: "table 1" }, 409);
+
+    const other = await user.json<{ page: PageRecord }>(
+      "POST",
+      `/spreadsheets/${snapshot.id}/pages`,
+      {},
+      201,
+    );
+    await user.json("POST", `/pages/${other.page.id}/tables`, { name: "Sales" }, 201);
+    await user.json("POST", `/pages/${pageId}/tables`, { name: "Sales" }, 201);
+  });
+
+  it("renames a table, and refuses a name another table on the page has", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { page, table } = first(snapshot);
+    await user.json("POST", `/pages/${page.id}/tables`, { name: "Sales" }, 201);
+
+    expect(await user.json("PATCH", `/tables/${table.id}`, { name: "Costs" })).toMatchObject({
+      name: "Costs",
+    });
+    expect(await user.json("PATCH", `/tables/${table.id}`, { name: "SALES" }, 409)).toEqual({
+      error: { code: "conflict", message: "A table named SALES already exists" },
+    });
+  });
+
+  it("resizes a table and deletes the cells that no longer fit", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { table } = first(snapshot);
+    await user.json(
+      "PUT",
+      `/tables/${table.id}/cells`,
+      cellsBody({ A1: "keep", C1: "col gone", A5: "row gone", B2: "keep too" }),
+      204,
+    );
+
+    const resized = await user.json("PATCH", `/tables/${table.id}`, { rowCount: 4, colCount: 2 });
+    expect(resized).toMatchObject({ rowCount: 4, colCount: 2, name: "Table 1" });
+    expect(await storedInputs(user, snapshot.id, table.id)).toEqual({
+      "0:0": "keep",
+      "1:1": "keep too",
+    });
+
+    await user.json("PATCH", `/tables/${table.id}`, { rowCount: 30 });
+    expect(await storedInputs(user, snapshot.id, table.id)).toHaveProperty("0:0", "keep");
+  });
+
+  it.each([
+    {},
+    { rowCount: 0 },
+    { rowCount: 1.5 },
+    { rowCount: LIMITS.tableRows + 1 },
+    { colCount: LIMITS.tableCols + 1 },
+    { name: "" },
+  ])("rejects the table change %j", async (body) => {
+    const snapshot = await createSpreadsheet(user);
+    await user.json("PATCH", `/tables/${first(snapshot).table.id}`, body, 400);
+  });
+
+  it("deletes a table with its cells", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { table } = first(snapshot);
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "gone" }), 204);
+    await user.json("DELETE", `/tables/${table.id}`, undefined, 204);
+    const after = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
+    expect(after.tables).toEqual([]);
+    expect(after.cells).toEqual([]);
+  });
+});
+
+describe("cells", () => {
+  it("stores, overwrites, and clears cell inputs", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { table } = first(snapshot);
+    const path = `/tables/${table.id}/cells`;
+
+    await user.json("PUT", path, cellsBody({ A1: "1", B1: "=A1+1", C1: "text" }), 204);
+    expect(await storedInputs(user, snapshot.id, table.id)).toEqual({
+      "0:0": "1",
+      "0:1": "=A1+1",
+      "0:2": "text",
+    });
+
+    await user.json("PUT", path, cellsBody({ A1: "2", C1: "", D1: "" }), 204);
+    expect(await storedInputs(user, snapshot.id, table.id)).toEqual({ "0:0": "2", "0:1": "=A1+1" });
+  });
+
+  it("keeps the last entry when a request names a cell more than once", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { table } = first(snapshot);
+    const cells = [
+      { row: 0, col: 0, input: "first" },
+      { row: 0, col: 0, input: "second" },
+      { row: 1, col: 0, input: "kept" },
+      { row: 1, col: 0, input: "" },
+    ];
+    await user.json("PUT", `/tables/${table.id}/cells`, { cells }, 204);
+    expect(await storedInputs(user, snapshot.id, table.id)).toEqual({ "0:0": "second" });
+  });
+
+  it("refuses a cell outside the table and stores none of the request", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { table } = first(snapshot);
+    const body = cellsBody({ A1: "inside", I1: "outside" });
+    expect(await user.json("PUT", `/tables/${table.id}/cells`, body, 422)).toEqual({
+      error: { code: "cell_out_of_bounds", message: "I1 is outside the table Table 1" },
+    });
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A21: "outside" }), 422);
+    expect(await storedInputs(user, snapshot.id, table.id)).toEqual({});
+  });
+
+  it.each([
+    { cells: [] },
+    { cells: [{ row: -1, col: 0, input: "x" }] },
+    { cells: [{ row: 0.5, col: 0, input: "x" }] },
+    { cells: [{ row: 0, col: 0 }] },
+    { cells: [{ row: 0, col: 0, input: "x".repeat(LIMITS.inputLength + 1) }] },
+    {
+      cells: Array.from({ length: LIMITS.cellsPerRequest + 1 }, () => ({
+        row: 0,
+        col: 0,
+        input: "x",
+      })),
+    },
+  ])("rejects a malformed cell request", async (body) => {
+    const snapshot = await createSpreadsheet(user);
+    await user.json("PUT", `/tables/${first(snapshot).table.id}/cells`, body, 400);
+  });
+});

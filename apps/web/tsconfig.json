@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    // The API client's types come from the server's source, which uses Node types.
+    "types": ["node", "vite/client"],
+    "jsx": "preserve"
+  },
+  "include": ["src", "*.config.ts"]
+}

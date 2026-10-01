@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.data/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.env
+.env.local
+.playwright-mcp/

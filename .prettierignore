@@ -1,0 +1,13 @@
+pnpm-lock.yaml
+dist/
+coverage/
+.data/
+.claude/
+test-results/
+playwright-report/
+apps/server/drizzle/
+LICENSE
+.mcp.json
+.vscode
+.idea
+.playwright-mcp/
