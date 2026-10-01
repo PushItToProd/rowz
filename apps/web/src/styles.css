@@ -129,6 +129,14 @@ input {
   background: transparent;
 }
 
+/* The app's name, on the pages that show it */
+
+.brand {
+  color: var(--accent);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
 /* Sign in and sign up */
 
 .auth {
@@ -138,6 +146,10 @@ input {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface);
+}
+
+.auth .brand {
+  margin: 0 0 16px;
 }
 
 .auth form {

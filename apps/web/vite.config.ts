@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { appName } from "@spreadsheet-app/shared";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig, loadEnv } from "vite";
@@ -14,6 +15,9 @@ export default defineConfig(({ mode }) => {
   const remote = !LOCAL_HOSTS.has(baseUrl.hostname);
 
   return {
+    // `APP_NAME` has no `VITE_` prefix because the API server reads it too, so Vite
+    // would not hand it to the app. `index.html` reads this definition as well.
+    define: { "import.meta.env.VITE_APP_NAME": JSON.stringify(appName(env)) },
     plugins: [
       vue(),
       // A self-signed certificate. Browsers offer `crypto.randomUUID` and other

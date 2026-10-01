@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { APP_NAME } from "../appName";
+import { usePageTitle } from "../pageTitle";
 import { useSessionStore } from "../stores/session";
 
 const props = defineProps<{ mode: "login" | "signup" }>();
@@ -17,6 +19,8 @@ const submitting = ref(false);
 const confirming = ref<string | null>(null);
 
 const isSignup = computed(() => props.mode === "signup");
+const heading = computed(() => (isSignup.value ? "Create an account" : "Sign in"));
+usePageTitle(heading);
 const MIN_PASSWORD_LENGTH = 8;
 
 async function submit(): Promise<void> {
@@ -41,7 +45,8 @@ async function submit(): Promise<void> {
 
 <template>
   <main class="auth">
-    <h1>{{ isSignup ? "Create an account" : "Sign in" }}</h1>
+    <p class="brand">{{ APP_NAME }}</p>
+    <h1>{{ heading }}</h1>
     <form @submit.prevent="submit">
       <label v-if="isSignup">
         Name

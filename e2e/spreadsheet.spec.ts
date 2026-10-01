@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { APP_NAME } from "./appName";
 
 const PASSWORD = "correct horse battery staple";
 
@@ -768,6 +769,23 @@ test("the help page documents formulas, with or without an account", async ({ pa
   await expect(help.getByRole("heading", { name: "Buttons and actions" })).toBeVisible();
   // The editor is still open in the first tab.
   await expect(cell(page, "A1")).toBeVisible();
+});
+
+test("the browser tab names what is open, then the app", async ({ page }) => {
+  await page.goto("/help");
+  await expect(page).toHaveTitle(`Help | ${APP_NAME}`);
+
+  await signUp(page);
+  await expect(page).toHaveTitle(`Spreadsheets | ${APP_NAME}`);
+  await expect(page.getByText(APP_NAME, { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "New spreadsheet" }).click();
+  await expect(page).toHaveTitle(`Untitled spreadsheet | ${APP_NAME}`);
+
+  await page.getByRole("heading", { level: 1 }).getByText("Untitled spreadsheet").dblclick();
+  await page.getByLabel("Spreadsheet name").fill("My budget");
+  await page.getByLabel("Spreadsheet name").press("Enter");
+  await expect(page).toHaveTitle(`My budget | ${APP_NAME}`);
 });
 
 test.describe("on a phone", () => {

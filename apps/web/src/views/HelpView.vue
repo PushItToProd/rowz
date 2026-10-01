@@ -15,6 +15,9 @@ import {
   type FunctionDoc,
 } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
+import { usePageTitle } from "../pageTitle";
+
+usePageTitle("Help");
 
 const TABLE_ID = "examples";
 // Below the cells the examples read, so an example never overwrites its own input.

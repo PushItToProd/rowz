@@ -1,3 +1,5 @@
+import { appName } from "@spreadsheet-app/shared";
+
 export interface Config {
   port: number;
   /** A `postgres://` URL, or a directory for the embedded PGlite database. */
@@ -42,7 +44,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   return {
     ...(webRoot === "" ? {} : { webRoot }),
     ...(env.SMTP_URL === undefined || env.SMTP_URL === "" ? {} : { smtpUrl: env.SMTP_URL }),
-    mailFrom: env.MAIL_FROM ?? "Spreadsheet <no-reply@localhost>",
+    mailFrom: env.MAIL_FROM ?? `${appName(env)} <no-reply@localhost>`,
     requireEmailVerification: ["1", "true"].includes(
       (env.REQUIRE_EMAIL_VERIFICATION ?? "").toLowerCase(),
     ),

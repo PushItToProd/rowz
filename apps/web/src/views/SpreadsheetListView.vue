@@ -2,11 +2,14 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, type ListedSpreadsheetItem } from "../api/client";
+import { APP_NAME } from "../appName";
 import { readSpreadsheetFile } from "../files/spreadsheetFile";
+import { usePageTitle } from "../pageTitle";
 import { useSessionStore } from "../stores/session";
 
 const session = useSessionStore();
 const router = useRouter();
+usePageTitle("Spreadsheets");
 
 const spreadsheets = ref<ListedSpreadsheetItem[] | null>(null);
 const error = ref<string | null>(null);
@@ -65,6 +68,7 @@ onMounted(refresh);
 <template>
   <div class="list">
     <header class="list__header">
+      <span class="brand">{{ APP_NAME }}</span>
       <h1>Spreadsheets</h1>
       <RouterLink :to="{ name: 'help' }">Help</RouterLink>
       <span class="list__user">{{ session.user?.email }}</span>

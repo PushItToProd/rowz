@@ -1,4 +1,4 @@
-# Spreadsheet app
+# rowz
 
 A Rows-style spreadsheet: pages, tables, formulas, and formulas that describe side effects run by buttons. [README.md](README.md) covers the formula language, the architecture, and configuration.
 

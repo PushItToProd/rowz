@@ -13,6 +13,7 @@ import { useSessionStore } from "../stores/session";
 import { watchSpreadsheet } from "../api/live";
 import { download, fileName } from "../files/download";
 import { fitsImport } from "../files/spreadsheetFile";
+import { usePageTitle } from "../pageTitle";
 import TableCard from "../components/TableCard.vue";
 import TextCard from "../components/TextCard.vue";
 import { useWorkbookStore } from "../stores/workbook";
@@ -53,6 +54,8 @@ async function openCopy(spreadsheetId: string): Promise<void> {
 }
 
 const loaded = computed(() => store.spreadsheet?.id === props.spreadsheetId);
+// The store may still hold the spreadsheet that was open before this one.
+usePageTitle(() => (loaded.value ? store.spreadsheet?.name : undefined));
 const page = computed(() => store.pages.find((candidate) => candidate.id === props.pageId));
 /** The tables, charts, and text views of the page, in the order they sit on it. */
 const items = computed(() =>

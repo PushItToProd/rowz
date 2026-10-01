@@ -13,6 +13,14 @@ export const LIMITS = {
   versions: 50,
 } as const;
 
+/**
+ * The name the app calls itself, in the browser tab and as the sender of its
+ * email. `APP_NAME` in the environment sets it. Empty counts as unset.
+ */
+export function appName(env: { APP_NAME?: string | undefined }): string {
+  return env.APP_NAME === undefined || env.APP_NAME === "" ? "rowz" : env.APP_NAME;
+}
+
 export const DEFAULT_TABLE_SIZE = { rowCount: 20, colCount: 8 } as const;
 
 const name = z.string().trim().min(1).max(LIMITS.nameLength);

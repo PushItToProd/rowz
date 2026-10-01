@@ -1,6 +1,7 @@
 import { defaultFunctions, errorDocs } from "@spreadsheet-app/engine";
 import { mount, RouterLinkStub, type VueWrapper } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
+import { APP_NAME } from "../appName";
 import HelpView from "./HelpView.vue";
 
 function render(): VueWrapper {
@@ -13,6 +14,11 @@ describe("HelpView", () => {
     const listed = wrapper.findAll("[data-function]").map((row) => row.attributes("data-function"));
     expect(listed.sort()).toEqual([...defaultFunctions.keys()].sort());
     expect(wrapper.get('[data-function="ROUND"]').text()).toContain("ROUND(number, [digits])");
+  });
+
+  it("titles the browser tab", () => {
+    render();
+    expect(document.title).toBe(`Help | ${APP_NAME}`);
   });
 
   it("shows the result the engine computes for an example", () => {

@@ -1,4 +1,4 @@
-# Spreadsheet app
+# rowz
 
 An open source, web-based spreadsheet modeled on rows.com. A spreadsheet holds pages, a page holds several independent tables, and a formula can describe a side effect that runs when someone clicks a button.
 
@@ -165,17 +165,18 @@ Every spreadsheet belongs to a workspace, and users reach spreadsheets through w
 
 ## Configuration
 
-The server reads environment variables. Development needs none. `pnpm dev` also reads them from `.env.local` at the repository root, which Git ignores.
+The server reads environment variables, and the web app's build reads `APP_NAME`. Development needs none. `pnpm dev` also reads them from `.env.local` at the repository root, which Git ignores.
 
 | Variable                     | Default                              | Meaning                                                                                                                                                                                                                              |
 | ---------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `APP_NAME`                   | `rowz`                               | The name the app calls itself, in the browser tab and as the sender of email. The web app takes it when Vite builds or serves it, so set it for `pnpm build` as well as for the server                                               |
 | `DATABASE_URL`               | `.data/pglite`                       | A `postgres://` URL, or a directory for the embedded PGlite database                                                                                                                                                                 |
 | `AUTH_SECRET`                | a development value                  | Signs sessions. Required when `NODE_ENV=production`.                                                                                                                                                                                 |
 | `BASE_URL`                   | `http://localhost:5173`              | The URL browsers use to reach the app                                                                                                                                                                                                |
 | `PORT`                       | `3000`                               | Port of the API server                                                                                                                                                                                                               |
 | `EMAILS_PER_HOUR`            | `50`                                 | Emails one user's button clicks may send in an hour, counting each recipient of each message. Stops use as an open mail relay                                                                                                        |
 | `SMTP_URL`                   | none                                 | An `smtp://` or `smtps://` URL of a mail server, with any user name and password in it. Without it email is logged, not sent                                                                                                         |
-| `MAIL_FROM`                  | `Spreadsheet <no-reply@localhost>`   | The address email is sent from                                                                                                                                                                                                       |
+| `MAIL_FROM`                  | `APP_NAME`, at `no-reply@localhost`  | The address email is sent from                                                                                                                                                                                                       |
 | `REQUIRE_EMAIL_VERIFICATION` | off                                  | Set to `true` to make a new account confirm its email address, through a link sent to it, before it can sign in. A spreadsheet can then be shared only with an account that has confirmed its address. Needs `SMTP_URL` to be useful |
 | `WEB_ROOT`                   | none, or `../web/dist` in production | The directory of the built web app, which the server then serves. Set it to nothing when something else serves the web app                                                                                                           |
 

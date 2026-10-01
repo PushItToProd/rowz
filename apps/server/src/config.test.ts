@@ -12,7 +12,7 @@ describe("loadConfig", () => {
       authSecret: expect.any(String),
       baseUrl: "http://localhost:5173",
       emailsPerHour: 50,
-      mailFrom: "Spreadsheet <no-reply@localhost>",
+      mailFrom: "rowz <no-reply@localhost>",
       requireEmailVerification: false,
     });
   });
@@ -49,6 +49,12 @@ describe("loadConfig", () => {
     expect(loadConfig(production).webRoot).toBe("../web/dist");
     expect(loadConfig({ ...production, WEB_ROOT: "" }).webRoot).toBeUndefined();
     expect(loadConfig({ SMTP_URL: "" }).smtpUrl).toBeUndefined();
+  });
+
+  it("names the sender of email after the app unless MAIL_FROM is set", () => {
+    expect(loadConfig({ APP_NAME: "Sheets" }).mailFrom).toBe("Sheets <no-reply@localhost>");
+    expect(loadConfig({ APP_NAME: "" }).mailFrom).toBe("rowz <no-reply@localhost>");
+    expect(loadConfig({ APP_NAME: "Sheets", MAIL_FROM: "a@b.co" }).mailFrom).toBe("a@b.co");
   });
 
   it.each([{}, { AUTH_SECRET: "" }])("refuses to start in production without a secret", (env) => {

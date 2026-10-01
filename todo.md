@@ -147,8 +147,8 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 
 ## Controls, mobile use, and templates
 
-- [ ] **P1** rebrand the app as "rowz" instead of "Spreadsheet". don't change package names but just update the UI. make the name configurable via an env var as well so it's easy to update in the future.
-- [ ] **P1** update the page title to show the name of the spreadsheet being edited or, for the help page, "Help". include the app name `rowz` at the end - e.g. `Help | rowz` or `My budget | rowz`
+- [x] rebrand the app as "rowz" instead of "Spreadsheet". don't change package names but just update the UI. make the name configurable via an env var as well so it's easy to update in the future.
+- [x] update the page title to show the name of the spreadsheet being edited or, for the help page, "Help". include the app name `rowz` at the end - e.g. `Help | rowz` or `My budget | rowz`
 - [x] mobile friendly UI (layout, touch targets, tap twice to edit)
 - [ ] more controls:
   - [ ] **P2** a text or number input bound to a cell (esp. useful in Markdown)
