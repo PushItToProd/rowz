@@ -49,24 +49,38 @@ These items are not necessarily in priority order. Triage and prioritize smaller
 - [x] mobile friendly UI (layout, touch targets, tap twice to edit)
 - [x] import and export (to files on disk): a JSON file for a whole spreadsheet, and CSV for a table
 - [x] support the thing where `=A:A+B:B` is equivalent to `=A1+B1` in any cell in 1:1 (and so on)
+- [x] add screenshots to the README
+
 - [ ] undo that survives structural changes (insert or delete a row, rename), and undo of formatting
-- [ ] dragging over col/row headers shouldselect multiple columns/rows
+
+- [ ] dragging over col/row headers should select multiple columns/rows
 - [ ] when a row/col is inserted into a range used in a formula, the formula's range should be expanded.
   - e.g. if we have A1 = 1, A2 = 2, A3 = 3, A4 = `SUM(A1:A3)` and the user right clicks and inserts a row above or below A2, the range should be updated to `A1:A4`
-- [x] add screenshots to the README
-- [ ] add a long thin "+" button along the full width/height of the bottom/right side of the table for adding rows/cols
+- [ ] allow adding rows/cols with a long thin "+" button along the full width/height of the bottom/right side of the table
+- [ ] resizable rows/cols
 - [ ] when multiple cells/cols/rows are selected, allow deleting the columns or rows containing them from the context menu
-- [ ] more controls: a text or number input bound to a cell, a date picker (after dates exist)
-- [ ] more actions: delete a row that matches a condition, open a URL, call a webhook
+
+- [ ] more controls: 
+  - [ ] a text or number input bound to a cell (esp. useful in Markdown)
+  - [ ] a date picker (after dates exist)
+  - [ ] a slider
+- [ ] more actions: 
+  - [ ] delete a row that matches a condition
+  - [ ] open a URL
+  - [ ] call a webhook
 - [ ] named functions and values at the workbook level, so `=double(5)` works instead of `=D1(5)`
-- [ ] chart formulas - `SPARKLINE` for a single cell, but also `PIE_CHART`, `LINE_CHART`, etc. which produce charts that spill over multiple rows and columns (size defined by the user or maybe implemented via merging cells)
-- [ ] merge across selection
+- [ ] chart formulas
+  - [ ] `SPARKLINE` for a single cell
+  - [ ] `PIE_CHART`, `LINE_CHART`, etc. which produce charts that spill over multiple rows and columns (size defined by the user or maybe implemented via merging cells)
+
+- [ ] merge cells across selection
 - [ ] functions that expect one value (IF, UPPER, ...) do not work cell by cell on a range; only operators do. MAP is the workaround. Related: `=UPPER(A:A)` could mean this row's cell, as `=A:A & ""` now does
 - [ ] regex functions (`REGEXMATCH`, `REGEXEXTRACT`, `REGEXREPLACE`) on a regex engine with a time bound
 - [ ] data tables: sort and filter in place, dropdown columns, hide the empty rows, and `QUERY(Sales, ...)` over a whole table with its column names as headers
 - [ ] allow editing markdown views by just clicking on the text and save/stop editing when focus is lost instead of requiring user to hit "Done"
 - [ ] create some sample/template sheets users can use - invoice, contacts list, to-do list, personal monthly budget, etc.
 - [ ] duplicate the "Add table", "Add chart", "Add text" buttons at the top and between each item so you can insert them anywhere
+- [ ] cell validation - require matching a pattern, regex, or custom formula
 
 ## Found while working (added by Claude)
 
