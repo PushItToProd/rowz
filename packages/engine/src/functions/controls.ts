@@ -1,4 +1,4 @@
-import type { Node } from "../ast";
+import { isSingleCell, type Node } from "../ast";
 import { evaluate, type EvaluationContext } from "../evaluate";
 import type { CellId } from "../address";
 import {
@@ -20,7 +20,7 @@ function target(
   context: EvaluationContext,
   form: string,
 ): { cell: CellId; value: Scalar } {
-  if (node?.type !== "reference" || node.reference.end) {
+  if (node?.type !== "reference" || !isSingleCell(node.reference)) {
     return fail("#VALUE!", `${form} needs a single cell to read and write`);
   }
   const range = context.resolve(node.reference);

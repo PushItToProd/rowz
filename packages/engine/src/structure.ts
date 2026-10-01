@@ -6,10 +6,49 @@ export interface PageDefinition {
   name: string;
 }
 
+/** What a column of a data table accepts. `any` reads what is typed as an ordinary cell does. */
+export type ColumnType = "any" | "text" | "number" | "date" | "checkbox" | "formula";
+
+export const COLUMN_TYPES: readonly ColumnType[] = [
+  "any",
+  "text",
+  "number",
+  "date",
+  "checkbox",
+  "formula",
+];
+
+export interface ColumnDefinition {
+  name: string;
+  type: ColumnType;
+  /** For a formula column: the formula every row computes, with its leading `=`. */
+  formula?: string;
+}
+
+/** Column names are matched without regard to letter case or to spaces around them. */
+function columnKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/** The index of a table's column by name, or -1. */
+export function findColumn(table: TableDefinition, name: string): number {
+  const key = columnKey(name);
+  return (table.columns ?? []).findIndex((column) => columnKey(column.name) === key);
+}
+
+export function sameColumnName(a: string, b: string): boolean {
+  return columnKey(a) === columnKey(b);
+}
+
 export interface TableDefinition {
   id: string;
   pageId: string;
   name: string;
+  /**
+   * The named columns of a data table, one for each column in order. A table
+   * without them is a plain grid whose columns are known only by letter.
+   */
+  columns?: readonly ColumnDefinition[] | null;
   /**
    * The table's size. A range with an open side, such as `A:A`, stops here.
    * Without a size it stops at the last row and column that hold a cell.

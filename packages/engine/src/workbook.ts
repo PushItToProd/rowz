@@ -1,6 +1,6 @@
 import { cellKey, formatAddress, rangeContains, type CellId, type CellRange } from "./address";
-import type { Node, Reference } from "./ast";
-import { formatDate, isDate } from "./dates";
+import { isColumnReference, type Node, type Reference } from "./ast";
+import { formatDate, isDate, parseDate } from "./dates";
 import type { Effect } from "./effects";
 import { evaluate, referencesOf, type EvaluationContext } from "./evaluate";
 import { defaultFunctions } from "./functions";
@@ -9,7 +9,9 @@ import type { FunctionRegistry } from "./functions/registry";
 import { DependencyIndex, evaluationOrder } from "./graph";
 import { parseFormula } from "./parser";
 import {
+  findColumn,
   TableResolver,
+  type ColumnDefinition,
   type TableDefinition,
   type WorkbookData,
   type WorkbookStructure,
@@ -25,6 +27,7 @@ import {
   type ControlValue,
   isRange,
   parseLiteralInput,
+  parseNumber,
   type ActionValue,
   type CellValue,
   type ErrorValue,
@@ -43,8 +46,45 @@ interface CellRecord {
   id: CellId;
   input: string;
   content: CellContent;
+  /** Whether the cell is in a formula column, whose formula the table holds and not the cell. */
+  computed?: boolean;
   /** The ranges the formula reads during recalculation. Empty for non-formulas. */
   precedents: CellRange[];
+}
+
+const TEXT_PREFIX = "'";
+
+/**
+ * Reads what was typed into a cell of a typed column. The column's type says
+ * what the cell holds, so `007` in a text column stays text, and anything
+ * that does not read as the type is an error the cell shows.
+ */
+function parseTyped(input: string, type: ColumnDefinition["type"]): CellContent {
+  const refuse = (what: string): CellContent => ({
+    type: "invalid",
+    error: error("#VALUE!", `${input} is not ${what}`),
+  });
+  // An apostrophe forces text in any cell. Here the text is then checked against the type.
+  const typed = input.startsWith(TEXT_PREFIX) ? input.slice(1) : input;
+  switch (type) {
+    case "text":
+      return { type: "literal", value: typed };
+    case "number": {
+      const value = parseNumber(typed);
+      return value === undefined ? refuse("a number") : { type: "literal", value };
+    }
+    case "date": {
+      const value = parseDate(typed);
+      return value === undefined ? refuse("a date") : { type: "literal", value };
+    }
+    case "checkbox": {
+      const upper = typed.trim().toUpperCase();
+      if (upper !== "TRUE" && upper !== "FALSE") return refuse("TRUE or FALSE");
+      return { type: "literal", value: upper === "TRUE" };
+    }
+    default:
+      return parseContent(input);
+  }
 }
 
 function parseContent(input: string): CellContent {
@@ -118,6 +158,9 @@ export class Workbook {
   /** Array formulas whose result did not fit. A change to their table may make room. */
   private readonly blocked = new Map<string, CellId>();
 
+  /** Tables whose cells were last read according to named columns. */
+  private readonly typed = new Set<string>();
+
   private settling = false;
   /** Counts calls to `invalidate`, so a computing pass can tell that one happened under it. */
   private invalidations = 0;
@@ -142,6 +185,7 @@ export class Workbook {
     for (const tableId of this.cells.keys()) {
       if (!this.tables.table(tableId)) this.cells.delete(tableId);
     }
+    for (const table of structure.tables) this.applyColumns(table);
 
     this.cache.clear();
     this.pending.clear();
@@ -157,10 +201,53 @@ export class Workbook {
     }
   }
 
-  /** Sets what the user typed into a cell. An empty input clears the cell. */
+  /**
+   * Makes a table's cells agree with its columns: every row of a formula
+   * column computes the column's formula, and what was typed into a typed
+   * column is read as that type.
+   */
+  private applyColumns(table: TableDefinition): void {
+    const records = this.cells.get(table.id);
+    if (!records) return;
+    // A plain table that was never a data table has nothing to bring into agreement.
+    if (!table.columns && !this.typed.has(table.id)) return;
+    if (table.columns) this.typed.add(table.id);
+    else this.typed.delete(table.id);
+    for (const [key, record] of records) {
+      const column = table.columns?.[record.id.col];
+      if (record.computed || column?.type === "formula") records.delete(key);
+      else record.content = parseTyped(record.input, column?.type ?? "any");
+    }
+    for (const [col, column] of (table.columns ?? []).entries()) {
+      if (column.type !== "formula" || column.formula === undefined) continue;
+      const content = parseContent(column.formula);
+      for (let row = 0; row < (table.rowCount ?? 0); row += 1) {
+        const id = { tableId: table.id, row, col };
+        records.set(cellKey(id), {
+          id,
+          input: column.formula,
+          content,
+          computed: true,
+          precedents: [],
+        });
+      }
+    }
+  }
+
+  /** The column a cell is in, when its table has named columns. */
+  columnOf(id: CellId): ColumnDefinition | undefined {
+    return this.tables.table(id.tableId)?.columns?.[id.col];
+  }
+
+  /**
+   * Sets what the user typed into a cell. An empty input clears the cell. A
+   * cell of a formula column is left alone: its formula belongs to the column.
+   */
   setCell(id: CellId, input: string): void {
     const records = this.cells.get(id.tableId);
     if (!records) throw new Error(`Unknown table ${id.tableId}`);
+    const column = this.columnOf(id);
+    if (column?.type === "formula") return;
 
     const key = cellKey(id);
     const replaced = records.get(key);
@@ -169,7 +256,8 @@ export class Workbook {
       records.delete(key);
       this.dependencies.remove(id);
     } else {
-      const record: CellRecord = { id, input, content: parseContent(input), precedents: [] };
+      const content = parseTyped(input, column?.type ?? "any");
+      const record: CellRecord = { id, input, content, precedents: [] };
       records.set(key, record);
       this.index(record);
     }
@@ -298,13 +386,24 @@ export class Workbook {
     const definition = this.functions.get(action.name);
     if (definition?.kind !== "action") fail("#NAME?", `Unknown action ${action.name}`);
     const context = this.context(action.origin);
-    return definition.plan(action.args, {
+    const effects = definition.plan(action.args, {
       origin: action.origin,
       evaluate: (node) => evaluate(node, context),
       resolve: (reference) => context.resolve(reference),
-      inputsIn: (range) => this.recordsIn(range).map((record) => record.id),
+      // A formula column's cells hold nothing a user typed, and nothing can be typed into them.
+      inputsIn: (range) =>
+        this.recordsIn(range)
+          .filter((record) => !record.computed)
+          .map((record) => record.id),
       plan: (inner) => this.effectsOf(inner),
     });
+    for (const effect of effects) {
+      const column = effect.type === "setCell" ? this.columnOf(effect) : undefined;
+      if (column?.type === "formula") {
+        fail("#VALUE!", `${column.name} is a formula column and cannot be written to`);
+      }
+    }
+    return effects;
   }
 
   private record(id: CellId): CellRecord | undefined {
@@ -331,19 +430,39 @@ export class Workbook {
     record.precedents =
       record.content.type === "formula"
         ? referencesOf(record.content.ast, this.functions)
-            .map((reference) => this.resolve(reference, record.id.tableId))
+            .map((reference) => this.resolve(reference, record.id))
             .filter((range) => range !== undefined)
         : [];
     this.dependencies.set(record.id, record.precedents);
   }
 
-  private resolve(reference: Reference, originTableId: string): CellRange | undefined {
-    return this.rangeOf(reference, this.tables.find(reference, originTableId));
+  private resolve(reference: Reference, origin: CellId): CellRange | undefined {
+    return this.rangeOf(reference, this.tables.find(reference, origin.tableId), origin.row);
   }
 
-  /** The cells a reference covers in the table it was found to mean. */
-  private rangeOf(reference: Reference, table: TableDefinition | undefined): CellRange | undefined {
+  /**
+   * The cells a reference covers in the table it was found to mean. `row` is
+   * the row of the formula, which is the row `[Column]` reads.
+   */
+  private rangeOf(
+    reference: Reference,
+    table: TableDefinition | undefined,
+    row?: number,
+  ): CellRange | undefined {
     if (!table) return undefined;
+    if (isColumnReference(reference)) {
+      const col = findColumn(table, reference.column);
+      if (col === -1) return undefined;
+      const whole = {
+        tableId: table.id,
+        startRow: 0,
+        endRow: Infinity,
+        startCol: col,
+        endCol: col,
+      };
+      if (reference.table !== undefined) return whole;
+      return row === undefined ? undefined : { ...whole, startRow: row, endRow: row };
+    }
     const { start, end = start } = reference;
     const [startRow, endRow] = span(start.row, end.row);
     const [startCol, endCol] = span(start.col, end.col);
@@ -375,7 +494,7 @@ export class Workbook {
     return {
       origin,
       functions: this.functions,
-      resolve: (reference) => this.resolve(reference, origin.tableId),
+      resolve: (reference) => this.resolve(reference, origin),
       read: (cell) => this.current(cell),
       extent: (tableId) => this.extent(tableId),
       now: this.now,

@@ -1,9 +1,10 @@
 import { cellKey } from "./address";
-import { formatReference, type Reference, type ReferenceCell } from "./ast";
+import { formatReference, isColumnReference, type Reference, type ReferenceCell } from "./ast";
 import { parseFormulaWithReferences, type LocatedReference } from "./parser";
 import { FormulaSyntaxError } from "./tokenizer";
 import { isFormulaInput } from "./values";
 import {
+  sameColumnName,
   TableResolver,
   type StoredInput,
   type TableDefinition,
@@ -57,6 +58,8 @@ export function translateInput(input: string, rows: number, cols: number): strin
     return (row ?? 0) < 0 || (col ?? 0) < 0 ? undefined : { ...cell, row, col };
   };
   return rewriteReferences(input, (reference) => {
+    // A column reference names its column, wherever the formula is.
+    if (isColumnReference(reference)) return undefined;
     const start = move(reference.start);
     const end = reference.end ? move(reference.end) : undefined;
     if (!start || (reference.end && !end)) return "#REF!";
@@ -65,7 +68,10 @@ export function translateInput(input: string, rows: number, cols: number): strin
 }
 
 export type Rename =
-  { kind: "page"; pageId: string; name: string } | { kind: "table"; tableId: string; name: string };
+  | { kind: "page"; pageId: string; name: string }
+  | { kind: "table"; tableId: string; name: string }
+  /** A column of a data table, named `from` before the rename. */
+  | { kind: "column"; tableId: string; from: string; name: string };
 
 /**
  * Decides how a reference must be rewritten, given the table it means where
@@ -83,6 +89,13 @@ export function renameDecider(resolver: TableResolver, rename: Rename): Decide {
       // The page qualifier is rewritten even when the table it names does not exist.
       return reference.page !== undefined && resolver.isPage(reference.page, rename.pageId)
         ? { ...reference, page: rename.name }
+        : undefined;
+    }
+    if (rename.kind === "column") {
+      return isColumnReference(reference) &&
+        target?.id === rename.tableId &&
+        sameColumnName(reference.column, rename.from)
+        ? { ...reference, column: rename.name }
         : undefined;
     }
     // A reference with no table name follows its formula's table and needs no rewrite.
@@ -156,6 +169,8 @@ function moveSpan(
 
 /** How a reference into the edited table must be written after the edit. */
 function moveReference(reference: Reference, edit: StructuralEdit): Replacement | undefined {
+  // A column reference follows its column by name, and a deleted column's name is simply gone.
+  if (isColumnReference(reference)) return undefined;
   const { axis } = edit;
   const withAxis = (cell: ReferenceCell, value: number | null): ReferenceCell => ({
     ...cell,

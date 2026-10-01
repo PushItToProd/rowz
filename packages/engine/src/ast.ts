@@ -25,12 +25,35 @@ export interface ReferenceCell {
  * refers to the formula's own table. `Table!A1` names a table on the formula's
  * page. `Page!Table!A1` names a table on another page.
  */
-export interface Reference {
+export interface CellReference {
   page?: string;
   table?: string;
   start: ReferenceCell;
   /** Present for ranges such as `A1:B2`. */
   end?: ReferenceCell;
+}
+
+/**
+ * A reference to a named column of a table. `[Price]` is the cell of that
+ * column in the formula's own row and table. `Sales[Price]` is every cell of
+ * the column in the table named Sales, and `Page!Sales[Price]` names a table
+ * on another page.
+ */
+export interface ColumnReference {
+  page?: string;
+  table?: string;
+  column: string;
+}
+
+export type Reference = CellReference | ColumnReference;
+
+export function isColumnReference(reference: Reference): reference is ColumnReference {
+  return "column" in reference;
+}
+
+/** Whether a reference names exactly one cell: `A1`, or `[Price]` for the formula's own row. */
+export function isSingleCell(reference: Reference): boolean {
+  return isColumnReference(reference) ? reference.table === undefined : !reference.end;
 }
 
 export type Node =
@@ -63,6 +86,11 @@ function quoteName(name: string): string {
 
 /** Writes a reference the way it is typed in a formula. */
 export function formatReference(reference: Reference): string {
+  if (isColumnReference(reference)) {
+    const page = reference.page === undefined ? "" : `${quoteName(reference.page)}!`;
+    const table = reference.table === undefined ? "" : quoteName(reference.table);
+    return `${page}${table}[${reference.column}]`;
+  }
   const qualifiers = [reference.page, reference.table]
     .filter((name) => name !== undefined)
     .map((name) => `${quoteName(name)}!`)

@@ -143,10 +143,13 @@ class Parser {
       case "error":
         return { type: "error", code: token.value };
       case "quotedName":
+        if (this.columnFollows(token)) return this.columnOf({ table: token.value }, token.position);
         if (!this.isPunctuation("!")) {
           throw new FormulaSyntaxError("Expected ! after a quoted name", token.position);
         }
         return this.qualifiedReference(token.value, token.position);
+      case "column":
+        return this.located({ column: token.value }, token.position);
       case "identifier":
         return this.identifier(token);
       case "punctuation":
@@ -164,6 +167,7 @@ class Parser {
 
   private identifier(token: Token & { type: "identifier" }): Node {
     const { value: name, position } = token;
+    if (this.columnFollows(token)) return this.columnOf({ table: name }, position);
     if (this.isPunctuation("!")) return this.qualifiedReference(name, position);
 
     // A cell address before `(` is a call of the function in that cell, so a
@@ -207,11 +211,31 @@ class Parser {
     return true;
   }
 
-  /** Parses `Table!A1` or `Page!Table!A1`, positioned at the first `!`. */
+  /** Whether a `[Column]` is written directly after a table name, with no space between. */
+  private columnFollows(name: Token): boolean {
+    const next = this.peek();
+    return next.type === "column" && next.position === name.end;
+  }
+
+  /** Finishes `Table[Column]`, positioned at the `[Column]`. */
+  private columnOf(qualifier: { page?: string; table: string }, position: number): Node {
+    const column = this.next();
+    if (column.type !== "column") throw this.unexpected(column);
+    return this.located({ ...qualifier, column: column.value }, position);
+  }
+
+  /** Parses `Table!A1`, `Page!Table!A1`, or `Page!Table[Column]`, positioned at the first `!`. */
   private qualifiedReference(firstName: string, position: number): Node {
     this.expectPunctuation("!");
     const names = [firstName];
     const candidate = this.peek();
+    if (candidate.type === "identifier" || candidate.type === "quotedName") {
+      const after = this.peek(1);
+      if (after.type === "column" && after.position === candidate.end) {
+        this.next();
+        return this.columnOf({ page: firstName, table: candidate.value }, position);
+      }
+    }
     if (
       (candidate.type === "identifier" || candidate.type === "quotedName") &&
       this.isPunctuation("!", 1)

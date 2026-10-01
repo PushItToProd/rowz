@@ -1,4 +1,4 @@
-import type { Node } from "../ast";
+import { isSingleCell, type Node } from "../ast";
 import type { Effect } from "../effects";
 import { isAction, isError, literalInput, type Evaluated } from "../values";
 import { fail, Failure, grid, lazy, scalar, text } from "./arguments";
@@ -43,7 +43,7 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
     minArgs: 2,
     maxArgs: 2,
     plan([expression, target], context): Effect[] {
-      if (target?.type !== "reference" || target.reference.end) {
+      if (target?.type !== "reference" || !isSingleCell(target.reference)) {
         fail("#VALUE!", "EXECUTE needs a single cell to write to");
       }
       const cell = context.resolve(target.reference);

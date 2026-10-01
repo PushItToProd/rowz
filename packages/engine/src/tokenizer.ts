@@ -14,6 +14,8 @@ export type Token = Span &
     | { type: "identifier"; value: string }
     /** A single-quoted page or table name. */
     | { type: "quotedName"; value: string }
+    /** A column name in square brackets, as in `[Price]`. */
+    | { type: "column"; value: string }
     /** An error written out in a formula, such as the `#REF!` left where a deleted cell was named. */
     | { type: "error"; value: ErrorCode }
     | { type: "operator"; value: Operator }
@@ -99,6 +101,18 @@ export function tokenize(text: string): Token[] {
       const { value, end } = readQuoted(text, position, char);
       tokens.push({ type: char === '"' ? "string" : "quotedName", value, position, end });
       position = end;
+      continue;
+    }
+
+    if (char === "[") {
+      const close = text.indexOf("]", position);
+      const name = close === -1 ? "" : text.slice(position + 1, close).trim();
+      if (close === -1) throw new FormulaSyntaxError("Missing closing ]", position);
+      if (name === "" || name.includes("[")) {
+        throw new FormulaSyntaxError("Expected a column name between [ and ]", position);
+      }
+      tokens.push({ type: "column", value: name, position, end: close + 1 });
+      position = close + 1;
       continue;
     }
 

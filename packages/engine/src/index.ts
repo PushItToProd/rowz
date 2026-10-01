@@ -8,7 +8,17 @@ export {
   type CellId,
   type CellRange,
 } from "./address";
-export { formatReference, printNode, type Node, type Reference } from "./ast";
+export {
+  formatReference,
+  isColumnReference,
+  isSingleCell,
+  printNode,
+  type CellReference,
+  type ColumnReference,
+  type Node,
+  type Reference,
+} from "./ast";
+export { columnFormulasAfterEdit, columnFormulasAfterRename, type ColumnFormula } from "./columns";
 export {
   errorDocs,
   EXAMPLE_CELLS,
@@ -65,7 +75,12 @@ export {
   type Scalar,
 } from "./values";
 export {
+  COLUMN_TYPES,
+  findColumn,
+  sameColumnName,
   TableResolver,
+  type ColumnDefinition,
+  type ColumnType,
   type PageDefinition,
   type StoredInput,
   type TableDefinition,

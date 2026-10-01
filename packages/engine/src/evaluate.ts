@@ -1,5 +1,12 @@
 import { columnLabel, type CellId, type CellRange } from "./address";
-import { formatReference, type BinaryOperator, type Node, type Reference } from "./ast";
+import {
+  formatReference,
+  isColumnReference,
+  isSingleCell,
+  type BinaryOperator,
+  type Node,
+  type Reference,
+} from "./ast";
 import { DAY_MS, dateFromMs, isDate } from "./dates";
 import { array, element, fail, Failure, number, scalar } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
@@ -92,11 +99,19 @@ function binary(operator: BinaryOperator, left: Scalar, right: Scalar): Scalar {
   }
 }
 
+/** Why a reference could not be resolved. */
+function missing(reference: Reference): string {
+  if (!isColumnReference(reference)) return "The referenced table does not exist";
+  return reference.table === undefined
+    ? `This table has no column named ${reference.column}`
+    : `There is no table ${reference.table} with a column named ${reference.column}`;
+}
+
 function readReference(reference: Reference, context: EvaluationContext): Evaluated {
   const range = context.resolve(reference);
-  if (!range) fail("#REF!", "The referenced table does not exist");
+  if (!range) fail("#REF!", missing(reference));
   const { tableId, startRow, startCol } = range;
-  if (!reference.end) return context.read({ tableId, row: startRow, col: startCol });
+  if (isSingleCell(reference)) return context.read({ tableId, row: startRow, col: startCol });
 
   const extent = context.extent(tableId);
   const endRow = Math.min(range.endRow, extent.rows - 1);
@@ -122,16 +137,24 @@ function readReference(reference: Reference, context: EvaluationContext): Evalua
 function operand(node: Node, context: EvaluationContext): Evaluated {
   const { origin } = context;
   if (node.type !== "reference" || origin.tableId === "") return compute(node, context);
-  const { start, end } = node.reference;
-  const columns = end !== undefined && start.row === null && end.row === null;
-  const rows = end !== undefined && start.col === null && end.col === null;
+  const { reference } = node;
+  // `Sales[Price]` is a whole column just as `A:A` is.
+  const named = isColumnReference(reference);
+  const columns = named
+    ? reference.table !== undefined
+    : reference.end !== undefined && reference.start.row === null && reference.end.row === null;
+  const rows =
+    !named &&
+    reference.end !== undefined &&
+    reference.start.col === null &&
+    reference.end.col === null;
   if (!columns && !rows) return compute(node, context);
 
-  const range = context.resolve(node.reference);
-  if (!range) fail("#REF!", "The referenced table does not exist");
+  const range = context.resolve(reference);
+  if (!range) fail("#REF!", missing(reference));
   const { tableId } = range;
   const extent = context.extent(tableId);
-  const written = formatReference(node.reference);
+  const written = formatReference(reference);
   if (columns) {
     if (origin.row >= extent.rows)
       fail("#VALUE!", `${written} has no row ${String(origin.row + 1)}`);
