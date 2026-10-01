@@ -13,8 +13,8 @@ export interface TestServer {
   db: Database;
   /** Messages the app asked to send, oldest first. */
   sent: EmailMessage[];
-  /** Makes the next sends fail, to exercise the failure path. */
-  failSending(fail: boolean): void;
+  /** Makes the next sends fail, to exercise the failure path. An address fails only the messages sent to it. */
+  failSending(fail: boolean | string): void;
   /** Creates an account and returns a client that sends requests as that user. */
   signUp(name?: string): Promise<TestUser>;
   /** Sends a request with no session. */
@@ -102,14 +102,15 @@ export async function storedInputs(
 
 /** Starts the app on a fresh database. Call `close` when the test file is done. */
 export async function startTestServer(
-  options: { emailRunsPerHour?: number; verifyEmail?: boolean } = {},
+  options: { emailsPerHour?: number; verifyEmail?: boolean; shutdown?: AbortSignal } = {},
 ): Promise<TestServer> {
   const database = await openTestDatabase();
   const sent: EmailMessage[] = [];
-  let failing = false;
+  let failing: boolean | string = false;
   const mailer: Mailer = {
     send(message) {
-      if (failing) return Promise.reject(new Error("mail server unreachable"));
+      const fails = typeof failing === "string" ? message.to.includes(failing) : failing;
+      if (fails) return Promise.reject(new Error("mail server unreachable"));
       sent.push(message);
       return Promise.resolve();
     },
@@ -123,7 +124,10 @@ export async function startTestServer(
       ...(options.verifyEmail ? { verifyEmailWith: mailer } : {}),
     }),
     mailer,
-    emailRunsPerHour: options.emailRunsPerHour ?? 20,
+    emailsPerHour: options.emailsPerHour ?? 20,
+    trustedOrigins: [BASE_URL],
+    requireEmailVerification: options.verifyEmail ?? false,
+    ...(options.shutdown ? { shutdown: options.shutdown } : {}),
   });
 
   const client = (cookie: string | undefined): TestClient => {

@@ -11,7 +11,7 @@ describe("loadConfig", () => {
       databaseUrl: ".data/pglite",
       authSecret: expect.any(String),
       baseUrl: "http://localhost:5173",
-      emailRunsPerHour: 20,
+      emailsPerHour: 50,
       mailFrom: "Spreadsheet <no-reply@localhost>",
       requireEmailVerification: false,
     });
@@ -25,7 +25,7 @@ describe("loadConfig", () => {
         DATABASE_URL: "postgres://db/app",
         AUTH_SECRET: "s3cret",
         BASE_URL: "https://sheets.example.com",
-        EMAIL_RUNS_PER_HOUR: "0",
+        EMAILS_PER_HOUR: "0",
         WEB_ROOT: "/srv/web",
         SMTP_URL: "smtps://user:pass@mail.example.com",
         MAIL_FROM: "Sheets <sheets@example.com>",
@@ -40,7 +40,7 @@ describe("loadConfig", () => {
       databaseUrl: "postgres://db/app",
       authSecret: "s3cret",
       baseUrl: "https://sheets.example.com",
-      emailRunsPerHour: 0,
+      emailsPerHour: 0,
     });
   });
 

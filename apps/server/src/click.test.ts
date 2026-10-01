@@ -16,7 +16,7 @@ import {
 let server: TestServer;
 let user: TestUser;
 beforeAll(async () => {
-  server = await startTestServer({ emailRunsPerHour: 3 });
+  server = await startTestServer({ emailsPerHour: 3 });
   user = await server.signUp();
 });
 afterEach(() => {
@@ -291,6 +291,72 @@ describe("clicking a SEND_EMAIL button", () => {
       other,
     );
     expect(await click(otherSheet, 0, 1, other)).toMatchObject({ status: "succeeded" });
+  });
+
+  it("counts every recipient of every message of one click", async () => {
+    const sender = await server.signUp();
+    const two = 'SEND_EMAIL("a@example.com; b@example.com", "s", "b")';
+    const one = 'SEND_EMAIL("c@example.com", "s", "b", "d@example.com")';
+    const sheet = await sheetWith(
+      {
+        A1: `=BUTTON("Four", DO(${two}, ${one}))`,
+        A2: `=BUTTON("Two", ${two})`,
+        A3: `=BUTTON("One", SEND_EMAIL("e@example.com", "s", "b"))`,
+      },
+      sender,
+    );
+
+    // Four emails are more than the limit of three, so none of them goes.
+    expect(await click(sheet, 0, 0, sender)).toMatchObject({
+      status: "failed",
+      error: "Email limit reached: 3 per hour",
+    });
+    expect(server.sent).toEqual([]);
+
+    expect(await click(sheet, 1, 0, sender)).toMatchObject({ status: "succeeded", emailsSent: 1 });
+    expect(await click(sheet, 1, 0, sender)).toMatchObject({ status: "failed" });
+    expect(await click(sheet, 2, 0, sender)).toMatchObject({ status: "succeeded" });
+    expect(await click(sheet, 2, 0, sender)).toMatchObject({ status: "failed" });
+    expect(server.sent.flatMap(({ to, cc }) => [...to, ...cc])).toHaveLength(3);
+    expect((await runsFor(sheet)).map((run) => run.emails).sort()).toEqual([0, 0, 0, 1, 2]);
+  });
+
+  it("holds a user to the limit when clicks on several spreadsheets arrive at once", async () => {
+    const sender = await server.signUp();
+    const sheets = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        sheetWith({ A1: "ada@example.com", A2: "s", A3: "b", B1: EMAIL }, sender),
+      ),
+    );
+    const results = await Promise.all(sheets.map((sheet) => click(sheet, 0, 1, sender)));
+    expect(results.filter((result) => result.status === "succeeded")).toHaveLength(3);
+    expect(server.sent).toHaveLength(3);
+  });
+
+  it("counts the messages that went out before one failed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sender = await server.signUp();
+    const message = (to: string): string => `SEND_EMAIL("${to}", "s", "b")`;
+    const sheet = await sheetWith(
+      {
+        A1: `=BUTTON("Two", DO(${message("a@example.com")}, ${message("fails@example.com")}))`,
+        A2: `=BUTTON("Three", DO(${["c", "d", "e"].map((name) => message(`${name}@example.com`)).join(", ")}))`,
+        A3: `=BUTTON("Two", DO(${message("f@example.com")}, ${message("g@example.com")}))`,
+      },
+      sender,
+    );
+    server.failSending("fails@example.com");
+    expect(await click(sheet, 0, 0, sender)).toMatchObject({ status: "failed", emailsSent: 0 });
+    expect(server.sent).toHaveLength(1);
+    server.failSending(false);
+
+    // One email went out, so three more would pass the limit and two would not.
+    expect(await click(sheet, 1, 0, sender)).toMatchObject({
+      status: "failed",
+      error: "Email limit reached: 3 per hour",
+    });
+    expect(await click(sheet, 2, 0, sender)).toMatchObject({ status: "succeeded" });
+    expect(server.sent).toHaveLength(3);
   });
 
   it("does not count failed sends toward the limit", async () => {

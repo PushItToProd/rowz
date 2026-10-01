@@ -5,7 +5,8 @@ export interface Config {
   authSecret: string;
   /** The URL browsers use to reach the app. */
   baseUrl: string;
-  emailRunsPerHour: number;
+  /** Emails one user's button clicks may send in an hour, counting each recipient of a message. */
+  emailsPerHour: number;
   /** The directory of the built web app to serve next to the API. Unset when something else serves it. */
   webRoot?: string;
   /** An `smtp://` or `smtps://` URL of the mail server that delivers `SEND_EMAIL`. Unset to log messages instead. */
@@ -50,6 +51,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     authSecret,
     // In development the browser talks to the Vite dev server, which proxies /api here.
     baseUrl: env.BASE_URL ?? "http://localhost:5173",
-    emailRunsPerHour: integer("EMAIL_RUNS_PER_HOUR", env.EMAIL_RUNS_PER_HOUR, 20),
+    emailsPerHour: integer("EMAILS_PER_HOUR", env.EMAILS_PER_HOUR, 50),
   };
 }

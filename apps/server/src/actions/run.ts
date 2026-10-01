@@ -42,8 +42,8 @@ export function clientClock(offsetHeader: string | undefined): () => number {
 export interface ActionDependencies {
   db: Database;
   mailer: Mailer;
-  /** How many button clicks per user may send email in any one-hour window. */
-  emailRunsPerHour: number;
+  /** How many emails a user's button clicks may send in any one-hour window. Each recipient of a message is one email. */
+  emailsPerHour: number;
 }
 
 export interface ClickResult {
@@ -74,6 +74,13 @@ function isEnsureRows(effect: Effect): effect is EnsureRowsEffect {
 
 function isSendEmail(effect: Effect): effect is SendEmailEffect {
   return effect.type === "sendEmail";
+}
+
+/** How many emails the effects send: one for each recipient of each message. */
+function emailCount(effects: readonly Effect[]): number {
+  return effects
+    .filter(isSendEmail)
+    .reduce((total, { to, cc }) => total + to.length + cc.length, 0);
 }
 
 interface Planned {
@@ -139,7 +146,7 @@ export function runControl(
  * run never sends mail.
  */
 async function runCell(
-  { db, mailer, emailRunsPerHour }: ActionDependencies,
+  { db, mailer, emailsPerHour }: ActionDependencies,
   userId: string,
   cell: CellId,
   now: () => number,
@@ -162,7 +169,16 @@ async function runCell(
         failure !== null ? "failed" : effects.some(isSendEmail) ? "pending" : "succeeded";
       const [run] = await tx
         .insert(actionRuns)
-        .values({ spreadsheetId, ...cell, userId, effects, status, error: failure })
+        .values({
+          spreadsheetId,
+          ...cell,
+          userId,
+          effects,
+          // A refused run sends nothing, so it uses none of the user's limit.
+          emails: failure === null ? emailCount(effects) : 0,
+          status,
+          error: failure,
+        })
         .returning({ id: actionRuns.id });
       if (!run) throw new Error("Insert returned no action run");
       return { runId: run.id, failure, effects, tables };
@@ -171,10 +187,13 @@ async function runCell(
     if (!plan.ok) return record([], describe(plan.error));
     const { effects } = plan;
 
-    if (effects.some(isSendEmail)) {
-      const recent = await repository.countEmailRuns(new Date(Date.now() - HOUR_MS));
-      if (recent >= emailRunsPerHour) {
-        return record(effects, `Email limit reached: ${String(emailRunsPerHour)} per hour`);
+    const emails = emailCount(effects);
+    if (emails > 0) {
+      // Held until this run is recorded, so that a click made at the same moment counts it.
+      await repository.lockUser();
+      const sent = await repository.countEmails(new Date(Date.now() - HOUR_MS));
+      if (sent + emails > emailsPerHour) {
+        return record(effects, `Email limit reached: ${String(emailsPerHour)} per hour`);
       }
     }
 
@@ -212,10 +231,15 @@ async function runCell(
   const done = { runId, cells: writtenCells(effects), tables };
   const emails = effects.filter(isSendEmail);
   if (emails.length > 0) {
-    const outcome = await sendAll(mailer, emails);
+    const { sent, failure: outcome } = await sendAll(mailer, emails);
     await db
       .update(actionRuns)
-      .set({ status: outcome === null ? "succeeded" : "failed", error: outcome })
+      // Only what went out counts toward the limit, so a mail server that is down uses none of it.
+      .set({
+        status: outcome === null ? "succeeded" : "failed",
+        error: outcome,
+        emails: emailCount(sent),
+      })
       .where(eq(actionRuns.id, runId));
     // Cell writes are already committed, so they are reported even when the mail failed.
     if (outcome !== null) return { ...done, status: "failed", error: outcome, emailsSent: 0 };
@@ -232,15 +256,21 @@ function writtenCells(effects: readonly Effect[]): StoredCell[] {
   return [...cells.values()];
 }
 
-/** Sends every message. Returns `null` on success or a description of the first failure. */
-async function sendAll(mailer: Mailer, emails: readonly SendEmailEffect[]): Promise<string | null> {
+/** Sends the messages in order and stops at the first that fails. Returns the ones sent, and a description of the failure if there was one. */
+async function sendAll(
+  mailer: Mailer,
+  emails: readonly SendEmailEffect[],
+): Promise<{ sent: SendEmailEffect[]; failure: string | null }> {
+  const sent: SendEmailEffect[] = [];
   try {
-    for (const { to, cc, subject, body } of emails) {
+    for (const email of emails) {
+      const { to, cc, subject, body } = email;
       await mailer.send({ to, cc, subject, body });
+      sent.push(email);
     }
-    return null;
+    return { sent, failure: null };
   } catch (cause) {
     console.error("Sending email failed", cause);
-    return "The email could not be sent";
+    return { sent, failure: "The email could not be sent" };
   }
 }

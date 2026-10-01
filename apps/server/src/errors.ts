@@ -18,6 +18,9 @@ export const unauthenticated = (): ApiFailure =>
 export const forbidden = (): ApiFailure =>
   new ApiFailure(403, "forbidden", "You can view this spreadsheet but not change it");
 
+export const crossOrigin = (): ApiFailure =>
+  new ApiFailure(403, "cross_origin", "This request did not come from the app");
+
 export const ownerOnly = (): ApiFailure =>
   new ApiFailure(403, "forbidden", "Only the owner of this spreadsheet can do that");
 

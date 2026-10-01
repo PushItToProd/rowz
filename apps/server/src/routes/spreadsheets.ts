@@ -1,5 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import {
+  eventsQuery,
   memberParam,
   nameBody,
   optionalNameBody,
@@ -16,7 +17,7 @@ import { onInvalid, type Env } from "../http";
 /** How long an open stream of changes goes without a word, at most. Proxies drop a connection that says nothing. */
 const HEARTBEAT_MS = 25_000;
 
-export function spreadsheetRoutes(changes: ChangeFeed) {
+export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
   return (
     new Hono<Env>()
       .get("/", async (c) => c.json(await c.var.repository.listSpreadsheets()))
@@ -48,34 +49,41 @@ export function spreadsheetRoutes(changes: ChangeFeed) {
       })
       /**
        * A stream of the changes made to a spreadsheet, for the sessions that
-       * have it open. Each `change` event carries the id of the client that
-       * made the change, so that client can ignore it.
+       * have it open. A session that names itself in `client` is not told of
+       * the changes it made itself, which it already shows.
        */
       .get(
         "/:spreadsheetId/events",
         zValidator("param", spreadsheetParam, onInvalid),
+        zValidator("query", eventsQuery, onInvalid),
         async (c) => {
           const { spreadsheetId } = c.req.valid("param");
+          const { client } = c.req.valid("query");
           await c.var.repository.findSpreadsheet(spreadsheetId, "read");
           return streamSSE(c, async (stream) => {
-            const origins: string[] = [];
+            let pending = 0;
             let closed = false;
             // Asked through a function, because the abort handler changes the answer between two awaits.
             const isOpen = (): boolean => !closed;
             let wake = (): void => undefined;
             const unsubscribe = changes.subscribe(spreadsheetId, (origin) => {
-              origins.push(origin);
+              if (client !== undefined && origin === client) return;
+              pending += 1;
               wake();
             });
-            stream.onAbort(() => {
+            const end = (): void => {
               closed = true;
               unsubscribe();
+              shutdown?.removeEventListener("abort", end);
               wake();
-            });
+            };
+            stream.onAbort(end);
+            shutdown?.addEventListener("abort", end);
+            if (shutdown?.aborted) end();
 
             await stream.writeSSE({ event: "ready", data: "" });
             while (isOpen()) {
-              if (origins.length === 0) {
+              if (pending === 0) {
                 await new Promise<void>((resolve) => {
                   const timer = setTimeout(resolve, HEARTBEAT_MS);
                   wake = () => {
@@ -85,12 +93,9 @@ export function spreadsheetRoutes(changes: ChangeFeed) {
                 });
               }
               if (!isOpen()) break;
-              const origin = origins.shift();
-              await stream.writeSSE(
-                origin === undefined
-                  ? { event: "ping", data: "" }
-                  : { event: "change", data: origin },
-              );
+              const event = pending === 0 ? "ping" : "change";
+              pending = Math.max(0, pending - 1);
+              await stream.writeSSE({ event, data: "" });
             }
           });
         },

@@ -1,0 +1,1 @@
+ALTER TABLE "action_runs" ADD COLUMN "emails" integer DEFAULT 0 NOT NULL;

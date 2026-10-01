@@ -2,7 +2,13 @@ import { FILE_LIMITS, type ApiError } from "@spreadsheet-app/shared";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { announceChanges, ChangeFeed } from "./changes";
-import { onError, requireSession, type AppDependencies, type Env } from "./http";
+import {
+  onError,
+  requireSession,
+  requireTrustedOrigin,
+  type AppDependencies,
+  type Env,
+} from "./http";
 import { pageRoutes } from "./routes/pages";
 import { spreadsheetRoutes } from "./routes/spreadsheets";
 import { tableRoutes } from "./routes/tables";
@@ -37,9 +43,10 @@ export function createApp(dependencies: AppDependencies) {
     )
     .on(["GET", "POST"], "/auth/*", (c) => dependencies.auth.handler(c.req.raw))
     // Everything registered after this line requires a session.
+    .use(requireTrustedOrigin(dependencies))
     .use(requireSession(dependencies))
     .use(announceChanges(changes))
-    .route("/spreadsheets", spreadsheetRoutes(changes))
+    .route("/spreadsheets", spreadsheetRoutes(changes, dependencies.shutdown))
     .route("/pages", pageRoutes())
     .route("/tables", tableRoutes(dependencies))
     .route("/views", viewRoutes());

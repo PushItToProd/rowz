@@ -83,4 +83,30 @@ describe("with email verification required", () => {
 
     expect((await signIn()).status).toBe(200);
   });
+
+  it("shares a spreadsheet only with an account that has confirmed its address", async () => {
+    const signedIn = await signIn();
+    const cookie = signedIn.headers
+      .getSetCookie()
+      .map((value) => value.split(";")[0])
+      .join("; ");
+    const asOwner = (method: string, path: string, body?: unknown) =>
+      strict.anonymous.request(method, path, body, { cookie });
+    const created = await asOwner("POST", "/spreadsheets", { name: "Plan" });
+    const { id } = (await created.json()) as { id: string };
+
+    // Anyone can sign up with an address that is not theirs. Until it is confirmed, a share by that address is refused.
+    const pending = { ...account, name: "Bob", email: "bob@example.com" };
+    await strict.anonymous.request("POST", "/auth/sign-up/email", pending);
+    const share = () =>
+      asOwner("PUT", `/spreadsheets/${id}/members`, { email: pending.email, role: "viewer" });
+    const refused = await share();
+    expect(refused.status).toBe(422);
+    expect(await refused.json()).toMatchObject({ error: { code: "email_not_confirmed" } });
+
+    const link = /https?:\/\/\S+/.exec(strict.sent.at(-1)!.body)![0];
+    const { pathname, search } = new URL(link);
+    await strict.anonymous.request("GET", `${pathname.replace(/^\/api/, "")}${search}`);
+    expect((await share()).status).toBe(200);
+  });
 });

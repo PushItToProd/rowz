@@ -122,6 +122,30 @@ describe("without a session", () => {
   });
 });
 
+describe("a page of another origin", () => {
+  // A sibling subdomain is the same site, so the browser sends the owner's session cookie with its requests.
+  const elsewhere = { origin: "https://evil.localhost:5173" };
+
+  it("is refused on every route that changes something, even with the owner's session", async () => {
+    for (const [method, path, body] of writeRoutes()) {
+      const response = await owner.request(method, path, body, elsewhere);
+      expect(response.status, `${method} ${path}`).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: "cross_origin" } });
+    }
+    await expectUnchanged();
+  });
+
+  it("can still read, which the browser keeps from the page that asked", async () => {
+    const response = await owner.request(
+      "GET",
+      `/spreadsheets/${snapshot.id}`,
+      undefined,
+      elsewhere,
+    );
+    expect(response.status).toBe(200);
+  });
+});
+
 describe("a user outside the workspace", () => {
   it("gets 404 on every route, as if the spreadsheet did not exist, and changes nothing", async () => {
     const stranger = await server.signUp("Stranger");

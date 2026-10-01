@@ -22,6 +22,8 @@ const mailer =
     ? logMailer()
     : smtpMailer(createTransport(config.smtpUrl), config.mailFrom);
 
+const stopping = new AbortController();
+
 const api = createApp({
   db: database.db,
   auth: createAuth(database.db, {
@@ -31,7 +33,10 @@ const api = createApp({
     ...(config.requireEmailVerification ? { verifyEmailWith: mailer } : {}),
   }),
   mailer,
-  emailRunsPerHour: config.emailRunsPerHour,
+  emailsPerHour: config.emailsPerHour,
+  trustedOrigins: [config.baseUrl],
+  requireEmailVerification: config.requireEmailVerification,
+  shutdown: stopping.signal,
 });
 
 const app = config.webRoot === undefined ? api : withWebApp(api, resolve(config.webRoot));
@@ -40,10 +45,19 @@ const server = serve({ fetch: app.fetch, port: config.port }, ({ port }) => {
   console.log(`Listening on http://localhost:${String(port)}`);
 });
 
+/** How long requests in progress get to finish before their connections are closed. */
+const SHUTDOWN_GRACE_MS = 10_000;
+
 function shutdown(): void {
+  // The server closes once every response has ended, and a stream of changes
+  // ends only when its reader leaves or it is told to.
+  stopping.abort();
   server.close(() => {
     void database.close().then(() => process.exit(0));
   });
+  setTimeout(() => {
+    if ("closeAllConnections" in server) server.closeAllConnections();
+  }, SHUTDOWN_GRACE_MS).unref();
 }
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

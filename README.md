@@ -157,7 +157,9 @@ The engine is pure. Evaluating an action formula returns a description of the ef
 
 The same engine runs in two places. The browser runs it to show values as soon as a cell changes. The server runs it when a button is clicked: it loads the stored cell inputs, evaluates the clicked cell, plans the action, and applies the effects. The browser sends only the address of the clicked cell, so it cannot ask the server for an effect that the stored formula does not describe.
 
-Cell writes and a record in `action_runs` commit in one transaction. Email is sent after the commit. `action_runs` records who clicked which cell, the effects, and the outcome.
+Cell writes and a record in `action_runs` commit in one transaction. Email is sent after the commit.
+
+Every change to what a spreadsheet holds runs in a transaction that first locks the spreadsheet's row, so changes to one spreadsheet happen one at a time and each reads what the one before it left. A request that changes anything must also come from a page served at `BASE_URL`: the server refuses one whose `Origin` header names another origin. `action_runs` records who clicked which cell, the effects, and the outcome.
 
 Every spreadsheet belongs to a workspace, and users reach spreadsheets through workspace membership with a role of owner, editor, or viewer. All data access goes through `SpreadsheetRepository`, which checks membership in each query. A spreadsheet outside the user's workspaces is reported as not found.
 
@@ -165,17 +167,17 @@ Every spreadsheet belongs to a workspace, and users reach spreadsheets through w
 
 The server reads environment variables. Development needs none. `pnpm dev` also reads them from `.env.local` at the repository root, which Git ignores.
 
-| Variable                     | Default                              | Meaning                                                                                                                                        |
-| ---------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`               | `.data/pglite`                       | A `postgres://` URL, or a directory for the embedded PGlite database                                                                           |
-| `AUTH_SECRET`                | a development value                  | Signs sessions. Required when `NODE_ENV=production`.                                                                                           |
-| `BASE_URL`                   | `http://localhost:5173`              | The URL browsers use to reach the app                                                                                                          |
-| `PORT`                       | `3000`                               | Port of the API server                                                                                                                         |
-| `EMAIL_RUNS_PER_HOUR`        | `20`                                 | Button clicks per user per hour that may send email. Stops use as an open mail relay                                                           |
-| `SMTP_URL`                   | none                                 | An `smtp://` or `smtps://` URL of a mail server, with any user name and password in it. Without it email is logged, not sent                   |
-| `MAIL_FROM`                  | `Spreadsheet <no-reply@localhost>`   | The address email is sent from                                                                                                                 |
-| `REQUIRE_EMAIL_VERIFICATION` | off                                  | Set to `true` to make a new account confirm its email address, through a link sent to it, before it can sign in. Needs `SMTP_URL` to be useful |
-| `WEB_ROOT`                   | none, or `../web/dist` in production | The directory of the built web app, which the server then serves. Set it to nothing when something else serves the web app                     |
+| Variable                     | Default                              | Meaning                                                                                                                                                                                                                              |
+| ---------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`               | `.data/pglite`                       | A `postgres://` URL, or a directory for the embedded PGlite database                                                                                                                                                                 |
+| `AUTH_SECRET`                | a development value                  | Signs sessions. Required when `NODE_ENV=production`.                                                                                                                                                                                 |
+| `BASE_URL`                   | `http://localhost:5173`              | The URL browsers use to reach the app                                                                                                                                                                                                |
+| `PORT`                       | `3000`                               | Port of the API server                                                                                                                                                                                                               |
+| `EMAILS_PER_HOUR`            | `50`                                 | Emails one user's button clicks may send in an hour, counting each recipient of each message. Stops use as an open mail relay                                                                                                        |
+| `SMTP_URL`                   | none                                 | An `smtp://` or `smtps://` URL of a mail server, with any user name and password in it. Without it email is logged, not sent                                                                                                         |
+| `MAIL_FROM`                  | `Spreadsheet <no-reply@localhost>`   | The address email is sent from                                                                                                                                                                                                       |
+| `REQUIRE_EMAIL_VERIFICATION` | off                                  | Set to `true` to make a new account confirm its email address, through a link sent to it, before it can sign in. A spreadsheet can then be shared only with an account that has confirmed its address. Needs `SMTP_URL` to be useful |
+| `WEB_ROOT`                   | none, or `../web/dist` in production | The directory of the built web app, which the server then serves. Set it to nothing when something else serves the web app                                                                                                           |
 
 The server applies database migrations at startup. After changing `apps/server/src/db/schema.ts`, run `pnpm --filter @spreadsheet-app/server db:generate` and commit the new file in `apps/server/drizzle/`.
 

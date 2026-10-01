@@ -18,11 +18,11 @@ beforeAll(async () => {
 afterAll(() => server.close());
 
 /** Opens the stream of changes of a spreadsheet and reads its events one at a time. */
-async function listen(client: TestUser, spreadsheetId: string) {
+async function listen(client: TestUser, spreadsheetId: string, as = "") {
   const abort = new AbortController();
   const response = await client.request(
     "GET",
-    `/spreadsheets/${spreadsheetId}/events`,
+    `/spreadsheets/${spreadsheetId}/events${as === "" ? "" : `?client=${as}`}`,
     undefined,
     {},
     abort.signal,
@@ -75,7 +75,7 @@ describe("ChangeFeed", () => {
 });
 
 describe("the stream of changes", () => {
-  it("announces each change with the client that made it", async () => {
+  it("announces each change without naming the client that made it", async () => {
     const snapshot = await createSpreadsheet(user);
     const table = snapshot.tables[0]!;
     const stream = await listen(user, snapshot.id);
@@ -83,21 +83,52 @@ describe("the stream of changes", () => {
     await user.request("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "x" }), {
       "x-client-id": "tab-1",
     });
-    expect(await stream.next()).toEqual({ event: "change", data: "tab-1" });
+    expect(await stream.next()).toEqual({ event: "change", data: "" });
 
     await user.json("PATCH", `/spreadsheets/${snapshot.id}`, { name: "Renamed" }, 204);
     expect(await stream.next()).toEqual({ event: "change", data: "" });
-
-    await user.request(
-      "POST",
-      `/tables/${table.id}/edits`,
-      { axis: "row", kind: "insert", index: 0 },
-      {
-        "x-client-id": "tab-2",
-      },
-    );
-    expect(await stream.next()).toEqual({ event: "change", data: "tab-2" });
     stream.close();
+  });
+
+  it("leaves a client's own changes out of its stream, and no one else's", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const table = snapshot.tables[0]!;
+    const save = (input: string, client: string) =>
+      user.request("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: input }), {
+        "x-client-id": client,
+      });
+    const [mine, theirs] = [
+      await listen(user, snapshot.id, "tab-1"),
+      await listen(user, snapshot.id, "tab-2"),
+    ];
+
+    await save("from tab 1", "tab-1");
+    expect(await theirs.next()).toEqual({ event: "change", data: "" });
+    await save("from tab 2", "tab-2");
+    // The first thing tab 1 hears is tab 2's change: its own was not announced to it.
+    expect(await mine.next()).toEqual({ event: "change", data: "" });
+    await save("from tab 1 again", "tab-1");
+    await save("from nobody", "");
+    expect(await mine.next()).toEqual({ event: "change", data: "" });
+    expect(await theirs.next()).toEqual({ event: "change", data: "" });
+    expect(await theirs.next()).toEqual({ event: "change", data: "" });
+    mine.close();
+    theirs.close();
+  });
+
+  it("ends when the server shuts down", async () => {
+    const stopping = new AbortController();
+    const stopped = await startTestServer({ shutdown: stopping.signal });
+    const reader = await stopped.signUp();
+    const snapshot = await createSpreadsheet(reader);
+    const stream = await listen(reader, snapshot.id);
+
+    stopping.abort();
+    await expect(stream.next()).rejects.toThrow("The stream ended");
+    // A stream opened during the shutdown ends at once, so reading all of it does not wait.
+    const late = await reader.request("GET", `/spreadsheets/${snapshot.id}/events`);
+    expect(await late.text()).toBe("event: ready\ndata: \n\n");
+    await stopped.close();
   });
 
   it("announces a button click, a share, and a deletion", async () => {

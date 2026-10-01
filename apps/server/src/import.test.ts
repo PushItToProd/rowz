@@ -1,5 +1,5 @@
 import { FILE_LIMITS, LIMITS, type SpreadsheetFile } from "@spreadsheet-app/shared";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Snapshot, SpreadsheetSummary } from "./app";
 import { startTestServer, type TestServer, type TestUser } from "./testing";
 
@@ -8,6 +8,11 @@ let user: TestUser;
 beforeAll(async () => {
   server = await startTestServer();
   user = await server.signUp();
+});
+const limits: { cells: number } = FILE_LIMITS;
+const REAL_CELL_LIMIT = FILE_LIMITS.cells;
+afterEach(() => {
+  limits.cells = REAL_CELL_LIMIT;
 });
 afterAll(() => server.close());
 
@@ -79,6 +84,30 @@ describe("importing a spreadsheet file", () => {
       [sales, 1, 0, "=A1*2"],
       [sales, 4, 2, "corner"],
     ]);
+  });
+
+  it("keeps a version of the file as it arrived, which the first edit does not replace", async () => {
+    const snapshot = await imported(file());
+    const sales = snapshot.tables.find((table) => table.name === "Sales")!;
+    await user.json(
+      "PUT",
+      `/tables/${sales.id}/cells`,
+      { cells: [{ row: 0, col: 0, input: "changed" }] },
+      204,
+    );
+    const history = await user.json<{ id: string }[]>(
+      "GET",
+      `/spreadsheets/${snapshot.id}/versions`,
+    );
+    expect(history).toHaveLength(1);
+    await user.json(
+      "POST",
+      `/spreadsheets/${snapshot.id}/versions/${history[0]!.id}/restore`,
+      undefined,
+      204,
+    );
+    const restored = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
+    expect(restored.cells.find((cell) => cell.row === 0 && cell.col === 0)?.input).toBe("10");
   });
 
   it("lists the new spreadsheet, and can import the same file again", async () => {
@@ -195,6 +224,71 @@ describe("importing a spreadsheet file", () => {
     ["something that is not a file", { hello: "world" }],
   ])("refuses a file with %s", async (_, contents) => {
     await user.json("POST", "/spreadsheets/import", contents, 400);
+  });
+
+  it("holds a spreadsheet to the limits of a file, so that what is exported can be imported", async () => {
+    const other = await server.signUp();
+    const views = Array.from({ length: FILE_LIMITS.itemsPerPage }, (_, index) => ({
+      type: "text" as const,
+      name: `Text ${String(index)}`,
+      source: "",
+    }));
+    const pages = Array.from({ length: FILE_LIMITS.pages }, (_, index) => ({
+      name: `Page ${String(index)}`,
+      items: index === 0 ? views : [],
+    }));
+    const summary = await other.json<SpreadsheetSummary>(
+      "POST",
+      "/spreadsheets/import",
+      file({ pages }),
+      201,
+    );
+    const snapshot = await other.json<Snapshot>("GET", `/spreadsheets/${summary.id}`);
+    const [full, empty] = snapshot.pages;
+
+    expect(await other.json("POST", `/spreadsheets/${summary.id}/pages`, {}, 422)).toMatchObject({
+      error: { code: "too_many_pages" },
+    });
+    for (const [path, body] of [
+      [`/pages/${full!.id}/tables`, {}],
+      [`/pages/${full!.id}/views`, { kind: "chart" }],
+    ] as const) {
+      expect(await other.json("POST", path, body, 422)).toMatchObject({
+        error: { code: "page_full" },
+      });
+    }
+    await other.json("POST", `/pages/${empty!.id}/tables`, {}, 201);
+  });
+
+  it("refuses a cell past the most a file may hold, and still lets cells be changed and emptied", async () => {
+    // A small limit stands in for the real one, which takes long to reach.
+    limits.cells = 3;
+    const other = await server.signUp();
+    const cells = [0, 1, 2].map((row) => ({ row, col: 0, input: "1" }));
+    const full = { type: "table" as const, name: "Full", rowCount: 5, colCount: 1, cells };
+    const spare = { type: "table" as const, name: "Spare", rowCount: 2, colCount: 2, cells: [] };
+    const summary = await other.json<SpreadsheetSummary>(
+      "POST",
+      "/spreadsheets/import",
+      file({ pages: [{ name: "P", items: [full, spare] }] }),
+      201,
+    );
+    const snapshot = await other.json<Snapshot>("GET", `/spreadsheets/${summary.id}`);
+    const [fullId, spareId] = snapshot.tables.map((table) => table.id);
+    const put = (tableId: string | undefined, input: string, status: number) =>
+      other.json(
+        "PUT",
+        `/tables/${tableId ?? ""}/cells`,
+        { cells: [{ row: 0, col: 0, input }] },
+        status,
+      );
+
+    expect(await put(spareId, "one too many", 422)).toMatchObject({
+      error: { code: "too_many_cells" },
+    });
+    await put(fullId, "changed", 204);
+    await put(fullId, "", 204);
+    await put(spareId, "fits now", 204);
   });
 
   it("refuses a body larger than a file may be", async () => {

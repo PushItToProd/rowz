@@ -10,15 +10,15 @@ import { CLIENT_ID } from "./client";
  */
 export function watchSpreadsheet(spreadsheetId: string, onChange: () => void): () => void {
   if (typeof EventSource === "undefined") return () => undefined;
-  const source = new EventSource(`/api/spreadsheets/${spreadsheetId}/events`);
+  // Naming this tab keeps the changes it made itself, which are already on screen, out of the stream.
+  const source = new EventSource(`/api/spreadsheets/${spreadsheetId}/events?client=${CLIENT_ID}`);
   let connectedBefore = false;
   source.addEventListener("ready", () => {
     if (connectedBefore) onChange();
     connectedBefore = true;
   });
-  source.addEventListener("change", (event) => {
-    // A change this tab made is already on screen.
-    if ((event as MessageEvent<string>).data !== CLIENT_ID) onChange();
+  source.addEventListener("change", () => {
+    onChange();
   });
   return () => {
     source.close();

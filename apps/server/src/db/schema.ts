@@ -244,6 +244,12 @@ export const actionRuns = pgTable(
     col: integer("col_index").notNull(),
     userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     effects: jsonb("effects").$type<Effect[]>().notNull(),
+    /**
+     * How many emails the run sent: one for each recipient of each message.
+     * While the run is pending it is how many the run set out to send, which
+     * holds their place in the user's hourly limit.
+     */
+    emails: integer("emails").notNull().default(0),
     status: text("status").$type<RunStatus>().notNull(),
     error: text("error"),
     createdAt,

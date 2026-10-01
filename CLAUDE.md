@@ -24,7 +24,7 @@ TypeScript is pinned to 6.0 because typescript-eslint and vue-tsc need its JavaS
 - **A formula column's cells are not stored.** The column definition on the table holds the formula, and the engine gives each row that holds something a computed cell. The server refuses writes to those cells, and the engine refuses actions that target them.
 - **Markdown never renders HTML it was given.** Text views and `MARKDOWN` cells share the renderer in `apps/web/src/markdown.ts`, which has `html: false`. The template engine escapes Markdown in the values it writes in, except a value made with `MARKDOWN`, so neither a view's author nor a cell's content can inject markup.
 - **Page and table names are unique within their parent, ignoring case,** because formulas resolve them that way. The database enforces it with unique indexes on `lower(name)`.
-- **A change to a spreadsheet goes through `touch`,** or calls `noteChange` itself. That is what announces the change to other open sessions and what keeps versions. A new mutation that skips it will not show up for collaborators.
+- **A change to what a spreadsheet holds goes through `change`** in `SpreadsheetRepository`, or through `changePage`, `changeTable`, or `changeView`, which also hand over the thing being changed. `change` locks the spreadsheet, so changes to it run one at a time, and then calls `touch`, which announces the change to other open sessions and keeps versions. Decide from what is read inside `change`: a table read before the lock may be stale by the time the work runs. A change to something else about a spreadsheet, such as its name or its shares, calls `noteChange` itself.
 - Packages export TypeScript source. There is no build step between packages.
 
 ## Tests

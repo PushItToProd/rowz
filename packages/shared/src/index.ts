@@ -294,6 +294,8 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
 }
 
 export const spreadsheetParam = z.object({ spreadsheetId: z.uuid() });
+/** Opening the stream of a spreadsheet's changes. `client` is the name the session makes its own changes under. */
+export const eventsQuery = z.object({ client: z.string().min(1).max(100).optional() });
 /** Sharing a spreadsheet with the account that has this email address. */
 export const shareBody = z.object({
   email: z.email().max(320),

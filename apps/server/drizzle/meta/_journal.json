@@ -43,6 +43,13 @@
       "when": 1790845681484,
       "tag": "0005_sharing",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790861119063,
+      "tag": "0006_email_count",
+      "breakpoints": true
     }
   ]
 }

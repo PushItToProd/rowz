@@ -33,25 +33,19 @@ afterEach(() => {
 });
 
 describe("watchSpreadsheet", () => {
-  it("listens to the spreadsheet's stream, and reports changes made elsewhere", () => {
+  it("listens to the spreadsheet's stream under this tab's name, and reports each change", () => {
     const onChange = vi.fn();
     watchSpreadsheet("s1", onChange);
     const source = FakeEventSource.last!;
-    expect(source.url).toBe("/api/spreadsheets/s1/events");
+    // The server leaves the changes made under this name out of the stream.
+    expect(source.url).toBe(`/api/spreadsheets/s1/events?client=${CLIENT_ID}`);
 
     source.emit("ready");
     source.emit("ping");
     expect(onChange).not.toHaveBeenCalled();
-    source.emit("change", "another-tab");
-    source.emit("change", "");
+    source.emit("change");
+    source.emit("change");
     expect(onChange).toHaveBeenCalledTimes(2);
-  });
-
-  it("ignores the changes this tab made", () => {
-    const onChange = vi.fn();
-    watchSpreadsheet("s1", onChange);
-    FakeEventSource.last!.emit("change", CLIENT_ID);
-    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("reports once when the connection comes back, for what was missed", () => {

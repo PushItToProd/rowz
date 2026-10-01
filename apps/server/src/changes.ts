@@ -1,7 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createMiddleware } from "hono/factory";
 
-/** The header a client sends to name itself, so it can tell its own changes from other people's. */
+/**
+ * The header a client sends to name itself. It gives the same name when it
+ * opens the stream of changes, and the stream leaves out the changes made
+ * under that name. The name is never sent to another client: whoever knew it
+ * could make changes under it that its owner would not hear of.
+ */
 export const CLIENT_ID_HEADER = "x-client-id";
 
 type Listener = (origin: string) => void;
