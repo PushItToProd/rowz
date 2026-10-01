@@ -291,7 +291,7 @@ describe("access after waiting for a spreadsheet lock", () => {
         });
         release();
         expect((await undo).status).toBe(403);
-        expect(await storedInputs(owner, snapshot.id, table.id)).toEqual({ A1: "saved" });
+        expect(await storedInputs(owner, snapshot.id, table.id)).toEqual({ "0:0": "saved" });
       } finally {
         release();
         await holdingLock.catch(() => undefined);
