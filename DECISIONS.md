@@ -2,6 +2,39 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: Undo through a server-side journal
+
+**Decision.** Ctrl+Z and Ctrl+Y cover every change to what a spreadsheet holds, and keep working after a row or column is inserted or deleted or something is renamed. The server records what each change replaced in a `journal` table, and an undo asks the server to put the recorded state back. The author chose the first four points under Choices. The rest were chosen during the work.
+
+**Choices.**
+
+- **The journal is on the server.** `SpreadsheetRepository.change` already runs every content change, so it records them in one place. A structural change is itself an entry that is undone first, which is why older entries stay valid within one tab.
+- **Every content change is undoable:** cells, formatting, row and column edits, renames, resizes, column types and formulas, charts and text views, reordering, moving a block to another page, and creating or deleting pages, tables, and views.
+- **A button click, a checkbox, and a dropdown are undoable.** A click's writes undo as one step. Email it sent stays sent.
+- **A stack belongs to one tab:** the signed-in user plus the client id the tab makes when it loads. Reloading the page starts an empty stack.
+- **An entry holds state, not operations:** each page, table, view, and cell as it was before and after. An undo writes every "before" and a redo every "after", so one function reverses a delete, a rename, and a format change alike.
+- **Requests that share a step id undo together.** The tab sends one id with the batches of a paste and with the resize that makes room for it.
+- **Renaming, sharing, and deleting the spreadsheet are not journaled,** and neither is creating it. Restoring a version gives every page and table a new id, so it empties the spreadsheet's journal.
+
+**When an undo is refused.** A refused step leaves its stack, so the next Ctrl+Z reaches the step under it. Redo follows the same rules with before and after exchanged. A later change counts when it has not itself been undone.
+
+1. A step that rewrote references, or that created or deleted a page, table, or view, is refused after any later change. Its recorded cells no longer say what the reverse should do: a formula typed after a row insert uses the new row numbers.
+2. Any step is refused after a later change that rewrote references, because the text it would put back names rows or names that have since changed.
+3. Each recorded page, table, view, and cell must still be as the step left it. A cell someone else has retyped fails this.
+4. What the undo writes must still fit: the page or table it belongs to exists, the spreadsheet keeps at least one page, no cell is outside its table or in a formula column, names stay unique, and the size limits hold.
+5. A change too large to record is refused.
+
+Two people typing in different cells of one table can each undo their own edits. Rules 1 and 2 refuse some undos that would be safe, such as one person adding a table while another types on a different page. Allowing those needs tracking of which changes touch which tables.
+
+**Limits.** A spreadsheet's journal keeps at most 200 entries, one day, and 64 MB, and one entry at most 8 MB. Pruning deletes oldest first, which keeps rules 1 and 2 sound: no entry outlives a later entry that would have blocked it. Pruning part of a step takes the rest of the step off its stack. A change over 8 MB succeeds and is stored without its state, so the rules still see it.
+
+**Risks.**
+
+- Reading the state before a change adds a read to every write. A change to more than 100 cells of a table reads the rectangle that holds them, which is one query but can read cells the change does not touch.
+- An undo or redo holds the spreadsheet's lock like any other change, and one that reverses a row insert in a full table writes every cell below it.
+
+**To change.** The journal and `ContentWriter`: `apps/server/src/repo/journal.ts`. The rules: `changeHistory` in `apps/server/src/repo/spreadsheets.ts`. The limits: `LIMITS` in `packages/shared/src/index.ts`. The tab's side: `runHistory` and `applyChanged` in the workbook store.
+
 ## 2026-10-01: Fixes from a code review
 
 A review listed 20 findings. All were addressed. These are the places where the fix involved a choice.
@@ -47,7 +80,7 @@ A review listed 20 findings. All were addressed. These are the places where the 
 - **Server-sent events, not WebSockets.** Changes still go up as ordinary requests, so only a one-way stream down is needed, and it passes through the dev proxy and through HTTP middleware unchanged.
 - **The feed is in the server's memory.** With more than one server process, a session hears only the changes made through its own process. Running several needs Postgres `LISTEN/NOTIFY` or similar behind `ChangeFeed`.
 - **A session's own typing is saved before it re-reads,** and the read is repeated if more was typed meanwhile, so a remote change does not wipe out a cell being saved. A cell that is open for editing keeps what is being typed.
-- **Undo and redo use a per-tab server journal.** Separate tabs and users have separate stacks. A later write to the same content can refuse an undo, and a later reference rewrite or structural change blocks an older step. Restoring a version clears the journal.
+- **A remote change can make an undo refuse.** Each tab undoes only its own changes, and the server refuses a step that someone else's later change has made unsafe to reverse. See "Undo through a server-side journal".
 - **Losing access shows at once:** the page of someone whose share ended says the spreadsheet was not found.
 
 **To change.** Server: `apps/server/src/changes.ts`. Browser: `apps/web/src/api/live.ts` and `refresh` in the workbook store.
@@ -72,13 +105,7 @@ A review listed 20 findings. All were addressed. These are the places where the 
 
 ## 2026-10-01: Version history
 
-**Decision.** The todo item read "undo and redo (persistent version history)". The server keeps whole-spreadsheet versions, and a History panel restores one or opens it as a copy. Ctrl+Z and Ctrl+Y use a server journal to take back and remake content changes from the current tab.
-
-**The journal records cell inputs, formatting, tables, pages, and views.** Structural edits and renames include the formulas they rewrite. Requests with the same step id, such as a paste that grows a table or a button action that writes cells, undo as one step. The stack belongs to the signed-in user and the client id generated for the current page load, so it is cleared by reloading the page or restoring a version.
-
-**An undo is refused when later content makes its inverse unsafe.** A later write to a recorded cell or record blocks the step. A reference rewrite or page, table, or view creation or deletion is refused after any later active change; an older step is also refused after a later reference rewrite. Refused steps leave the stack so the next Ctrl+Z can reach the step below. Independent cell edits by different tabs can still be undone separately.
-
-**The journal keeps at most 200 entries, one day, 64 MB per spreadsheet, and 8 MB per entry.** Pruning removes entries oldest first and removes a whole step from its stack if pruning deletes any part of it. A change larger than 8 MB succeeds without stored undo data and its undo is refused. History remains the recovery path for older versions and journal entries that cannot be applied safely.
+**Decision.** The todo item read "undo and redo (persistent version history)". The server keeps whole-spreadsheet versions, and a History panel restores one or opens it as a copy. Ctrl+Z and Ctrl+Y take back and remake changes made in the current tab, which the entry "Undo through a server-side journal" describes. History is the way back after a reload, and from a change that Ctrl+Z refuses.
 
 **When a version is kept.**
 
