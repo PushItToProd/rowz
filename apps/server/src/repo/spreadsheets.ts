@@ -1202,13 +1202,14 @@ export class SpreadsheetRepository {
   }
 
   /**
-   * Inserts or deletes one row or column. Cells past it move by one, and
-   * formulas anywhere in the spreadsheet that read the table are rewritten to
-   * keep reading the same cells, as are charts and text views.
+   * Inserts or deletes rows or columns that sit next to each other. Cells
+   * past them move, and formulas anywhere in the spreadsheet that read the
+   * table are rewritten to keep reading the same cells, as are charts and
+   * text views.
    */
   async editStructure(
     tableId: string,
-    edit: StructuralEditBody,
+    body: StructuralEditBody,
   ): Promise<Rewritten & { table: TableRecord }> {
     const { spreadsheetId } = await this.findTable(tableId, "write");
     return this.change(spreadsheetId, async (tx) => {
@@ -1216,38 +1217,42 @@ export class SpreadsheetRepository {
       const table = snapshot.tables.find((candidate) => candidate.id === tableId);
       if (!table) throw notFound("Table");
 
+      const { count = 1 } = body;
+      const edit = { tableId, ...body, count };
       const rows = edit.axis === "row";
       const noun = rows ? "row" : "column";
-      const count = rows ? table.rowCount : table.colCount;
+      const size = rows ? table.rowCount : table.colCount;
       const limit = rows ? LIMITS.tableRows : LIMITS.tableCols;
+      const label = (index: number): string => (rows ? String(index + 1) : columnLabel(index));
       if (edit.kind === "delete") {
-        if (edit.index >= count) {
-          const label = rows ? String(edit.index + 1) : columnLabel(edit.index);
-          throw unprocessable("out_of_bounds", `${table.name} has no ${noun} ${label}`);
+        const last = edit.index + count - 1;
+        if (last >= size) {
+          throw unprocessable("out_of_bounds", `${table.name} has no ${noun} ${label(last)}`);
         }
-        if (count <= 1) throw unprocessable("last_one", `A table needs at least one ${noun}`);
+        if (count >= size) throw unprocessable("last_one", `A table needs at least one ${noun}`);
+        const deleted =
+          count === 1
+            ? `${noun} ${label(edit.index)}`
+            : `${noun}s ${label(edit.index)} to ${label(last)}`;
+        await this.keepVersion(tx, spreadsheetId, `Before deleting ${deleted} of ${table.name}`);
       } else {
-        if (edit.index > count) {
-          const counted = `${String(count)} ${noun}${count === 1 ? "" : "s"}`;
+        if (edit.index > size) {
+          const counted = `${String(size)} ${noun}${size === 1 ? "" : "s"}`;
           throw unprocessable("out_of_bounds", `${table.name} has only ${counted}`);
         }
-        if (count >= limit) {
+        if (size + count > limit) {
           throw unprocessable("table_full", `A table can have at most ${String(limit)} ${noun}s`);
         }
       }
 
-      if (edit.kind === "delete") {
-        const label = rows ? `row ${String(edit.index + 1)}` : `column ${columnLabel(edit.index)}`;
-        await this.keepVersion(tx, spreadsheetId, `Before deleting ${label} of ${table.name}`);
-      }
-      const written = inputsAfterEdit(snapshot, { tableId, ...edit });
+      const written = inputsAfterEdit(snapshot, edit);
       await this.storeCells(tx, written);
-      const rewrittenViews = viewsAfterEdit(snapshot, snapshot.views, { tableId, ...edit });
+      const rewrittenViews = viewsAfterEdit(snapshot, snapshot.views, edit);
       await this.storeViewSources(tx, rewrittenViews);
       const changed = await this.storeColumnFormulas(
         tx,
         snapshot.tables,
-        columnFormulasAfterEdit(snapshot, { tableId, ...edit }),
+        columnFormulasAfterEdit(snapshot, edit),
       );
       // The formulas were rewritten at the positions the columns had before the edit.
       const current =
@@ -1255,14 +1260,14 @@ export class SpreadsheetRepository {
       const columns =
         current && !rows
           ? edit.kind === "insert"
-            ? current.toSpliced(edit.index, 0, { name: nextColumnName(current), type: "any" })
-            : current.toSpliced(edit.index, 1)
+            ? withColumnsInserted(current, edit.index, count)
+            : current.toSpliced(edit.index, count)
           : current;
-      const newCount = count + (edit.kind === "insert" ? 1 : -1);
+      const newSize = size + (edit.kind === "insert" ? count : -count);
       const [updated] = await tx
         .update(tables)
         .set({
-          ...(rows ? { rowCount: newCount } : { colCount: newCount, columns }),
+          ...(rows ? { rowCount: newSize } : { colCount: newSize, columns }),
           // Formats follow the cells they were given to.
           formats: formatRulesAfterEdit(table.formats, edit),
         })
@@ -1539,11 +1544,23 @@ function nextColumnName(columns: readonly ColumnDefinition[]): string {
   );
 }
 
+/** A table's columns with `count` new ones put in at `index`, each with the next free name. */
+function withColumnsInserted(
+  columns: readonly ColumnDefinition[],
+  index: number,
+  count: number,
+): ColumnDefinition[] {
+  const result = [...columns];
+  for (let added = 0; added < count; added += 1) {
+    result.splice(index + added, 0, { name: nextColumnName(result), type: "any" });
+  }
+  return result;
+}
+
 /** A table's columns after its width changes: new ones at the end, or fewer. */
 function resized(columns: readonly ColumnDefinition[], colCount: number): ColumnDefinition[] {
-  const result = columns.slice(0, colCount);
-  while (result.length < colCount) result.push({ name: nextColumnName(result), type: "any" });
-  return result;
+  const kept = columns.slice(0, colCount);
+  return withColumnsInserted(kept, kept.length, colCount - kept.length);
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { StructuralEdit } from "./rewrite";
+import { moveRun, type StructuralEdit } from "./rewrite";
 
 /** The named colors a cell's text or background can take. What each looks like is up to whatever draws the cell. */
 export const FORMAT_COLORS = [
@@ -125,28 +125,21 @@ export function addFormatRule(rules: readonly FormatRule[], rule: FormatRule): F
 }
 
 /**
- * A table's rules after a row or column is inserted or deleted, so that each
+ * A table's rules after rows or columns are inserted or deleted, so that each
  * rule keeps covering the cells it covered. A rule grows when a row is
  * inserted inside it, shrinks when one inside it is deleted, and is dropped
- * when the only row or column it covered is deleted.
+ * when every row or column it covered is deleted.
  */
 export function formatRulesAfterEdit(
   rules: readonly FormatRule[],
-  edit: Pick<StructuralEdit, "axis" | "kind" | "index">,
+  edit: Pick<StructuralEdit, "axis" | "kind" | "index" | "count">,
 ): FormatRule[] {
   const [startKey, endKey] =
     edit.axis === "row" ? (["startRow", "endRow"] as const) : (["startCol", "endCol"] as const);
   return rules.flatMap((rule) => {
-    let start = rule[startKey];
-    let end = rule[endKey];
-    if (edit.kind === "insert") {
-      if (start >= edit.index) start += 1;
-      if (end !== null && end >= edit.index) end += 1;
-    } else {
-      if (start > edit.index) start -= 1;
-      if (end !== null && end >= edit.index) end -= 1;
-      if (end !== null && end < start) return [];
-    }
-    return [{ ...rule, [startKey]: start, [endKey]: end }];
+    const end = rule[endKey];
+    const moved = moveRun(rule[startKey], end ?? Infinity, edit);
+    if (!moved) return [];
+    return [{ ...rule, [startKey]: moved[0], [endKey]: end === null ? null : moved[1] }];
   });
 }

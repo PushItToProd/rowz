@@ -363,6 +363,56 @@ describe("inputsAfterEdit", () => {
     ).toEqual(["t2 A1 =Table1!A4", "t2 A4 ='Page 1'!Table1!A4", "t3 A2 ='Page 1'!Table1!A4"]);
   });
 
+  describe("several rows or columns at once", () => {
+    it("deletes rows 2 to 3: their cells go and the rows below move up by two", () => {
+      const cells = { t1: { A1: "one", A2: "two", A3: "three", A4: "four", B5: "five" } };
+      expect(writes(cells, { ...deleteRow(1), count: 2 })).toEqual([
+        "t1 A2 four",
+        "t1 A3 (cleared)",
+        "t1 A4 (cleared)",
+        "t1 B3 five",
+        "t1 B5 (cleared)",
+      ]);
+    });
+
+    it("inserts two columns: the columns from there on move right by two", () => {
+      expect(
+        writes({ t1: { A1: "a", B1: "=A1", C1: "c" } }, { ...insertCol(1), count: 2 }),
+      ).toEqual(["t1 B1 (cleared)", "t1 C1 (cleared)", "t1 D1 =A1", "t1 E1 c"]);
+    });
+
+    it.each([
+      ["=Table1!A2", "=Table1!A2"],
+      ["=Table1!A3", "=#REF!"],
+      ["=Table1!A5", "=#REF!"],
+      ["=Table1!A6", "=Table1!A3"],
+      ["=SUM(Table1!A1:A4)", "=SUM(Table1!A1:A2)"],
+      ["=SUM(Table1!A4:A8)", "=SUM(Table1!A3:A5)"],
+      ["=SUM(Table1!A1:A9)", "=SUM(Table1!A1:A6)"],
+      ["=SUM(Table1!A3:A5)", "=SUM(#REF!)"],
+      ["=SUM(Table1!A4:A4)", "=SUM(#REF!)"],
+      ["=SUM(Table1!A8:A4)", "=SUM(Table1!A5:A3)"],
+      ["=SUM(Table1!A4:A)", "=SUM(Table1!A3:A)"],
+      ["=SUM(Table1!A7:A)", "=SUM(Table1!A4:A)"],
+      ["=SUM(Table1!2:4)", "=SUM(Table1!2:2)"],
+      ["=SUM(Table1!B:B)", "=SUM(Table1!B:B)"],
+    ])("rewrites %s to %s after deleting rows 3 to 5", (formula, expected) => {
+      expect(rewritten(formula, { ...deleteRow(2), count: 3 })).toBe(expected);
+    });
+
+    it.each([
+      ["=Table1!A2", "=Table1!A2"],
+      ["=Table1!A3", "=Table1!A6"],
+      ["=SUM(Table1!A1:A2)", "=SUM(Table1!A1:A2)"],
+      ["=SUM(Table1!A1:A3)", "=SUM(Table1!A1:A6)"],
+      ["=SUM(Table1!A3:A4)", "=SUM(Table1!A6:A7)"],
+      ["=SUM(Table1!A2:A)", "=SUM(Table1!A2:A)"],
+      ["=SUM(Table1!3:3)", "=SUM(Table1!6:6)"],
+    ])("rewrites %s to %s after inserting three rows at row 3", (formula, expected) => {
+      expect(rewritten(formula, { ...insertRow(2), count: 3 })).toBe(expected);
+    });
+  });
+
   it("rewrites references inside action arguments", () => {
     expect(rewritten('=BUTTON("Add", EXECUTE(Table1!A4+1, Table1!A4))', deleteRow(0))).toBe(
       '=BUTTON("Add", EXECUTE(Table1!A3+1, Table1!A3))',
@@ -388,5 +438,8 @@ describe("inputsAfterEdit", () => {
     const inserted = apply(original, insertRow(1));
     expect(inputs(inserted)).not.toEqual(inputs(original));
     expect(inputs(apply(inserted, deleteRow(1)))).toEqual(inputs(original));
+
+    const three = apply(original, { ...insertRow(1), count: 3 });
+    expect(inputs(apply(three, { ...deleteRow(1), count: 3 }))).toEqual(inputs(original));
   });
 });

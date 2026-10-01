@@ -420,6 +420,55 @@ describe("inserting and deleting rows and columns", () => {
     expect(await stored()).toEqual({ "0:0": "a", "0:2": "b", "0:3": "=A1&C1" });
   });
 
+  it("deletes several rows at once, and inserts several columns at once", async () => {
+    const { edit, stored } = await tableWith({
+      A1: "1",
+      A2: "gone",
+      A3: "gone too",
+      A4: "4",
+      B1: "=SUM(A1:A4)",
+      B5: "=A4+A3",
+    });
+    const deleted = await edit({ axis: "row", kind: "delete", index: 1, count: 2 });
+    expect(deleted.table).toMatchObject({ rowCount: DEFAULT_TABLE_SIZE.rowCount - 2 });
+    expect(await stored()).toEqual({
+      "0:0": "1",
+      "1:0": "4",
+      "0:1": "=SUM(A1:A2)",
+      "2:1": "=A2+#REF!",
+    });
+
+    const inserted = await edit({ axis: "col", kind: "insert", index: 1, count: 3 });
+    expect(inserted.table).toMatchObject({ colCount: DEFAULT_TABLE_SIZE.colCount + 3 });
+    expect(await stored()).toEqual({
+      "0:0": "1",
+      "1:0": "4",
+      "0:4": "=SUM(A1:A2)",
+      "2:4": "=A2+#REF!",
+    });
+  });
+
+  it("refuses to delete every row, rows past the end, or to insert past the size limit", async () => {
+    const { table, edit, stored } = await tableWith({ A1: "kept" });
+    await user.json("PATCH", `/tables/${table.id}`, { rowCount: 3 });
+    expect(await edit({ axis: "row", kind: "delete", index: 0, count: 3 }, 422)).toEqual({
+      error: { code: "last_one", message: "A table needs at least one row" },
+    });
+    expect(await edit({ axis: "row", kind: "delete", index: 1, count: 3 }, 422)).toEqual({
+      error: { code: "out_of_bounds", message: "Table 1 has no row 4" },
+    });
+    const room = LIMITS.tableRows - 3;
+    expect(await edit({ axis: "row", kind: "insert", index: 0, count: room + 1 }, 422)).toEqual({
+      error: {
+        code: "table_full",
+        message: `A table can have at most ${String(LIMITS.tableRows)} rows`,
+      },
+    });
+    expect(await stored()).toEqual({ "0:0": "kept" });
+    const filled = await edit({ axis: "row", kind: "insert", index: 3, count: room });
+    expect(filled.table).toMatchObject({ rowCount: LIMITS.tableRows });
+  });
+
   it("rewrites formulas in other tables and on other pages", async () => {
     const { snapshot, page, edit } = await tableWith({ A5: "5" });
     const sibling = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
@@ -486,6 +535,8 @@ describe("inserting and deleting rows and columns", () => {
     {},
     { axis: "diagonal", kind: "insert", index: 0 },
     { axis: "row", kind: "insert", index: -1 },
+    { axis: "row", kind: "insert", index: 0, count: 0 },
+    { axis: "row", kind: "delete", index: 0, count: 1.5 },
   ])("rejects the malformed edit %j", async (body) => {
     const { edit } = await tableWith({ A1: "x" });
     await edit(body, 400);

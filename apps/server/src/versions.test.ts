@@ -71,6 +71,17 @@ describe("keeping versions", () => {
       "Before deleting row 1 of Table 1",
     ],
     [
+      "deleting several rows",
+      ({ table }) =>
+        user.json("POST", `/tables/${table.id}/edits`, {
+          axis: "row",
+          kind: "delete",
+          index: 1,
+          count: 3,
+        }),
+      "Before deleting rows 2 to 4 of Table 1",
+    ],
+    [
       "deleting a column",
       ({ table }) =>
         user.json("POST", `/tables/${table.id}/edits`, { axis: "col", kind: "delete", index: 1 }),

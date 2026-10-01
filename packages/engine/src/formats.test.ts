@@ -151,6 +151,21 @@ describe("formatRulesAfterEdit", () => {
     ]);
   });
 
+  it("moves, grows, shrinks, and drops rules by as many rows as are inserted or deleted", () => {
+    const edit = { axis: "row", index: 3, count: 2 } as const;
+    expect(rows(formatRulesAfterEdit(rules, { ...edit, kind: "insert" }))).toEqual([
+      [2, 6],
+      [5, null],
+    ]);
+    // Rows 4 and 5 go: the first rule keeps row 3, and the second starts at what was row 6.
+    expect(rows(formatRulesAfterEdit(rules, { ...edit, kind: "delete" }))).toEqual([
+      [2, 2],
+      [3, null],
+    ]);
+    const inside = [rule([3, 4, 0, 0], { bold: true }), rule([4, 7, 0, 0], { bold: true })];
+    expect(rows(formatRulesAfterEdit(inside, { ...edit, kind: "delete" }))).toEqual([[3, 5]]);
+  });
+
   it("edits columns the same way", () => {
     const edited = formatRulesAfterEdit(rules, { axis: "col", kind: "insert", index: 0 });
     expect(edited.map(({ startCol, endCol }) => [startCol, endCol])).toEqual([

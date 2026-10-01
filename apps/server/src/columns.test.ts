@@ -309,6 +309,22 @@ describe("a data table as rows and columns come and go", () => {
     expect((await current()).columns).toHaveLength((await current()).colCount);
   });
 
+  it("names each of several new columns, and forgets several deleted ones", async () => {
+    const { table, current } = await sales();
+    const edits = `/tables/${table.id}/edits`;
+    await user.json("POST", edits, { axis: "col", kind: "insert", index: 1, count: 2 });
+    expect(names(await current()).slice(0, 5)).toEqual([
+      "Item",
+      "Column 6",
+      "Column 7",
+      "Price",
+      "Qty",
+    ]);
+    await user.json("POST", edits, { axis: "col", kind: "delete", index: 0, count: 2 });
+    expect(names(await current()).slice(0, 3)).toEqual(["Column 7", "Price", "Qty"]);
+    expect((await current()).columns).toHaveLength((await current()).colCount);
+  });
+
   it("keeps a formula column's formula with its column, and rewrites cell addresses in it", async () => {
     const { table, patchColumn, current } = await sales();
     await patchColumn(3, { name: "Total", type: "formula", formula: "=[Price] * [Qty] + $A$2" });

@@ -124,11 +124,16 @@ export const updateColumnBody = z
     message: "Give at least one of name, type, formula",
   });
 
-/** Inserting or deleting one row or column. An insert puts the new one at `index`. */
+/**
+ * Inserting or deleting rows or columns that sit next to each other: `count`
+ * of them, or one. An insert puts the first new one at `index`, and a delete
+ * starts there.
+ */
 export const structuralEditBody = z.object({
   axis: z.enum(["row", "col"]),
   kind: z.enum(["insert", "delete"]),
   index: cellIndex,
+  count: z.int().min(1).max(LIMITS.tableRows).optional(),
 });
 export type StructuralEditBody = z.infer<typeof structuralEditBody>;
 

@@ -120,27 +120,57 @@ export function inputsAfterRename(data: WorkbookData, rename: Rename): StoredInp
   });
 }
 
-/** Inserting or deleting one row or column of a table. */
+/** Inserting or deleting rows or columns of a table that sit next to each other. */
 export interface StructuralEdit {
   tableId: string;
   axis: "row" | "col";
   kind: "insert" | "delete";
-  /** For an insert, the new row or column takes this index and those from here on move by one. */
+  /**
+   * For an insert, the first new row or column takes this index and those
+   * from here on move. For a delete, the first one deleted.
+   */
   index: number;
+  /** How many rows or columns. One when left out. */
+  count?: number;
 }
 
+/** The part of an edit that says which rows or columns it inserts or deletes. */
+export type EditSpan = Pick<StructuralEdit, "kind" | "index" | "count">;
+
 /** Where a row or column index ends up after the edit, or `undefined` if it is deleted. */
-function moveIndex(index: number, edit: StructuralEdit): number | undefined {
-  if (edit.kind === "insert") return index >= edit.index ? index + 1 : index;
-  if (index === edit.index) return undefined;
-  return index > edit.index ? index - 1 : index;
+function moveIndex(index: number, { kind, index: first, count = 1 }: EditSpan): number | undefined {
+  if (kind === "insert") return index >= first ? index + count : index;
+  if (index < first) return index;
+  return index < first + count ? undefined : index - count;
+}
+
+/**
+ * Where a run of rows or columns ends up after the edit, or `undefined` when
+ * every one of them is deleted. `last` is `Infinity` for a run with an open
+ * end. The run keeps covering what it covered: it shrinks when rows inside it
+ * are deleted and grows when rows are inserted inside it.
+ */
+export function moveRun(
+  first: number,
+  last: number,
+  { kind, index, count = 1 }: EditSpan,
+): [first: number, last: number] | undefined {
+  if (kind === "insert") {
+    return [first >= index ? first + count : first, last >= index ? last + count : last];
+  }
+  const deletedLast = index + count - 1;
+  if (first >= index && last <= deletedLast) return undefined;
+  return [
+    // A run that starts among the deleted rows now starts at the first row after them.
+    first > deletedLast ? first - count : Math.min(first, index),
+    last > deletedLast ? last - count : Math.min(last, index - 1),
+  ];
 }
 
 /**
  * Where the two ends of a range end up along the edited axis. `null` is an
- * open side. A range keeps covering the rows or columns it covered: it shrinks
- * when one inside it is deleted, grows when one is inserted inside it, and
- * becomes `undefined` when the only one it covered is deleted.
+ * open side. The result is `undefined` when everything the range covered is
+ * deleted.
  */
 function moveSpan(
   start: number | null,
@@ -150,16 +180,9 @@ function moveSpan(
   if (start === null && end === null) return [start, end];
   const first = start === null ? 0 : end === null ? start : Math.min(start, end);
   const last = end === null ? Infinity : start === null ? end : Math.max(start, end);
-
-  let [newFirst, newLast] = [first, last];
-  if (edit.kind === "insert") {
-    if (first >= edit.index) newFirst += 1;
-    if (last >= edit.index) newLast += 1;
-  } else {
-    if (first === last && first === edit.index) return undefined;
-    if (first > edit.index) newFirst -= 1;
-    if (last >= edit.index) newLast -= 1;
-  }
+  const moved = moveRun(first, last, edit);
+  if (!moved) return undefined;
+  const [newFirst, newLast] = moved;
 
   // Write the new ends back to whichever corner held them, keeping open sides open.
   if (start === null) return [null, newLast];
@@ -199,8 +222,8 @@ export function editDecider(edit: StructuralEdit): Decide {
 }
 
 /**
- * The cell writes that carry out inserting or deleting a row or column: cells
- * past the edit move by one, and formulas anywhere in the workbook that read
+ * The cell writes that carry out inserting or deleting rows or columns: cells
+ * past the edit move, and formulas anywhere in the workbook that read
  * the table are rewritten to keep reading the same cells. A reference to a
  * deleted cell becomes `#REF!`. An empty input in the result clears that cell.
  * `data` is the workbook before the edit.
