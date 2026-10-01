@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const PASSWORD = "correct horse battery staple";
@@ -429,6 +430,57 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await chart.getByRole("button", { name: "Delete chart" }).click();
   await expect(chart).toHaveCount(0);
   await expect(text).toBeVisible();
+});
+
+test("a spreadsheet is exported to a file and imported again, and a table to and from CSV", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "apples");
+  await enter(page, "B1", "3");
+  await enter(page, "A2", "pears, ripe");
+  await enter(page, "B2", "=B1*2");
+  await page.getByRole("button", { name: "Add chart" }).click();
+  const chart = page.locator('[data-view="Chart 1"]');
+  await chart.getByLabel("Chart data").fill("'Table 1'!A1:B2");
+  await chart.getByLabel("Chart data").press("Enter");
+  await expect(chart.locator(".chart__bar")).toHaveCount(2);
+
+  // The CSV holds the values the table shows.
+  const csvDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export CSV" }).click();
+  const csv = await csvDownload;
+  expect(csv.suggestedFilename()).toBe("Table 1.csv");
+  const csvPath = await csv.path();
+  expect(await readFile(csvPath, "utf8")).toBe('apples,3\r\n"pears, ripe",6');
+
+  // The spreadsheet file holds what was typed, so formulas survive.
+  const fileDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const file = await fileDownload;
+  expect(file.suggestedFilename()).toBe("Untitled spreadsheet.json");
+  const filePath = await file.path();
+
+  await page.getByRole("link", { name: "← Spreadsheets" }).click();
+  await page.getByLabel("Import").setInputFiles(filePath);
+  await expect(cell(page, "B2")).toHaveText("6");
+  await expect(page.locator('[data-view="Chart 1"] .chart__bar')).toHaveCount(2);
+  await enter(page, "B1", "5");
+  await expect(cell(page, "B2")).toHaveText("10");
+  await page.getByRole("link", { name: "← Spreadsheets" }).click();
+  await expect(page.getByRole("link", { name: "Untitled spreadsheet" })).toHaveCount(2);
+
+  // A CSV file goes into a table from its first cell, and the table grows to fit.
+  await page.getByRole("button", { name: "New spreadsheet" }).click();
+  await expect(cell(page, "A1")).toBeVisible();
+  await page.getByLabel("Import CSV").setInputFiles(csvPath);
+  await expect(cell(page, "A2")).toHaveText("pears, ripe");
+  await expect(cell(page, "B2")).toHaveText("6");
+
+  // A file that is not a spreadsheet is refused with a message.
+  await page.getByRole("link", { name: "← Spreadsheets" }).click();
+  await page.getByLabel("Import").setInputFiles(csvPath);
+  await expect(page.getByRole("alert")).toContainText("not a spreadsheet exported from this app");
 });
 
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {

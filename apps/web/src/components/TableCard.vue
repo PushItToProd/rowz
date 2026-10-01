@@ -2,6 +2,8 @@
 import { columnLabel } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
 import { computed, ref } from "vue";
+import { parseCsv, toCsv } from "../files/csv";
+import { download, fileName } from "../files/download";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import ContextMenu from "./ContextMenu.vue";
@@ -23,6 +25,25 @@ function remove(): void {
   if (window.confirm(`Delete ${props.table.name} and everything in it?`)) {
     void store.deleteTable(props.table.id);
   }
+}
+
+function exportCsv(): void {
+  download(fileName(props.table.name, "csv"), toCsv(store.shownRows(props.table)), "text/csv");
+}
+
+/** Reads a chosen CSV file into the table, starting at its first cell. */
+async function importCsv(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const [file] = input.files ?? [];
+  // Cleared so that choosing the same file again is a change the input reports.
+  input.value = "";
+  if (!file) return;
+  const rows = parseCsv(await file.text());
+  const replaces = store.shownRows(props.table).length > 0;
+  if (replaces && !window.confirm(`Import ${file.name} over what ${props.table.name} holds?`)) {
+    return;
+  }
+  await store.importRows(props.table.id, rows);
 }
 
 /** Whether any cell of a row or column holds something. */
@@ -129,7 +150,15 @@ const menuItems = computed((): MenuItem[] => {
         >
           Add column
         </button>
+        <label class="file-button">
+          Import CSV
+          <input type="file" accept=".csv,.tsv,.txt,text/csv" @change="importCsv" />
+        </label>
+        <button type="button" @click="exportCsv">Export CSV</button>
         <button type="button" class="danger" @click="remove">Delete table</button>
+      </div>
+      <div v-else class="table-card__actions">
+        <button type="button" @click="exportCsv">Export CSV</button>
       </div>
     </header>
 

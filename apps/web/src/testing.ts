@@ -49,6 +49,7 @@ export function mockApi(): MockedApi {
   return {
     listSpreadsheets: vi.fn().mockResolvedValue([]),
     createSpreadsheet: vi.fn(),
+    importSpreadsheet: vi.fn(),
     getSnapshot: vi.fn().mockResolvedValue(snapshotWith()),
     renameSpreadsheet: vi.fn().mockResolvedValue(undefined),
     deleteSpreadsheet: vi.fn().mockResolvedValue(undefined),

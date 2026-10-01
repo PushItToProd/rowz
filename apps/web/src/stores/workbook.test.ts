@@ -250,7 +250,7 @@ describe("selection", () => {
     expect(store.inputOf({ tableId: "t1", row: 0, col: 99 })).toBe("99");
     expect(store.notice).toEqual({
       kind: "error",
-      text: "Some pasted cells did not fit in the table",
+      text: "Some cells did not fit in the table",
     });
   });
 
@@ -649,5 +649,51 @@ describe("views", () => {
     await store.load("s1");
     await store.deletePage("p2");
     expect(store.views).toEqual([CHART]);
+  });
+});
+
+describe("files", () => {
+  it("gives the values a table shows, without the empty rows and columns at its end", async () => {
+    const store = await open({ A1: "2", B1: "=A1*3", A3: "2026-09-30", B3: "=1/0" });
+    expect(store.shownRows(TABLE)).toEqual([
+      ["2", "6"],
+      ["", ""],
+      ["2026-09-30", "#DIV/0!"],
+    ]);
+    expect((await open()).shownRows(TABLE)).toEqual([]);
+  });
+
+  it("writes the spreadsheet as a file holding what was typed", async () => {
+    const store = await open({ A1: "2", B1: "=A1*3" });
+    expect(store.toFile()).toEqual({
+      format: "spreadsheet-app",
+      version: 1,
+      name: "Budget",
+      pages: [
+        {
+          name: "Page 1",
+          items: [
+            {
+              type: "table",
+              name: "Table 1",
+              rowCount: 4,
+              colCount: 3,
+              cells: [
+                { row: 0, col: 0, input: "2" },
+                { row: 0, col: 1, input: "=A1*3" },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    setActivePinia(createPinia());
+    expect(useWorkbookStore().toFile()).toBeUndefined();
+  });
+
+  it("does not import rows for a viewer", async () => {
+    const store = await open({}, "viewer");
+    await store.importRows("t1", [["x"]]);
+    expect(server.setCells).not.toHaveBeenCalled();
   });
 });

@@ -8,7 +8,12 @@ import type {
   TableRecord,
   ViewRecord,
 } from "@spreadsheet-app/server";
-import type { ApiError, CellInput, StructuralEditBody } from "@spreadsheet-app/shared";
+import type {
+  ApiError,
+  CellInput,
+  SpreadsheetFile,
+  StructuralEditBody,
+} from "@spreadsheet-app/shared";
 import type { CellId, ChartType } from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
@@ -76,6 +81,10 @@ function clock(): { headers: Record<string, string> } {
  */
 export const api = {
   listSpreadsheets: (): Promise<SpreadsheetListItem[]> => body(routes.spreadsheets.$get()),
+
+  /** Creates a spreadsheet from a file an export wrote. */
+  importSpreadsheet: (file: SpreadsheetFile): Promise<SpreadsheetListItem> =>
+    body(routes.spreadsheets.import.$post({ json: file })),
 
   createSpreadsheet: (name: string): Promise<SpreadsheetListItem> =>
     body(routes.spreadsheets.$post({ json: { name } })),

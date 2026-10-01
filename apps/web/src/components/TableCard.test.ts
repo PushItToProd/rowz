@@ -1,12 +1,17 @@
-import { mount, type VueWrapper } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
+import { download } from "../files/download";
 import { useWorkbookStore } from "../stores/workbook";
 import { at, snapshotWith, TABLE, type MockedApi } from "../testing";
 import TableCard from "./TableCard.vue";
 
 vi.mock("../api/client", async () => ({ api: (await import("../testing")).mockApi() }));
+vi.mock("../files/download", () => ({
+  download: vi.fn(),
+  fileName: (name: string, extension: string) => `${name}.${extension}`,
+}));
 const server = api as unknown as MockedApi;
 
 let wrapper: VueWrapper;
@@ -95,7 +100,10 @@ describe("row and column actions", () => {
     await render({}, "viewer");
     await select("B3");
     expect(wrapper.find(".table-card__lines").exists()).toBe(false);
-    expect(wrapper.find(".table-card__actions").exists()).toBe(false);
+    expect(wrapper.findAll(".table-card__actions button").map((found) => found.text())).toEqual([
+      "Export CSV",
+    ]);
+    expect(wrapper.find('input[type="file"]').exists()).toBe(false);
   });
 });
 
@@ -179,5 +187,68 @@ describe("the menu of row, column, and cell actions", () => {
     await menu.trigger("keydown", { key: "Escape" });
     expect(wrapper.find('[role="menu"]').exists()).toBe(false);
     expect(server.editTable).not.toHaveBeenCalled();
+  });
+});
+
+describe("files", () => {
+  /** Chooses a file in the table's file input, as picking one in the browser's dialog does. */
+  async function choose(name: string, content: string): Promise<void> {
+    const input = wrapper.get<HTMLInputElement>('input[type="file"]');
+    Object.defineProperty(input.element, "files", {
+      configurable: true,
+      value: [new File([content], name, { type: "text/csv" })],
+    });
+    await input.trigger("change");
+    await flushPromises();
+  }
+
+  it("exports the values the table shows as CSV, without the empty rows and columns at its end", async () => {
+    await render({ A1: "name", B1: "total", A2: "a, b", B2: "=1+2" });
+    await button("Export CSV").trigger("click");
+    expect(download).toHaveBeenCalledExactlyOnceWith(
+      "Table 1.csv",
+      'name,total\r\n"a, b",3',
+      "text/csv",
+    );
+  });
+
+  it("imports a CSV file into the table from its first cell", async () => {
+    await render();
+    await choose("data.csv", 'x,"y, z"\n1,=A2*2\n');
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
+      { row: 0, col: 0, input: "x" },
+      { row: 0, col: 1, input: "y, z" },
+      { row: 1, col: 0, input: "1" },
+      { row: 1, col: 1, input: "=A2*2" },
+    ]);
+    const store = useWorkbookStore();
+    expect(store.valueOf(at("B2"))).toBe(2);
+    expect(store.selectedBlock).toEqual({ startRow: 0, endRow: 1, startCol: 0, endCol: 1 });
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("grows the table to fit the file", async () => {
+    await render();
+    server.updateTable.mockResolvedValue({
+      table: { ...TABLE, rowCount: 6, colCount: 5 },
+      cells: [],
+      views: [],
+    });
+    await choose("data.csv", Array.from({ length: 6 }, () => "1,2,3,4,5").join("\n"));
+    expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", { rowCount: 6, colCount: 5 });
+    expect(useWorkbookStore().valueOf({ tableId: "t1", row: 5, col: 4 })).toBe(5);
+  });
+
+  it("asks before importing over a table that holds something", async () => {
+    await render({ C3: "kept" });
+    confirm.mockReturnValue(false);
+    await choose("data.csv", "x");
+    expect(confirm).toHaveBeenCalledExactlyOnceWith("Import data.csv over what Table 1 holds?");
+    expect(server.setCells).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    await choose("data.csv", "x");
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [{ row: 0, col: 0, input: "x" }]);
+    expect(useWorkbookStore().inputOf(at("C3"))).toBe("kept");
   });
 });

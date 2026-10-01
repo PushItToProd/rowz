@@ -10,8 +10,10 @@ import {
 } from "@spreadsheet-app/engine";
 import {
   DEFAULT_TABLE_SIZE,
+  FILE_LIMITS,
   LIMITS,
   type CellInput,
+  type SpreadsheetFile,
   type StoredCell,
   type StructuralEditBody,
 } from "@spreadsheet-app/shared";
@@ -110,6 +112,53 @@ const STARTER_TEMPLATE = `## New text view
 Write Markdown here. A formula in double braces puts its value into the text: {{ 1 + 1 }}
 `;
 
+// Each row binds six parameters, and Postgres takes at most 65,535 in one statement.
+const INSERT_BATCH = 5000;
+
+/** The first name in a list that another, earlier name matches without regard to case. */
+function repeated(names: readonly string[]): string | undefined {
+  const seen = new Set<string>();
+  return names.find((name) => {
+    const key = name.toLowerCase();
+    const again = seen.has(key);
+    seen.add(key);
+    return again;
+  });
+}
+
+/**
+ * Refuses a file that breaks a rule the request schema cannot state: names
+ * that collide, cells outside their table or listed twice, and too many cells
+ * in all.
+ */
+function checkFile(file: SpreadsheetFile): void {
+  const invalid = (message: string): never => {
+    throw unprocessable("invalid_file", message);
+  };
+  const page = repeated(file.pages.map(({ name }) => name));
+  if (page !== undefined) invalid(`Two pages are named ${page}`);
+
+  let total = 0;
+  for (const { name: pageName, items } of file.pages) {
+    const fileTables = items.filter((item) => item.type === "table");
+    const table = repeated(fileTables.map(({ name }) => name));
+    if (table !== undefined) invalid(`Two tables on ${pageName} are named ${table}`);
+    for (const { name, rowCount, colCount, cells: fileCells } of fileTables) {
+      const seen = new Set<string>();
+      for (const { row, col } of fileCells) {
+        const address = formatAddress({ row, col });
+        if (row >= rowCount || col >= colCount) invalid(`${address} is outside the table ${name}`);
+        if (seen.has(address)) invalid(`${address} appears twice in the table ${name}`);
+        seen.add(address);
+      }
+      total += fileCells.length;
+    }
+  }
+  if (total > FILE_LIMITS.cells) {
+    invalid(`The file has more than ${String(FILE_LIMITS.cells)} cells`);
+  }
+}
+
 /** The first of `Page 1`, `Page 2`, ... that no existing name matches, ignoring case. */
 function nextName(prefix: string, existing: readonly string[]): string {
   const taken = new Set(existing.map((name) => name.toLowerCase()));
@@ -151,6 +200,55 @@ export class SpreadsheetRepository {
         .returning();
       if (!spreadsheet) throw new Error("Insert returned no spreadsheet");
       await new SpreadsheetRepository(tx, this.userId).createPage(spreadsheet.id);
+      return { id: spreadsheet.id, name: spreadsheet.name, updatedAt: spreadsheet.updatedAt };
+    });
+  }
+
+  /** Creates a spreadsheet from a file, in the caller's own workspace. Nothing is created if any part is refused. */
+  async importSpreadsheet(file: SpreadsheetFile): Promise<SpreadsheetSummary> {
+    checkFile(file);
+    return this.db.transaction(async (tx) => {
+      const workspaceId = await new SpreadsheetRepository(tx, this.userId).personalWorkspace();
+      const [spreadsheet] = await tx
+        .insert(spreadsheets)
+        .values({ workspaceId, name: file.name, createdBy: this.userId })
+        .returning();
+      if (!spreadsheet) throw new Error("Insert returned no spreadsheet");
+
+      for (const [pagePosition, page] of file.pages.entries()) {
+        const [created] = await tx
+          .insert(pages)
+          .values({ spreadsheetId: spreadsheet.id, name: page.name, position: pagePosition })
+          .returning({ id: pages.id });
+        if (!created) throw new Error("Insert returned no page");
+        for (const [position, item] of page.items.entries()) {
+          const placed = { pageId: created.id, name: item.name, position };
+          if (item.type !== "table") {
+            await tx.insert(views).values({
+              ...placed,
+              kind: item.type,
+              source: item.source,
+              chartType: item.type === "chart" ? item.chartType : null,
+            });
+            continue;
+          }
+          const [table] = await tx
+            .insert(tables)
+            .values({ ...placed, rowCount: item.rowCount, colCount: item.colCount })
+            .returning({ id: tables.id });
+          if (!table) throw new Error("Insert returned no table");
+          const filled = item.cells.filter((cell) => cell.input !== "");
+          for (let from = 0; from < filled.length; from += INSERT_BATCH) {
+            await tx.insert(cells).values(
+              filled.slice(from, from + INSERT_BATCH).map((cell) => ({
+                tableId: table.id,
+                ...cell,
+                updatedBy: this.userId,
+              })),
+            );
+          }
+        }
+      }
       return { id: spreadsheet.id, name: spreadsheet.name, updatedAt: spreadsheet.updatedAt };
     });
   }

@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, type SpreadsheetListItem } from "../api/client";
+import { readSpreadsheetFile } from "../files/spreadsheetFile";
 import { useSessionStore } from "../stores/session";
 
 const session = useSessionStore();
@@ -27,6 +28,18 @@ const refresh = (): Promise<void> =>
 const create = (): Promise<void> =>
   run(async () => {
     const created = await api.createSpreadsheet("Untitled spreadsheet");
+    await router.push({ name: "editor", params: { spreadsheetId: created.id } });
+  });
+
+/** Creates a spreadsheet from a chosen file that an export wrote, and opens it. */
+const importFile = (event: Event): Promise<void> =>
+  run(async () => {
+    const input = event.target as HTMLInputElement;
+    const [file] = input.files ?? [];
+    // Cleared so that choosing the same file again is a change the input reports.
+    input.value = "";
+    if (!file) return;
+    const created = await api.importSpreadsheet(readSpreadsheetFile(await file.text()));
     await router.push({ name: "editor", params: { spreadsheetId: created.id } });
   });
 
@@ -60,7 +73,13 @@ onMounted(refresh);
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
-    <button type="button" class="primary" @click="create">New spreadsheet</button>
+    <div class="list__actions">
+      <button type="button" class="primary" @click="create">New spreadsheet</button>
+      <label class="file-button">
+        Import
+        <input type="file" accept=".json,application/json" @change="importFile" />
+      </label>
+    </div>
 
     <p v-if="spreadsheets === null && !error">Loading…</p>
     <p v-else-if="spreadsheets?.length === 0" class="list__empty">

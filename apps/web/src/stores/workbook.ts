@@ -13,8 +13,14 @@ import {
   type Evaluated,
   type Scalar,
 } from "@spreadsheet-app/engine";
-import { LIMITS, type CellInput, type StructuralEditBody } from "@spreadsheet-app/shared";
+import {
+  LIMITS,
+  type CellInput,
+  type SpreadsheetFile,
+  type StructuralEditBody,
+} from "@spreadsheet-app/shared";
 import { defineStore } from "pinia";
+import { toSpreadsheetFile } from "../files/spreadsheetFile";
 import { computed, reactive, ref, shallowRef, triggerRef, watch } from "vue";
 import {
   api,
@@ -243,12 +249,67 @@ export const useWorkbookStore = defineStore("workbook", () => {
    */
   async function paste(text: string): Promise<void> {
     const at = selection.value;
-    const table = tables.value.find((candidate) => candidate.id === at?.tableId);
-    if (!at || !table || !canEdit.value) return;
-
+    if (!at || !canEdit.value) return;
     // Text this app put on the clipboard stands for the cells it was copied from.
     const own = copied?.text === text ? copied : undefined;
-    const writes = pasteWrites(own?.rows ?? fromClipboardText(text), at, own?.from);
+    await writeBlock(at, pasteWrites(own?.rows ?? fromClipboardText(text), at, own?.from));
+  }
+
+  /**
+   * Puts rows read from a file into a table, with their top-left corner at
+   * the table's first cell, and leaves them selected.
+   */
+  async function importRows(tableId: string, rows: readonly (readonly string[])[]): Promise<void> {
+    if (!canEdit.value) return;
+    const at = { tableId, row: 0, col: 0 };
+    selection.value = at;
+    selectionEnd.value = null;
+    await writeBlock(at, pasteWrites(rows, at));
+  }
+
+  /** The values a table shows, row by row, for writing to a file. Rows and columns that are empty at the end are left out. */
+  function shownRows(table: TableRecord): string[][] {
+    const rows = Array.from({ length: table.rowCount }, (_, row) =>
+      Array.from({ length: table.colCount }, (_, col) =>
+        formatValue(engine.value.getValue({ tableId: table.id, row, col })),
+      ),
+    );
+    const lastRow = rows.findLastIndex((cells) => cells.some((cell) => cell !== ""));
+    const lastCol = Math.max(
+      -1,
+      ...rows.map((cells) => cells.findLastIndex((cell) => cell !== "")),
+    );
+    return rows.slice(0, lastRow + 1).map((cells) => cells.slice(0, lastCol + 1));
+  }
+
+  /** The cells of a table that hold something, as typed. */
+  function filledCells(table: TableRecord): CellInput[] {
+    const filled: CellInput[] = [];
+    for (let row = 0; row < table.rowCount; row += 1) {
+      for (let col = 0; col < table.colCount; col += 1) {
+        const input = engine.value.getInput({ tableId: table.id, row, col });
+        if (input !== "") filled.push({ row, col, input });
+      }
+    }
+    return filled;
+  }
+
+  /** The spreadsheet as a file that can be imported again. */
+  function toFile(): SpreadsheetFile | undefined {
+    if (!spreadsheet.value) return undefined;
+    return toSpreadsheetFile(
+      spreadsheet.value.name,
+      pages.value,
+      tables.value,
+      views.value,
+      filledCells,
+    );
+  }
+
+  /** Writes cells into a table that grows to fit them, up to its size limit, and selects what was written. */
+  async function writeBlock(at: CellId, writes: readonly CellInput[]): Promise<void> {
+    const table = tables.value.find((candidate) => candidate.id === at.tableId);
+    if (!table) return;
     if (writes.length === 0) return;
     const rowCount = Math.min(LIMITS.tableRows, Math.max(...writes.map((write) => write.row + 1)));
     const colCount = Math.min(LIMITS.tableCols, Math.max(...writes.map((write) => write.col + 1)));
@@ -265,7 +326,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     // Leave what was pasted selected.
     extendSelection({ row: rowCount - 1, col: colCount - 1 });
     if (fitting.length < writes.length) {
-      notice.value = { kind: "error", text: "Some pasted cells did not fit in the table" };
+      notice.value = { kind: "error", text: "Some cells did not fit in the table" };
     }
   }
 
@@ -468,6 +529,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     pages,
     tables,
     views,
+    importRows,
+    shownRows,
+    toFile,
     evaluateOnPage,
     addView,
     updateView,

@@ -2,6 +2,24 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: Import and export
+
+**Decision.** Two kinds of file.
+
+- **A spreadsheet file (JSON)** holds a whole spreadsheet: pages, tables, charts, text views, and what was typed into each cell. Export is in the editor's header. Import is on the spreadsheet list and always makes a new spreadsheet.
+- **CSV, per table.** Export writes the values the cells show. Import reads a file into the table from A1.
+
+**Choices.**
+
+- **The spreadsheet file has no ids.** Pages and tables are identified by name and order, which is how formulas identify them. A file can be imported twice, edited by hand, or produced by a script. The schema is `spreadsheetFile` in `packages/shared`, with `version: 1`.
+- **Import is one request and one transaction** (`POST /api/spreadsheets/import`). A file that breaks a rule creates nothing.
+- **Import never overwrites an existing spreadsheet.** Replacing one in place would need undo first.
+- **CSV export writes values, not formulas,** because the point of CSV is other programs. The JSON file is the way to keep formulas.
+- **CSV import treats a cell starting with `=` as a formula,** the same as typing or pasting it. A CSV from an untrusted source can therefore put formulas in a table, including a `BUTTON`, but nothing runs until someone clicks it.
+- **CSV export does not guard against formula injection in other apps.** A cell whose text starts with `=`, `+`, `-`, or `@` is written as it is. Prefixing such cells with an apostrophe, as some exporters do, would corrupt negative numbers and text that round-trips back into this app. If exports will be opened in Excel by people who did not write the data, this should become an option.
+- **Limits:** 50 pages, 50 items on a page, 100,000 cells in a file, and a 32 MB request body. The body limit now applies to every API request; before this there was none.
+- **The CSV reader accepts commas, semicolons, or tabs** and picks the one that splits the first rows evenly. Excel in many European locales writes semicolons.
+
 ## 2026-10-01: QUERY
 
 **Decision.** `QUERY(range, query, [headers])` runs a SQL-like query over a range, with the clauses Rows documented: `select`, `where`, `group by`, `having`, `pivot`, `order by`, `limit`, `offset`, `label`, and `as`.

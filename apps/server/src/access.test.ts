@@ -89,6 +89,7 @@ describe("without a session", () => {
     const routes: Route[] = [
       ["GET", "/spreadsheets"],
       ["POST", "/spreadsheets", { name: "x" }],
+      ["POST", "/spreadsheets/import", {}],
       ...readRoutes(),
       ...writeRoutes(),
     ];

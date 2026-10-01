@@ -5,6 +5,7 @@ import EditableName from "../components/EditableName.vue";
 import FormulaBar from "../components/FormulaBar.vue";
 import PageTabs from "../components/PageTabs.vue";
 import ChartCard from "../components/ChartCard.vue";
+import { download, fileName } from "../files/download";
 import TableCard from "../components/TableCard.vue";
 import TextCard from "../components/TextCard.vue";
 import { useWorkbookStore } from "../stores/workbook";
@@ -14,6 +15,13 @@ const store = useWorkbookStore();
 const router = useRouter();
 
 const loadError = ref<string | null>(null);
+
+/** Saves the spreadsheet, formulas included, as a file that can be imported again. */
+function exportFile(): void {
+  const file = store.toFile();
+  if (file)
+    download(fileName(file.name, "json"), JSON.stringify(file, null, 1), "application/json");
+}
 const loaded = computed(() => store.spreadsheet?.id === props.spreadsheetId);
 const page = computed(() => store.pages.find((candidate) => candidate.id === props.pageId));
 /** The tables, charts, and text views of the page, in the order they sit on it. */
@@ -85,6 +93,9 @@ watch(
           />
         </h1>
         <span v-if="loaded && !store.canEdit" class="badge">View only</span>
+        <button v-if="loaded" type="button" class="editor__export" @click="exportFile">
+          Export
+        </button>
         <!-- A new tab, so reading about a formula does not take the user away from the sheet. -->
         <RouterLink :to="{ name: 'help' }" target="_blank" class="editor__help">Help</RouterLink>
       </header>

@@ -70,6 +70,64 @@ export const updateViewBody = z
 
 export const viewParam = z.object({ viewId: z.uuid() });
 
+/** Limits on a spreadsheet file, which a person can write by hand or another program can produce. */
+export const FILE_LIMITS = {
+  pages: 50,
+  itemsPerPage: 50,
+  /** Cells across the whole file. */
+  cells: 100_000,
+  /** The size of a request body the server reads, which bounds a file. */
+  bytes: 32 * 1024 * 1024,
+} as const;
+
+export const FILE_FORMAT = "spreadsheet-app";
+
+const fileTable = z.object({
+  type: z.literal("table"),
+  name,
+  rowCount: z.int().min(1).max(LIMITS.tableRows),
+  colCount: z.int().min(1).max(LIMITS.tableCols),
+  /** Cells that hold something. Empty cells are left out. */
+  cells: z.array(cellInput).max(FILE_LIMITS.cells),
+});
+
+const fileChart = z.object({
+  type: z.literal("chart"),
+  name,
+  source: z.string().max(LIMITS.viewSourceLength),
+  chartType: z.enum(["bar", "line", "pie", "scatter"]),
+});
+
+const fileText = z.object({
+  type: z.literal("text"),
+  name,
+  source: z.string().max(LIMITS.viewSourceLength),
+});
+
+/**
+ * A whole spreadsheet as a file: what an export writes and an import reads.
+ * Things are identified by name and order, as formulas identify them, so a
+ * file carries no ids and can be imported any number of times.
+ */
+export const spreadsheetFile = z.object({
+  format: z.literal(FILE_FORMAT),
+  version: z.literal(1),
+  name,
+  pages: z
+    .array(
+      z.object({
+        name,
+        /** Tables, charts, and text views, in their order on the page. */
+        items: z
+          .array(z.discriminatedUnion("type", [fileTable, fileChart, fileText]))
+          .max(FILE_LIMITS.itemsPerPage),
+      }),
+    )
+    .min(1)
+    .max(FILE_LIMITS.pages),
+});
+export type SpreadsheetFile = z.infer<typeof spreadsheetFile>;
+
 export const spreadsheetParam = z.object({ spreadsheetId: z.uuid() });
 export const pageParam = z.object({ pageId: z.uuid() });
 export const tableParam = z.object({ tableId: z.uuid() });

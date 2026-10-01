@@ -87,6 +87,7 @@ const SECTIONS = [
   ["query", "Queries"],
   ["actions", "Buttons and actions"],
   ["controls", "Checkboxes and dropdowns"],
+  ["files", "Files"],
   ["charts", "Charts"],
   ["text-views", "Text views"],
   ["errors", "Errors"],
@@ -671,6 +672,28 @@ const OPERATORS = [
           Formulas read the bound cell, not the control: <code>=IF(B1, "thanks", "waiting")</code>.
         </li>
         <li>A control cannot be bound to its own cell.</li>
+      </ul>
+    </section>
+
+    <section id="files">
+      <h2>Files</h2>
+      <ul>
+        <li>
+          <strong>Export</strong>, at the top of a spreadsheet, saves the whole spreadsheet as a
+          file: its pages, tables, charts, text views, and everything typed into cells, formulas
+          included. <strong>Import</strong>, on the list of spreadsheets, makes a new spreadsheet
+          from such a file.
+        </li>
+        <li>
+          <strong>Export CSV</strong> saves one table as a CSV file that other spreadsheet apps
+          open. It holds the values the cells show, not their formulas.
+        </li>
+        <li>
+          <strong>Import CSV</strong> reads a CSV file into a table, starting at A1. The table grows
+          to fit, up to {{ LIMITS.tableRows }} rows and {{ LIMITS.tableCols }} columns. A cell in
+          the file that starts with <code>=</code> becomes a formula. Files with semicolons or tabs
+          between cells are read too.
+        </li>
       </ul>
     </section>
 

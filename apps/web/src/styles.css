@@ -234,7 +234,7 @@ input {
   text-decoration: none;
 }
 
-.editor__help {
+.editor__export {
   margin-left: auto;
 }
 
@@ -909,4 +909,39 @@ select.cell-control--dropdown {
 .grid thead th,
 .grid tbody th {
   cursor: pointer;
+}
+
+/* A file input shown as a button. The input itself is hidden, and its label takes the clicks. */
+
+.file-button {
+  display: inline-block;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.file-button:hover,
+.file-button:focus-within {
+  border-color: var(--accent);
+}
+
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0;
+}
+
+.list__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.table-card__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
