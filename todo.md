@@ -4,27 +4,13 @@ Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author
 
 Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions. When instructed to work autonomously, execute these items first in ascending order (do all P0s first, then P1s, etc.). Items with the same priority are co-equal unless you're instructed otherwise. Items with priority "P10" and above are backlogged and generally shouldn't be picked up unless the author says so explicitly (this is primarily about allocation of work and the author's perceived necessity of the feature). Remove these priority prefixes when checking items off. Check these items off before making commits.
 
-## To be organized
-
-- [ ] allow referencing an entire data table without naming a specific range -- I would like to be able to write s.t. like `=QUERY('Table name'!, 'select * ...')` (not wedded to that exact syntax tho)
-  - [ ] **P2** evaluate syntax options and how painful they'd be to implement
-- [ ] **P2** show cell errors in a popover on hover instead of using a native browser tooltip
-- [ ] **P5** when a spill error occurs, the popover should have a button to resize the table to fit
-- [ ] **P3** `QUERY` doesn't show col names in its output - if `Table1` is a table with named columns and we write `=QUERY(Table1!A:A, "select *")`, the output should show the column names by default
-- [ ] support optional named arguments to formula functions
-  - [ ] **P4** plan before implementing so we can see how hard this would be
-  - [ ] example use case: `=QUERY(Table1!A:A, "select *", column_headers=False)`
-- [ ] **P4** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable
-- [ ] **P4** when a chart has dates on one axis, they should be spaced out like numeric data, not categorical -- right now if I have a plot with `2018-08-22`, `2019-03-04`, `2019-12-03`, `2020-03-01`, `2021-08-25` on the X-axis, those points all appear equally horizontally spaced, but they should have variable width gaps proportional to the number of days between them just like they would if they were ordinary numbers and the X-axis should have dates at regular intervals covering the time period
-- [ ] **P6** add a `default`/`else` case to `IFS` so you could write either `IFS(x > 100, "foo", x > 0 "bar", "default value")` or, maybe for familiarity/compatibility `IFS(x > 100, "foo", x > 0 "bar", default="default value")`
-
 ## Bugs
 
 - [x] Wildcard criteria can stall synchronous formula evaluation. [criteria.ts](packages/engine/src/functions/criteria.ts:28) turns `*` and `?` into a backtracking regular expression, then tests cell text at [line 56](packages/engine/src/functions/criteria.ts:56). A crafted criterion and long near-matching text can trigger catastrophic backtracking. Formula evaluation has no time limit, and the server evaluates workbook formulas while handling action clicks. Use a matcher with bounded runtime.
 
 - [x] Combined array results can exhaust memory before spill limits apply. [arrays.ts](packages/engine/src/functions/arrays.ts:129) caps each `SEQUENCE` call at 100,000 cells, but `HSTACK`, `VSTACK`, and `FLATTEN` have no aggregate output cap ([lines 155–184](packages/engine/src/functions/arrays.ts:155)). [workbook.ts](packages/engine/src/workbook.ts:654) materializes the result before checking whether it can spill into the table. Preflight the combined result against a workbook-wide cell budget before allocating it.
 
-- [ ] Queued writes are not reauthorized after acquiring the spreadsheet lock. `change` in [spreadsheets.ts](apps/server/src/repo/spreadsheets.ts) takes the lock and runs the work without checking access again, so a write that waited on the lock runs even when the caller was downgraded or removed while it waited. `changePage`, `changeTable`, and `changeView` already read their target again under the lock with `"write"`. The methods that call `change` directly (`createPage`, `reorderPages`, `restoreVersion`) and the public `lockSpreadsheet`, which button clicks use, check only before the lock.
+- [ ] **P0** Queued writes are not reauthorized after acquiring the spreadsheet lock. `change` in [spreadsheets.ts](apps/server/src/repo/spreadsheets.ts) takes the lock and runs the work without checking access again, so a write that waited on the lock runs even when the caller was downgraded or removed while it waited. `changePage`, `changeTable`, and `changeView` already read their target again under the lock with `"write"`. The methods that call `change` directly (`createPage`, `reorderPages`, `restoreVersion`) and the public `lockSpreadsheet`, which button clicks use, check only before the lock.
   - Fix it in one place: `change` calls `findSpreadsheet(spreadsheetId, "write")` on the transaction right after `lockSpreadsheet`, and the public `lockSpreadsheet` makes its check after taking the lock. The checks callers make before `change` stay, because they answer 403 or 404 without waiting for the lock.
   - `share` and `unshare` stay outside the lock. A transaction at read committed sees a role change that committed before the check ran.
   - Test: one connection holds the spreadsheet's lock while an editor's write waits, the owner downgrades the editor, the lock is released, and the write gets 403. This needs two connections. If the PGlite setup cannot make one wait on another, run the test only with `TEST_DATABASE_URL`.
@@ -58,6 +44,10 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] (Claude) financial functions (`PMT`, `PV`, `FV`, `NPV`, `IRR`, `RATE`, `NPER`), trig, and line fitting
 - [ ] **P2** named functions and values at the workbook level, so `=double(5)` works instead of `=D1(5)`
 - [ ] **P2** support creating named ranges of one or more cells
+- [ ] support optional named arguments to formula functions
+  - [ ] **P4** plan before implementing so we can see how hard this would be
+  - [ ] example use case: `=QUERY(Table1!A:A, "select *", column_headers=False)`
+- [ ] **P6** add a `default`/`else` case to `IFS` so you could write either `IFS(x > 100, "foo", x > 0 "bar", "default value")` or, maybe for familiarity/compatibility `IFS(x > 100, "foo", x > 0 "bar", default="default value")`
 - [ ] functions that expect one value (IF, UPPER, ...) do not work cell by cell on a range; only operators do. MAP is the workaround. 
   - [ ] Related: `=UPPER(A:A)` could mean this row's cell, as `=A:A & ""` now does. -- that is, if e.g. D2 = `=UPPER(A:A)`, it should be equivalent to `=UPPER(A2)`
 - [ ] **P4** `MAP` doesn't take built-in function names as args - `MAP(A:A, UPPER)` should work but right now it errors with `#NAME?`
@@ -92,6 +82,8 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] bug: the formula bar doesn't save changes when it loses focus
 - [x] hitting enter with the formula bar focused should return focus to the cell -- you can type input and try to hit enter and it'll just stay focused instead of acting like you hit enter in the cell input (I suspect possibly b/c of a conflict with the suggestion behavior)
 - [ ] **P2** hitting tab with the formula bar focused should have the same effect as hitting tab with the cell itself selected
+- [ ] **P2** show cell errors in a popover on hover instead of using a native browser tooltip
+- [ ] **P5** when a spill error occurs, the popover should have a button to resize the table to fit
 
 - [ ] **P3** implement the handy tab+enter workflow from Excel and Sheets -- if you select a certain cell with the mouse or arrow keys, use tab to traverse multiple cells (optionally entering values into any or none of them), then input a value into a cell and submit that value by hitting enter, it'll drop to the next row in the column where you started
   - example: in a table, select C3. hit tab 3 times (optionally entering values in any cells in C3:E3 along the way) - now you're in F3. hit enter to focus the cell input (or just start typing), type anything (or nothing), and hit enter to submit. the selection should move to C4.
@@ -145,6 +137,10 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] (Claude) Rows' data actions: `UPDATE(data, key_columns, range)` (upsert by key), `OVERWRITE(data, range)`, and `INSERT` of several rows
 - [x] (Claude) reorder the tables, charts, and text views on a page (arrows beside each one)
 - [ ] data tables: sort and filter in place, dropdown columns, hide the empty rows, and `QUERY(Sales, ...)` over a whole table with its column names as headers
+  - [ ] allow referencing an entire data table without naming a specific range -- I would like to be able to write s.t. like `=QUERY('Table name'!, 'select * ...')` (not wedded to that exact syntax tho)
+    - [ ] **P2** evaluate syntax options and how painful they'd be to implement
+  - [ ] **P3** `QUERY` doesn't show col names in its output - if `Table1` is a table with named columns and we write `=QUERY(Table1!A:A, "select *")`, the output should show the column names by default
+- [ ] **P4** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable
 - [ ] **P1** when updating a formula column's formula, use an in-page editor with proper formula support (modal or popover or maybe just hijack the formula bar), not a browser `input` popup
 - [ ] (Claude) pivot tables as a block or table feature (`QUERY` already has a `pivot` clause)
 - [x] move a table, chart, or text view to another page, and reorder pages
@@ -155,6 +151,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
   - [ ] axis titles
   - [ ] stacked bars
   - [ ] colors
+- [ ] **P4** when a chart has dates on one axis, they should be spaced out like numeric data, not categorical -- right now if I have a plot with `2018-08-22`, `2019-03-04`, `2019-12-03`, `2020-03-01`, `2021-08-25` on the X-axis, those points all appear equally horizontally spaced, but they should have variable width gaps proportional to the number of days between them just like they would if they were ordinary numbers and the X-axis should have dates at regular intervals covering the time period
 - [ ] **P10** show labels on charts on hover
 - [x] allow editing markdown views by just double clicking on the text (instead of clicking "Edit"). save and exit edit mode when the user unfocuses the input (instead of requiring user to hit "Done") (keep the "Edit" and "Done" buttons for user convenience)
 - [ ] **P2** duplicate the "Add table", "Add chart", "Add text" buttons at the top and between each item so you can insert them anywhere
