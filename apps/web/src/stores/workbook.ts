@@ -447,24 +447,38 @@ export const useWorkbookStore = defineStore("workbook", () => {
     await updateColumn(id.tableId, id.col, { formula: input });
   }
 
-  /**
-   * Shows new inputs for cells of one table at once and saves them. Inputs
-   * that fail to save are put back as they were. A paste can pass one step id
-   * to keep all its batches together with a table resize.
-   */
-  function setCells(
-    tableId: string,
-    writes: readonly CellInput[],
-    stepId = crypto.randomUUID(),
-  ): Promise<void> {
+  /** A cell write that changes what the cell holds, with what it held. */
+  type CellChange = CellInput & { previous: string };
+
+  /** Shows new inputs for cells of one table, and returns the ones that changed a cell. */
+  function showInputs(tableId: string, writes: readonly CellInput[]): CellChange[] {
     const changes = writes
       // A fill or paste that crosses a formula column leaves that column to its formula.
       .filter((write) => columnOf({ tableId, ...write })?.type !== "formula")
       .map((write) => ({ ...write, previous: engine.value.getInput({ tableId, ...write }) }))
       .filter((change) => change.previous !== change.input);
-    if (changes.length === 0) return Promise.resolve();
     for (const { row, col, input } of changes) apply({ tableId, row, col }, input);
+    return changes;
+  }
 
+  /** Puts cells back as they were before changes that could not be saved. */
+  function putBack(tableId: string, changes: readonly CellChange[]): void {
+    for (const { row, col, input, previous } of changes) {
+      // A later edit to the same cell has its own save. Leave it alone.
+      if (engine.value.getInput({ tableId, row, col }) === input) {
+        apply({ tableId, row, col }, previous);
+      }
+    }
+  }
+
+  /**
+   * Shows new inputs for cells of one table at once and saves them as one
+   * undo step. Inputs that fail to save are put back as they were.
+   */
+  function setCells(tableId: string, writes: readonly CellInput[]): Promise<void> {
+    const changes = showInputs(tableId, writes);
+    if (changes.length === 0) return Promise.resolve();
+    const stepId = crypto.randomUUID();
     const previous = saves;
     saves = enqueueWrite(async () => {
       await previous;
@@ -473,9 +487,10 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return saves;
   }
 
+  /** Saves shown changes under one undo step. A failure is reported here and counted in `failedSaves`. */
   async function saveCellChanges(
     tableId: string,
-    changes: readonly (CellInput & { previous: string })[],
+    changes: readonly CellChange[],
     stepId: string,
   ): Promise<void> {
     let saved = 0;
@@ -490,12 +505,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
         );
       }
     } catch (cause) {
-      for (const { row, col, input, previous } of changes.slice(saved)) {
-        // A later edit to the same cell has its own save. Leave it alone.
-        if (engine.value.getInput({ tableId, row, col }) === input) {
-          apply({ tableId, row, col }, previous);
-        }
-      }
+      putBack(tableId, changes.slice(saved));
       failedSaves += 1;
       fail(cause, "The change could not be saved");
     }
@@ -625,31 +635,21 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const rowCount = Math.min(LIMITS.tableRows, Math.max(...writes.map((write) => write.row + 1)));
     const colCount = Math.min(LIMITS.tableCols, Math.max(...writes.map((write) => write.col + 1)));
     const fitting = writes.filter((write) => write.row < rowCount && write.col < colCount);
+    // The growth and the cells are one undo step.
     const stepId = crypto.randomUUID();
-    const changes = fitting
-      .filter((write) => columnOf({ tableId: table.id, ...write })?.type !== "formula")
-      .map((write) => ({
-        ...write,
-        previous: engine.value.getInput({ tableId: table.id, ...write }),
-      }))
-      .filter((change) => change.previous !== change.input);
-    for (const { row, col, input } of changes) apply({ tableId: table.id, row, col }, input);
+    const changes = showInputs(table.id, fitting);
 
     const queuedSaves = saves;
     const operation = enqueueWrite(async () => {
       await queuedSaves;
-      const currentTable = tables.value.find((candidate) => candidate.id === at.tableId);
+      const currentTable = tables.value.find((candidate) => candidate.id === table.id);
       if (!currentTable) {
-        for (const { row, col, input, previous } of changes) {
-          if (engine.value.getInput({ tableId: at.tableId, row, col }) === input) {
-            apply({ tableId: at.tableId, row, col }, previous);
-          }
-        }
+        putBack(table.id, changes);
         return;
       }
       if (rowCount > currentTable.rowCount || colCount > currentTable.colCount) {
         const { table: grown, ...rewritten } = await api.updateTable(
-          currentTable.id,
+          table.id,
           {
             rowCount: Math.max(rowCount, currentTable.rowCount),
             colCount: Math.max(colCount, currentTable.colCount),
@@ -660,18 +660,16 @@ export const useWorkbookStore = defineStore("workbook", () => {
         syncStructure();
         applyRewritten(rewritten);
       }
-      await saveCellChanges(currentTable.id, changes, stepId);
+      await saveCellChanges(table.id, changes, stepId);
       // Leave what was pasted selected.
       extendSelection({ row: rowCount - 1, col: colCount - 1 });
       if (fitting.length < writes.length) {
         notice.value = { kind: "error", text: "Some cells did not fit in the table" };
       }
     }).catch((cause: unknown) => {
-      for (const { row, col, input, previous } of changes) {
-        if (engine.value.getInput({ tableId: at.tableId, row, col }) === input) {
-          apply({ tableId: at.tableId, row, col }, previous);
-        }
-      }
+      // The table could not grow, so none of the cells were sent.
+      putBack(table.id, changes);
+      failedSaves += 1;
       fail(cause, "The change could not be saved");
     });
     saves = operation.then(() => undefined);
@@ -946,17 +944,12 @@ export const useWorkbookStore = defineStore("workbook", () => {
   function updateTable(
     tableId: string,
     changes: { name?: string; rowCount?: number; colCount?: number },
-    stepId?: string,
   ): Promise<boolean> {
     const queuedSaves = saves;
     return attempt(async () => {
       // A smaller table loses cells, so pending edits must be stored first.
       await queuedSaves;
-      const response =
-        stepId === undefined
-          ? await api.updateTable(tableId, changes)
-          : await api.updateTable(tableId, changes, stepId);
-      const { table: updated, ...rewritten } = response;
+      const { table: updated, ...rewritten } = await api.updateTable(tableId, changes);
       tables.value = tables.value.map((table) => (table.id === tableId ? updated : table));
       syncStructure();
       // The server rewrote the formulas that named a renamed table, or that read rows and
