@@ -26,6 +26,7 @@ export function toSpreadsheetFile(
           name: table.name,
           rowCount: table.rowCount,
           colCount: table.colCount,
+          ...(table.columns ? { columns: table.columns } : {}),
           cells: cellsOf(table),
         } satisfies FileItem,
       })),

@@ -79,6 +79,7 @@ const SECTIONS = [
   ["basics", "Typing into cells"],
   ["filling", "Selecting, filling, and copying"],
   ["structure", "Pages and tables"],
+  ["columns", "Tables with named columns"],
   ["references", "References"],
   ["operators", "Operators"],
   ["functions", "Functions"],
@@ -125,6 +126,14 @@ const REFERENCES = [
   ["Sales!A1", "Cell A1 of the table named Sales on the formula's own page."],
   ["'Table 2'!A1:A9", "A table whose name has a space needs single quotes."],
   ["'Page 2'!Sales!A1", "Cell A1 of the table Sales on the page named Page 2."],
+  [
+    "[Price]",
+    "In a table with named columns: the cell of the column Price in the formula's own row.",
+  ],
+  [
+    "Sales[Price]",
+    "Every cell of the column Price in the table Sales. 'Table 2'[Unit price] and 'Page 2'!Sales[Price] work the same way.",
+  ],
 ] as const;
 
 const QUERY_CLAUSES = [
@@ -327,6 +336,49 @@ const OPERATORS = [
         <li>
           Two pages in a spreadsheet cannot share a name, and neither can two tables on a page.
           Names are compared without regard to letter case.
+        </li>
+      </ul>
+    </section>
+
+    <section id="columns">
+      <h2>Tables with named columns</h2>
+      <p>
+        <strong>Name columns</strong>, above a table, gives each column a name in place of its
+        letter. The names can come from the table's first row, which then stops being a row of data.
+        Double-click a name to change it.
+      </p>
+      <ul>
+        <li>
+          A formula names a column in square brackets. <code>=[Price] * [Qty]</code> multiplies the
+          Price and Qty cells of the formula's own row. From anywhere,
+          <code>=SUM(Sales[Price])</code> adds the whole Price column of the table Sales. Typing
+          <code>[</code> in a formula lists the columns.
+        </li>
+        <li>
+          Right-click a column to choose what it holds. <strong>Text</strong> keeps what is typed as
+          it is, so <code>007</code> stays <code>007</code>. <strong>Number</strong> and
+          <strong>Date</strong> show <code>#VALUE!</code> for anything else.
+          <strong>Checkbox</strong> shows a checkbox in every row. <strong>Anything</strong> reads
+          what is typed as an ordinary cell does.
+        </li>
+        <li>
+          <strong>A formula</strong> makes a formula column: one formula computed in every row that
+          holds something. Its cells cannot be typed into. Typing a formula into any of them, or
+          into the bar above the tables while one is selected, changes the formula for the whole
+          column.
+        </li>
+        <li>
+          Renaming a column rewrites the formulas that name it. Cell addresses such as
+          <code>A1</code> still work in a table with named columns, where row 1 is the first row of
+          data.
+        </li>
+        <li>
+          <code>QUERY</code> over a range has no header row to read in such a table. Charts and
+          queries can name whole columns instead: <code>HSTACK(Sales[Item], Sales[Total])</code>.
+        </li>
+        <li>
+          <strong>Remove column names</strong> makes the table a plain table again. Its formula
+          columns become empty.
         </li>
       </ul>
     </section>

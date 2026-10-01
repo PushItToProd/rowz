@@ -14,7 +14,7 @@ import type {
   SpreadsheetFile,
   StructuralEditBody,
 } from "@spreadsheet-app/shared";
-import type { CellId, ChartType } from "@spreadsheet-app/engine";
+import type { CellId, ChartType, ColumnType } from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
 export type { ClickResult, PageRecord, Rewritten, Snapshot, TableRecord, ViewRecord };
@@ -125,6 +125,27 @@ export const api = {
     edit: StructuralEditBody,
   ): Promise<Rewritten & { table: TableRecord }> =>
     body(routes.tables[":tableId"].edits.$post({ param: { tableId }, json: edit })),
+
+  /** Names a table's columns, which makes it a data table. With `headerRow`, the first row supplies the names. */
+  nameColumns: (tableId: string, headerRow: boolean): Promise<Rewritten & { table: TableRecord }> =>
+    body(routes.tables[":tableId"].columns.$post({ param: { tableId }, json: { headerRow } })),
+
+  /** Makes a data table a plain table again. */
+  dropColumns: (tableId: string): Promise<TableRecord> =>
+    body(routes.tables[":tableId"].columns.$delete({ param: { tableId } })),
+
+  /** Changes a column's name, type, or formula. Resolves to the table and what a rename rewrote. */
+  updateColumn: (
+    tableId: string,
+    col: number,
+    changes: { name?: string; type?: ColumnType; formula?: string },
+  ): Promise<Rewritten & { table: TableRecord }> =>
+    body(
+      routes.tables[":tableId"].columns[":col"].$patch({
+        param: { tableId, col: String(col) },
+        json: changes,
+      }),
+    ),
 
   /** Adds a chart or a text view to the end of a page. */
   createView: (pageId: string, kind: ViewRecord["kind"]): Promise<ViewRecord> =>

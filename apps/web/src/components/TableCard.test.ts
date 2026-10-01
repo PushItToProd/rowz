@@ -253,3 +253,102 @@ describe("files", () => {
     expect(useWorkbookStore().inputOf(at("C3"))).toBe("kept");
   });
 });
+
+describe("column names", () => {
+  const prompt = vi.spyOn(window, "prompt");
+  const COLUMNS = [
+    { name: "Price", type: "number" as const },
+    { name: "Qty", type: "any" as const },
+    { name: "Total", type: "formula" as const, formula: "=[Price] * [Qty]" },
+  ];
+  const DATA_TABLE = { ...TABLE, columns: COLUMNS };
+
+  async function renderData(): Promise<void> {
+    server.getSnapshot.mockResolvedValue({ ...snapshotWith(), tables: [DATA_TABLE] });
+    await useWorkbookStore().load("s1");
+    wrapper = mount(TableCard, { props: { table: DATA_TABLE }, attachTo: document.body });
+    server.updateColumn.mockResolvedValue({ table: DATA_TABLE, cells: [], views: [], tables: [] });
+  }
+
+  function item(name: string) {
+    const found = wrapper
+      .findAll('[role="menuitem"]')
+      .find((candidate) => candidate.text() === name);
+    if (!found) throw new Error(`No menu item named ${name}`);
+    return found;
+  }
+
+  it("offers two ways to name the columns of a plain table", async () => {
+    await render();
+    server.nameColumns.mockResolvedValue({ table: DATA_TABLE, cells: [], views: [], tables: [] });
+    await button("Name columns").trigger("click");
+    expect(wrapper.get('[role="menu"]').attributes("aria-label")).toBe("Name columns");
+    await item("Use the first row as the names").trigger("click");
+    expect(server.nameColumns).toHaveBeenCalledExactlyOnceWith("t1", true);
+
+    await button("Name columns").trigger("click");
+    await item("Name them Column 1, Column 2, …").trigger("click");
+    expect(server.nameColumns).toHaveBeenLastCalledWith("t1", false);
+  });
+
+  it("removes the names of a data table after confirming, with a warning about formula columns", async () => {
+    await renderData();
+    server.dropColumns.mockResolvedValue(TABLE);
+    expect(wrapper.findAll("button").some((found) => found.text() === "Name columns")).toBe(false);
+    confirm.mockReturnValue(false);
+    await button("Remove column names").trigger("click");
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(
+      "Remove the column names of Table 1? Its formula columns will become empty.",
+    );
+    expect(server.dropColumns).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true);
+    await button("Remove column names").trigger("click");
+    expect(server.dropColumns).toHaveBeenCalledExactlyOnceWith("t1");
+  });
+
+  it("lists what a column can hold in the menu, with the current one ticked", async () => {
+    await renderData();
+    await wrapper.get('[data-cell="A1"]').trigger("contextmenu");
+    const labels = wrapper.findAll('[role="menuitem"]').map((found) => found.text());
+    expect(labels.filter((label) => label.includes("Column holds"))).toEqual([
+      "Column holds: Anything",
+      "Column holds: Text",
+      "✓ Column holds: Number",
+      "Column holds: Date",
+      "Column holds: Checkbox",
+      "Column holds: A formula…",
+    ]);
+    await item("Column holds: Date").trigger("click");
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", 0, { type: "date" });
+  });
+
+  it("asks for the formula of a formula column, starting from the one it has", async () => {
+    await renderData();
+    await wrapper.get('[data-cell="C1"]').trigger("contextmenu");
+    prompt.mockReturnValue("=[Price] + 1");
+    await item("✓ Column holds: A formula…").trigger("click");
+    expect(prompt.mock.calls[0]?.[1]).toBe("=[Price] * [Qty]");
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", 2, {
+      type: "formula",
+      formula: "=[Price] + 1",
+    });
+  });
+
+  it.each([null, "", " = "])(
+    "leaves the column alone when the formula prompt gives %j",
+    async (answer) => {
+      await renderData();
+      await wrapper.get('[data-cell="B1"]').trigger("contextmenu");
+      prompt.mockReturnValue(answer);
+      await item("Column holds: A formula…").trigger("click");
+      expect(server.updateColumn).not.toHaveBeenCalled();
+    },
+  );
+
+  it("has no column items in the menu of a plain table", async () => {
+    await render();
+    await wrapper.get('[data-cell="A1"]').trigger("contextmenu");
+    const labels = wrapper.findAll('[role="menuitem"]').map((found) => found.text());
+    expect(labels.some((label) => label.includes("Column holds"))).toBe(false);
+  });
+});

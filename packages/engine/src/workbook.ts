@@ -160,6 +160,8 @@ export class Workbook {
 
   /** Tables whose cells were last read according to named columns. */
   private readonly typed = new Set<string>();
+  /** For each data table, how many cells of each row hold something typed. */
+  private readonly typedInRow = new Map<string, Map<number, number>>();
 
   private settling = false;
   /** Counts calls to `invalidate`, so a computing pass can tell that one happened under it. */
@@ -202,9 +204,9 @@ export class Workbook {
   }
 
   /**
-   * Makes a table's cells agree with its columns: every row of a formula
-   * column computes the column's formula, and what was typed into a typed
-   * column is read as that type.
+   * Makes a table's cells agree with its columns: every row that holds
+   * something computes the formulas of the formula columns, and what was
+   * typed into a typed column is read as that type.
    */
   private applyColumns(table: TableDefinition): void {
     const records = this.cells.get(table.id);
@@ -218,18 +220,65 @@ export class Workbook {
       if (record.computed || column?.type === "formula") records.delete(key);
       else record.content = parseTyped(record.input, column?.type ?? "any");
     }
+    const filled = new Map<number, number>();
+    for (const { id } of records.values()) filled.set(id.row, (filled.get(id.row) ?? 0) + 1);
+    if (table.columns) this.typedInRow.set(table.id, filled);
+    else this.typedInRow.delete(table.id);
+    for (const row of filled.keys()) this.computeRow(table, row, records);
+  }
+
+  /**
+   * Gives a row its formula-column cells. A row gets them once something is
+   * typed into it, so the empty rows at the end of a table stay empty.
+   */
+  private computeRow(
+    table: TableDefinition,
+    row: number,
+    records: Map<string, CellRecord>,
+  ): CellRecord[] {
+    const added: CellRecord[] = [];
     for (const [col, column] of (table.columns ?? []).entries()) {
       if (column.type !== "formula" || column.formula === undefined) continue;
-      const content = parseContent(column.formula);
-      for (let row = 0; row < (table.rowCount ?? 0); row += 1) {
-        const id = { tableId: table.id, row, col };
-        records.set(cellKey(id), {
-          id,
-          input: column.formula,
-          content,
-          computed: true,
-          precedents: [],
-        });
+      if (row >= (table.rowCount ?? Infinity)) continue;
+      const id = { tableId: table.id, row, col };
+      const record: CellRecord = {
+        id,
+        input: column.formula,
+        content: parseContent(column.formula),
+        computed: true,
+        precedents: [],
+      };
+      records.set(cellKey(id), record);
+      added.push(record);
+    }
+    return added;
+  }
+
+  /**
+   * Keeps count of what is typed into a row of a data table. The first cell
+   * typed into a row gives it its formula-column cells, and clearing the last
+   * takes them away.
+   */
+  private trackRow(id: CellId, was: boolean, is: boolean, records: Map<string, CellRecord>): void {
+    const filled = this.typedInRow.get(id.tableId);
+    const table = this.tables.table(id.tableId);
+    if (!filled || !table || was === is) return;
+    const count = (filled.get(id.row) ?? 0) + (is ? 1 : -1);
+    if (count > 0) filled.set(id.row, count);
+    else filled.delete(id.row);
+
+    if (is && count === 1) {
+      for (const record of this.computeRow(table, id.row, records)) {
+        this.index(record);
+        this.invalidate(record.id);
+      }
+    } else if (!is && count === 0) {
+      for (const [key, record] of records) {
+        if (!record.computed || record.id.row !== id.row) continue;
+        records.delete(key);
+        this.pending.delete(record);
+        this.dependencies.remove(record.id);
+        this.invalidate(record.id);
       }
     }
   }
@@ -261,6 +310,8 @@ export class Workbook {
       records.set(key, record);
       this.index(record);
     }
+
+    this.trackRow(id, replaced !== undefined, input !== "", records);
 
     // An array that had filled this cell no longer fits, and one that did not
     // fit in this table may fit now.

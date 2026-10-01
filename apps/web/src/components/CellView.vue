@@ -21,8 +21,10 @@ const props = defineProps<{
   running: boolean;
   /** Whether the viewer may run buttons. */
   canRun: boolean;
+  /** Whether the cell is in a checkbox column, where TRUE, FALSE, and empty show as a checkbox. */
+  checkbox?: boolean;
 }>();
-const emit = defineEmits<{ run: []; choose: [value: Scalar] }>();
+const emit = defineEmits<{ run: []; choose: [value: Scalar]; toggle: [checked: boolean] }>();
 
 const text = computed(() => formatValue(props.value));
 const kind = computed(() => {
@@ -66,6 +68,18 @@ function onChoice(event: Event): void {
   >
     {{ running ? "Running…" : text }}
   </button>
+  <label
+    v-else-if="checkbox && (value === null || typeof value === 'boolean')"
+    class="cell-control cell-control--column"
+  >
+    <input
+      type="checkbox"
+      aria-label="Checked"
+      :checked="value === true"
+      :disabled="!canRun"
+      @change="emit('toggle', ($event.target as HTMLInputElement).checked)"
+    />
+  </label>
   <label v-else-if="control && kind === 'checkbox'" class="cell-control">
     <input
       type="checkbox"

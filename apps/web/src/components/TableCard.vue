@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { columnLabel } from "@spreadsheet-app/engine";
+import { columnLabel, type ColumnType } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
 import { computed, ref } from "vue";
 import { parseCsv, toCsv } from "../files/csv";
@@ -65,6 +65,73 @@ function removeLine(axis: "row" | "col", index: number): void {
   void store.editTable(props.table.id, { axis, kind: "delete", index });
 }
 
+/** Where the menu that offers the two ways to name columns is open, if it is. */
+const namingAt = ref<{ x: number; y: number } | null>(null);
+
+function openNaming(event: MouseEvent): void {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  namingAt.value = { x: box.left, y: box.bottom + 4 };
+}
+
+const namingItems: MenuItem[] = [
+  {
+    label: "Use the first row as the names",
+    run: () => {
+      void store.nameColumns(props.table.id, true);
+    },
+  },
+  {
+    label: "Name them Column 1, Column 2, …",
+    run: () => {
+      void store.nameColumns(props.table.id, false);
+    },
+  },
+];
+
+function dropColumns(): void {
+  const computed = (props.table.columns ?? []).some((column) => column.type === "formula");
+  const warning = computed ? " Its formula columns will become empty." : "";
+  if (window.confirm(`Remove the column names of ${props.table.name}?${warning}`)) {
+    void store.dropColumns(props.table.id);
+  }
+}
+
+const COLUMN_TYPES: readonly { type: ColumnType; label: string }[] = [
+  { type: "any", label: "Anything" },
+  { type: "text", label: "Text" },
+  { type: "number", label: "Number" },
+  { type: "date", label: "Date" },
+  { type: "checkbox", label: "Checkbox" },
+];
+
+/** The menu items that set what a named column holds. */
+function columnItems(col: number): MenuItem[] {
+  const column = props.table.columns?.[col];
+  if (!column) return [];
+  const { id } = props.table;
+  return [
+    ...COLUMN_TYPES.map(({ type, label }, index) => ({
+      label: `${column.type === type ? "✓ " : ""}Column holds: ${label}`,
+      separated: index === 0,
+      run: () => {
+        void store.updateColumn(id, col, { type });
+      },
+    })),
+    {
+      label: `${column.type === "formula" ? "✓ " : ""}Column holds: A formula…`,
+      run: () => {
+        const formula = window.prompt(
+          `The formula for every row of ${column.name}. Name a column of the same row in square brackets, as in =[Price] * [Qty]`,
+          column.formula ?? "=",
+        );
+        if (formula !== null && formula.trim() !== "" && formula.trim() !== "=") {
+          void store.updateColumn(id, col, { type: "formula", formula });
+        }
+      },
+    },
+  ];
+}
+
 /** Where the menu of row, column, and cell actions is open, if it is. */
 const menuAt = ref<{ x: number; y: number } | null>(null);
 
@@ -119,6 +186,7 @@ const menuItems = computed((): MenuItem[] => {
         removeLine("col", col);
       },
     },
+    ...columnItems(col),
     { label: "Clear cells", separated: true, run: () => void store.clearSelection() },
   ];
 });
@@ -150,6 +218,8 @@ const menuItems = computed((): MenuItem[] => {
         >
           Add column
         </button>
+        <button v-if="table.columns" type="button" @click="dropColumns">Remove column names</button>
+        <button v-else type="button" aria-haspopup="menu" @click="openNaming">Name columns</button>
         <label class="file-button">
           Import CSV
           <input type="file" accept=".csv,.tsv,.txt,text/csv" @change="importCsv" />
@@ -198,6 +268,14 @@ const menuItems = computed((): MenuItem[] => {
     </div>
 
     <GridView :table="table" @menu="menuAt = $event" />
+    <ContextMenu
+      v-if="namingAt"
+      :x="namingAt.x"
+      :y="namingAt.y"
+      label="Name columns"
+      :items="namingItems"
+      @close="namingAt = null"
+    />
     <ContextMenu
       v-if="menuAt && selected"
       :x="menuAt.x"

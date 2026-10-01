@@ -153,6 +153,29 @@ describe("formula columns", () => {
     expect(book.columnOf(at("A1", "t2"))).toBeUndefined();
   });
 
+  it("compute only in rows that hold something, so empty rows stay empty", () => {
+    const book = workbook({
+      t1: { A1: "pen", B1: "2", C1: "10" },
+      t2: { A1: "=COUNTA(Sales[Total])" },
+    });
+    expect(book.getValue(at("D1"))).toBe(20);
+    expect(book.getValue(at("D2"))).toBeNull();
+    expect(book.getInput(at("D2"))).toBe("");
+    expect(book.getValue(at("A1", "t2"))).toBe(1);
+
+    // Typing into a row gives it its computed cells, and clearing the row takes them away.
+    book.setCell(at("B2"), "3");
+    expect(book.getValue(at("D2"))).toBe(0);
+    expect(book.getValue(at("A1", "t2"))).toBe(2);
+    book.setCell(at("C2"), "4");
+    expect(book.getValue(at("D2"))).toBe(12);
+    book.setCell(at("B2"), "");
+    expect(book.getValue(at("D2"))).toBe(0);
+    book.setCell(at("C2"), "");
+    expect(book.getValue(at("D2"))).toBeNull();
+    expect(book.getValue(at("A1", "t2"))).toBe(1);
+  });
+
   it("follow the cells they read, and feed other formulas", () => {
     const book = workbook({ t1: CELLS, t2: { A1: "=SUM(Sales[Total])" } });
     expect(book.getValue(at("A1", "t2"))).toBe(35);
@@ -224,11 +247,13 @@ describe("formula columns", () => {
     const tick = book.getValue(at("B2"));
     expect(isControl(tick) && tick.target).toEqual(at("A2"));
     expect(isControl(tick) && tick.value).toBe(true);
-    const go = book.getValue(at("C1"));
+    const go = book.getValue(at("C2"));
     expect(isButton(go) && book.planAction(go.action)).toEqual({
       ok: true,
-      effects: [{ type: "setCell", tableId: "t1", row: 0, col: 0, input: "TRUE" }],
+      effects: [{ type: "setCell", tableId: "t1", row: 1, col: 0, input: "TRUE" }],
     });
+    // A row with nothing typed into it has no button.
+    expect(book.getValue(at("C1"))).toBeNull();
   });
 
   it("are skipped by actions that look for typed cells, and refuse to be written to", () => {

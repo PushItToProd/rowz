@@ -1,7 +1,7 @@
 import { functionDocs, isFormulaInput, type FunctionDoc } from "@spreadsheet-app/engine";
 
 export interface Suggestion {
-  kind: "function" | "table" | "page" | "name";
+  kind: "function" | "table" | "page" | "name" | "column";
   /** What the list shows. */
   label: string;
   /** What replaces the word being typed. */
@@ -19,15 +19,24 @@ export interface Suggestions {
 /** The pages and tables a formula in one table can name. */
 export interface NamingContext {
   pages: readonly { id: string; name: string }[];
-  tables: readonly { pageId: string; name: string }[];
+  tables: readonly {
+    pageId: string;
+    name: string;
+    /** The named columns of a data table. */
+    columns?: readonly { name: string }[] | null;
+  }[];
   /** The page of the table that holds the formula. */
   pageId: string | undefined;
+  /** The named columns of the table that holds the formula, which `[Name]` reads. */
+  columns?: readonly { name: string }[] | null;
 }
 
 const MAX_SUGGESTIONS = 8;
 const BARE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const WORD_AT_END = /[A-Za-z_][A-Za-z0-9_.]*$/;
 const QUALIFIER_AT_END = /(?:'((?:[^']|'')*)'|([A-Za-z_][A-Za-z0-9_]*))!$/;
+// An open `[` with a table name before it, or none: `Sales[Pr`, `'Table 1'[`, `[Pr`.
+const COLUMN_AT_END = /(?:'((?:[^']|'')*)'|([A-Za-z_][A-Za-z0-9_]*))?\[([^[\]]*)$/;
 const CELL_LIKE = /^\$?[A-Za-z]{1,3}\$?[0-9]*$/;
 const WORD = /[A-Za-z_][A-Za-z0-9_.]*/g;
 
@@ -129,6 +138,34 @@ export function suggestionsAt(text: string, caret: number, context: NamingContex
     };
   }
 
+  // Inside square brackets only a column can be meant.
+  const bracket = COLUMN_AT_END.exec(before);
+  if (bracket) {
+    const [, quotedTable, bareTable, typedColumn = ""] = bracket;
+    const tableName = quotedTable?.replaceAll("''", "'") ?? bareTable;
+    const columns =
+      tableName === undefined
+        ? context.columns
+        : context.tables.find(
+            (table) =>
+              table.pageId === context.pageId &&
+              table.name.toLowerCase() === tableName.toLowerCase(),
+          )?.columns;
+    const where = tableName === undefined ? "column of this row" : `column of ${tableName}`;
+    return {
+      from: caret - typedColumn.length - 1,
+      items: (columns ?? [])
+        .filter((column) => startsWith(column.name, typedColumn.trimStart()))
+        .map((column): Suggestion => ({
+          kind: "column",
+          label: column.name,
+          insert: `[${column.name}]`,
+          detail: where,
+        }))
+        .slice(0, MAX_SUGGESTIONS),
+    };
+  }
+
   const typed = WORD_AT_END.exec(before)?.[0] ?? "";
   if (typed === "") return none;
   const from = caret - typed.length;
@@ -188,7 +225,11 @@ export function applySuggestion(
   suggestion: Suggestion,
 ): { text: string; caret: number } {
   // Typing `SUM` then accepting `SUM(` must not leave `SUM((` when a parenthesis already follows.
-  const after = text.slice(caret);
+  // Accepting `[Price]` after typing `[Pr` must not leave `[Price]]` when the bracket is already closed.
+  const after =
+    suggestion.kind === "column" && text.slice(caret).startsWith("]")
+      ? text.slice(caret + 1)
+      : text.slice(caret);
   const insert =
     suggestion.insert.endsWith("(") && after.startsWith("(")
       ? suggestion.insert.slice(0, -1)

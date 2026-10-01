@@ -2,6 +2,43 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: Data tables: named, typed, and formula columns
+
+**Decision.** A data table is an ordinary table whose columns have been given names. It is not a separate kind of page item. **Name columns** converts a table, optionally taking the names from its first row, and **Remove column names** converts it back. Everything a table could already do still works: cell addresses, fill, paste, CSV, charts.
+
+**References.**
+
+| Written                                 | Means                                                               |
+| --------------------------------------- | ------------------------------------------------------------------- |
+| `[Price]`                               | The Price cell of the formula's own row, in the formula's own table |
+| `Sales[Price]`, `'Table 1'[Unit price]` | The whole Price column of that table on the formula's page          |
+| `'Page 2'!Sales[Price]`                 | The same on another page                                            |
+
+Your todo item gave `'Table 1'[Column Name]`. I added the bare `[Price]` form for "this row", because a formula column needs a way to say it and `'Table 1'[Price]` is the whole column. Excel writes this row as `[@Price]`. Here a bare `[Price]` could not sensibly mean anything else, so the `@` is left out. As an operand of an operator, `Sales[Price]` means this row's cell, the same rule as `A:A`.
+
+**Column types.** Anything (the default: what is typed is read as in any cell), Text, Number, Date, Checkbox, and Formula.
+
+- **A typed column shows `#VALUE!` for an entry of the wrong kind** and keeps what was typed. The alternative was to refuse the entry. Keeping it means a paste or an import never loses data, and changing a column's type back shows the values again.
+- **A formula column holds one formula for every row.** The formula is stored on the column, not in cells. Typing a formula into any cell of the column changes it for the whole column. Typing something that is not a formula is refused with a message, so a stray keystroke cannot replace the column.
+- **A formula column computes only in rows that hold something.** A table here has a fixed number of rows, most of them empty at the end. Without this rule `=[Price] * [Qty]` would show a column of zeros below the data, and `SUM(Sales[Total] + 1)` would count the empty rows.
+- **A column that becomes a formula column loses what was typed into it.** The change is made from a menu and names the column, and stored cells that nothing shows would otherwise come back as a surprise in exports.
+
+**Choices.**
+
+- **Row 1 is the first row of data.** With names taken from the first row, that row is deleted and formulas are rewritten as for any deleted row. `A1` then names the first data cell.
+- **Column names are unique within a table, ignoring case,** and cannot contain `[` or `]`.
+- **Renaming a column rewrites every formula that names it:** in cells, in charts and text views, and in formula columns of any table. A formula that names a deleted column keeps its text and shows `#REF!`.
+- **The formula for a formula column is asked for with the browser's prompt box.** It is the one place the app uses `prompt`. After that the formula is edited in the formula bar like any other.
+
+**Not done.**
+
+- Sorting and filtering a data table in place. `QUERY`, `SORT`, and `FILTER` over `Sales[...]` columns give sorted and filtered copies.
+- Dropdown (choice) columns, and number formats per column.
+- `QUERY(Sales, ...)` over a whole data table by name, with its column names as headers. A query currently needs a range, and a data table has no header row inside the range.
+- Showing only the rows that hold data. The table still shows its empty rows.
+
+**To change.** References: `packages/engine/src/ast.ts`, `parser.ts`. Typed and formula columns: `applyColumns` and `parseTyped` in `workbook.ts`. Server: `nameColumns` and `updateColumn` in `apps/server/src/repo/spreadsheets.ts`.
+
 ## 2026-10-01: Phone-width layout and touch
 
 **Decision.** The app is usable on a phone. Below 640px the headers wrap, the back link is an arrow, page tabs scroll sideways, and table cards put their buttons under the name. On a touch device rows and buttons are taller, and inputs are 16px so iOS does not zoom when one takes focus.

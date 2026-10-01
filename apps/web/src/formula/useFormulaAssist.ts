@@ -47,6 +47,7 @@ export function useFormulaAssist(
     pages: store.pages,
     tables: store.tables,
     pageId: store.tables.find((table) => table.id === tableId())?.pageId,
+    columns: store.tables.find((table) => table.id === tableId())?.columns,
   }));
   const suggestions = computed<Suggestions>(() =>
     text.value === null || dismissed.value

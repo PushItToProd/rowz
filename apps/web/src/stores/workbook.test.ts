@@ -1,5 +1,6 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ColumnDefinition } from "@spreadsheet-app/engine";
 import { computed } from "vue";
 import { api, type ViewRecord } from "../api/client";
 import { at, clickResult, snapshotWith, TABLE, type MockedApi } from "../testing";
@@ -702,5 +703,151 @@ describe("files", () => {
     const store = await open({}, "viewer");
     await store.importRows("t1", [["x"]]);
     expect(server.setCells).not.toHaveBeenCalled();
+  });
+});
+
+describe("data tables", () => {
+  const COLUMNS: ColumnDefinition[] = [
+    { name: "Price", type: "number" },
+    { name: "Qty", type: "any" },
+    { name: "Total", type: "formula", formula: "=[Price] * [Qty]" },
+  ];
+  const DATA_TABLE = { ...TABLE, columns: COLUMNS };
+
+  async function openData(
+    inputs: Record<string, string> = { A1: "2", B1: "10", A2: "5", B2: "3" },
+  ) {
+    server.getSnapshot.mockResolvedValue({ ...snapshotWith(inputs), tables: [DATA_TABLE] });
+    const store = useWorkbookStore();
+    await store.load("s1");
+    return store;
+  }
+
+  it("computes a formula column in every row, and knows the column of a cell", async () => {
+    const store = await openData();
+    expect(store.valueOf(at("C1"))).toBe(20);
+    expect(store.valueOf(at("C2"))).toBe(15);
+    expect(store.inputOf(at("C2"))).toBe("=[Price] * [Qty]");
+    expect(store.columnOf(at("C2"))).toEqual(COLUMNS[2]);
+    expect(store.columnOf(at("A1"))?.name).toBe("Price");
+  });
+
+  it("makes a formula typed into a formula column the formula of the whole column", async () => {
+    const store = await openData();
+    const changed = COLUMNS.with(2, { name: "Total", type: "formula", formula: "=[Price] + 1" });
+    server.updateColumn.mockResolvedValue({
+      table: { ...DATA_TABLE, columns: changed },
+      cells: [],
+      views: [],
+      tables: [],
+    });
+    await store.setCell(at("C2"), "=[Price] + 1");
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", 2, {
+      formula: "=[Price] + 1",
+    });
+    expect(server.setCells).not.toHaveBeenCalled();
+    expect(store.valueOf(at("C1"))).toBe(3);
+    expect(store.valueOf(at("C2"))).toBe(6);
+  });
+
+  it("refuses to replace a column's formula with something that is not a formula", async () => {
+    const store = await openData();
+    await store.setCell(at("C1"), "5");
+    await store.setCell(at("C1"), "");
+    await store.setCell(at("C1"), "=[Price] * [Qty]");
+    expect(server.updateColumn).not.toHaveBeenCalled();
+    expect(store.notice).toEqual({
+      kind: "error",
+      text: "Total is a formula column. Type a formula starting with = to change it for every row",
+    });
+    expect(store.valueOf(at("C1"))).toBe(20);
+  });
+
+  it("leaves a formula column out of a paste, a fill, and a clear that cross it", async () => {
+    const store = await openData();
+    store.selection = at("B1");
+    await store.paste("7\t8\n9\t10");
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
+      { row: 0, col: 1, input: "7" },
+      { row: 1, col: 1, input: "9" },
+    ]);
+    expect(store.valueOf(at("C1"))).toBe(14);
+  });
+
+  it("names the columns of a table, and shows the cells the server moved", async () => {
+    const store = await open({ A1: "Price", A2: "4" });
+    server.nameColumns.mockResolvedValue({
+      table: { ...TABLE, rowCount: 3, columns: [{ name: "Price", type: "any" }] },
+      cells: [
+        { ...at("A1"), input: "4" },
+        { ...at("A2"), input: "" },
+      ],
+      views: [],
+      tables: [],
+    });
+    expect(await store.nameColumns("t1", true)).toBe(true);
+    expect(server.nameColumns).toHaveBeenCalledExactlyOnceWith("t1", true);
+    expect(store.tables[0]?.columns).toEqual([{ name: "Price", type: "any" }]);
+    expect(store.valueOf(at("A1"))).toBe(4);
+    expect(store.inputOf(at("A2"))).toBe("");
+  });
+
+  it("changes a column, and reads its cells as the new type", async () => {
+    const store = await openData({ B1: "007" });
+    server.updateColumn.mockResolvedValue({
+      table: { ...DATA_TABLE, columns: COLUMNS.with(1, { name: "Qty", type: "text" }) },
+      cells: [],
+      views: [],
+      tables: [],
+    });
+    expect(store.valueOf(at("B1"))).toBe(7);
+    expect(await store.updateColumn("t1", 1, { type: "text" })).toBe(true);
+    expect(store.valueOf(at("B1"))).toBe("007");
+  });
+
+  it("drops the column names, after which the formula column is empty", async () => {
+    const store = await openData();
+    server.dropColumns.mockResolvedValue(TABLE);
+    expect(await store.dropColumns("t1")).toBe(true);
+    expect(store.tables[0]?.columns).toBeNull();
+    expect(store.valueOf(at("C1"))).toBeNull();
+  });
+
+  it("shows other tables whose formula columns a rename rewrote", async () => {
+    const store = await openData();
+    const rewritten = COLUMNS.with(2, {
+      name: "Total",
+      type: "formula",
+      formula: "=[Price] + [Qty]",
+    });
+    server.renamePage.mockResolvedValue({
+      cells: [],
+      views: [],
+      tables: [{ ...DATA_TABLE, columns: rewritten }],
+    });
+    await store.renamePage("p1", "Data");
+    expect(store.valueOf(at("C1"))).toBe(12);
+  });
+
+  it("reports a refused column change", async () => {
+    const store = await openData();
+    server.updateColumn.mockRejectedValue(new Error("A column named Qty already exists"));
+    expect(await store.updateColumn("t1", 0, { name: "Qty" })).toBe(false);
+    expect(store.notice).toEqual({ kind: "error", text: "A column named Qty already exists" });
+  });
+
+  it("writes column definitions to a file, without cells for the formula column", async () => {
+    const store = await openData({ A1: "2", B1: "10" });
+    expect(store.toFile()?.pages[0]?.items[0]).toEqual({
+      type: "table",
+      name: "Table 1",
+      rowCount: 4,
+      colCount: 3,
+      columns: COLUMNS,
+      cells: [
+        { row: 0, col: 0, input: "2" },
+        { row: 0, col: 1, input: "10" },
+      ],
+    });
   });
 });

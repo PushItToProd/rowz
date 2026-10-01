@@ -904,3 +904,89 @@ describe("touch", () => {
     expect(wrapper.find(".grid__editor").exists()).toBe(false);
   });
 });
+
+describe("a data table", () => {
+  const DATA_TABLE = {
+    ...TABLE,
+    columns: [
+      { name: "Item", type: "any" as const },
+      { name: "Done", type: "checkbox" as const },
+      { name: "Twice", type: "formula" as const, formula: "=[Item] * 2" },
+    ],
+  };
+
+  async function mountData(inputs: Record<string, string> = {}, role = "owner"): Promise<void> {
+    server.getSnapshot.mockResolvedValue({ ...snapshotWith(inputs, role), tables: [DATA_TABLE] });
+    await useWorkbookStore().load("s1");
+    wrapper = mount(GridView, { props: { table: DATA_TABLE }, attachTo: document.body });
+  }
+
+  const header = (name: string) => wrapper.get(`thead th[data-column="${name}"]`);
+
+  it("heads each column with its name, its letter, and what it holds", async () => {
+    await mountData();
+    const part = (selector: string): string[] =>
+      wrapper.findAll(`thead th ${selector}`).map((found) => found.text());
+    expect(part(".grid__column-letter")).toEqual(["A", "B", "C"]);
+    expect(part(".editable-name")).toEqual(["Item", "Done", "Twice"]);
+    expect(part(".grid__column-type")).toEqual(["checkbox", "formula"]);
+  });
+
+  it("renames a column from its header", async () => {
+    await mountData();
+    server.updateColumn.mockResolvedValue({ table: DATA_TABLE, cells: [], views: [], tables: [] });
+    await header("Item").get(".editable-name").trigger("dblclick");
+    const input = header("Item").get("input");
+    // A press inside the box places the caret and does not select the column.
+    await input.trigger("mousedown");
+    expect(useWorkbookStore().selection).toBeNull();
+    await input.setValue("Thing");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", 0, { name: "Thing" });
+  });
+
+  it("still selects the column when its header is pressed", async () => {
+    await mountData();
+    await header("Done").trigger("mousedown");
+    expect(useWorkbookStore().selectedBlock).toEqual({
+      startRow: 0,
+      endRow: 3,
+      startCol: 1,
+      endCol: 1,
+    });
+  });
+
+  it("shows a checkbox in every cell of a checkbox column, and stores a tick", async () => {
+    await mountData({ B1: "TRUE", B2: "FALSE" });
+    const boxes = ["B1", "B2", "B3"].map((address) =>
+      cellAt(address).get<HTMLInputElement>("input"),
+    );
+    expect(boxes.map((box) => box.element.checked)).toEqual([true, false, false]);
+    await boxes[2]!.setValue(true);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
+      { row: 2, col: 1, input: "TRUE" },
+    ]);
+    await boxes[0]!.setValue(false);
+    expect(server.setCells).toHaveBeenLastCalledWith("t1", [{ row: 0, col: 1, input: "FALSE" }]);
+  });
+
+  it("shows the error for something in a checkbox column that is not TRUE or FALSE", async () => {
+    await mountData({ B1: "maybe" });
+    expect(cellAt("B1").find("input").exists()).toBe(false);
+    expect(cellAt("B1").text()).toBe("#VALUE!");
+  });
+
+  it("marks the cells of a formula column, which show the column's formula result", async () => {
+    await mountData({ A1: "4" });
+    expect(cellAt("C1").classes()).toContain("grid__cell--computed");
+    expect(cellAt("C1").text()).toBe("8");
+    expect(cellAt("A1").classes()).not.toContain("grid__cell--computed");
+  });
+
+  it("gives a viewer the names without the means to change them", async () => {
+    await mountData({ B1: "TRUE" }, "viewer");
+    await header("Item").get(".editable-name").trigger("dblclick");
+    expect(header("Item").find("input").exists()).toBe(false);
+    expect(cellAt("B1").get("input").attributes("disabled")).toBeDefined();
+  });
+});

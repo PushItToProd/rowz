@@ -5,6 +5,7 @@ import {
   formatAddress,
   type CellAddress,
   type CellId,
+  type ColumnDefinition,
 } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
 import {
@@ -22,6 +23,7 @@ import { useWorkbookStore } from "../stores/workbook";
 import { contains, fillTarget, type Block } from "../formula/fill";
 import { useFormulaAssist } from "../formula/useFormulaAssist";
 import CellView from "./CellView.vue";
+import EditableName from "./EditableName.vue";
 import FormulaAssist from "./FormulaAssist.vue";
 
 const props = defineProps<{ table: TableRecord }>();
@@ -71,6 +73,18 @@ function select(row: number, col: number): void {
   if (isSelected(row, col) && store.selectionEnd === null) return;
   commit();
   store.selection = cell(row, col);
+}
+
+/** The definition of a column, when the table has named columns. */
+function columnAt(col: number): ColumnDefinition | undefined {
+  return props.table.columns?.[col];
+}
+
+/** A press on a column header selects the column, unless it is in the box where the column is being renamed. */
+function onColumnMousedown(event: MouseEvent, col: number): void {
+  if (event.target instanceof HTMLInputElement) return;
+  event.preventDefault();
+  selectLine("col", col);
 }
 
 /** Selects a whole row or column, from its header. */
@@ -362,10 +376,24 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             v-for="col in table.colCount"
             :key="col"
             scope="col"
-            @mousedown.left.prevent="selectLine('col', col - 1)"
+            :class="{ 'grid__column--named': columnAt(col - 1) }"
+            :data-column="columnAt(col - 1)?.name"
+            @mousedown.left="onColumnMousedown($event, col - 1)"
             @contextmenu="onHeaderContextMenu($event, 'col', col - 1)"
           >
-            {{ columnLabel(col - 1) }}
+            <template v-if="columnAt(col - 1)">
+              <span class="grid__column-letter">{{ columnLabel(col - 1) }}</span>
+              <EditableName
+                :value="columnAt(col - 1)?.name ?? ''"
+                label="Column name"
+                :disabled="!store.canEdit"
+                @rename="store.updateColumn(table.id, col - 1, { name: $event })"
+              />
+              <span v-if="columnAt(col - 1)?.type !== 'any'" class="grid__column-type">
+                {{ columnAt(col - 1)?.type }}
+              </span>
+            </template>
+            <template v-else>{{ columnLabel(col - 1) }}</template>
           </th>
         </tr>
       </thead>
@@ -389,6 +417,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               'grid__cell--in-range': inBlock(row - 1, col - 1),
               'grid__cell--fill-preview': inFillPreview(row - 1, col - 1),
               'grid__cell--filled': store.filledBy(cell(row - 1, col - 1)) !== undefined,
+              'grid__cell--computed': columnAt(col - 1)?.type === 'formula',
             }"
             @pointerdown="onCellPointerdown($event, row - 1, col - 1)"
             @mousedown="onCellMousedown($event, row - 1, col - 1)"
@@ -415,6 +444,8 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               :value="store.valueOf(cell(row - 1, col - 1))"
               :running="store.running.has(cellKey(cell(row - 1, col - 1)))"
               :can-run="store.canEdit"
+              :checkbox="columnAt(col - 1)?.type === 'checkbox'"
+              @toggle="store.setCell(cell(row - 1, col - 1), $event ? 'TRUE' : 'FALSE')"
               @run="run(row - 1, col - 1)"
               @choose="store.input(cell(row - 1, col - 1), $event)"
             />

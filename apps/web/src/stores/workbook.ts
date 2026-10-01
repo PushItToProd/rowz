@@ -4,12 +4,15 @@ import {
   formatAddress,
   formatDate,
   formatValue,
+  isFormulaInput,
   isDate,
   Workbook,
   type CellAddress,
   type CellId,
   type CellValue,
   type ChartType,
+  type ColumnDefinition,
+  type ColumnType,
   type Evaluated,
   type Scalar,
 } from "@spreadsheet-app/engine";
@@ -134,7 +137,13 @@ export const useWorkbookStore = defineStore("workbook", () => {
   }
 
   /** Shows what the server rewrote after a rename or a row or column edit. */
-  function applyRewritten({ cells, views: sources }: Rewritten): void {
+  function applyRewritten({ cells, views: sources, tables: changed }: Rewritten): void {
+    if (changed.length > 0) {
+      // Other tables' formula columns named what was renamed or moved.
+      const byId = new Map(changed.map((table) => [table.id, table]));
+      tables.value = tables.value.map((table) => byId.get(table.id) ?? table);
+      syncStructure();
+    }
     for (const cell of cells) apply(cell, cell.input);
     if (sources.length === 0) return;
     const rewritten = new Map(sources.map(({ id, source }) => [id, source]));
@@ -157,9 +166,31 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return engine.value.getInput(id);
   }
 
-  /** Shows the new input at once and saves it. A failed save puts the old input back. */
-  function setCell(id: CellId, input: string): Promise<void> {
-    return setCells(id.tableId, [{ row: id.row, col: id.col, input }]);
+  /** The column a cell is in, when its table has named columns. */
+  function columnOf(id: CellId): ColumnDefinition | undefined {
+    return engine.value.columnOf(id);
+  }
+
+  /**
+   * Shows the new input at once and saves it. A failed save puts the old
+   * input back. What is typed into a cell of a formula column becomes the
+   * formula of the whole column.
+   */
+  async function setCell(id: CellId, input: string): Promise<void> {
+    if (columnOf(id)?.type !== "formula") {
+      return setCells(id.tableId, [{ row: id.row, col: id.col, input }]);
+    }
+    if (input.trim() === "" || input === engine.value.getInput(id)) return;
+    if (!isFormulaInput(input)) {
+      // A stray keystroke must not replace the formula of a whole column.
+      const name = columnOf(id)?.name ?? "This";
+      notice.value = {
+        kind: "error",
+        text: `${name} is a formula column. Type a formula starting with = to change it for every row`,
+      };
+      return;
+    }
+    await updateColumn(id.tableId, id.col, { formula: input });
   }
 
   /**
@@ -168,6 +199,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
    */
   function setCells(tableId: string, writes: readonly CellInput[]): Promise<void> {
     const changes = writes
+      // A fill or paste that crosses a formula column leaves that column to its formula.
+      .filter((write) => columnOf({ tableId, ...write })?.type !== "formula")
       .map((write) => ({ ...write, previous: engine.value.getInput({ tableId, ...write }) }))
       .filter((change) => change.previous !== change.input);
     if (changes.length === 0) return Promise.resolve();
@@ -287,6 +320,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const filled: CellInput[] = [];
     for (let row = 0; row < table.rowCount; row += 1) {
       for (let col = 0; col < table.colCount; col += 1) {
+        // A formula column's cells are computed, and its formula is kept with the column.
+        if (table.columns?.[col]?.type === "formula") continue;
         const input = engine.value.getInput({ tableId: table.id, row, col });
         if (input !== "") filled.push({ row, col, input });
       }
@@ -471,6 +506,42 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }, "The table could not be changed");
   }
 
+  /** Shows a table as the server now has it, with what the change rewrote elsewhere. */
+  function showTable(updated: TableRecord, rewritten: Rewritten): void {
+    tables.value = tables.value.map((table) => (table.id === updated.id ? updated : table));
+    syncStructure();
+    applyRewritten(rewritten);
+  }
+
+  /** Names a table's columns, which makes it a data table. With `headerRow`, its first row gives the names. */
+  function nameColumns(tableId: string, headerRow: boolean): Promise<boolean> {
+    return attempt(async () => {
+      // The server may remove the header row, so pending edits must be stored first.
+      await saves;
+      const { table, ...rewritten } = await api.nameColumns(tableId, headerRow);
+      showTable(table, rewritten);
+    }, "The columns could not be named");
+  }
+
+  /** Makes a data table a plain table again. */
+  function dropColumns(tableId: string): Promise<boolean> {
+    return attempt(async () => {
+      showTable(await api.dropColumns(tableId), { cells: [], views: [], tables: [] });
+    }, "The table could not be changed");
+  }
+
+  function updateColumn(
+    tableId: string,
+    col: number,
+    changes: { name?: string; type?: ColumnType; formula?: string },
+  ): Promise<boolean> {
+    return attempt(async () => {
+      await saves;
+      const { table, ...rewritten } = await api.updateColumn(tableId, col, changes);
+      showTable(table, rewritten);
+    }, "The column could not be changed");
+  }
+
   /** Inserts or deletes a row or column, and shows the cells the server moved and rewrote. */
   function editTable(tableId: string, edit: StructuralEditBody): Promise<boolean> {
     return attempt(async () => {
@@ -563,5 +634,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     updateTable,
     editTable,
     deleteTable,
+    columnOf,
+    nameColumns,
+    dropColumns,
+    updateColumn,
   };
 });

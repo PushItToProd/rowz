@@ -43,7 +43,9 @@ The app has a help page at `/help` with the full reference. It lists every funct
 | Names       | `LET LAMBDA`. A function kept in a cell is called by the cell's address: `=D1(21)`                                                                                                                                                                          |
 | Errors      | `#DIV/0! #VALUE! #REF! #NAME? #N/A #SPILL! #CYCLE! #ERROR!`                                                                                                                                                                                                 |
 
-Page and table names in references ignore case. Names with spaces need single quotes.
+A table can have named columns, which makes it a data table. `[Price]` is the cell of that column in the formula's own row, and `Sales[Price]` is the whole column of the table Sales. A column can be typed (text, number, date, checkbox) or be a formula column, which computes one formula in every row that holds something.
+
+Page, table, and column names in references ignore case. Names with spaces need single quotes.
 
 ### Actions
 

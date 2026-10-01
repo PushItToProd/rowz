@@ -483,6 +483,79 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await expect(page.getByRole("alert")).toContainText("not a spreadsheet exported from this app");
 });
 
+test("a table with named columns has typed columns, a formula column, and column references", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  const rows = [
+    ["Item", "Price", "Qty", "Paid"],
+    ["pen", "2", "10", "TRUE"],
+    ["ink", "5", "3", "FALSE"],
+  ];
+  for (const [row, cells] of rows.entries()) {
+    for (const [col, text] of cells.entries()) {
+      await enter(page, `${"ABCD"[col] ?? ""}${String(row + 1)}`, text);
+    }
+  }
+  const header = (name: string): Locator =>
+    page.locator(`[data-table="Table 1"] thead th[data-column="${name}"]`);
+  const choose = async (column: string, item: string): Promise<void> => {
+    await header(column).click({ button: "right" });
+    await page.getByRole("menuitem", { name: item }).click();
+  };
+
+  // The first row becomes the names, and the data moves up.
+  await page.getByRole("button", { name: "Name columns" }).click();
+  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+  await expect(header("Price")).toBeVisible();
+  await expect(cell(page, "A1")).toHaveText("pen");
+
+  // A checkbox column shows checkboxes, and ticking one stores it.
+  await choose("Paid", "Column holds: Checkbox");
+  await expect(cell(page, "D1").getByRole("checkbox")).toBeChecked();
+  await cell(page, "D2").getByRole("checkbox").check();
+
+  // A formula column computes every row from the columns it names.
+  page.once("dialog", (dialog) => void dialog.accept("=[Price] * [Qty]"));
+  await choose("Column 1", "Column holds: A formula…");
+  await expect(cell(page, "E1")).toHaveText("20");
+  await expect(cell(page, "E2")).toHaveText("15");
+
+  // Renaming a column rewrites the formulas that name it.
+  await header("Column 1").getByText("Column 1").dblclick();
+  await page.getByLabel("Column name").fill("Total");
+  await page.getByLabel("Column name").press("Enter");
+  await header("Price").getByText("Price").dblclick();
+  await page.getByLabel("Column name").fill("Unit price");
+  await page.getByLabel("Column name").press("Enter");
+  await cell(page, "E2").click();
+  await expect(page.getByLabel("Formula")).toHaveValue("=[Unit price] * [Qty]");
+
+  // Typing a formula into a formula column changes it for every row, and completes column names.
+  await page.getByLabel("Formula").fill("=[Unit price] * [Qty] + [");
+  await expect(page.getByRole("option", { name: /Qty/ })).toBeVisible();
+  await page.getByLabel("Formula").fill("=[Unit price] * [Qty] + 1");
+  await page.getByLabel("Formula").press("Enter");
+  await expect(cell(page, "E1")).toHaveText("21");
+  await expect(cell(page, "E2")).toHaveText("16");
+
+  // Another table reads a whole column by the table's name.
+  await page.getByRole("button", { name: "Add table" }).click();
+  await enter(page, "A1", "=SUM('Table 1'[Total])", "Table 2");
+  await expect(cell(page, "A1", "Table 2")).toHaveText("37");
+
+  // A new row is computed too, and everything survives a reload.
+  await enter(page, "B3", "4");
+  await enter(page, "C3", "2");
+  await expect(cell(page, "E3")).toHaveText("9");
+  await expect(cell(page, "A1", "Table 2")).toHaveText("46");
+  await page.reload();
+  await expect(header("Unit price")).toBeVisible();
+  await expect(cell(page, "E3")).toHaveText("9");
+  await expect(cell(page, "D2").getByRole("checkbox")).toBeChecked();
+  await expect(cell(page, "A1", "Table 2")).toHaveText("46");
+});
+
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "=1/0");

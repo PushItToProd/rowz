@@ -7,12 +7,17 @@ const context: NamingContext = {
     { id: "p2", name: "Raw Data" },
   ],
   tables: [
-    { pageId: "p1", name: "Sales" },
+    {
+      pageId: "p1",
+      name: "Sales",
+      columns: [{ name: "Price" }, { name: "Paid on" }, { name: "Qty" }],
+    },
     { pageId: "p1", name: "Sales Targets" },
     { pageId: "p2", name: "Imports" },
     { pageId: "p2", name: "Joe's" },
   ],
   pageId: "p1",
+  columns: [{ name: "Item" }, { name: "In stock" }],
 };
 
 /** Suggestions with the caret at the `|` mark, or at the end when there is no mark. */
@@ -172,5 +177,50 @@ describe("applySuggestion", () => {
 
   it("does not double a parenthesis that already follows", () => {
     expect(accept("=su|(A1)", "SUM")).toBe("=SUM|(A1)");
+  });
+});
+
+describe("column names", () => {
+  it("offers the columns of the formula's own table after an open bracket", () => {
+    expect(suggest("=[")).toEqual({
+      from: 1,
+      items: [
+        { kind: "column", label: "Item", insert: "[Item]", detail: "column of this row" },
+        { kind: "column", label: "In stock", insert: "[In stock]", detail: "column of this row" },
+      ],
+    });
+    expect(labels("=1 + [in")).toEqual(["In stock"]);
+    expect(labels("=[it")).toEqual(["Item"]);
+    expect(labels("=[x")).toEqual([]);
+  });
+
+  it("offers the columns of a named table on the formula's page", () => {
+    expect(suggest("=SUM(Sales[p")).toMatchObject({
+      from: 10,
+      items: [
+        { label: "Price", insert: "[Price]", detail: "column of Sales" },
+        { label: "Paid on", insert: "[Paid on]" },
+      ],
+    });
+    expect(labels("=sales[")).toEqual(["Price", "Paid on", "Qty"]);
+    expect(labels("='Sales Targets'[")).toEqual([]);
+    expect(labels("=Imports[")).toEqual([]);
+  });
+
+  it("offers nothing once the bracket is closed, or inside text", () => {
+    expect(labels("=[Item] + q")).toEqual(["QUARTILE", "QUERY", "QUOTIENT"]);
+    expect(labels('="[it')).toEqual([]);
+  });
+
+  it("completes a name with spaces, and does not double a bracket that is already there", () => {
+    const complete = (marked: string): string => {
+      const caret = marked.indexOf("|");
+      const text = marked.replace("|", "");
+      const found = suggestionsAt(text, caret, context);
+      return applySuggestion(text, found, caret, found.items[0]!).text;
+    };
+    expect(complete("=[in| * 2")).toBe("=[In stock] * 2");
+    expect(complete("=[in|] * 2")).toBe("=[In stock] * 2");
+    expect(complete("=SUM(Sales[pa|)")).toBe("=SUM(Sales[Paid on])");
   });
 });
