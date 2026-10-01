@@ -223,3 +223,59 @@ describe("keeping views pointed at the same cells", () => {
     expect(await sources()).toEqual(["'Table 1'!A1", "{{ 'Table 1'!A1 }}"]);
   });
 });
+
+describe("reordering a page", () => {
+  async function page() {
+    const started = await start();
+    const chart = await add(started.page.id, "chart");
+    const text = await add(started.page.id, "text");
+    const order = async (): Promise<string[]> => {
+      const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${started.id}`);
+      return [...snapshot.tables, ...snapshot.views]
+        .sort((a, b) => a.position - b.position)
+        .map((item) => item.id);
+    };
+    const put = (items: string[], status = 204) =>
+      user.json("PUT", `/pages/${started.page.id}/order`, { items }, status);
+    return { ...started, chart, text, order, put };
+  }
+
+  it("puts tables and views in the order given", async () => {
+    const { table, chart, text, order, put } = await page();
+    expect(await order()).toEqual([table.id, chart.id, text.id]);
+    await put([text.id, table.id, chart.id]);
+    expect(await order()).toEqual([text.id, table.id, chart.id]);
+  });
+
+  it("puts a table added afterward at the end", async () => {
+    const {
+      page: { id: pageId },
+      table,
+      chart,
+      text,
+      order,
+      put,
+    } = await page();
+    await put([chart.id, text.id, table.id]);
+    const added = await user.json<TableRecord>("POST", `/pages/${pageId}/tables`, {}, 201);
+    expect(await order()).toEqual([chart.id, text.id, table.id, added.id]);
+  });
+
+  it.each<[string, (ids: string[]) => string[]]>([
+    ["leaves one out", (ids) => ids.slice(1)],
+    ["names one twice", (ids) => [ids[0]!, ids[0]!, ids[2]!]],
+    ["names something that is not on the page", (ids) => [...ids.slice(1), UNKNOWN_ID]],
+  ])("refuses a list that %s, and leaves the order alone", async (_, spoil) => {
+    const { table, chart, text, order, put } = await page();
+    expect(await put(spoil([table.id, chart.id, text.id]), 409)).toEqual({
+      error: { code: "conflict", message: "The page has changed. Reload it and try again" },
+    });
+    expect(await order()).toEqual([table.id, chart.id, text.id]);
+  });
+
+  it("refuses a list that is empty or not ids", async () => {
+    const { put } = await page();
+    await put([], 400);
+    await put(["first"], 400);
+  });
+});

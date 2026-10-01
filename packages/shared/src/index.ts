@@ -138,6 +138,9 @@ export const controlInputBody = z.object({
   value: z.union([z.string().max(LIMITS.inputLength), z.number(), z.boolean(), z.null()]),
 });
 
+/** The tables, charts, and text views of a page, by id, in the order they are to sit on it. */
+export const reorderBody = z.object({ items: z.array(z.uuid()).min(1).max(1000) });
+
 export const createViewBody = z.object({ kind: z.enum(["chart", "text"]) });
 
 export const updateViewBody = z

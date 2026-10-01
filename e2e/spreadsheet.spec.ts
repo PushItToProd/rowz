@@ -426,6 +426,25 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await expect(chart.getByLabel("Chart type")).toHaveValue("pie");
   await expect(text.getByRole("listitem")).toHaveText(["apples: 15", "pears: 5"]);
 
+  // The text view moves above the table, and stays there.
+  const order = async (): Promise<string[]> => {
+    const cards = await page.locator(".editor__item > :first-child").all();
+    return Promise.all(
+      cards.map(
+        async (card) =>
+          (await card.getAttribute("data-table")) ?? (await card.getAttribute("data-view")) ?? "",
+      ),
+    );
+  };
+  expect(await order()).toEqual(["Fruit", "Chart 1", "Text 1"]);
+  await page.getByRole("button", { name: "Move Text 1 up" }).click();
+  await page.getByRole("button", { name: "Move Text 1 up" }).click();
+  await expect(page.getByRole("button", { name: "Move Text 1 up" })).toBeDisabled();
+  expect(await order()).toEqual(["Text 1", "Fruit", "Chart 1"]);
+  await page.reload();
+  await expect(text).toBeVisible();
+  expect(await order()).toEqual(["Text 1", "Fruit", "Chart 1"]);
+
   page.once("dialog", (dialog) => void dialog.accept());
   await chart.getByRole("button", { name: "Delete chart" }).click();
   await expect(chart).toHaveCount(0);

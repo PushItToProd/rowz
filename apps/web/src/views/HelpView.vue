@@ -339,6 +339,7 @@ const OPERATORS = [
           same cells. A formula that named a deleted cell shows <code>#REF!</code>.
         </li>
         <li>Double-click the name of a spreadsheet, page, or table to rename it.</li>
+        <li>The arrows beside a table, chart, or text view move it up or down its page.</li>
         <li>
           Two pages in a spreadsheet cannot share a name, and neither can two tables on a page.
           Names are compared without regard to letter case.

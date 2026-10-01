@@ -61,6 +61,7 @@ export function mockApi(): MockedApi {
     updateView: vi.fn(),
     deleteView: vi.fn().mockResolvedValue(undefined),
     deletePage: vi.fn().mockResolvedValue(undefined),
+    reorderPage: vi.fn().mockResolvedValue(undefined),
     createTable: vi.fn(),
     updateTable: vi.fn(),
     editTable: vi.fn(),

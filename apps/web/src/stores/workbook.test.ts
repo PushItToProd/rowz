@@ -851,3 +851,54 @@ describe("data tables", () => {
     });
   });
 });
+
+describe("the order of a page", () => {
+  const view = (id: string, position: number): ViewRecord => ({
+    id,
+    pageId: "p1",
+    kind: "text",
+    name: id,
+    position,
+    source: "",
+    chartType: null,
+  });
+
+  async function openPage() {
+    server.getSnapshot.mockResolvedValue({
+      ...snapshotWith(),
+      views: [view("v2", 2), view("v1", 1), { ...view("far", 0), pageId: "p9" }],
+    });
+    const store = useWorkbookStore();
+    await store.load("s1");
+    return store;
+  }
+
+  it("lists the tables and views of a page in their order", async () => {
+    const store = await openPage();
+    expect(store.itemsOn("p1")).toEqual(["t1", "v1", "v2"]);
+  });
+
+  it("moves an item up or down, and stores the new order", async () => {
+    const store = await openPage();
+    expect(await store.moveItem("p1", "v2", -1)).toBe(true);
+    expect(server.reorderPage).toHaveBeenCalledExactlyOnceWith("p1", ["t1", "v2", "v1"]);
+    expect(store.itemsOn("p1")).toEqual(["t1", "v2", "v1"]);
+    await store.moveItem("p1", "t1", 1);
+    expect(store.itemsOn("p1")).toEqual(["v2", "t1", "v1"]);
+  });
+
+  it("does nothing at either end of the page, or for an item that is not on it", async () => {
+    const store = await openPage();
+    expect(await store.moveItem("p1", "t1", -1)).toBe(false);
+    expect(await store.moveItem("p1", "v2", 1)).toBe(false);
+    expect(await store.moveItem("p1", "far", 1)).toBe(false);
+    expect(server.reorderPage).not.toHaveBeenCalled();
+  });
+
+  it("keeps the order when the server refuses", async () => {
+    const store = await openPage();
+    server.reorderPage.mockRejectedValueOnce(new Error("The page has changed"));
+    expect(await store.moveItem("p1", "v1", 1)).toBe(false);
+    expect(store.itemsOn("p1")).toEqual(["t1", "v1", "v2"]);
+  });
+});

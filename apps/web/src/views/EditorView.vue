@@ -112,11 +112,31 @@ watch(
     <p v-if="loadError" class="notice notice--error" role="alert">{{ loadError }}</p>
     <p v-else-if="!loaded" class="editor__loading">Loading…</p>
     <main v-else-if="page" class="editor__page">
-      <template v-for="item in items" :key="item.record.id">
+      <div v-for="(item, index) in items" :key="item.record.id" class="editor__item">
         <TableCard v-if="item.table" :table="item.table" />
         <ChartCard v-else-if="item.view.kind === 'chart'" :view="item.view" />
         <TextCard v-else :view="item.view" />
-      </template>
+        <div v-if="store.canEdit && items.length > 1" class="editor__move">
+          <button
+            type="button"
+            title="Move up"
+            :aria-label="`Move ${item.record.name} up`"
+            :disabled="index === 0"
+            @click="store.moveItem(page.id, item.record.id, -1)"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            title="Move down"
+            :aria-label="`Move ${item.record.name} down`"
+            :disabled="index === items.length - 1"
+            @click="store.moveItem(page.id, item.record.id, 1)"
+          >
+            ↓
+          </button>
+        </div>
+      </div>
       <p v-if="items.length === 0" class="editor__empty">This page is empty.</p>
       <div v-if="store.canEdit" class="editor__add">
         <button type="button" @click="store.addTable(page.id)">Add table</button>

@@ -113,6 +113,10 @@ export const api = {
   renamePage: (pageId: string, name: string): Promise<Rewritten> =>
     body(routes.pages[":pageId"].$patch({ param: { pageId }, json: { name } })),
 
+  /** Puts the tables, charts, and text views of a page in the order of their ids. */
+  reorderPage: (pageId: string, items: string[]): Promise<void> =>
+    done(routes.pages[":pageId"].order.$put({ param: { pageId }, json: { items } })),
+
   deletePage: (pageId: string): Promise<void> =>
     done(routes.pages[":pageId"].$delete({ param: { pageId } })),
 

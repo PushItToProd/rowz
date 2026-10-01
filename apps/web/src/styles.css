@@ -1182,3 +1182,41 @@ select.cell-control--dropdown {
     flex-shrink: 0;
   }
 }
+
+/* A table, chart, or text view on a page, with the buttons that move it beside it. */
+
+.editor__item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.editor__item > :first-child {
+  min-width: 0;
+}
+
+.editor__move {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor__move button {
+  padding: 2px 8px;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .editor__item {
+    flex-direction: column-reverse;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .editor__move {
+    flex-direction: row;
+    align-self: flex-end;
+  }
+}

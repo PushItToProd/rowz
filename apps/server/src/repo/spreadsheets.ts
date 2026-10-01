@@ -388,6 +388,36 @@ export class SpreadsheetRepository {
     });
   }
 
+  /**
+   * Puts the tables, charts, and text views of a page in the order given. The
+   * list must name every one of them once, so that a stale client cannot
+   * leave two items in one place.
+   */
+  async reorderPage(pageId: string, items: readonly string[]): Promise<void> {
+    const page = await this.findPage(pageId, "write");
+    await this.db.transaction(async (tx) => {
+      await lockSpreadsheet(tx, page.spreadsheetId);
+      const [tableRows, viewRows] = await Promise.all([
+        tx.select({ id: tables.id }).from(tables).where(eq(tables.pageId, pageId)),
+        tx.select({ id: views.id }).from(views).where(eq(views.pageId, pageId)),
+      ]);
+      const tableIds = new Set(tableRows.map((row) => row.id));
+      const present = new Set([...tableIds, ...viewRows.map((row) => row.id)]);
+      const complete =
+        items.length === present.size &&
+        new Set(items).size === items.length &&
+        items.every((id) => present.has(id));
+      if (!complete) {
+        throw conflict("The page has changed. Reload it and try again");
+      }
+      for (const [position, id] of items.entries()) {
+        const target = tableIds.has(id) ? tables : views;
+        await tx.update(target).set({ position }).where(eq(target.id, id));
+      }
+      await touch(tx, page.spreadsheetId);
+    });
+  }
+
   async deletePage(pageId: string): Promise<void> {
     const page = await this.findPage(pageId, "write");
     await this.db.transaction(async (tx) => {

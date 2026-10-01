@@ -509,6 +509,33 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }, "The page could not be renamed");
   }
 
+  /** The ids of the tables, charts, and text views of a page, in the order they sit on it. */
+  function itemsOn(pageId: string): string[] {
+    return [...tables.value, ...views.value]
+      .filter((item) => item.pageId === pageId)
+      .sort((a, b) => a.position - b.position)
+      .map((item) => item.id);
+  }
+
+  /** Moves a table, chart, or text view one place up or down its page. */
+  function moveItem(pageId: string, itemId: string, by: -1 | 1): Promise<boolean> {
+    const order = itemsOn(pageId);
+    const from = order.indexOf(itemId);
+    const to = from + by;
+    if (from === -1 || to < 0 || to >= order.length) return Promise.resolve(false);
+    [order[from], order[to]] = [order[to] ?? itemId, order[from] ?? itemId];
+    return attempt(async () => {
+      await api.reorderPage(pageId, order);
+      const position = new Map(order.map((id, index) => [id, index]));
+      const placed = <T extends { id: string; position: number }>(item: T): T => ({
+        ...item,
+        position: position.get(item.id) ?? item.position,
+      });
+      tables.value = tables.value.map(placed);
+      views.value = views.value.map(placed);
+    }, "The page could not be rearranged");
+  }
+
   function deletePage(pageId: string): Promise<boolean> {
     return attempt(async () => {
       await api.deletePage(pageId);
@@ -668,6 +695,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     updateTable,
     editTable,
     deleteTable,
+    itemsOn,
+    moveItem,
     columnOf,
     formatOf,
     formatSelection,
