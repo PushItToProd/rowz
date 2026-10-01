@@ -1,8 +1,10 @@
 import {
+  addFormatRule,
   columnFormulasAfterEdit,
   columnFormulasAfterRename,
   columnLabel,
   formatAddress,
+  formatRulesAfterEdit,
   inputsAfterEdit,
   inputsAfterRename,
   isFormulaInput,
@@ -13,12 +15,14 @@ import {
   type ColumnDefinition,
   type ColumnFormula,
   type ColumnType,
+  type FormatRule,
   type Rename,
 } from "@spreadsheet-app/engine";
 import {
   DEFAULT_TABLE_SIZE,
   FILE_LIMITS,
   LIMITS,
+  MAX_FORMAT_RULES,
   type CellInput,
   type SpreadsheetFile,
   type StoredCell,
@@ -64,6 +68,8 @@ export interface TableRecord {
   colCount: number;
   /** The named columns of a data table, one for each column. `null` for a plain table. */
   columns: ColumnDefinition[] | null;
+  /** How cells are shown: rules applied in order, later ones over earlier ones. */
+  formats: FormatRule[];
 }
 
 export interface ViewRecord {
@@ -107,6 +113,7 @@ const tableColumns = {
   rowCount: tables.rowCount,
   colCount: tables.colCount,
   columns: tables.columns,
+  formats: tables.formats,
 };
 
 const viewColumns = {
@@ -260,7 +267,13 @@ export class SpreadsheetRepository {
           const columns = item.columns?.map(normalized) ?? null;
           const [table] = await tx
             .insert(tables)
-            .values({ ...placed, rowCount: item.rowCount, colCount: item.colCount, columns })
+            .values({
+              ...placed,
+              rowCount: item.rowCount,
+              colCount: item.colCount,
+              columns,
+              formats: item.formats ?? [],
+            })
             .returning({ id: tables.id });
           if (!table) throw new Error("Insert returned no table");
           // A formula column computes its cells, so none are stored for it.
@@ -507,6 +520,26 @@ export class SpreadsheetRepository {
       await touch(tx, table.spreadsheetId);
       return { ...rewritten, table: updated };
     });
+  }
+
+  /** Changes how a block of cells is shown. The format is added to whatever the cells already have. */
+  async formatCells(tableId: string, rule: FormatRule): Promise<TableRecord> {
+    const table = await this.findTable(tableId, "write");
+    const formats = addFormatRule(table.formats, rule);
+    if (formats.length > MAX_FORMAT_RULES) {
+      throw unprocessable(
+        "too_many_formats",
+        `${table.name} has too many separate formats. Clear the formatting of some cells first`,
+      );
+    }
+    const [updated] = await this.db
+      .update(tables)
+      .set({ formats })
+      .where(eq(tables.id, tableId))
+      .returning(tableColumns);
+    if (!updated) throw notFound("Table");
+    await touch(this.db, table.spreadsheetId);
+    return updated;
   }
 
   /** Makes a data table a plain table again. Its formula columns stop computing. */
@@ -763,7 +796,11 @@ export class SpreadsheetRepository {
       const newCount = count + (edit.kind === "insert" ? 1 : -1);
       const [updated] = await tx
         .update(tables)
-        .set(rows ? { rowCount: newCount } : { colCount: newCount, columns })
+        .set({
+          ...(rows ? { rowCount: newCount } : { colCount: newCount, columns }),
+          // Formats follow the cells they were given to.
+          formats: formatRulesAfterEdit(table.formats, edit),
+        })
         .where(eq(tables.id, tableId))
         .returning(tableColumns);
       if (!updated) throw notFound("Table");

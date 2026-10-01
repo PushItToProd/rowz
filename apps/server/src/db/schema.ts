@@ -1,4 +1,4 @@
-import type { ChartType, ColumnDefinition, Effect } from "@spreadsheet-app/engine";
+import type { ChartType, ColumnDefinition, Effect, FormatRule } from "@spreadsheet-app/engine";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -139,6 +139,8 @@ export const tables = pgTable(
     colCount: integer("col_count").notNull(),
     /** The named columns of a data table, one for each column. Null for a plain table. */
     columns: jsonb("columns").$type<ColumnDefinition[]>(),
+    /** How cells are shown: rules applied in order, later ones over earlier ones. */
+    formats: jsonb("formats").$type<FormatRule[]>().notNull().default([]),
   },
   (table) => [uniqueIndex("tables_name").on(table.pageId, sql`lower(${table.name})`)],
 );

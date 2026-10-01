@@ -52,6 +52,11 @@ function writeRoutes(): Route[] {
     ["POST", `/tables/${table}/edits`, { axis: "row", kind: "insert", index: 5 }],
     ["POST", `/tables/${table}/cells/0/0/click`],
     ["POST", `/tables/${table}/cells/1/0/input`, { value: true }],
+    [
+      "POST",
+      `/tables/${table}/formats`,
+      { range: { startRow: 0, endRow: 0, startCol: 0, endCol: 0 }, format: { bold: true } },
+    ],
     ["POST", `/tables/${table}/columns`, { headerRow: false }],
     ["PATCH", `/tables/${table}/columns/2`, { name: "Renamed", type: "text" }],
     ["DELETE", `/tables/${table}/columns`],
@@ -147,7 +152,7 @@ describe("an editor", () => {
     });
     // The page delete is refused because it is the last page, not for lack of access.
     expect(await statuses(editor, writeRoutes())).toEqual([
-      204, 201, 200, 201, 200, 204, 200, 200, 200, 200, 200, 200, 201, 200, 204, 204, 204, 204,
+      204, 201, 200, 201, 200, 204, 200, 200, 200, 200, 200, 200, 200, 201, 200, 204, 204, 204, 204,
     ]);
     await owner.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);
   });

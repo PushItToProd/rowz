@@ -1,0 +1,1 @@
+ALTER TABLE "tables" ADD COLUMN "formats" jsonb DEFAULT '[]'::jsonb NOT NULL;

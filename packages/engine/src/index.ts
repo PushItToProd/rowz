@@ -74,6 +74,19 @@ export {
   type LambdaValue,
   type Scalar,
 } from "./values";
+export { formatDateAs, FormatError, formatNumber as formatNumberAs } from "./format";
+export {
+  addFormatRule,
+  FORMAT_ALIGNMENTS,
+  FORMAT_COLORS,
+  formatAt,
+  formatRulesAfterEdit,
+  MAX_FORMAT_RULES,
+  type CellFormat,
+  type FormatColor,
+  type FormatPatch,
+  type FormatRule,
+} from "./formats";
 export {
   COLUMN_TYPES,
   findColumn,

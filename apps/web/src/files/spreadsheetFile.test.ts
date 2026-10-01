@@ -7,8 +7,26 @@ const PAGES: PageRecord[] = [
   { id: "p1", name: "Data", position: 0 },
 ];
 const TABLES: TableRecord[] = [
-  { id: "t2", pageId: "p1", name: "Costs", position: 2, rowCount: 2, colCount: 2, columns: null },
-  { id: "t1", pageId: "p1", name: "Sales", position: 0, rowCount: 5, colCount: 3, columns: null },
+  {
+    id: "t2",
+    pageId: "p1",
+    name: "Costs",
+    position: 2,
+    rowCount: 2,
+    colCount: 2,
+    columns: null,
+    formats: [],
+  },
+  {
+    id: "t1",
+    pageId: "p1",
+    name: "Sales",
+    position: 0,
+    rowCount: 5,
+    colCount: 3,
+    columns: null,
+    formats: [],
+  },
 ];
 const VIEWS: ViewRecord[] = [
   {

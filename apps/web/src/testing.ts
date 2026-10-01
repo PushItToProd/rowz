@@ -10,6 +10,7 @@ export const TABLE: TableRecord = {
   rowCount: 4,
   colCount: 3,
   columns: null,
+  formats: [],
 };
 
 /** A spreadsheet with one page and one 4x3 table holding `inputs`, keyed by address. */

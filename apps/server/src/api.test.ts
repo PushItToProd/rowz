@@ -40,6 +40,7 @@ describe("spreadsheets", () => {
         position: 0,
         ...DEFAULT_TABLE_SIZE,
         columns: null,
+        formats: [],
       },
     ]);
   });

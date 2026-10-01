@@ -46,6 +46,61 @@ export const columnDefinition = z.object({
   formula: z.string().max(LIMITS.inputLength).optional(),
 });
 
+export const FORMAT_COLORS = [
+  "red",
+  "orange",
+  "yellow",
+  "green",
+  "blue",
+  "purple",
+  "gray",
+] as const;
+
+/** A change to how cells are shown. A property set to `null` goes back to its default. */
+export const formatPatch = z.strictObject({
+  bold: z.boolean().nullable().optional(),
+  italic: z.boolean().nullable().optional(),
+  align: z.enum(["left", "center", "right"]).nullable().optional(),
+  color: z.enum(FORMAT_COLORS).nullable().optional(),
+  fill: z.enum(FORMAT_COLORS).nullable().optional(),
+  /** A format in the notation `TEXT` takes. */
+  numberFormat: z.string().min(1).max(100).nullable().optional(),
+});
+
+/** A block of cells. A `null` end runs to the edge of the table, however far it grows. */
+const formatRange = z
+  .object({
+    startRow: cellIndex,
+    endRow: cellIndex.nullable(),
+    startCol: cellIndex,
+    endCol: cellIndex.nullable(),
+  })
+  .refine(
+    (range) =>
+      (range.endRow === null || range.endRow >= range.startRow) &&
+      (range.endCol === null || range.endCol >= range.startCol),
+    { message: "A range ends at or after where it starts" },
+  );
+
+/** Formatting a block of cells. With `reset`, the cells first lose every format they had. */
+export const formatCellsBody = z.object({
+  range: formatRange,
+  format: formatPatch,
+  reset: z.boolean().optional(),
+});
+
+const formatRule = z.object({
+  startRow: cellIndex,
+  endRow: cellIndex.nullable(),
+  startCol: cellIndex,
+  endCol: cellIndex.nullable(),
+  format: formatPatch,
+  reset: z.boolean().optional(),
+});
+
+/** More format rules than a person makes by hand. */
+export const MAX_FORMAT_RULES = 500;
+
 /** Turning a plain table into a data table. With `headerRow`, its first row becomes the column names. */
 export const makeColumnsBody = z.object({ headerRow: z.boolean() });
 
@@ -116,6 +171,8 @@ const fileTable = z.object({
   colCount: z.int().min(1).max(LIMITS.tableCols),
   /** The named columns of a data table, one for each column. Left out for a plain table. */
   columns: z.array(columnDefinition).max(LIMITS.tableCols).optional(),
+  /** How cells are shown: rules applied in order. Left out when nothing is formatted. */
+  formats: z.array(formatRule).max(MAX_FORMAT_RULES).optional(),
   /** Cells that hold something. Empty cells and the cells of formula columns are left out. */
   cells: z.array(cellInput).max(FILE_LIMITS.cells),
 });

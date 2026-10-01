@@ -3,6 +3,7 @@ import {
   cellParam,
   columnParam,
   controlInputBody,
+  formatCellsBody,
   makeColumnsBody,
   setCellsBody,
   structuralEditBody,
@@ -43,6 +44,17 @@ export function tableRoutes(dependencies: ActionDependencies) {
         async (c) => {
           const { tableId } = c.req.valid("param");
           return c.json(await c.var.repository.editStructure(tableId, c.req.valid("json")));
+        },
+      )
+      // Changes how a block of cells is shown.
+      .post(
+        "/:tableId/formats",
+        zValidator("param", tableParam, onInvalid),
+        zValidator("json", formatCellsBody, onInvalid),
+        async (c) => {
+          const { range, format, reset } = c.req.valid("json");
+          const rule = { ...range, format, ...(reset ? { reset } : {}) };
+          return c.json(await c.var.repository.formatCells(c.req.valid("param").tableId, rule));
         },
       )
       // Names the table's columns, which makes it a data table.
