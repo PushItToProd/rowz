@@ -6,6 +6,8 @@ import EditableName from "../components/EditableName.vue";
 import FormulaBar from "../components/FormulaBar.vue";
 import PageTabs from "../components/PageTabs.vue";
 import ChartCard from "../components/ChartCard.vue";
+import ContextMenu from "../components/ContextMenu.vue";
+import type { MenuItem } from "../components/menu";
 import FormatBar from "../components/FormatBar.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
 import SharePanel from "../components/SharePanel.vue";
@@ -66,6 +68,28 @@ const blocks = computed(() =>
     .filter((block) => block.record.pageId === props.pageId)
     .sort((a, b) => a.record.position - b.record.position),
 );
+
+/** The block whose menu of pages to move it to is open, and where the menu is. */
+const pageMenu = ref<{ x: number; y: number; block: { id: string; name: string } } | null>(null);
+
+function openPageMenu(event: MouseEvent, block: { id: string; name: string }): void {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  pageMenu.value = { x: box.left, y: box.bottom + 4, block };
+}
+
+/** The other pages, each as a place to move the block to. */
+const pageMenuItems = computed((): MenuItem[] => {
+  const block = pageMenu.value?.block;
+  if (!block) return [];
+  return store.pages
+    .filter((candidate) => candidate.id !== props.pageId)
+    .map((target) => ({
+      label: `Move to ${target.name}`,
+      run: () => {
+        void store.moveBlockToPage(block.id, target.id);
+      },
+    }));
+});
 
 watch(
   () => props.spreadsheetId,
@@ -174,24 +198,39 @@ watch(
         <TableCard v-if="block.table" :table="block.table" />
         <ChartCard v-else-if="block.view.kind === 'chart'" :view="block.view" />
         <TextCard v-else :view="block.view" />
-        <div v-if="store.canEdit && blocks.length > 1" class="editor__move">
+        <div
+          v-if="store.canEdit && (blocks.length > 1 || store.pages.length > 1)"
+          class="editor__move"
+        >
+          <template v-if="blocks.length > 1">
+            <button
+              type="button"
+              title="Move up"
+              :aria-label="`Move ${block.record.name} up`"
+              :disabled="index === 0"
+              @click="store.moveBlock(page.id, block.record.id, -1)"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              title="Move down"
+              :aria-label="`Move ${block.record.name} down`"
+              :disabled="index === blocks.length - 1"
+              @click="store.moveBlock(page.id, block.record.id, 1)"
+            >
+              ↓
+            </button>
+          </template>
           <button
+            v-if="store.pages.length > 1"
             type="button"
-            title="Move up"
-            :aria-label="`Move ${block.record.name} up`"
-            :disabled="index === 0"
-            @click="store.moveBlock(page.id, block.record.id, -1)"
+            title="Move to another page"
+            aria-haspopup="menu"
+            :aria-label="`Move ${block.record.name} to another page`"
+            @click="openPageMenu($event, block.record)"
           >
-            ↑
-          </button>
-          <button
-            type="button"
-            title="Move down"
-            :aria-label="`Move ${block.record.name} down`"
-            :disabled="index === blocks.length - 1"
-            @click="store.moveBlock(page.id, block.record.id, 1)"
-          >
-            ↓
+            ⇄
           </button>
         </div>
       </div>
@@ -203,6 +242,14 @@ watch(
       </div>
     </main>
 
+    <ContextMenu
+      v-if="pageMenu"
+      :x="pageMenu.x"
+      :y="pageMenu.y"
+      :label="`Move ${pageMenu.block.name} to another page`"
+      :items="pageMenuItems"
+      @close="pageMenu = null"
+    />
     <SharePanel
       v-if="shareOpen && loaded"
       :spreadsheet-id="spreadsheetId"

@@ -695,6 +695,68 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }, "The page could not be rearranged");
   }
 
+  /** The last request to reorder the pages, which the next one waits for. */
+  let pageReorders: Promise<void> = Promise.resolve();
+
+  /** Shows the pages in the order of their ids. */
+  function showPageOrder(order: readonly string[]): void {
+    const byId = new Map(pages.value.map((page) => [page.id, page]));
+    pages.value = order.flatMap((id, position) => {
+      const page = byId.get(id);
+      return page ? [{ ...page, position }] : [];
+    });
+  }
+
+  /**
+   * Moves a page one place left or right among the tabs. As with a block,
+   * the move shows at once and is undone if the server refuses.
+   */
+  function movePage(pageId: string, by: -1 | 1): Promise<boolean> {
+    const current = spreadsheet.value;
+    const before = pages.value.map((page) => page.id);
+    const from = before.indexOf(pageId);
+    const to = from + by;
+    if (!current || from === -1 || to < 0 || to >= before.length) return Promise.resolve(false);
+    const order = before.with(from, before[to] ?? pageId).with(to, pageId);
+    showPageOrder(order);
+    const sent = pageReorders.then(() => api.reorderPages(current.id, order));
+    pageReorders = sent.catch(() => undefined);
+    return attempt(async () => {
+      try {
+        await sent;
+      } catch (cause) {
+        showPageOrder(before);
+        throw cause;
+      }
+    }, "The pages could not be rearranged");
+  }
+
+  /**
+   * Moves a block to the end of another page, and shows the formulas the
+   * server rewrote so that each goes on reading the table it read.
+   */
+  function moveBlockToPage(blockId: string, pageId: string): Promise<boolean> {
+    return attempt(async () => {
+      // The server rewrites stored formulas, so pending edits must be stored first.
+      await saves;
+      let name: string;
+      if (hasTable(blockId)) {
+        const { table, ...rewritten } = await api.moveTable(blockId, pageId);
+        showTable(table, rewritten);
+        // The selected cell is no longer on the page being shown.
+        if (selection.value?.tableId === blockId) selection.value = null;
+        ({ name } = table);
+      } else {
+        const { view, ...rewritten } = await api.moveView(blockId, pageId);
+        views.value = views.value.map((other) => (other.id === view.id ? view : other));
+        applyRewritten(rewritten);
+        ({ name } = view);
+      }
+      const page = pages.value.find((candidate) => candidate.id === pageId);
+      notice.value = { kind: "success", text: `Moved ${name} to ${page?.name ?? "the page"}` };
+    }, "The block could not be moved");
+  }
+
   function deletePage(pageId: string): Promise<boolean> {
     return attempt(async () => {
       await api.deletePage(pageId);
@@ -870,6 +932,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     refresh,
     blocksOn,
     moveBlock,
+    movePage,
+    moveBlockToPage,
     canUndo,
     canRedo,
     undo,

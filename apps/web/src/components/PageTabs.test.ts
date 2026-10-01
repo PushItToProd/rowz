@@ -70,6 +70,25 @@ describe("PageTabs", () => {
     expect(server.renamePage).toHaveBeenCalledExactlyOnceWith("p2", "Summary");
   });
 
+  it("moves the open page among the tabs with the buttons on its tab", async () => {
+    const wrapper = await render();
+    const names = () => wrapper.findAll("a").map((link) => link.text());
+    expect(wrapper.find('button[aria-label="Move Page 2 right"]').exists()).toBe(false);
+    expect(
+      wrapper.get('button[aria-label="Move Page 1 left"]').attributes("disabled"),
+    ).toBeDefined();
+
+    await wrapper.get('button[aria-label="Move Page 1 right"]').trigger("click");
+    await flushPromises();
+    expect(server.reorderPages).toHaveBeenCalledExactlyOnceWith("s1", ["p2", "p1"]);
+    expect(names()).toEqual(["Page 2", "Page 1"]);
+    expect(
+      wrapper.get('button[aria-label="Move Page 1 right"]').attributes("disabled"),
+    ).toBeDefined();
+    // The click moved the page and did not open one.
+    expect(router.currentRoute.value.path).toBe("/");
+  });
+
   it("gives a viewer links, and no way to rename or delete", async () => {
     const wrapper = await render("viewer");
     await wrapper.findAll("a")[0]!.trigger("keydown", { key: "F2" });

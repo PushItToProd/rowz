@@ -33,7 +33,7 @@ async function remove(page: PageRecord): Promise<void> {
 <template>
   <nav class="page-tabs" aria-label="Pages">
     <div
-      v-for="page in store.pages"
+      v-for="(page, index) in store.pages"
       :key="page.id"
       class="page-tabs__tab"
       :class="{ 'page-tabs__tab--active': page.id === activePageId }"
@@ -49,6 +49,29 @@ async function remove(page: PageRecord): Promise<void> {
         @click.prevent
         @rename="store.renamePage(page.id, $event)"
       />
+      <!-- The open page can be moved among the tabs. -->
+      <template v-if="store.canEdit && store.pages.length > 1 && page.id === activePageId">
+        <button
+          type="button"
+          class="page-tabs__move"
+          title="Move left"
+          :aria-label="`Move ${page.name} left`"
+          :disabled="index === 0"
+          @click.stop="store.movePage(page.id, -1)"
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          class="page-tabs__move"
+          title="Move right"
+          :aria-label="`Move ${page.name} right`"
+          :disabled="index === store.pages.length - 1"
+          @click.stop="store.movePage(page.id, 1)"
+        >
+          ›
+        </button>
+      </template>
       <button
         v-if="store.canEdit && store.pages.length > 1"
         type="button"

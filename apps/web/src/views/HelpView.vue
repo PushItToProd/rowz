@@ -408,7 +408,12 @@ const OPERATORS = [
           move to the name with Tab and press Enter. A page's name is also the link that opens the
           page, so there Enter opens the page and F2 renames it.
         </li>
-        <li>The arrows beside a block move it up or down its page.</li>
+        <li>
+          The arrows beside a block move it up or down its page, and the button under them moves it
+          to another page. Formulas that read a moved table are rewritten to name its new page, so
+          they keep reading it. A page cannot take a table with the name of one it already has.
+        </li>
+        <li>The arrows on the open page's tab move the page left or right among the tabs.</li>
         <li>
           Two pages in a spreadsheet cannot share a name, and neither can two tables on a page.
           Names are compared without regard to letter case.

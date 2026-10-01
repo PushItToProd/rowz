@@ -341,6 +341,7 @@ input.editable-name--editing {
   font-weight: 600;
 }
 
+.page-tabs__move,
 .page-tabs__delete {
   padding: 0 4px;
   border: none;

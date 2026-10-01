@@ -78,6 +78,9 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
   - [x] if I select C:E, give me a "Delete columns C-E" option. likewise for rows.
   - [x] if I select C3:E6 and right click on the selected range, show me both "Delete columns C-E" and "Delete rows 3-6"
 - [ ] **P4** merge cells across selection - support merging multiple cells across one or more rows and one or more columns
+- [ ] (Claude) find and replace within a table, page, or document
+- [ ] (Claude) hide rows and columns
+- [ ] (Claude) freeze header rows and columns so they stay in view while a table scrolls
 
 ## Tables, pages, charts, and text views
 
@@ -110,7 +113,8 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] (Claude) reorder the tables, charts, and text views on a page (arrows beside each one)
 - [ ] data tables: sort and filter in place, dropdown columns, hide the empty rows, and `QUERY(Sales, ...)` over a whole table with its column names as headers
 - [ ] (Claude) replace the browser prompt used for a formula column's first formula with an in-page editor
-- [ ] **P2** move a table, chart, or text view to another page, and reorder pages
+- [ ] (Claude) pivot tables as a block or table feature (`QUERY` already has a `pivot` clause)
+- [x] move a table, chart, or text view to another page, and reorder pages
 - [ ] support chart formulas in tables
   - [ ] **P3** `SPARKLINE` for a single cell
   - [ ] **P5** `PIE_CHART`, `LINE_CHART`, etc. (implement after merging cells is done so the user can merge however many cells they want to show this)
@@ -133,6 +137,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
   - [ ] **P5** borders
   - [ ] **P6** conditional formats
   - [ ] **P5** carrying formats through copy, fill, and paste
+  - [ ] (Claude) wrap long text within a cell
 
 ## Actions and automation
 
@@ -150,6 +155,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 
 - [x] rebrand the app as "rowz" instead of "Spreadsheet". don't change package names but just update the UI. make the name configurable via an env var as well so it's easy to update in the future.
 - [x] update the page title to show the name of the spreadsheet being edited or, for the help page, "Help". include the app name `rowz` at the end - e.g. `Help | rowz` or `My budget | rowz`
+- [ ] (Claude) say "document" instead of "spreadsheet" in the UI and help page, as the README does
 - [x] mobile friendly UI (layout, touch targets, tap twice to edit)
 - [ ] more controls:
   - [ ] **P2** a text or number input bound to a cell (esp. useful in Markdown)
@@ -182,6 +188,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] (Claude) live sync between sessions: open sessions re-read the spreadsheet when another changes it
 - [ ] **P3** send the changed cells with a change event, so sessions need not re-read the whole spreadsheet; show who else has it open
 - [ ] **P3** a save names a cell by row and column, so one that crosses another person's row or column insert lands on the wrong cell. Needs the client to send the table version it saw
+- [ ] (Claude) comments on cells
 
 ## Accounts and email
 
@@ -229,3 +236,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
   - support reusable function scripts that can be shared across sheets
 - support referencing tables/etc. from other documents
 - forms for submitting new rows to tables
+- (Claude) protected ranges: cells that only some people may change
+- (Claude) a layout for printing
+- (Claude) export to .xlsx
+- (Claude) numbers and dates shown in the reader's locale

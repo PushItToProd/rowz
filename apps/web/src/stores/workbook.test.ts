@@ -994,6 +994,93 @@ describe("the order of a page", () => {
   });
 });
 
+describe("the order of the pages, and moving a block between them", () => {
+  const PAGES = [
+    { id: "p1", name: "Page 1", position: 0 },
+    { id: "p2", name: "Page 2", position: 1 },
+    { id: "p3", name: "Page 3", position: 2 },
+  ];
+  const TEXT: ViewRecord = {
+    id: "v1",
+    pageId: "p1",
+    kind: "text",
+    name: "Text 1",
+    position: 1,
+    source: "{{ 'Table 1'!A1 }}",
+    chartType: null,
+  };
+
+  async function openPages(inputs: Record<string, string> = {}) {
+    server.getSnapshot.mockResolvedValue({ ...snapshotWith(inputs), pages: PAGES, views: [TEXT] });
+    const store = useWorkbookStore();
+    await store.load("s1");
+    return store;
+  }
+  const order = (store: ReturnType<typeof useWorkbookStore>) => store.pages.map((page) => page.id);
+
+  it("moves a page left or right, and stores the new order", async () => {
+    const store = await openPages();
+    expect(await store.movePage("p3", -1)).toBe(true);
+    expect(server.reorderPages).toHaveBeenCalledExactlyOnceWith("s1", ["p1", "p3", "p2"]);
+    expect(order(store)).toEqual(["p1", "p3", "p2"]);
+    expect(store.pages.map((page) => page.position)).toEqual([0, 1, 2]);
+    await store.movePage("p1", 1);
+    expect(order(store)).toEqual(["p3", "p1", "p2"]);
+  });
+
+  it("does nothing at either end of the tabs, and keeps the order when the server refuses", async () => {
+    const store = await openPages();
+    expect(await store.movePage("p1", -1)).toBe(false);
+    expect(await store.movePage("p3", 1)).toBe(false);
+    expect(server.reorderPages).not.toHaveBeenCalled();
+
+    server.reorderPages.mockRejectedValueOnce(new Error("The pages have changed"));
+    expect(await store.movePage("p1", 1)).toBe(false);
+    expect(order(store)).toEqual(["p1", "p2", "p3"]);
+    expect(store.notice).toEqual({ kind: "error", text: "The pages have changed" });
+  });
+
+  it("moves a table to another page, with the formulas the server rewrote", async () => {
+    const store = await openPages({ A1: "5" });
+    store.selection = at("A1");
+    server.moveTable.mockResolvedValue({
+      table: { ...TABLE, pageId: "p2", position: 0 },
+      cells: [],
+      views: [{ id: "v1", source: "{{ 'Page 2'!'Table 1'!A1 }}" }],
+      tables: [],
+    });
+    expect(await store.moveBlockToPage("t1", "p2")).toBe(true);
+    expect(server.moveTable).toHaveBeenCalledExactlyOnceWith("t1", "p2");
+    expect(store.blocksOn("p1")).toEqual(["v1"]);
+    expect(store.blocksOn("p2")).toEqual(["t1"]);
+    expect(store.views[0]?.source).toBe("{{ 'Page 2'!'Table 1'!A1 }}");
+    expect(store.evaluateOnPage("p1", "'Page 2'!'Table 1'!A1")).toBe(5);
+    expect(store.selection).toBeNull();
+    expect(store.notice).toEqual({ kind: "success", text: "Moved Table 1 to Page 2" });
+  });
+
+  it("moves a view to another page, as the server now has it", async () => {
+    const store = await openPages();
+    const moved = { ...TEXT, pageId: "p3", position: 0, source: "{{ 'Page 1'!'Table 1'!A1 }}" };
+    server.moveView.mockResolvedValue({ view: moved, cells: [], views: [], tables: [] });
+    expect(await store.moveBlockToPage("v1", "p3")).toBe(true);
+    expect(server.moveView).toHaveBeenCalledExactlyOnceWith("v1", "p3");
+    expect(store.views).toEqual([moved]);
+    expect(store.notice).toEqual({ kind: "success", text: "Moved Text 1 to Page 3" });
+  });
+
+  it("leaves a block where it is when the server refuses the move", async () => {
+    const store = await openPages();
+    server.moveTable.mockRejectedValue(new Error("Page 2 already has a table named Table 1"));
+    expect(await store.moveBlockToPage("t1", "p2")).toBe(false);
+    expect(store.blocksOn("p1")).toEqual(["t1", "v1"]);
+    expect(store.notice).toEqual({
+      kind: "error",
+      text: "Page 2 already has a table named Table 1",
+    });
+  });
+});
+
 describe("undo and redo", () => {
   it("takes back the last edit, and makes it again", async () => {
     const store = await open({ A1: "1" });

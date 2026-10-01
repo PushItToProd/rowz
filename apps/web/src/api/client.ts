@@ -170,6 +170,23 @@ export const api = {
   reorderPage: (pageId: string, blocks: string[]): Promise<void> =>
     done(routes.pages[":pageId"].order.$put({ param: { pageId }, json: { blocks } })),
 
+  /** Puts the pages of a spreadsheet in the order of their ids. */
+  reorderPages: (spreadsheetId: string, pages: string[]): Promise<void> =>
+    done(
+      routes.spreadsheets[":spreadsheetId"].pages.order.$put({
+        param: { spreadsheetId },
+        json: { pages },
+      }),
+    ),
+
+  /** Moves a table to the end of another page. Resolves to the table and the formulas rewritten to keep reading what they read. */
+  moveTable: (tableId: string, pageId: string): Promise<Rewritten & { table: TableRecord }> =>
+    body(routes.tables[":tableId"].page.$put({ param: { tableId }, json: { pageId } })),
+
+  /** Moves a chart or text view to the end of another page. */
+  moveView: (viewId: string, pageId: string): Promise<Rewritten & { view: ViewRecord }> =>
+    body(routes.views[":viewId"].page.$put({ param: { viewId }, json: { pageId } })),
+
   deletePage: (pageId: string): Promise<void> =>
     done(routes.pages[":pageId"].$delete({ param: { pageId } })),
 

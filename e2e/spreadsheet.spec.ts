@@ -36,6 +36,20 @@ async function enter(page: Page, address: string, text: string, table = "Table 1
   await page.keyboard.press("Enter");
 }
 
+/**
+ * Opens the menu of pages a block can move to. A menu closes when the page
+ * scrolls, and the scroll that brings the button into view can end after the
+ * click, so the click is made again until the menu stays open.
+ */
+async function openPageMenu(page: Page, block: string): Promise<void> {
+  const button = page.getByRole("button", { name: `Move ${block} to another page` });
+  await button.scrollIntoViewIfNeeded();
+  await expect(async () => {
+    await button.click();
+    await expect(page.getByRole("menu")).toBeVisible({ timeout: 500 });
+  }).toPass();
+}
+
 test("a button writes the sum of two cells into a third, and the result persists", async ({
   page,
 }) => {
@@ -83,6 +97,49 @@ test("formulas read other tables and other pages, and follow their changes", asy
 
   await page.reload();
   await expect(cell(page, "A1")).toHaveText("8");
+});
+
+test("a block moves to another page, formulas follow it, and pages are reordered", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add table" }).click();
+  await enter(page, "A1", "5", "Table 2");
+  await enter(page, "A1", "='Table 2'!A1*2");
+  await page.getByRole("button", { name: "Add page" }).click();
+  const pages = page.getByRole("navigation", { name: "Pages" });
+  await expect(pages.locator('[aria-current="page"]')).toHaveText(/Page 2/);
+  await pages.getByText("Page 1").click();
+  await expect(cell(page, "A1")).toHaveText("10");
+
+  // Table 2 goes to Page 2, and the formula that read it now names that page.
+  await openPageMenu(page, "Table 2");
+  await page.getByRole("menuitem", { name: "Move to Page 2" }).click();
+  await expect(page.getByRole("status")).toHaveText(/Moved Table 2 to Page 2/);
+  await expect(page.locator('[data-table="Table 2"]')).toHaveCount(0);
+  await expect(cell(page, "A1")).toHaveText("10");
+  await cell(page, "A1").click();
+  await expect(page.getByLabel("Formula")).toHaveValue("='Page 2'!'Table 2'!A1*2");
+
+  await pages.getByText("Page 2").click();
+  await expect(cell(page, "A1", "Table 2")).toHaveText("5");
+  // Page 1 has a table of the same name as the one Page 2 began with.
+  await openPageMenu(page, "Table 1");
+  await page.getByRole("menuitem", { name: "Move to Page 1" }).click();
+  await expect(page.getByRole("alert")).toHaveText(/Page 1 already has a table named Table 1/);
+  await expect(page.locator('[data-table="Table 1"]')).toBeVisible();
+
+  // The open page moves among the tabs, and stays there.
+  const names = () => pages.getByRole("link").allTextContents();
+  expect(await names()).toEqual(["Page 1", "Page 2"]);
+  await pages.getByRole("button", { name: "Move Page 2 left" }).click();
+  await expect(pages.getByRole("button", { name: "Move Page 2 left" })).toBeDisabled();
+  expect(await names()).toEqual(["Page 2", "Page 1"]);
+  await page.reload();
+  await expect(cell(page, "A1", "Table 2")).toHaveText("5");
+  expect(await names()).toEqual(["Page 2", "Page 1"]);
+  await pages.getByText("Page 1").click();
+  await expect(cell(page, "A1")).toHaveText("10");
 });
 
 test("a button sends an email built from cells, and reports a bad address", async ({ page }) => {
