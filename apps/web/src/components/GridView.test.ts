@@ -1,4 +1,4 @@
-import { mount, type VueWrapper } from "@vue/test-utils";
+import { DOMWrapper, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
@@ -270,6 +270,121 @@ describe("editing", () => {
     await select("A1");
     await press("c", { ctrlKey: true });
     expect(wrapper.find(".grid__editor").exists()).toBe(false);
+  });
+});
+
+describe("formula suggestions", () => {
+  function options(): (string | undefined)[] {
+    return [...document.querySelectorAll('.formula-assist [role="option"]')].map(
+      (option) => option.querySelector(".formula-assist__label")?.textContent,
+    );
+  }
+
+  function editor() {
+    return wrapper.get<HTMLInputElement>(".grid__editor");
+  }
+
+  /** Starts editing A1 and types the text. */
+  async function type(text: string): Promise<void> {
+    await select("A1");
+    await press(text.charAt(0));
+    await editor().setValue(text);
+  }
+
+  it("lists matching functions while a formula is typed, and completes with Tab", async () => {
+    await mountGrid();
+    await type("=rou");
+    expect(options()).toEqual(["ROUND", "ROUNDDOWN", "ROUNDUP"]);
+    expect(document.querySelector('[role="option"][aria-selected="true"]')?.textContent).toContain(
+      "ROUND(number, [digits])",
+    );
+
+    await press("Tab");
+    expect(editor().element.value).toBe("=ROUND(");
+    expect(selectedAddress()).toBe("A1");
+    expect(options()).toEqual([]);
+    expect(document.querySelector('.formula-assist [role="note"]')?.textContent).toContain(
+      "ROUND(number, [digits])",
+    );
+  });
+
+  it("saves the cell on Enter while the list has not been touched", async () => {
+    await mountGrid();
+    await type("=ab");
+    expect(options()).toEqual(["ABS"]);
+    await press("Enter");
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith("t1", [
+      { row: 0, col: 0, input: "=ab" },
+    ]);
+    expect(selectedAddress()).toBe("A2");
+    expect(document.querySelector(".formula-assist")).toBeNull();
+  });
+
+  it("moves the highlight with the arrows, then accepts it with Enter", async () => {
+    await mountGrid();
+    await type("=rou");
+    await press("ArrowDown");
+    await press("ArrowDown");
+    await press("ArrowUp");
+    expect(selectedAddress()).toBe("A1");
+    await press("Enter");
+    expect(editor().element.value).toBe("=ROUNDDOWN(");
+    expect(server.setCells).not.toHaveBeenCalled();
+  });
+
+  it("wraps the highlight around the ends of the list", async () => {
+    await mountGrid();
+    await type("=rou");
+    await press("ArrowUp");
+    await press("Enter");
+    expect(editor().element.value).toBe("=ROUNDUP(");
+  });
+
+  it("closes the list on Escape, and cancels the edit on a second Escape", async () => {
+    await mountGrid({ A1: "kept" });
+    await type("=rou");
+    await press("Escape");
+    expect(options()).toEqual([]);
+    expect(editor().element.value).toBe("=rou");
+
+    await press("Escape");
+    expect(wrapper.find(".grid__editor").exists()).toBe(false);
+    expect(cellAt("A1").text()).toBe("kept");
+  });
+
+  it("accepts a clicked suggestion without ending the edit", async () => {
+    await mountGrid();
+    await type("=rou");
+    const option = document.querySelectorAll('.formula-assist [role="option"]')[2];
+    await new DOMWrapper(option).trigger("mousedown");
+    expect(editor().element.value).toBe("=ROUNDUP(");
+    // The editor keeps focus, so the click did not end the edit.
+    expect(document.activeElement).toBe(editor().element);
+    expect(server.setCells).not.toHaveBeenCalled();
+  });
+
+  it("offers tables of the cell's page and completes one with its qualifier", async () => {
+    await mountGrid();
+    await type("=tab");
+    expect(options()).toEqual(["Table 1"]);
+    await press("Tab");
+    expect(editor().element.value).toBe("='Table 1'!");
+  });
+
+  it("shows what the function at the caret expects", async () => {
+    await mountGrid();
+    await type("=IF(A2 > 1, ");
+    expect(options()).toEqual([]);
+    expect(document.querySelector('.formula-assist [role="note"]')?.textContent).toContain(
+      "IF(condition, then, [else])",
+    );
+  });
+
+  it("offers nothing while plain text is typed, and nothing when not editing", async () => {
+    await mountGrid();
+    expect(document.querySelector(".formula-assist")).toBeNull();
+    await type("sum");
+    expect(document.querySelector(".formula-assist")).toBeNull();
   });
 });
 

@@ -241,6 +241,40 @@ test("a form with a checkbox and a dropdown saves rows to a log", async ({ page 
   await expect(cell(page, "A2", "Table 2")).toHaveText("fig");
 });
 
+test("typing a formula offers completions and shows what a function expects", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "4");
+
+  await cell(page, "B1").click();
+  await page.keyboard.type("=sq");
+  const suggestions = page.getByRole("listbox", { name: "Suggestions" });
+  await expect(suggestions.getByRole("option")).toHaveText([/SQRT/]);
+
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("note")).toContainText("SQRT(number)");
+  await page.keyboard.type("A1)");
+  await page.keyboard.press("Enter");
+  await expect(cell(page, "B1")).toHaveText("2");
+
+  // The arrows pick from the list, and a click works too.
+  await cell(page, "B2").click();
+  await page.keyboard.type("=cou");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("A1:B1)");
+  await page.keyboard.press("Enter");
+  await expect(cell(page, "B2")).toHaveText("2");
+  await cell(page, "B2").click();
+  await expect(page.getByLabel("Formula")).toHaveValue("=COUNTA(A1:B1)");
+
+  await cell(page, "B3").click();
+  await page.keyboard.type("=ab");
+  await suggestions.getByRole("option", { name: /ABS/ }).click();
+  await page.keyboard.type("-7)");
+  await page.keyboard.press("Enter");
+  await expect(cell(page, "B3")).toHaveText("7");
+});
+
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "=1/0");

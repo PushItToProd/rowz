@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { cellKey, columnLabel, formatAddress, type CellId } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, nextTick, ref, watch, type ComponentPublicInstance } from "vue";
+import { computed, nextTick, ref, shallowRef, watch, type ComponentPublicInstance } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
+import { useFormulaAssist } from "../formula/useFormulaAssist";
 import CellView from "./CellView.vue";
+import FormulaAssist from "./FormulaAssist.vue";
 
 const props = defineProps<{ table: TableRecord }>();
 const store = useWorkbookStore();
@@ -12,6 +14,14 @@ const store = useWorkbookStore();
 const grid = ref<HTMLElement>();
 /** The text being typed into the selected cell, or `null` when not editing. */
 const draft = ref<string | null>(null);
+
+/** The input of the cell being edited, while there is one. */
+const editor = shallowRef<HTMLInputElement>();
+const assist = useFormulaAssist(
+  draft,
+  () => editor.value,
+  () => props.table.id,
+);
 
 const selected = computed(() =>
   store.selection?.tableId === props.table.id ? store.selection : null,
@@ -117,6 +127,8 @@ function onGridKeydown(event: KeyboardEvent): void {
 }
 
 function onEditorKeydown(event: KeyboardEvent): void {
+  // An open suggestion list takes the arrows, Tab, and Escape first.
+  if (assist.onKeydown(event)) return;
   // Up and down save and move, as Enter does. Left and right stay with the
   // editor, where they move the caret through the text.
   if (event.key === "Enter" || event.key === "ArrowDown") void finish(1, 0);
@@ -128,6 +140,7 @@ function onEditorKeydown(event: KeyboardEvent): void {
 }
 
 function focusEditor(element: Element | ComponentPublicInstance | null): void {
+  editor.value = element instanceof HTMLInputElement ? element : undefined;
   if (element instanceof HTMLInputElement && document.activeElement !== element) {
     element.focus({ preventScroll: true });
     element.setSelectionRange(element.value.length, element.value.length);
@@ -175,6 +188,9 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               aria-label="Cell content"
               :maxlength="LIMITS.inputLength"
               @keydown.stop="onEditorKeydown"
+              @input="assist.track"
+              @keyup="assist.track"
+              @click="assist.track"
               @blur="commit"
             />
             <CellView
@@ -189,5 +205,13 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
         </tr>
       </tbody>
     </table>
+    <FormulaAssist
+      v-if="draft !== null"
+      :items="assist.suggestions.value.items"
+      :active="assist.active.value"
+      :signature="assist.signature.value"
+      :anchor="editor"
+      @pick="assist.accept($event)"
+    />
   </div>
 </template>

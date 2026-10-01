@@ -9,10 +9,14 @@ import FormulaBar from "./FormulaBar.vue";
 vi.mock("../api/client", async () => ({ api: (await import("../testing")).mockApi() }));
 const server = api as unknown as MockedApi;
 
-async function render(inputs: Record<string, string> = {}, role = "owner"): Promise<VueWrapper> {
+async function render(
+  inputs: Record<string, string> = {},
+  role = "owner",
+  attached = false,
+): Promise<VueWrapper> {
   server.getSnapshot.mockResolvedValue(snapshotWith(inputs, role));
   await useWorkbookStore().load("s1");
-  return mount(FormulaBar);
+  return mount(FormulaBar, attached ? { attachTo: document.body } : {});
 }
 
 function field(wrapper: VueWrapper) {
@@ -94,6 +98,26 @@ describe("FormulaBar", () => {
 
     await select(wrapper, "A1");
     expect(field(wrapper).attributes("placeholder")).toContain("Select a cell");
+  });
+
+  it("suggests functions while typing and completes one with Tab", async () => {
+    const wrapper = await render({ A1: "2" }, "owner", true);
+    await select(wrapper, "A1");
+    await field(wrapper).trigger("focus");
+    await field(wrapper).setValue("=ma");
+    const labels = [...document.querySelectorAll('.formula-assist [role="option"]')].map(
+      (option) => option.querySelector(".formula-assist__label")?.textContent,
+    );
+    expect(labels).toEqual(["MAP", "MATCH", "MAX"]);
+
+    await field(wrapper).trigger("keydown", { key: "ArrowDown" });
+    await field(wrapper).trigger("keydown", { key: "Tab" });
+    expect(field(wrapper).element.value).toBe("=MATCH(");
+    expect(server.setCells).not.toHaveBeenCalled();
+
+    await field(wrapper).trigger("blur");
+    expect(document.querySelector(".formula-assist")).toBeNull();
+    wrapper.unmount();
   });
 
   it("is disabled for a viewer", async () => {

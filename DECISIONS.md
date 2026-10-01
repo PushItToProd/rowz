@@ -2,6 +2,18 @@
 
 Choices made without asking, for review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-09-30: Formula autocompletion
+
+**Decision.** While a formula is typed, in a cell or in the formula bar, a list offers what could complete the word at the caret: function names, the tables of the cell's page, page names, and names the formula already uses (such as those bound by `LET`). Inside a function's parentheses, a hint shows the function's syntax and summary.
+
+**Keys.** Tab accepts the highlighted suggestion. The arrows move the highlight. Enter saves the cell, as it always does, unless the arrows have moved the highlight, in which case it accepts. Escape closes the list, and a second Escape cancels the edit.
+
+**Why Enter does not accept by default.** Typing `=a` and pressing Enter would otherwise turn into `=ABS(`. Excel behaves this way too: Tab completes, Enter commits.
+
+**Not included.** Suggestions for cell addresses, and help on which argument the caret is in.
+
+**To change.** `apps/web/src/formula/assist.ts` decides what is offered. `useFormulaAssist.ts` holds the key handling.
+
 ## 2026-09-30: Controls and form actions
 
 **Decision.** Two controls and three actions:

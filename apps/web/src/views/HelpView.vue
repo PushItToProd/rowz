@@ -90,6 +90,8 @@ const KEYS = [
   ["Up, while editing", "Save and move up."],
   ["Tab, Shift+Tab", "Save and move right or left."],
   ["Escape", "Stop editing and discard what was typed."],
+  ["Tab, while a list of suggestions shows", "Complete the word with the highlighted suggestion."],
+  ["Up or Down, while suggestions show", "Move the highlight. Enter then accepts it."],
   ["Delete or Backspace", "Clear the selected cell."],
 ] as const;
 
