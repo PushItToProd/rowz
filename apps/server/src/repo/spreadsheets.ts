@@ -338,14 +338,10 @@ export class SpreadsheetRepository {
   }
 
   /**
-   * Runs a change to what a spreadsheet holds. The spreadsheet is locked
-   * first, so one change at a time reads and writes it, and `touch` follows
-   * the work. Every change goes through here.
-   *
-   * What a caller read before the lock may be stale by the time `work` runs.
-   * `work` reads again whatever it decides by, which `changePage`,
-   * `changeTable`, and `changeView` do for the thing being changed. Write
-   * access is checked again under the lock before `work` runs.
+   * Runs `work` in a transaction that holds the spreadsheet's lock, so one
+   * such transaction at a time reads and writes it. Write access is checked
+   * again under the lock: a caller that waited for it may have lost access
+   * meanwhile.
    */
   private async locked<T>(spreadsheetId: string, work: (tx: Database) => Promise<T>): Promise<T> {
     return this.db.transaction(async (tx) => {
@@ -355,6 +351,15 @@ export class SpreadsheetRepository {
     });
   }
 
+  /**
+   * Runs a change to what a spreadsheet holds, under its lock. What `work`
+   * writes through the writer becomes one journal entry, and `touch` follows
+   * the work. Every change goes through here.
+   *
+   * What a caller read before the lock may be stale by the time `work` runs.
+   * `work` reads again whatever it decides by, which `changePage`,
+   * `changeTable`, and `changeView` do for the thing being changed.
+   */
   private async change<T>(
     spreadsheetId: string,
     work: (tx: Database, writer: ContentWriter) => Promise<T>,

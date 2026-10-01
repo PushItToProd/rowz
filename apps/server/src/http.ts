@@ -4,7 +4,7 @@ import { createMiddleware } from "hono/factory";
 import type { ActionDependencies } from "./actions/run";
 import type { Auth } from "./auth";
 import { ApiFailure, crossOrigin, unauthenticated } from "./errors";
-import { SpreadsheetRepository, type RepositoryOptions } from "./repo/spreadsheets";
+import { SpreadsheetRepository } from "./repo/spreadsheets";
 
 export interface AppDependencies extends ActionDependencies {
   auth: Auth;
@@ -12,8 +12,6 @@ export interface AppDependencies extends ActionDependencies {
   trustedOrigins: string[];
   /** Whether a new account must confirm its email address. An account a spreadsheet is shared with must then have. */
   requireEmailVerification: boolean;
-  /** Repository overrides used by focused integration tests. */
-  repositoryOptions?: RepositoryOptions;
   /** Aborted when the server is shutting down, which ends the streams that otherwise never end. */
   shutdown?: AbortSignal;
 }

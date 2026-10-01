@@ -47,6 +47,7 @@ export function clientClock(offsetHeader: string | undefined): () => number {
 export interface ActionDependencies {
   db: Database;
   mailer: Mailer;
+  /** Overrides for the repositories the app makes, which tests use to lower limits. */
   repositoryOptions?: RepositoryOptions;
   /** How many emails a user's button clicks may send in any one-hour window. Each recipient of a message is one email. */
   emailsPerHour: number;
