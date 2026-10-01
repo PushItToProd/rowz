@@ -10,6 +10,7 @@ export const FUNCTION_CATEGORIES = [
   "Information",
   "Names",
   "Arrays",
+  "Charts",
   "Controls",
   "Actions",
 ] as const;
@@ -610,6 +611,20 @@ export const functionDocs: readonly FunctionDoc[] = [
     example: "ROWS(A1:B3)",
   },
   {
+    name: "HSTACK",
+    category: "Arrays",
+    syntax: "HSTACK(range, ...)",
+    summary: "Puts ranges side by side as one array.",
+    example: "HSTACK(B1:B3, A1:A3)",
+  },
+  {
+    name: "VSTACK",
+    category: "Arrays",
+    syntax: "VSTACK(range, ...)",
+    summary: "Puts ranges one under another as one array.",
+    example: "VSTACK(A1:A2, B1:B2)",
+  },
+  {
     name: "COLUMNS",
     category: "Arrays",
     syntax: "COLUMNS(range)",
@@ -645,6 +660,36 @@ export const functionDocs: readonly FunctionDoc[] = [
     syntax: "BYCOL(range, function)",
     summary: "Calls a function on each column and gives a row of the results.",
     example: "BYCOL(A1:B3, LAMBDA(col, COUNTA(col)))",
+  },
+  {
+    name: "BAR_CHART",
+    category: "Charts",
+    syntax: "BAR_CHART(data, [title])",
+    summary:
+      "A bar chart. The first column of the data labels the bars, and each other column is a series of bars. A first row of text names the series.",
+    example: 'BAR_CHART(HSTACK(B1:B3, A1:A3), "Fruit")',
+  },
+  {
+    name: "LINE_CHART",
+    category: "Charts",
+    syntax: "LINE_CHART(data, [title])",
+    summary: "A line chart, with one line for each column after the first.",
+    example: "LINE_CHART(HSTACK(B1:B3, A1:A3))",
+  },
+  {
+    name: "PIE_CHART",
+    category: "Charts",
+    syntax: "PIE_CHART(data, [title])",
+    summary: "A pie chart of the second column, with a slice for each row.",
+    example: "PIE_CHART(HSTACK(B1:B3, A1:A3))",
+  },
+  {
+    name: "SCATTER_CHART",
+    category: "Charts",
+    syntax: "SCATTER_CHART(data, [title])",
+    summary:
+      "A scatter chart. The first column gives each point's position across, and each other column its height.",
+    example: "SCATTER_CHART(HSTACK(A1:A3, A1:A3))",
   },
   {
     name: "CHECKBOX",

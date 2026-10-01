@@ -212,8 +212,10 @@ function compute(node: Node, context: EvaluationContext): Evaluated {
     case "reference":
       return readReference(node.reference, context);
     case "name": {
-      const bound = context.names?.get(node.name.toLowerCase());
-      return bound ?? fail("#NAME?", `Unknown name ${node.name}`);
+      // A name can be bound to an empty cell, whose value is null, so presence is what counts.
+      const key = node.name.toLowerCase();
+      if (!context.names?.has(key)) fail("#NAME?", `Unknown name ${node.name}`);
+      return context.names.get(key) ?? null;
     }
     case "call":
       return call(node.name, node.args, context);

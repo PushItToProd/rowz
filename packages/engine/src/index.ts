@@ -17,6 +17,7 @@ export {
   type FunctionCategory,
   type FunctionDoc,
 } from "./docs";
+export { chartData, type ChartData, type ChartSeries } from "./charts";
 export { dateFromParts, dateParts, formatDate, isDate, parseDate, type DateValue } from "./dates";
 export type { Effect, EnsureRowsEffect, SendEmailEffect, SetCellEffect } from "./effects";
 export { defaultFunctions } from "./functions";
@@ -43,6 +44,7 @@ export {
   formatValue,
   isAction,
   isButton,
+  isChart,
   isControl,
   isError,
   isLambda,
@@ -51,9 +53,12 @@ export {
   type ActionValue,
   type ButtonValue,
   type CellValue,
+  type ChartType,
+  type ChartValue,
   type ControlValue,
   type ErrorCode,
   type ErrorValue,
+  type Evaluated,
   type LambdaValue,
   type Scalar,
 } from "./values";
@@ -65,4 +70,13 @@ export {
   type WorkbookData,
   type WorkbookStructure,
 } from "./structure";
+export {
+  parseTemplate,
+  renderTemplate,
+  rewriteTemplate,
+  TemplateSyntaxError,
+  type TemplateBlock,
+  type TemplateNode,
+} from "./template";
+export { viewsAfterEdit, viewsAfterRename, type ViewKind, type ViewSource } from "./views";
 export { createWorkbook, Workbook, type ActionPlan, type WorkbookOptions } from "./workbook";

@@ -20,6 +20,7 @@ describe("LET", () => {
     ['=LET(unused, 1/0, "fine")', "fine"],
     ['=LET(broken, 1/0, IFERROR(broken, "caught"))', "caught"],
     ["=LET(tax_rate, 0.1, A1 * tax_rate)", 0.1],
+    ['=LET(blank, B9, IF(ISBLANK(blank), "empty", "full"))', "empty"],
   ])("%s is %j", (formula, expected) => {
     expect(evaluateFormula(formula, { A1: "1", A2: "2", A3: "3" })).toBe(expected);
   });

@@ -67,11 +67,24 @@ export class TableResolver {
 
   find(reference: Reference, originTableId: string): TableDefinition | undefined {
     const origin = this.tablesById.get(originTableId);
-    if (reference.table === undefined) return origin;
+    return reference.table === undefined ? origin : this.findNamed(reference, origin?.pageId);
+  }
+
+  /**
+   * Finds the table a reference means when it is written on a page but not in
+   * a table, as in a chart or a text view. Such a reference must name its table.
+   */
+  findFromPage(reference: Reference, pageId: string): TableDefinition | undefined {
+    return this.findNamed(reference, pageId);
+  }
+
+  private findNamed(
+    reference: Reference,
+    originPageId: string | undefined,
+  ): TableDefinition | undefined {
+    if (reference.table === undefined) return undefined;
     const pageId =
-      reference.page === undefined
-        ? origin?.pageId
-        : this.pageIdByName.get(nameKey(reference.page));
+      reference.page === undefined ? originPageId : this.pageIdByName.get(nameKey(reference.page));
     if (pageId === undefined) return undefined;
     return this.tablesByPage.get(pageId)?.get(nameKey(reference.table));
   }

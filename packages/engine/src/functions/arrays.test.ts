@@ -168,6 +168,42 @@ describe("SEQUENCE, TRANSPOSE, TAKE, DROP, ROWS, COLUMNS", () => {
         [8, 9],
       ],
     ],
+    [
+      "=HSTACK(SEQUENCE(2), SEQUENCE(2, 1, 10))",
+      [
+        [1, 10],
+        [2, 11],
+      ],
+    ],
+    [
+      "=HSTACK(SEQUENCE(3), 9)",
+      [
+        [1, 9],
+        [2, null],
+        [3, null],
+      ],
+    ],
+    [
+      "=VSTACK(SEQUENCE(1, 2), SEQUENCE(1, 2, 10))",
+      [
+        [1, 2],
+        [10, 11],
+      ],
+    ],
+    [
+      "=VSTACK(SEQUENCE(1, 3), 9)",
+      [
+        [1, 2, 3],
+        [9, null, null],
+      ],
+    ],
+    [
+      "=HSTACK(A1:A2, C1:C2)",
+      [
+        ["banana", 12],
+        ["apple", 5],
+      ],
+    ],
     ["=ROWS(A1:C5)", [[5]]],
     ["=COLUMNS(A1:C5)", [[3]]],
     ["=ROWS(7)", [[1]]],

@@ -3,7 +3,12 @@ import { formatReference, type Reference, type ReferenceCell } from "./ast";
 import { parseFormulaWithReferences, type LocatedReference } from "./parser";
 import { FormulaSyntaxError } from "./tokenizer";
 import { isFormulaInput } from "./values";
-import { TableResolver, type StoredInput, type WorkbookData } from "./structure";
+import {
+  TableResolver,
+  type StoredInput,
+  type TableDefinition,
+  type WorkbookData,
+} from "./structure";
 
 /** What to write in place of a reference: a new reference, or `#REF!` when its target is gone. */
 export type Replacement = Reference | "#REF!";
@@ -62,15 +67,29 @@ export function translateInput(input: string, rows: number, cols: number): strin
 export type Rename =
   { kind: "page"; pageId: string; name: string } | { kind: "table"; tableId: string; name: string };
 
-/** Rewrites every cell's references and returns the cells whose input changed. */
-function rewriteCells(
-  data: WorkbookData,
-  replaceFor: (originTableId: string) => (reference: Reference) => Replacement | undefined,
-): StoredInput[] {
-  return data.cells.flatMap(({ input, ...cell }) => {
-    const rewritten = rewriteReferences(input, replaceFor(cell.tableId));
-    return rewritten === input ? [] : [{ ...cell, input: rewritten }];
-  });
+/**
+ * Decides how a reference must be rewritten, given the table it means where
+ * it is written. `undefined` leaves the reference as it is.
+ */
+export type Decide = (
+  reference: Reference,
+  target: TableDefinition | undefined,
+) => Replacement | undefined;
+
+/** The rewrite a rename asks for: the new name in place of the old, wherever the old one is written. */
+export function renameDecider(resolver: TableResolver, rename: Rename): Decide {
+  return (reference, target) => {
+    if (rename.kind === "page") {
+      // The page qualifier is rewritten even when the table it names does not exist.
+      return reference.page !== undefined && resolver.isPage(reference.page, rename.pageId)
+        ? { ...reference, page: rename.name }
+        : undefined;
+    }
+    // A reference with no table name follows its formula's table and needs no rewrite.
+    return reference.table !== undefined && target?.id === rename.tableId
+      ? { ...reference, table: rename.name }
+      : undefined;
+  };
 }
 
 /**
@@ -79,18 +98,12 @@ function rewriteCells(
  */
 export function inputsAfterRename(data: WorkbookData, rename: Rename): StoredInput[] {
   const resolver = new TableResolver(data);
-  return rewriteCells(data, (originTableId) => (reference) => {
-    if (rename.kind === "page") {
-      // The page qualifier is rewritten even when the table it names does not exist.
-      return reference.page !== undefined && resolver.isPage(reference.page, rename.pageId)
-        ? { ...reference, page: rename.name }
-        : undefined;
-    }
-    // A reference with no table name follows its formula's table and needs no rewrite.
-    const names = reference.table !== undefined;
-    return names && resolver.find(reference, originTableId)?.id === rename.tableId
-      ? { ...reference, table: rename.name }
-      : undefined;
+  const decide = renameDecider(resolver, rename);
+  return data.cells.flatMap(({ input, ...cell }) => {
+    const rewritten = rewriteReferences(input, (reference) =>
+      decide(reference, resolver.find(reference, cell.tableId)),
+    );
+    return rewritten === input ? [] : [{ ...cell, input: rewritten }];
   });
 }
 
@@ -164,6 +177,12 @@ function moveReference(reference: Reference, edit: StructuralEdit): Replacement 
   return { ...reference, start: withAxis(start, moved[0]), end: withAxis(end, moved[1]) };
 }
 
+/** The rewrite a row or column edit asks for: references into the edited table follow their cells. */
+export function editDecider(edit: StructuralEdit): Decide {
+  return (reference, target) =>
+    target?.id === edit.tableId ? moveReference(reference, edit) : undefined;
+}
+
 /**
  * The cell writes that carry out inserting or deleting a row or column: cells
  * past the edit move by one, and formulas anywhere in the workbook that read
@@ -173,14 +192,13 @@ function moveReference(reference: Reference, edit: StructuralEdit): Replacement 
  */
 export function inputsAfterEdit(data: WorkbookData, edit: StructuralEdit): StoredInput[] {
   const resolver = new TableResolver(data);
+  const decide = editDecider(edit);
   const before = new Map(data.cells.map((cell) => [cellKey(cell), cell.input]));
   const after = new Map<string, StoredInput>();
 
   for (const cell of data.cells) {
     const input = rewriteReferences(cell.input, (reference) =>
-      resolver.find(reference, cell.tableId)?.id === edit.tableId
-        ? moveReference(reference, edit)
-        : undefined,
+      decide(reference, resolver.find(reference, cell.tableId)),
     );
     if (cell.tableId !== edit.tableId) {
       after.set(cellKey(cell), { ...cell, input });

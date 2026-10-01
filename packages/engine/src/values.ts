@@ -75,8 +75,18 @@ export interface ControlValue {
   label: string;
 }
 
+export type ChartType = "pie" | "bar" | "line" | "scatter";
+
+/** A chart to draw from rows of data. The first column labels the points, and the others are series. */
+export interface ChartValue {
+  kind: "chart";
+  chart: ChartType;
+  rows: CellValue[][];
+  title: string;
+}
+
 export type CellValue =
-  Scalar | ErrorValue | ActionValue | ButtonValue | LambdaValue | ControlValue;
+  Scalar | ErrorValue | ActionValue | ButtonValue | LambdaValue | ControlValue | ChartValue;
 
 /** Several values as rows of cells: what a range reference reads, or an array a function made. */
 export interface RangeValue {
@@ -116,6 +126,10 @@ export function isLambda(value: unknown): value is LambdaValue {
 
 export function isControl(value: unknown): value is ControlValue {
   return hasKind(value, "control");
+}
+
+export function isChart(value: unknown): value is ChartValue {
+  return hasKind(value, "chart");
 }
 
 export function isRange(value: unknown): value is RangeValue {
@@ -208,6 +222,7 @@ export function formatValue(value: CellValue): string {
   if (isButton(value)) return value.label;
   if (isLambda(value)) return `LAMBDA(${value.params.join(", ")})`;
   if (isControl(value)) return value.control === "checkbox" ? value.label : toText(value.value);
+  if (isChart(value)) return value.title === "" ? `${value.chart} chart` : value.title;
   return toText(value);
 }
 

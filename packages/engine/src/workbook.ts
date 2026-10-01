@@ -8,7 +8,12 @@ import { fail, Failure } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
 import { DependencyIndex, evaluationOrder } from "./graph";
 import { parseFormula } from "./parser";
-import { TableResolver, type WorkbookData, type WorkbookStructure } from "./structure";
+import {
+  TableResolver,
+  type TableDefinition,
+  type WorkbookData,
+  type WorkbookStructure,
+} from "./structure";
 import { FormulaSyntaxError } from "./tokenizer";
 import {
   compare,
@@ -23,6 +28,7 @@ import {
   type ActionValue,
   type CellValue,
   type ErrorValue,
+  type Evaluated,
   type Scalar,
 } from "./values";
 
@@ -215,6 +221,37 @@ export class Workbook {
   }
 
   /**
+   * Evaluates a formula written on a page but not in a cell, as a chart's
+   * data or an expression in a text view is. With no table of its own, the
+   * formula must name the table of every cell it reads. `names` are values
+   * the formula can use by name.
+   */
+  evaluateOnPage(
+    pageId: string,
+    formula: string,
+    names?: ReadonlyMap<string, Evaluated>,
+  ): Evaluated {
+    this.settle();
+    let ast: Node;
+    try {
+      ast = parseFormula(formula.startsWith("=") ? formula.slice(1) : formula);
+    } catch (cause) {
+      if (!(cause instanceof FormulaSyntaxError)) throw cause;
+      return error(cause.code, cause.message);
+    }
+    return evaluate(ast, {
+      // No cell holds this formula. An action made here has nowhere to run from.
+      origin: { tableId: "", row: 0, col: 0 },
+      functions: this.functions,
+      resolve: (reference) => this.rangeOf(reference, this.tables.findFromPage(reference, pageId)),
+      read: (cell) => this.current(cell),
+      extent: (tableId) => this.extent(tableId),
+      now: this.now,
+      ...(names ? { names } : {}),
+    });
+  }
+
+  /**
    * Turns an action into the effects it asks for, using current cell values.
    * Nothing is applied: the caller decides whether and how to carry them out.
    */
@@ -301,7 +338,11 @@ export class Workbook {
   }
 
   private resolve(reference: Reference, originTableId: string): CellRange | undefined {
-    const table = this.tables.find(reference, originTableId);
+    return this.rangeOf(reference, this.tables.find(reference, originTableId));
+  }
+
+  /** The cells a reference covers in the table it was found to mean. */
+  private rangeOf(reference: Reference, table: TableDefinition | undefined): CellRange | undefined {
     if (!table) return undefined;
     const { start, end = start } = reference;
     const [startRow, endRow] = span(start.row, end.row);

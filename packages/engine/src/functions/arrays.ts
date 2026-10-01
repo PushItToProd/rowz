@@ -159,6 +159,29 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
   /** A range without its first rows, or without its last with a negative count. */
   DROP: takeOrDrop(false),
 
+  /** Puts ranges side by side. Shorter ones are padded with empty cells at the bottom. */
+  HSTACK: eager(1, Infinity, (...sources) => {
+    const grids = sources.map(grid);
+    const height = Math.max(...grids.map((rows) => rows.length));
+    return array(
+      Array.from({ length: height }, (_, row) =>
+        grids.flatMap((rows) =>
+          Array.from({ length: width(rows) }, (_, col) => rows[row]?.[col] ?? null),
+        ),
+      ),
+    );
+  }),
+  /** Puts ranges one under another. Narrower ones are padded with empty cells on the right. */
+  VSTACK: eager(1, Infinity, (...sources) => {
+    const grids = sources.map(grid);
+    const widest = Math.max(...grids.map(width));
+    return array(
+      grids.flatMap((rows) =>
+        rows.map((cells) => Array.from({ length: widest }, (_, col) => cells[col] ?? null)),
+      ),
+    );
+  }),
+
   ROWS: eager(1, 1, (source) => grid(source).length),
   COLUMNS: eager(1, 1, (source) => width(grid(source))),
 
