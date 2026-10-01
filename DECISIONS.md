@@ -12,7 +12,7 @@ Choices made without asking, for review. Each entry says what was decided, why, 
 - **Email goes through `SMTP_URL` when it is set** (nodemailer). Without it messages are logged as before. The body is sent as plain text. The existing limit on email per user per hour still applies.
 - **One process is assumed.** The change feed for live updates is in memory.
 
-**Before putting this on the public internet.** Turn on email verification (see Sharing), set `AUTH_SECRET` to a random value, and configure better-auth's trusted proxy headers: without the client's address its sign-in rate limit is one shared bucket, which the server logs a warning about at start.
+**Before putting this on the public internet.** Set `REQUIRE_EMAIL_VERIFICATION=true` (see Sharing), set `AUTH_SECRET` to a random value, and configure better-auth's trusted proxy headers: without the client's address its sign-in rate limit is one shared bucket, which the server logs a warning about at start.
 
 ## 2026-10-01: Live updates between sessions
 
@@ -41,7 +41,7 @@ Choices made without asking, for review. Each entry says what was decided, why, 
 
 - **Only an existing account can be given a spreadsheet,** by its email address. There is no invitation for people who have not signed up, because there is no real email delivery to send one with.
 - **The error for an unknown address says so** ("No account uses ..."). An owner can therefore learn whether an address has an account. Hiding that would mean a share that silently does nothing.
-- **Accounts are not email-verified.** Whoever signed up with an address holds it. Sharing with `ada@example.com` shares with whoever registered that address, who may not be Ada. On a public instance, turn on email verification in better-auth before relying on sharing. This is the main risk of the feature as built.
+- **Accounts are not email-verified by default.** Whoever signed up with an address holds it, so sharing with `ada@example.com` shares with whoever registered that address. Set `REQUIRE_EMAIL_VERIFICATION=true` (with `SMTP_URL`) on a public instance: a new account then cannot sign in until it opens a link sent to its address. It is off by default so that development and a private instance need no mail server.
 - **Three levels of access in the repository:** `read`, `write`, and `own`. Deleting a spreadsheet and managing shares need `own`. An editor could delete a spreadsheet before this change. An editor can still restore an old version.
 - **A guest can leave** a spreadsheet shared with them. Nobody but the owner can remove another person.
 - **New spreadsheets a guest makes go into the guest's own workspace,** including copies opened from a shared spreadsheet's history.

@@ -12,6 +12,8 @@ export interface Config {
   smtpUrl?: string;
   /** The address email is sent from. */
   mailFrom: string;
+  /** Whether a new account must confirm its email address, by a link sent to it, before it can sign in. */
+  requireEmailVerification: boolean;
 }
 
 const DEV_SECRET = "development-only-secret-do-not-deploy";
@@ -40,6 +42,9 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     ...(webRoot === "" ? {} : { webRoot }),
     ...(env.SMTP_URL === undefined || env.SMTP_URL === "" ? {} : { smtpUrl: env.SMTP_URL }),
     mailFrom: env.MAIL_FROM ?? "Spreadsheet <no-reply@localhost>",
+    requireEmailVerification: ["1", "true"].includes(
+      (env.REQUIRE_EMAIL_VERIFICATION ?? "").toLowerCase(),
+    ),
     port: integer("PORT", env.PORT, 3000),
     databaseUrl: env.DATABASE_URL ?? ".data/pglite",
     authSecret,

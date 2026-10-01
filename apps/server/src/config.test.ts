@@ -13,6 +13,7 @@ describe("loadConfig", () => {
       baseUrl: "http://localhost:5173",
       emailRunsPerHour: 20,
       mailFrom: "Spreadsheet <no-reply@localhost>",
+      requireEmailVerification: false,
     });
   });
 
@@ -28,8 +29,10 @@ describe("loadConfig", () => {
         WEB_ROOT: "/srv/web",
         SMTP_URL: "smtps://user:pass@mail.example.com",
         MAIL_FROM: "Sheets <sheets@example.com>",
+        REQUIRE_EMAIL_VERIFICATION: "TRUE",
       }),
     ).toEqual({
+      requireEmailVerification: true,
       webRoot: "/srv/web",
       smtpUrl: "smtps://user:pass@mail.example.com",
       mailFrom: "Sheets <sheets@example.com>",

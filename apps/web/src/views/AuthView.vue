@@ -13,6 +13,8 @@ const email = ref("");
 const password = ref("");
 const error = ref<string | null>(null);
 const submitting = ref(false);
+/** The address a confirmation link was sent to, when the account must be confirmed before signing in. */
+const confirming = ref<string | null>(null);
 
 const isSignup = computed(() => props.mode === "signup");
 const MIN_PASSWORD_LENGTH = 8;
@@ -21,8 +23,11 @@ async function submit(): Promise<void> {
   error.value = null;
   submitting.value = true;
   try {
-    if (isSignup.value) await session.signUp(name.value.trim(), email.value, password.value);
-    else await session.signIn(email.value, password.value);
+    if (!isSignup.value) await session.signIn(email.value, password.value);
+    else if (!(await session.signUp(name.value.trim(), email.value, password.value))) {
+      confirming.value = email.value;
+      return;
+    }
     // Only follow a redirect to a path inside this app.
     const { redirect } = route.query;
     await router.push(typeof redirect === "string" && redirect.startsWith("/") ? redirect : "/");
@@ -58,6 +63,10 @@ async function submit(): Promise<void> {
         />
       </label>
       <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+      <p v-if="confirming" class="notice notice--success" role="status">
+        We sent a link to {{ confirming }}. Open it to confirm your address and finish creating your
+        account.
+      </p>
       <button type="submit" class="primary" :disabled="submitting">
         {{ isSignup ? "Sign up" : "Sign in" }}
       </button>

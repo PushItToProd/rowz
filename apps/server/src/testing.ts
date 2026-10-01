@@ -102,7 +102,7 @@ export async function storedInputs(
 
 /** Starts the app on a fresh database. Call `close` when the test file is done. */
 export async function startTestServer(
-  options: { emailRunsPerHour?: number } = {},
+  options: { emailRunsPerHour?: number; verifyEmail?: boolean } = {},
 ): Promise<TestServer> {
   const database = await openTestDatabase();
   const sent: EmailMessage[] = [];
@@ -120,6 +120,7 @@ export async function startTestServer(
       secret: "test-secret-test-secret-test-secret",
       baseUrl: BASE_URL,
       trustedOrigins: [BASE_URL],
+      ...(options.verifyEmail ? { verifyEmailWith: mailer } : {}),
     }),
     mailer,
     emailRunsPerHour: options.emailRunsPerHour ?? 20,
