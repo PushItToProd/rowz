@@ -556,10 +556,16 @@ test("a page shows a chart and a text view of its tables, and they follow change
     );
   };
   expect(await order()).toEqual(["Fruit", "Chart 1", "Text 1"]);
+  // The second move is sent when the first is answered, and a reload drops a move not yet sent.
+  let saved = 0;
+  page.on("response", (response) => {
+    if (response.request().method() === "PUT" && response.url().endsWith("/order")) saved += 1;
+  });
   await page.getByRole("button", { name: "Move Text 1 up" }).click();
   await page.getByRole("button", { name: "Move Text 1 up" }).click();
   await expect(page.getByRole("button", { name: "Move Text 1 up" })).toBeDisabled();
   expect(await order()).toEqual(["Text 1", "Fruit", "Chart 1"]);
+  await expect.poll(() => saved).toBe(2);
   await page.reload();
   await expect(text).toBeVisible();
   expect(await order()).toEqual(["Text 1", "Fruit", "Chart 1"]);
