@@ -40,6 +40,24 @@ function choose(property: "align" | "numberFormat" | "color" | "fill", event: Ev
   <div class="format-bar" role="toolbar" aria-label="Format">
     <button
       type="button"
+      title="Undo (Ctrl+Z)"
+      aria-label="Undo"
+      :disabled="!store.canUndo"
+      @click="store.undo()"
+    >
+      ↶
+    </button>
+    <button
+      type="button"
+      title="Redo (Ctrl+Y)"
+      aria-label="Redo"
+      :disabled="!store.canRedo"
+      @click="store.redo()"
+    >
+      ↷
+    </button>
+    <button
+      type="button"
       class="format-bar__toggle format-bar__bold"
       title="Bold"
       aria-label="Bold"

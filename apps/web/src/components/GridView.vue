@@ -330,6 +330,8 @@ function onGridKeydown(event: KeyboardEvent): void {
   else if (key === "Delete" || key === "Backspace") void store.clearSelection();
   else if (key === "ContextMenu" || (key === "F10" && event.shiftKey)) openMenuAtSelection();
   else if (command && key.toLowerCase() === "a") selectAll();
+  else if (command && key.toLowerCase() === "z" && !event.shiftKey) void store.undo();
+  else if (command && (key.toLowerCase() === "y" || key.toLowerCase() === "z")) void store.redo();
   else if (command && key.toLowerCase() === "d") fillSelection("down");
   else if (command && key.toLowerCase() === "r") fillSelection("right");
   else if (key.length === 1 && !command && !event.altKey) {

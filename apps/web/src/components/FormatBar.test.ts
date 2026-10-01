@@ -151,6 +151,19 @@ describe("FormatBar", () => {
     );
   });
 
+  it("takes back and makes again the last edit", async () => {
+    const store = await render();
+    expect(control("Undo").attributes("disabled")).toBeDefined();
+    await store.setCell(at("A1"), "typed");
+    await wrapper.vm.$nextTick();
+    await control("Undo").trigger("click");
+    expect(store.inputOf(at("A1"))).toBe("");
+    await wrapper.vm.$nextTick();
+    expect(control("Undo").attributes("disabled")).toBeDefined();
+    await control("Redo").trigger("click");
+    expect(store.inputOf(at("A1"))).toBe("typed");
+  });
+
   it("reports a refused change", async () => {
     const store = await render();
     store.selection = at("A1");

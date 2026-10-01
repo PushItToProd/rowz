@@ -54,6 +54,14 @@ export interface Notice {
 
 /** A notice names the cells an action wrote, up to this many. Past that it gives the count. */
 const MAX_NAMED_CELLS = 3;
+/** How many cell edits Ctrl+Z can take back. */
+const MAX_UNDO = 100;
+
+/** One change to cells of a table, as what each held before and after. */
+interface CellEdit {
+  tableId: string;
+  cells: { row: number; col: number; before: string; after: string }[];
+}
 /** The format of every cell that has none. One object, so a cell that renders it sees no change. */
 const NO_FORMAT: CellFormat = Object.freeze({});
 
@@ -116,6 +124,50 @@ export const useWorkbookStore = defineStore("workbook", () => {
   function syncStructure(): void {
     engine.value.setStructure({ pages: pages.value, tables: tables.value });
     triggerRef(engine);
+    // A rename or a moved row rewrites formulas and addresses, so what was
+    // typed before it can no longer be put back where and as it was.
+    forgetEdits();
+  }
+
+  /** Cell edits made in this session, oldest first, that Ctrl+Z takes back. */
+  const undoable = shallowRef<CellEdit[]>([]);
+  /** Edits taken back, most recent last, that Ctrl+Y makes again. */
+  const redoable = shallowRef<CellEdit[]>([]);
+  const canUndo = computed(() => canEdit.value && undoable.value.length > 0);
+  const canRedo = computed(() => canEdit.value && redoable.value.length > 0);
+
+  function forgetEdits(): void {
+    undoable.value = [];
+    redoable.value = [];
+  }
+
+  /** Puts the cells of an edit to their state before or after it, and selects them. */
+  function replay(edit: CellEdit, to: "before" | "after"): Promise<void> {
+    const [first] = edit.cells;
+    if (first) {
+      selection.value = { tableId: edit.tableId, row: first.row, col: first.col };
+      selectionEnd.value = null;
+    }
+    const writes = edit.cells.map(({ row, col, ...states }) => ({ row, col, input: states[to] }));
+    return setCells(edit.tableId, writes, false);
+  }
+
+  /** Takes back the last cell edit made in this session. */
+  function undo(): Promise<void> {
+    const edit = undoable.value.at(-1);
+    if (!edit || !canEdit.value) return Promise.resolve();
+    undoable.value = undoable.value.slice(0, -1);
+    redoable.value = [...redoable.value, edit];
+    return replay(edit, "before");
+  }
+
+  /** Makes again the edit that was last taken back. */
+  function redo(): Promise<void> {
+    const edit = redoable.value.at(-1);
+    if (!edit || !canEdit.value) return Promise.resolve();
+    redoable.value = redoable.value.slice(0, -1);
+    undoable.value = [...undoable.value, edit];
+    return replay(edit, "after");
   }
 
   async function load(spreadsheetId: string): Promise<void> {
@@ -127,6 +179,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     views.value = snapshot.views;
     selection.value = null;
     notice.value = null;
+    forgetEdits();
   }
 
   /**
@@ -229,9 +282,10 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   /**
    * Shows new inputs for cells of one table at once and saves them. Inputs
-   * that fail to save are put back as they were.
+   * that fail to save are put back as they were. The change can be taken
+   * back with `undo` unless `record` is false, as it is for an undo itself.
    */
-  function setCells(tableId: string, writes: readonly CellInput[]): Promise<void> {
+  function setCells(tableId: string, writes: readonly CellInput[], record = true): Promise<void> {
     const changes = writes
       // A fill or paste that crosses a formula column leaves that column to its formula.
       .filter((write) => columnOf({ tableId, ...write })?.type !== "formula")
@@ -239,6 +293,16 @@ export const useWorkbookStore = defineStore("workbook", () => {
       .filter((change) => change.previous !== change.input);
     if (changes.length === 0) return Promise.resolve();
     for (const { row, col, input } of changes) apply({ tableId, row, col }, input);
+    if (record) {
+      const cells = changes.map(({ row, col, previous, input }) => ({
+        row,
+        col,
+        before: previous,
+        after: input,
+      }));
+      undoable.value = [...undoable.value, { tableId, cells }].slice(-MAX_UNDO);
+      redoable.value = [];
+    }
 
     saves = saves.then(async () => {
       let saved = 0;
@@ -717,6 +781,10 @@ export const useWorkbookStore = defineStore("workbook", () => {
     deleteTable,
     itemsOn,
     moveItem,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
     columnOf,
     formatOf,
     formatSelection,

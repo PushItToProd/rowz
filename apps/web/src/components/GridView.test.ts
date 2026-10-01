@@ -1027,3 +1027,23 @@ describe("formats", () => {
     expect(cellAt("B2").get(".cell-value").attributes("style") ?? "").not.toContain("color");
   });
 });
+
+describe("undo from the keyboard", () => {
+  it("takes back an edit with Ctrl+Z and makes it again with Ctrl+Y or Ctrl+Shift+Z", async () => {
+    await mountGrid({ A1: "old" });
+    await select("A1");
+    await press("n");
+    await wrapper.get(".grid__editor").setValue("new");
+    await press("Enter");
+    expect(cellAt("A1").text()).toBe("new");
+
+    await press("z", { ctrlKey: true });
+    expect(cellAt("A1").text()).toBe("old");
+    expect(selectedAddress()).toBe("A1");
+    await press("y", { ctrlKey: true });
+    expect(cellAt("A1").text()).toBe("new");
+    await press("z", { ctrlKey: true });
+    await press("Z", { ctrlKey: true, shiftKey: true });
+    expect(cellAt("A1").text()).toBe("new");
+  });
+});

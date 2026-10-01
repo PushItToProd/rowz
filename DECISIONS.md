@@ -4,7 +4,9 @@ Choices made without asking, for review. Each entry says what was decided, why, 
 
 ## 2026-10-01: Version history
 
-**Decision.** The todo item read "undo and redo (persistent version history)". I built the persistent history: the server keeps whole-spreadsheet versions, and a History panel restores one or opens it as a copy. Ctrl+Z for single edits is not built and stays in the todo file.
+**Decision.** The todo item read "undo and redo (persistent version history)". Both halves are built. The server keeps whole-spreadsheet versions, and a History panel restores one or opens it as a copy. Ctrl+Z and Ctrl+Y take back and remake cell edits within a session.
+
+**Ctrl+Z covers cell edits only,** up to 100 of them, and lives in the browser. A paste or a fill is one step. Inserting or deleting a row or column, or renaming anything, empties the list: those rewrite formulas and move addresses, so an older edit could no longer be put back where and as it was. Structural changes are undone from History.
 
 **When a version is kept.**
 

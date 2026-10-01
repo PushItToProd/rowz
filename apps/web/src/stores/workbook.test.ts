@@ -902,3 +902,89 @@ describe("the order of a page", () => {
     expect(store.itemsOn("p1")).toEqual(["t1", "v1", "v2"]);
   });
 });
+
+describe("undo and redo", () => {
+  it("takes back the last edit, and makes it again", async () => {
+    const store = await open({ A1: "1" });
+    expect(store.canUndo).toBe(false);
+    await store.setCell(at("A1"), "2");
+    await store.setCell(at("B1"), "=A1*10");
+    expect(store.canUndo).toBe(true);
+
+    await store.undo();
+    expect(store.inputOf(at("B1"))).toBe("");
+    expect(store.selection).toEqual(at("B1"));
+    await store.undo();
+    expect(store.inputOf(at("A1"))).toBe("1");
+    expect(store.canUndo).toBe(false);
+    expect(server.setCells).toHaveBeenLastCalledWith("t1", [{ row: 0, col: 0, input: "1" }]);
+
+    await store.redo();
+    await store.redo();
+    expect(store.valueOf(at("B1"))).toBe(20);
+    expect(store.canRedo).toBe(false);
+    await store.redo();
+    expect(store.valueOf(at("B1"))).toBe(20);
+  });
+
+  it("takes back a change to many cells as one step", async () => {
+    const store = await open({ A1: "x", A2: "y" });
+    store.selection = at("A1");
+    await store.paste("1\t2\n3\t4");
+    await store.undo();
+    expect(["A1", "B1", "A2", "B2"].map((address) => store.inputOf(at(address)))).toEqual([
+      "x",
+      "",
+      "y",
+      "",
+    ]);
+    await store.redo();
+    expect(store.inputOf(at("B2"))).toBe("4");
+  });
+
+  it("forgets what could be made again once a new edit is made", async () => {
+    const store = await open();
+    await store.setCell(at("A1"), "1");
+    await store.undo();
+    await store.setCell(at("A1"), "2");
+    expect(store.canRedo).toBe(false);
+    await store.redo();
+    expect(store.inputOf(at("A1"))).toBe("2");
+  });
+
+  it("does not record an edit that changes nothing", async () => {
+    const store = await open({ A1: "1" });
+    await store.setCell(at("A1"), "1");
+    expect(store.canUndo).toBe(false);
+  });
+
+  it("forgets edits when rows move or something is renamed, since formulas are rewritten", async () => {
+    const store = await open();
+    await store.setCell(at("A1"), "1");
+    server.editTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
+    await store.editTable("t1", { axis: "row", kind: "insert", index: 0 });
+    expect(store.canUndo).toBe(false);
+
+    await store.setCell(at("A1"), "2");
+    server.renamePage.mockResolvedValue({ cells: [], views: [], tables: [] });
+    await store.renamePage("p1", "Data");
+    expect(store.canUndo).toBe(false);
+    await store.undo();
+    expect(store.inputOf(at("A1"))).toBe("2");
+  });
+
+  it("keeps at most a hundred edits", async () => {
+    const store = await open();
+    for (let value = 1; value <= 105; value += 1) await store.setCell(at("A1"), String(value));
+    for (let step = 0; step < 105; step += 1) await store.undo();
+    expect(store.inputOf(at("A1"))).toBe("5");
+    expect(store.canUndo).toBe(false);
+  });
+
+  it("is not offered to a viewer", async () => {
+    const store = await open({}, "viewer");
+    expect(store.canUndo).toBe(false);
+    await store.undo();
+    expect(server.setCells).not.toHaveBeenCalled();
+  });
+});
