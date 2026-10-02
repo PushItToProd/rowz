@@ -260,10 +260,30 @@ One server process is assumed. Live updates between sessions are announced in th
 | `pnpm test`          | Unit and integration tests (Vitest)                                  |
 | `pnpm test:coverage` | The same with coverage. Fails if the engine drops below 90% of lines |
 | `pnpm e2e`           | End-to-end tests (Playwright). Starts its own servers on other ports |
+| `pnpm e2e:remote`    | The same, with the browser in the `playwright` container (see below) |
 | `pnpm format`        | Formats with Prettier                                                |
 | `pnpm screenshots`   | Retakes the screenshots in this file (`e2e/screenshots.ts`)          |
 
 Server tests run against PGlite in memory. Set `TEST_DATABASE_URL` to a Postgres server to run them against real Postgres instead; each test file creates and drops its own database. CI does this on every push. `pnpm test:postgres` does it locally: it starts the Postgres server in `compose.yaml` with Docker and runs the server tests against it. The tests that need two database connections run only this way. `docker compose down` stops the server.
+
+`pnpm e2e:remote` runs the end-to-end tests where Chromium cannot start. The browser runs in the Playwright server of `compose.yaml`, started with `docker compose up --detach playwright`, and the tests and the servers they start stay on the machine that runs the command. It takes the arguments `playwright test` does. The container's Playwright version must match the one in `pnpm-lock.yaml`, so change both together.
+
+A Claude Code session can run `pnpm e2e:remote` inside its Bash sandbox with these settings, in `.claude/settings.json` or, to keep them to one checkout, `.claude/settings.local.json`:
+
+```json
+{
+  "permissions": {
+    "allow": ["Bash(pnpm e2e:remote)", "Bash(pnpm e2e:remote *)"]
+  },
+  "sandbox": {
+    "network": {
+      "allowedDomains": ["127.0.0.1"]
+    }
+  }
+}
+```
+
+The sandbox gives each command its own loopback interface, so the command reaches the container's port through the sandbox's proxy, and `allowedDomains` is what lets the proxy connect to it. The entry opens every loopback port of the machine to sandboxed commands, not only the Playwright server's.
 
 ## License
 

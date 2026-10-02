@@ -5,7 +5,8 @@ A Rows-style spreadsheet: pages, tables, formulas, and formulas that describe si
 ## Commands
 
 - `pnpm check` runs lint, typecheck, and unit tests. Run it before calling work done.
-- `pnpm e2e` runs Playwright. It starts its own servers on ports 3100 and 5273 with an in-memory database.
+- `pnpm e2e` runs Playwright. It starts its own servers on ports 3100 and 5273 with an in-memory database. (This doesn't work in the Claude Code or Codex sandboxes.)
+- `pnpm e2e:remote` runs the same tests with the browser in the `playwright` container of `compose.yaml`. (Agents running in Claude Code or Codex should use this.)
 - `pnpm exec vitest run --project engine` (or `server`, `web`) runs one package's tests.
 - `pnpm --filter @spreadsheet-app/server db:generate` writes a migration after a schema change.
 
@@ -40,5 +41,5 @@ Server tests call the real app through `app.request()` against PGlite. Each test
 
 - `tsx watch` and the `tsx` CLI fail with `EPERM` because they open a Unix socket. Use `node --import tsx <file>`, which the server's `start` script does.
 - Each sandboxed command has its own network namespace. A server started in one command cannot be reached from another command or from the Playwright MCP browser.
-- Chromium does not start inside the sandbox. `pnpm e2e` must run outside it.
+- Chromium does not start inside the sandbox, so `pnpm e2e` must run outside it. `pnpm e2e:remote` runs inside it when the `playwright` container is up and the command is allowed to reach `127.0.0.1:3200`.
 - Prettier is run on explicit globs, not `.`, because the sandbox places unreadable dotfiles in the working directory.

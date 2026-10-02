@@ -1,7 +1,7 @@
-# A Postgres server for running the server tests as CI does: `pnpm test:postgres`.
-# Each test file creates and drops its own database, so nothing here needs to
-# outlive the container, and the data sits in memory.
 services:
+  # A Postgres server for running the server tests as CI does: `pnpm test:postgres`.
+  # Each test file creates and drops its own database, so nothing here needs to
+  # outlive the container, and the data sits in memory.
   postgres:
     image: postgres:17
     environment:
@@ -16,3 +16,24 @@ services:
       interval: 2s
       timeout: 5s
       retries: 15
+
+  # A Playwright server, for running the end-to-end tests where Chromium cannot
+  # start, such as the Claude Code sandbox: `pnpm e2e:remote` (`e2e/remote.ts`).
+  # The tests and the servers they start stay on the machine that runs them;
+  # only the browser runs here.
+  playwright:
+    # The image and the server must match the version of @playwright/test in
+    # pnpm-lock.yaml: a client refuses a server of another minor version.
+    image: mcr.microsoft.com/playwright:v1.63.0-noble
+    command: npx --yes playwright@1.63.0 run-server --port 3000 --host 0.0.0.0
+    working_dir: /home/pwuser
+    # Not root, so that Chromium keeps its own sandbox.
+    user: pwuser
+    # Reaps the browser processes that the server leaves behind.
+    init: true
+    # Chromium runs out of memory in Docker's default 64 MB /dev/shm.
+    ipc: host
+    ports:
+      # Not 3000, which the API server of `pnpm dev` holds. `e2e/remote.ts`
+      # names this port too.
+      - "127.0.0.1:3200:3000"

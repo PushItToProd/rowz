@@ -581,7 +581,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
 
 test("a spreadsheet is exported to a file and imported again, and a table to and from CSV", async ({
   page,
-}) => {
+}, testInfo) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "apples");
   await enter(page, "B1", "3");
@@ -598,7 +598,9 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await page.getByRole("button", { name: "Export CSV" }).click();
   const csv = await csvDownload;
   expect(csv.suggestedFilename()).toBe("Table 1.csv");
-  const csvPath = await csv.path();
+  // Saved here because a download has no path when the browser runs on another machine.
+  const csvPath = testInfo.outputPath(csv.suggestedFilename());
+  await csv.saveAs(csvPath);
   expect(await readFile(csvPath, "utf8")).toBe('apples,3\r\n"pears, ripe",6');
 
   // The spreadsheet file holds what was typed, so formulas survive.
@@ -606,7 +608,8 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const file = await fileDownload;
   expect(file.suggestedFilename()).toBe("Untitled spreadsheet.json");
-  const filePath = await file.path();
+  const filePath = testInfo.outputPath(file.suggestedFilename());
+  await file.saveAs(filePath);
 
   await page.getByRole("link", { name: "← Spreadsheets" }).click();
   await page.getByLabel("Import").setInputFiles(filePath);
