@@ -6,21 +6,21 @@ The plan was written from the code at commit `077d26a`. Three commits were added
 
 ## Decisions in brief
 
-| Question | Decision |
-| --- | --- |
-| Scope | Rows and columns of every table, plain or data. One storage model. |
-| Row storage | A `table_rows` table: `id`, `table_id`, and an order key. Inserting a row writes one record. |
-| Column storage | An ordered array of column ids on the table record. |
-| Cell storage | Keyed by `(row_id, col_id)`. A structural edit moves no cells. |
-| A1 references | Stay positional and are still rewritten on structural edits. |
-| Sort and filter in place | A display setting on the table. The stored order, and so what `A2` reads, does not change. |
-| Wire | The client names a cell by row id and column id. A deleted row or column answers 409. No table version number. |
-| Engine | Does not learn row ids. `CellId` stays `{ tableId, row, col }`. |
-| Undo | Entries name cells and rows by id. Refusal rules 1 and 2 narrow to one rule about formula text. |
-| File format and versions | Unchanged. No ids. |
-| Data tables | Hold only the rows that were added. The grid offers one new row below the last. |
-| Live updates | A change event carries the changed cells and rows, with a revision number for ordering. |
-| Limits | 1,000 rows per table stays. A new limit caps row records per spreadsheet. |
+| Question                 | Decision                                                                                                       |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Scope                    | Rows and columns of every table, plain or data. One storage model.                                             |
+| Row storage              | A `table_rows` table: `id`, `table_id`, and an order key. Inserting a row writes one record.                   |
+| Column storage           | An ordered array of column ids on the table record.                                                            |
+| Cell storage             | Keyed by `(row_id, col_id)`. A structural edit moves no cells.                                                 |
+| A1 references            | Stay positional and are still rewritten on structural edits.                                                   |
+| Sort and filter in place | A display setting on the table. The stored order, and so what `A2` reads, does not change.                     |
+| Wire                     | The client names a cell by row id and column id. A deleted row or column answers 409. No table version number. |
+| Engine                   | Does not learn row ids. `CellId` stays `{ tableId, row, col }`.                                                |
+| Undo                     | Entries name cells and rows by id. Refusal rules 1 and 2 narrow to one rule about formula text.                |
+| File format and versions | Unchanged. No ids.                                                                                             |
+| Data tables              | Hold only the rows that were added. The grid offers one new row below the last.                                |
+| Live updates             | A change event carries the changed cells and rows, with a revision number for ordering.                        |
+| Limits                   | 1,000 rows per table stays. A new limit caps row records per spreadsheet.                                      |
 
 ## Current behavior
 
@@ -101,12 +101,12 @@ cells
 
 ### What a structural edit writes
 
-| Edit | Today | With ids |
-| --- | --- | --- |
-| Insert a row | Every cell below it, each also in the journal. About 100,000 writes for row 1 of a full table. | One `table_rows` record for each new row. |
-| Delete a row | Every cell below it. | The row's record and its own cells. |
-| Insert or delete a column | Every cell to its right. | The table record. A delete also removes the column's cells. |
-| Any of them | Formulas that read the table, view sources, formula columns, and format rules, where their text changes. | The same. |
+| Edit                      | Today                                                                                                    | With ids                                                    |
+| ------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Insert a row              | Every cell below it, each also in the journal. About 100,000 writes for row 1 of a full table.           | One `table_rows` record for each new row.                   |
+| Delete a row              | Every cell below it.                                                                                     | The row's record and its own cells.                         |
+| Insert or delete a column | Every cell to its right.                                                                                 | The table record. A delete also removes the column's cells. |
+| Any of them               | Formulas that read the table, view sources, formula columns, and format rules, where their text changes. | The same.                                                   |
 
 An edit still reads the whole spreadsheet to find the formulas to rewrite. Reading only the cells whose input starts with `=` is a later optimization and not part of this plan.
 
@@ -174,14 +174,14 @@ An entry for a row insert holds the new rows and the formulas whose text changed
 
 **Refusal rules.** Numbers refer to the rules in the DECISIONS entry "Undo through a server-side journal".
 
-| Rule today | After |
-| --- | --- |
-| 1. A step that rewrote references is refused after any later change. | Refused only when a later change in effect wrote formula text or rewrote references. |
-| 1. A step that created or deleted a page, table, or view is refused after any later change. | Unchanged. Narrowing it is a separate piece of work. |
-| 2. Any step is refused after a later change that rewrote references. | Refused only when the step would restore formula text. A step that restores typed values is allowed. |
-| 3. Each recorded thing must still be as the step left it. | Kept. Two checks are added, below. |
-| 4. What the undo writes must still fit. | Kept. "No cell outside its table" becomes a foreign key. |
-| 5. A change too large to record is refused. | Kept. |
+| Rule today                                                                                  | After                                                                                                |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 1. A step that rewrote references is refused after any later change.                        | Refused only when a later change in effect wrote formula text or rewrote references.                 |
+| 1. A step that created or deleted a page, table, or view is refused after any later change. | Unchanged. Narrowing it is a separate piece of work.                                                 |
+| 2. Any step is refused after a later change that rewrote references.                        | Refused only when the step would restore formula text. A step that restores typed values is allowed. |
+| 3. Each recorded thing must still be as the step left it.                                   | Kept. Two checks are added, below.                                                                   |
+| 4. What the undo writes must still fit.                                                     | Kept. "No cell outside its table" becomes a foreign key.                                             |
+| 5. A change too large to record is refused.                                                 | Kept.                                                                                                |
 
 Rules 1 and 2 become one rule: an undo or redo is refused when it and a later change in effect conflict, and they conflict when one rewrote references and the other wrote formula text or also rewrote references. Formula text is a cell input that starts with `=`, a view source, or a formula column's formula.
 
@@ -215,12 +215,12 @@ A restored row takes its recorded key. When another row has taken that key since
 
 **Actions.** The engine keeps emitting positional effects, and `ensureRows` keeps its meaning. The server's handler adds row records where it now raises `row_count`.
 
-| Action | Change |
-| --- | --- |
+| Action       | Change                                                                                                                              |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `APPEND_ROW` | No change to the function. On a data table the first row below the content is the row after the last, so the scan finds it at once. |
-| `INSERT` | No change. |
-| `UPDATE` | No change. Rows it matches are written by position and resolved to ids under the lock. |
-| `OVERWRITE` | No change in step 6: it empties cells, which on a data table leaves empty rows at the end. Step 8 makes it delete them. |
+| `INSERT`     | No change.                                                                                                                          |
+| `UPDATE`     | No change. Rows it matches are written by position and resolved to ids under the lock.                                              |
+| `OVERWRITE`  | No change in step 6: it empties cells, which on a data table leaves empty rows at the end. Step 8 makes it delete them.             |
 
 `APPEND_ROW(Sales, ...)` with a table name in place of a range needs the whole-table reference syntax that `todo.md` lists separately.
 
