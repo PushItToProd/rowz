@@ -45,6 +45,10 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
   },
   {
+    files: ["scripts/**"],
+    languageOptions: { globals: globals.node },
+  },
+  {
     files: ["**/*.test.ts"],
     rules: {
       // Tests index into arrays they just built; a failed assertion reports a wrong index.

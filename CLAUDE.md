@@ -5,6 +5,7 @@ A Rows-style spreadsheet: pages, tables, formulas, and formulas that describe si
 ## Commands
 
 - `pnpm check` runs lint, typecheck, and unit tests. Run it before calling work done.
+- `pnpm check:migrations` verifies that the SQL migration files match the Drizzle journal and committed checksums. Run it after adding a migration.
 - `pnpm e2e` runs Playwright. It starts its own servers on ports 3100 and 5273 with an in-memory database. (This doesn't work in the Claude Code or Codex sandboxes.)
 - `pnpm e2e:remote` runs the same tests with the browser in the `playwright` container of `compose.yaml`. (Agents running in Claude Code or Codex should use this.)
 - `pnpm exec vitest run --project engine` (or `server`, `web`) runs one package's tests.
@@ -31,6 +32,7 @@ TypeScript is pinned to 6.0 because typescript-eslint and vue-tsc need its JavaS
 - **Page and table names are unique within their parent, ignoring case,** because formulas resolve them that way. The database enforces it with unique indexes on `lower(name)`.
 - **A change to what a spreadsheet holds goes through `change`** in `SpreadsheetRepository`, or through `changePage`, `changeTable`, or `changeView`, which also hand over the thing being changed. `locked` takes the spreadsheet lock and checks write access under it. `change` records content through `ContentWriter` and calls `touch`, which announces the change to other open sessions and keeps versions. Undo and redo use `locked` directly and call `touch` only when they write. Decide from what is read inside `change`: a table read before the lock may be stale by the time the work runs. A change to something else about a spreadsheet, such as its name or its shares, calls `noteChange` itself.
 - Packages export TypeScript source. There is no build step between packages.
+- **Applied migrations are immutable.** Never edit or remove an existing SQL migration or change its checksum. Add a new migration for follow-up schema or data changes, keep `_journal.json` append-only, and add the new migration's checksum to `apps/server/drizzle/meta/_checksums.json`. `pnpm check` verifies the journal, SQL files, and checksum manifest together.
 
 ## Tests
 
