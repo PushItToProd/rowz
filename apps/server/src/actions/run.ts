@@ -16,7 +16,7 @@ import {
 } from "@spreadsheet-app/engine";
 import type { StoredCell } from "@spreadsheet-app/shared";
 import { eq } from "drizzle-orm";
-import { forgetJournaled } from "../changes";
+import { rememberChanges } from "../changes";
 import type { Database } from "../db/client";
 import { actionRuns, type RunStatus } from "../db/schema";
 import { ApiFailure, unprocessable } from "../errors";
@@ -204,6 +204,7 @@ async function runCell(
       }
     }
 
+    const forgetChanges = rememberChanges();
     try {
       // A nested transaction, so a change that is refused undoes the changes
       // before it while the failed run is still recorded.
@@ -226,8 +227,9 @@ async function runCell(
       return await record(effects, null, tables);
     } catch (cause) {
       if (!(cause instanceof ApiFailure)) throw cause;
-      // The changes made before the refused one journaled entries that are now rolled back.
-      forgetJournaled();
+      // The changes made before the refused one are rolled back, so the request
+      // has no step to undo and nothing to tell other sessions about.
+      forgetChanges();
       return record(effects, cause.message);
     }
   });

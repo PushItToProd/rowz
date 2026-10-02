@@ -761,7 +761,7 @@ describe("refused history operations", () => {
     expect((await snapshot(owner, fixture.id)).cells).toEqual([]);
   });
 
-  it("does not report an undoable step for a click whose writes were rolled back", async () => {
+  it("reports no undoable step and publishes no change for a click whose writes were rolled back", async () => {
     const fixture = await fresh();
     const client = withClientId(owner);
     await owner.json(
@@ -777,10 +777,12 @@ describe("refused history operations", () => {
     );
     await owner.json("PATCH", `/tables/${fixture.tableId}`, { rowCount: 2 });
 
-    const response = await client.request("POST", `/tables/${fixture.tableId}/cells/0/3/click`);
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ status: "failed", tables: [] });
-    expect(response.headers.get(UNDOABLE_HEADER)).toBeNull();
+    await expectNoChangeEvent(fixture.id, async () => {
+      const response = await client.request("POST", `/tables/${fixture.tableId}/cells/0/3/click`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ status: "failed", tables: [] });
+      expect(response.headers.get(UNDOABLE_HEADER)).toBeNull();
+    });
     expect(await snapshot(client, fixture.id)).toMatchObject({ undoable: false });
   });
 
