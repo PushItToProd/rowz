@@ -75,6 +75,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - (Claude) plan before implementing. A name that holds a formula is a new place formulas are kept, so renames and row and column edits must rewrite it, and undo must record it
 - [ ] **P1** support creating named ranges of one or more cells
 - [ ] **P1** (Claude) plan one mechanism for document-level names before implementing the two items above. It should cover named values, named functions, named ranges, and the formula scripts under Ambitious ideas. A script block that holds `Name = formula` lines could cover all four, and rewriting and undo would then be extended for one new place that holds formulas
+  - (Claude) drafted in [plans/names-and-scripts.md](plans/names-and-scripts.md), which awaits the author's review
 - [ ] support optional named arguments to formula functions
   - [ ] **P6** plan before implementing so we can see how hard this would be
   - [ ] example use case: `=QUERY(Table1!A:A, "select *", column_headers=False)`
@@ -99,6 +100,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P8** other text - `SLICE`, `SLUGIFY`, `DECODEURL`, `BASE64`, `BASE64DECODE`, `DOMAIN`, `RELATIVE_URL`
 - [ ] **P7** `LOOKUP`, `HLOOKUP`, `XYLOOKUP` (skip `FLOOKUP` for now)
 - [ ] **P6** `SUBTOTAL`, `ARRAY_CONSTRAIN`, `FILTER_COLUMNS`, `RANGE_CONTAINS`
+- [ ] (Claude) consider Excel's structured references for parts of a data table: `Sales[#Data]`, `Sales[#Headers]`, and `Sales[#All]`. The bare table name already means the data rows (see [plans/names-and-scripts.md](plans/names-and-scripts.md))
 - [ ] **P99** `FLOOKUP`
 
 ## Grid editing and navigation
@@ -364,3 +366,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - (Claude) a layout for printing
 - (Claude) export to .xlsx
 - (Claude) numbers and dates shown in the reader's locale
+
+- allow table cells to contain structs/arrays/nested tables
