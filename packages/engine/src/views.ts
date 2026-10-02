@@ -11,14 +11,15 @@ import {
   type StructuralEdit,
 } from "./rewrite";
 import { TableResolver, type WorkbookStructure } from "./structure";
+import { rewriteScript } from "./script";
 import { rewriteTemplate } from "./template";
 
-export type ViewKind = "chart" | "text";
+export type ViewKind = "chart" | "text" | "script";
 
 /**
- * Something on a page that shows spreadsheet data without being a table. A
- * chart's source is the formula for its data. A text view's source is its
- * template.
+ * A block on a page that is not a table. A chart's source is the formula for
+ * its data. A text view's source is its template. A script's source is its
+ * statements.
  */
 export interface ViewSource {
   id: string;
@@ -33,6 +34,7 @@ function rewriteSource(
   replace: (reference: Reference) => Replacement | undefined,
 ): string {
   if (kind === "text") return rewriteTemplate(source, replace);
+  if (kind === "script") return rewriteScript(source, replace);
   // A chart's formula may be written with or without the leading `=`.
   const written = source.startsWith("=");
   const rewritten = rewriteReferences(written ? source : `=${source}`, replace);

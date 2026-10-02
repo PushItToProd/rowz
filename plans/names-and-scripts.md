@@ -6,6 +6,8 @@ The plan describes the code at commit `797a764`. It is a proposal. The decisions
 
 ## Progress
 
+Step 2 is implemented in `packages/engine/src/script.ts`, with tests in `script.test.ts`. A script's names come from its source: `ScriptDefinition` carries the source, and `Workbook` reads the names from it. Bare formulas such as `ASSERT(...)` are parsed but not evaluated until step 5.
+
 Step 1 is implemented in `packages/engine`: `scope.ts`, `names.ts`, and the name records in `workbook.ts`, with tests in `names.test.ts`. Three parts of it are left:
 
 - `CHECKBOX` and `DROPDOWN` do not accept a name as the cell they write to. `EXECUTE`, `APPEND_ROW`, `CLEAR`, and the data actions do.

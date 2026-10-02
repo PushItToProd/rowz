@@ -16,6 +16,7 @@ import { DependencyIndex, evaluationOrder } from "./graph";
 import { refusedName } from "./names";
 import { parseFormula } from "./parser";
 import { namesOf, type NameUse } from "./scope";
+import { scriptNames } from "./script";
 import {
   findColumn,
   TableResolver,
@@ -223,7 +224,10 @@ export class Workbook {
       this.computedRows.delete(tableId);
     }
     for (const table of structure.tables) this.applyColumns(table);
-    this.defineNames(structure.names ?? []);
+    this.defineNames([
+      ...(structure.names ?? []),
+      ...(structure.scripts ?? []).flatMap((script) => scriptNames(script.id, script.source)),
+    ]);
 
     this.cache.clear();
     this.pending.clear();

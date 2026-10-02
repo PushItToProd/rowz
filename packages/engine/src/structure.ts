@@ -57,11 +57,12 @@ export interface TableDefinition {
   colCount?: number;
 }
 
-/** A block that holds names and has no cells. */
+/** A block that holds names and has no cells. Its source is parsed by `parseScript`. */
 export interface ScriptDefinition {
   id: string;
   pageId: string;
   name: string;
+  source: string;
 }
 
 /**
@@ -75,7 +76,7 @@ export interface ScriptDefinition {
  * to point at a row it does not read, and its columns already have names.
  */
 export interface NameDefinition {
-  /** The id of the table or script that holds the name. */
+  /** The id of the table that holds the name. A script's names come from its source. */
   holderId: string;
   name: string;
   /** With or without the leading `=`. */

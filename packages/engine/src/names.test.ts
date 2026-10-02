@@ -13,8 +13,8 @@ import { Workbook, type ActionPlan } from "./workbook";
 const WITH_SCRIPTS: WorkbookStructure = {
   ...STRUCTURE,
   scripts: [
-    { id: "s1", pageId: "p1", name: "Summary" },
-    { id: "s2", pageId: "p2", name: "Rates" },
+    { id: "s1", pageId: "p1", name: "Summary", source: "" },
+    { id: "s2", pageId: "p2", name: "Rates", source: "" },
   ],
 };
 

@@ -26,22 +26,36 @@ export function rewriteReferences(
 ): string {
   if (!isFormulaInput(input)) return input;
   let text = input.slice(1);
+  // Last to first, so earlier offsets stay valid while later text changes length.
+  for (const edit of referenceEdits(text, replace).toReversed()) {
+    text = text.slice(0, edit.from) + edit.text + text.slice(edit.to);
+  }
+  return `=${text}`;
+}
+
+/**
+ * The changes a rewrite makes to formula text without its leading `=`, in
+ * order, each with the span of the text it replaces. A formula that does not
+ * parse has none.
+ */
+export function referenceEdits(
+  text: string,
+  replace: (reference: Reference) => Replacement | undefined,
+): { from: number; to: number; text: string }[] {
   let references: LocatedReference[];
   try {
     ({ references } = parseFormulaWithReferences(text));
   } catch (cause) {
-    if (cause instanceof FormulaSyntaxError) return input;
+    if (cause instanceof FormulaSyntaxError) return [];
     throw cause;
   }
-
-  // Last to first, so earlier offsets stay valid while later text changes length.
-  for (const { reference, from, to } of references.toReversed()) {
+  return references.flatMap(({ reference, from, to }) => {
     const replacement = replace(reference);
-    if (replacement === undefined) continue;
-    const written = replacement === "#REF!" ? replacement : formatReference(replacement);
-    text = text.slice(0, from) + written + text.slice(to);
-  }
-  return `=${text}`;
+    if (replacement === undefined) return [];
+    return [
+      { from, to, text: replacement === "#REF!" ? replacement : formatReference(replacement) },
+    ];
+  });
 }
 
 /**
