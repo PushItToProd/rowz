@@ -1312,6 +1312,38 @@ describe("undo and redo", () => {
     expect(server.undo).toHaveBeenCalledOnce();
   });
 
+  it("keeps showing what was typed into a cell while the undo that restores it is on its way", async () => {
+    const store = await open({ A1: "2", B1: "=A1*10" });
+    notifyJournaled();
+    let answer!: (result: Awaited<ReturnType<typeof api.undo>>) => void;
+    server.undo.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const undo = store.undo();
+    await vi.waitFor(() => {
+      expect(server.undo).toHaveBeenCalledOnce();
+    });
+    const typed = store.setCell(at("A1"), "3");
+    const typedAgain = store.setCell(at("A1"), "4");
+    expect(server.setCells).not.toHaveBeenCalled();
+
+    server.setCells.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("refused"));
+    answer({
+      outcome: "done",
+      label: "Change cells in Table 1",
+      error: null,
+      changed: changedCell("1"),
+      undoable: false,
+      redoable: true,
+    });
+    await undo;
+    expect(store.inputOf(at("A1"))).toBe("4");
+    expect(store.valueOf(at("B1"))).toBe(40);
+
+    // The second save fails, and the cell goes back to what the first one stored.
+    await Promise.all([typed, typedAgain]);
+    expect(server.setCells).toHaveBeenCalledTimes(2);
+    expect(store.inputOf(at("A1"))).toBe("3");
+  });
+
   it("waits for pending page reorders and view updates before sending undo", async () => {
     const pages = [
       { id: "p1", name: "Page 1", position: 0 },

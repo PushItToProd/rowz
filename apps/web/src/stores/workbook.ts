@@ -336,6 +336,25 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }
   }
 
+  /**
+   * Shows again the cell changes typed while an undo or redo was on its way,
+   * where its result wrote over them. Their saves waited for it and store
+   * them after it, so they are what the server ends up holding.
+   */
+  function showUnsavedOver(restored: readonly CellId[]): void {
+    const written = new Set(restored.map(cellKey));
+    for (const { tableId, changes } of unsavedChanges) {
+      if (!hasTable(tableId)) continue;
+      for (const change of changes) {
+        const id = { tableId, row: change.row, col: change.col };
+        if (!written.has(cellKey(id))) continue;
+        // A save that fails puts back what the cell holds on the server.
+        change.previous = engine.value.getInput(id);
+        apply(id, change.input);
+      }
+    }
+  }
+
   async function runHistory(direction: "undo" | "redo"): Promise<void> {
     const current = spreadsheet.value;
     if (!current || !canEdit.value) return;
@@ -358,6 +377,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
       redoable.value = result.redoable;
       if (result.outcome === "done") {
         applyChanged(result.changed);
+        showUnsavedOver(result.changed.cells);
         if (
           result.changed.pages.length > 0 ||
           result.changed.tables.length > 0 ||
@@ -476,6 +496,24 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return changes;
   }
 
+  /** The cell changes shown here that the server has not answered, oldest first. */
+  const unsavedChanges = new Set<{ tableId: string; changes: readonly CellChange[] }>();
+
+  /** Keeps shown changes in `unsavedChanges` until their save settles. */
+  function untilSaved<T>(
+    tableId: string,
+    changes: readonly CellChange[],
+    save: Promise<T>,
+  ): Promise<T> {
+    const unsaved = { tableId, changes };
+    unsavedChanges.add(unsaved);
+    const forget = (): void => {
+      unsavedChanges.delete(unsaved);
+    };
+    void save.then(forget, forget);
+    return save;
+  }
+
   /** Puts cells back as they were before changes that could not be saved. */
   function putBack(tableId: string, changes: readonly CellChange[]): void {
     for (const { row, col, input, previous } of changes) {
@@ -495,10 +533,14 @@ export const useWorkbookStore = defineStore("workbook", () => {
     if (changes.length === 0) return Promise.resolve();
     const stepId = crypto.randomUUID();
     const previous = saves;
-    saves = enqueueWrite(async () => {
-      await previous;
-      await saveCellChanges(tableId, changes, stepId);
-    });
+    saves = untilSaved(
+      tableId,
+      changes,
+      enqueueWrite(async () => {
+        await previous;
+        await saveCellChanges(tableId, changes, stepId);
+      }),
+    );
     return saves;
   }
 
@@ -687,7 +729,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
       failedSaves += 1;
       fail(cause, "The change could not be saved");
     });
-    saves = operation.then(() => undefined);
+    saves = untilSaved(table.id, changes, operation);
     await saves;
   }
 
