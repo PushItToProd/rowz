@@ -1,5 +1,6 @@
+import { keysAfter, type IdentifiedCell, type IdentityFormatRange } from "@spreadsheet-app/shared";
 import { parseAddress, type CellId } from "@spreadsheet-app/engine";
-import { vi, type Mock } from "vitest";
+import { vi, expect, type Mock } from "vitest";
 import type { api, ClickResult, Snapshot, TableRecord } from "./api/client";
 
 let onJournaled: () => void = () => undefined;
@@ -19,6 +20,11 @@ export const TABLE: TableRecord = {
   position: 0,
   rowCount: 4,
   colCount: 3,
+  colIds: ["c1", "c2", "c3"],
+  rows: Array.from({ length: 4 }, (_, row) => ({
+    id: `r${String(row)}`,
+    orderKey: `a${String(row)}`,
+  })),
   columns: null,
   formats: [],
 };
@@ -42,6 +48,52 @@ export function at(address: string, tableId = "t1"): CellId {
   const parsed = parseAddress(address);
   if (!parsed) throw new Error(`Bad test address ${address}`);
   return { tableId, ...parsed };
+}
+
+export function identifiedAt(address: string, tableId = "t1"): IdentifiedCell {
+  const { row, col } = at(address, tableId);
+  return { tableId, rowId: `r${String(row)}`, colId: `c${String(col + 1)}` };
+}
+
+/** A resized fixture with stable IDs for the rows and columns that survive. */
+export function sizedTable(changes: Partial<TableRecord>): TableRecord {
+  const table = { ...TABLE, ...changes };
+  return {
+    ...table,
+    colIds: Array.from({ length: table.colCount }, (_, col) => `c${String(col + 1)}`),
+    rows: keysAfter(null, table.rowCount).map((orderKey, row) => ({
+      id: `r${String(row)}`,
+      orderKey,
+    })),
+  };
+}
+
+export function positionalFormatRange(range: IdentityFormatRange) {
+  return {
+    startRow: Number(range.startRowId.slice(1)),
+    endRow: range.endRowId === null ? null : Number(range.endRowId.slice(1)),
+    startCol: Number(range.startColId.slice(1)) - 1,
+    endCol: range.endColId === null ? null : Number(range.endColId.slice(1)) - 1,
+  };
+}
+
+export function expectedEdit(edit: { axis: string; kind: string; index: number; count?: number }) {
+  const size = edit.axis === "row" ? TABLE.rowCount : TABLE.colCount;
+  const id = (index: number) =>
+    edit.axis === "row" ? `r${String(index)}` : `c${String(index + 1)}`;
+  const count = edit.count ?? 1;
+  return edit.kind === "insert"
+    ? {
+        axis: edit.axis,
+        kind: edit.kind,
+        beforeId: edit.index === size ? null : id(edit.index),
+        ids: Array.from({ length: count }, () => expect.any(String) as unknown),
+      }
+    : {
+        axis: edit.axis,
+        kind: edit.kind,
+        ids: Array.from({ length: count }, (_, i) => id(edit.index + i)),
+      };
 }
 
 export function clickResult(overrides: Partial<ClickResult> = {}): ClickResult {

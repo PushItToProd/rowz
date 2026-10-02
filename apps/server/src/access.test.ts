@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Snapshot, SpreadsheetSummary } from "./app";
+import type { Change, Snapshot, SpreadsheetSummary } from "./app";
 import { spreadsheets, workspaceMembers, type Role } from "./db/schema";
 import {
   cellsBody,
@@ -25,7 +25,6 @@ beforeAll(async () => {
     "PUT",
     `/tables/${created.tables[0]!.id}/cells`,
     cellsBody({ A1: '=BUTTON("Go", EXECUTE(1, B1))', A2: "=CHECKBOX(B2)" }),
-    204,
   );
   await owner.json("POST", `/pages/${created.pages[0]!.id}/views`, { kind: "chart" }, 201);
   snapshot = await owner.json<Snapshot>("GET", `/spreadsheets/${created.id}`);
@@ -224,6 +223,47 @@ describe("a viewer", () => {
   });
 });
 
+describe("the stream of changes", () => {
+  /** Opens the stream and resolves to the data of its first event after `ready`. */
+  async function firstChange(client: TestClient, id: string, change: () => Promise<unknown>) {
+    const abort = new AbortController();
+    const response = await client.request(
+      "GET",
+      `/spreadsheets/${id}/events`,
+      undefined,
+      {},
+      abort.signal,
+    );
+    expect(response.status).toBe(200);
+    const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
+    let text = "";
+    const read = async (events: number): Promise<void> => {
+      while (text.split("\n\n").length <= events) text += (await reader.read()).value ?? "";
+    };
+    await read(1);
+    await change();
+    await read(2);
+    abort.abort();
+    const data = /event: change\ndata: (.*)/.exec(text)?.[1] ?? "";
+    return JSON.parse(data) as Change;
+  }
+
+  it("sends content to a viewer, and does not open for someone who cannot read", async () => {
+    const [viewer, stranger] = [await server.signUp("Viewer"), await server.signUp("Stranger")];
+    const shared = await createSpreadsheet(owner, "Shared");
+    const table = shared.tables[0]!;
+    await owner.json("PUT", `/spreadsheets/${shared.id}/members`, {
+      email: viewer.email,
+      role: "viewer",
+    });
+    const heard = await firstChange(viewer, shared.id, () =>
+      owner.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "for viewers" })),
+    );
+    expect(heard.changed?.cells).toMatchObject([{ tableId: table.id, input: "for viewers" }]);
+    await stranger.json("GET", `/spreadsheets/${shared.id}/events`, undefined, 404);
+  });
+});
+
 describe("an editor", () => {
   // Runs last: it carries out the writes, including the deletes.
   it("can read and make every change to the contents, and cannot share or delete the spreadsheet", async () => {
@@ -236,8 +276,8 @@ describe("an editor", () => {
     // The restore names a version that does not exist. The page order leaves out the page just
     // added, and each move names the page the block is on. Sharing and deleting are the owner's.
     expect(await statuses(editor, writeRoutes())).toEqual([
-      404, 204, 201, 200, 200, 200, 204, 409, 422, 422, 201, 200, 204, 200, 200, 200, 200, 200, 200,
-      200, 201, 200, 204, 204, 204, 403, 403, 403,
+      404, 204, 201, 200, 200, 200, 200, 409, 422, 422, 201, 200, 200, 200, 200, 200, 200, 200, 200,
+      200, 201, 200, 200, 200, 200, 403, 403, 403,
     ]);
     await owner.json("DELETE", `/spreadsheets/${snapshot.id}`, undefined, 204);
     await editor.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);

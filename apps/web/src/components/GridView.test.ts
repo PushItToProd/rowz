@@ -1,3 +1,5 @@
+import { sizedTable } from "../testing";
+import { identifiedAt } from "../testing";
 import { DOMWrapper, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -169,7 +171,7 @@ describe("editing", () => {
     await press("Enter");
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      [{ row: 0, col: 0, input: "75" }],
+      [{ rowId: "r0", colId: "c1", input: "75" }],
       expect.any(String),
     );
     expect(cellAt("A1").text()).toBe("75");
@@ -276,7 +278,7 @@ describe("editing", () => {
     expect(cellAt("A1").text()).toBe("");
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      [{ row: 0, col: 0, input: "" }],
+      [{ rowId: "r0", colId: "c1", input: "" }],
       expect.any(String),
     );
   });
@@ -361,9 +363,9 @@ describe("selecting a range", () => {
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
       [
-        { row: 0, col: 0, input: "" },
-        { row: 0, col: 1, input: "" },
-        { row: 1, col: 0, input: "" },
+        { rowId: "r0", colId: "c1", input: "" },
+        { rowId: "r0", colId: "c2", input: "" },
+        { rowId: "r1", colId: "c1", input: "" },
       ],
       expect.any(String),
     );
@@ -406,8 +408,8 @@ describe("filling", () => {
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
       [
-        { row: 1, col: 1, input: "=A2*10" },
-        { row: 2, col: 1, input: "=A3*10" },
+        { rowId: "r1", colId: "c2", input: "=A2*10" },
+        { rowId: "r2", colId: "c2", input: "=A3*10" },
       ],
       expect.any(String),
     );
@@ -527,7 +529,7 @@ describe("copy and paste", () => {
   it("grows the table when what is pasted does not fit", async () => {
     await mountGrid();
     server.updateTable.mockResolvedValue({
-      table: { ...TABLE, rowCount: 6 },
+      table: sizedTable({ rowCount: 6 }),
       cells: [],
       views: [],
       tables: [],
@@ -623,7 +625,7 @@ describe("formula suggestions", () => {
     await press("Enter");
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      [{ row: 0, col: 0, input: "=ab" }],
+      [{ rowId: "r0", colId: "c1", input: "=ab" }],
       expect.any(String),
     );
     expect(selectedAddress()).toBe("A2");
@@ -711,7 +713,7 @@ describe("buttons", () => {
     await vi.waitFor(() => {
       expect(cellAt("A1").text()).toBe("2");
     });
-    expect(server.click).toHaveBeenCalledExactlyOnceWith(at("B1"));
+    expect(server.click).toHaveBeenCalledExactlyOnceWith(identifiedAt("B1"));
   });
 
   it("keeps keyboard focus on the grid after a button is clicked", async () => {
@@ -769,7 +771,7 @@ describe("controls", () => {
     await vi.waitFor(() => {
       expect(cellAt("A1").text()).toBe("TRUE");
     });
-    expect(server.input).toHaveBeenCalledExactlyOnceWith(at("B1"), true);
+    expect(server.input).toHaveBeenCalledExactlyOnceWith(identifiedAt("B1"), true);
     expect(cellAt("B1").get<HTMLInputElement>("input").element.checked).toBe(true);
     expect(useWorkbookStore().notice).toBeNull();
   });
@@ -786,14 +788,14 @@ describe("controls", () => {
     await vi.waitFor(() => {
       expect(cellAt("B1").text()).toBe("low");
     });
-    expect(server.input).toHaveBeenCalledExactlyOnceWith(at("C1"), "low");
+    expect(server.input).toHaveBeenCalledExactlyOnceWith(identifiedAt("C1"), "low");
   });
 
   it("sends an empty value when the blank choice is picked", async () => {
     await mountGrid({ B1: "x", C1: '=DROPDOWN("x, y", B1)' });
     await cellAt("C1").get("select").setValue("-1");
     await vi.waitFor(() => {
-      expect(server.input).toHaveBeenCalledExactlyOnceWith(at("C1"), null);
+      expect(server.input).toHaveBeenCalledExactlyOnceWith(identifiedAt("C1"), null);
     });
   });
 
@@ -1042,7 +1044,7 @@ describe("a data table", () => {
     expect(useWorkbookStore().selection).toBeNull();
     await input.setValue("Thing");
     await input.trigger("keydown", { key: "Enter" });
-    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", 0, { name: "Thing" });
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", { name: "Thing" });
   });
 
   it("still selects the column when its header is pressed", async () => {
@@ -1065,13 +1067,13 @@ describe("a data table", () => {
     await boxes[2]!.setValue(true);
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      [{ row: 2, col: 1, input: "TRUE" }],
+      [{ rowId: "r2", colId: "c2", input: "TRUE" }],
       expect.any(String),
     );
     await boxes[0]!.setValue(false);
     expect(server.setCells).toHaveBeenLastCalledWith(
       "t1",
-      [{ row: 0, col: 1, input: "FALSE" }],
+      [{ rowId: "r0", colId: "c2", input: "FALSE" }],
       expect.any(String),
     );
   });
@@ -1177,5 +1179,31 @@ describe("undo from the keyboard", () => {
     await vi.waitFor(() => {
       expect(cellAt("A1").text()).toBe("new");
     });
+  });
+});
+
+it("keeps a grid draft attached to its row after a remote insertion", async () => {
+  await mountGrid({ A2: "old" });
+  await select("A2");
+  await press("d");
+  await wrapper.get<HTMLInputElement>(".grid__editor").setValue("draft");
+  const store = useWorkbookStore();
+  const snapshot = snapshotWith({ A3: "old" });
+  snapshot.tables = [
+    { ...TABLE, rowCount: 5, rows: [{ id: "new", orderKey: "Zz" }, ...TABLE.rows!] },
+  ];
+  server.getSnapshot.mockResolvedValue(snapshot);
+  await store.refresh();
+  await wrapper.vm.$nextTick();
+  expect(selectedAddress()).toBe("A3");
+  expect(wrapper.get<HTMLInputElement>(".grid__editor").element.value).toBe("draft");
+  expect(server.setCells).not.toHaveBeenCalled();
+  await press("Enter");
+  await vi.waitFor(() => {
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [{ rowId: "r1", colId: "c1", input: "draft" }],
+      expect.any(String),
+    );
   });
 });

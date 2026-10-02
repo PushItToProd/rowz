@@ -3,8 +3,20 @@ import { parseAddress } from "@spreadsheet-app/engine";
 import { CLIENT_ID_HEADER } from "@spreadsheet-app/shared";
 import type { RepositoryOptions } from "./repo/spreadsheets";
 import pg from "pg";
+import { asc, eq } from "drizzle-orm";
+import { tables, tableRows } from "./db/schema";
 import { expect } from "vitest";
-import { createApp, type Snapshot, type SpreadsheetSummary } from "./app";
+import type { CellInput } from "@spreadsheet-app/shared";
+import {
+  createApp,
+  type Change,
+  type Created,
+  type SnapshotWithHistory,
+  type SpreadsheetSummary,
+  type TableRecord,
+  type ViewRecord,
+} from "./app";
+import { Contents, type SizedTable } from "./repo/contents";
 import { createAuth } from "./auth";
 import { IN_MEMORY, openDatabase, type Database, type DatabaseHandle } from "./db/client";
 import type { EmailMessage, Mailer } from "./mail/mailer";
@@ -141,10 +153,79 @@ export function routeOf(
   );
 }
 
+/**
+ * A snapshot as a test reads it: tables with their sizes and cells by
+ * position, which is how fixtures are written. `rows` and each table's
+ * `colIds` hold the ids the wire names them by.
+ */
+export interface TestSnapshot extends Omit<SnapshotWithHistory, "tables" | "cells"> {
+  tables: SizedTable[];
+  cells: (CellInput & { tableId: string })[];
+}
+
+/** Reads a spreadsheet through the API, and gives its tables and cells by position. */
+export async function readSnapshot(user: TestClient, spreadsheetId: string): Promise<TestSnapshot> {
+  const snapshot = await user.json<SnapshotWithHistory>("GET", `/spreadsheets/${spreadsheetId}`);
+  const { tables, cells } = new Contents(snapshot).data;
+  return { ...snapshot, tables, cells: [...cells] };
+}
+
+/** Adds a table to a page and returns it. */
+export async function addTable(
+  user: TestClient,
+  pageId: string,
+  body: { name?: string } = {},
+): Promise<TableRecord> {
+  const created = await user.json<Created<{ table: TableRecord }>>(
+    "POST",
+    `/pages/${pageId}/tables`,
+    body,
+    201,
+  );
+  return created.table;
+}
+
+/** Adds a chart or text view to a page and returns it. */
+export async function addView(
+  user: TestClient,
+  pageId: string,
+  kind: "chart" | "text" = "text",
+): Promise<ViewRecord> {
+  const created = await user.json<Created<{ view: ViewRecord }>>(
+    "POST",
+    `/pages/${pageId}/views`,
+    { kind },
+    201,
+  );
+  return created.view;
+}
+
+/**
+ * The cells a change wrote, by the positions they have in the spreadsheet
+ * now. A cell whose row or column the change deleted is not among them.
+ */
+export async function changedCells(
+  user: TestClient,
+  spreadsheetId: string,
+  change: Change,
+): Promise<(CellInput & { tableId: string })[]> {
+  const snapshot = await user.json<SnapshotWithHistory>("GET", `/spreadsheets/${spreadsheetId}`);
+  const contents = new Contents(snapshot);
+  return (change.changed?.cells ?? []).map(({ input, ...cell }) => ({
+    ...contents.position(cell),
+    input,
+  }));
+}
+
+/** The ids of a table's rows, first to last. */
+export function rowIds(snapshot: TestSnapshot, tableId: string): string[] {
+  return snapshot.rows.filter((row) => row.tableId === tableId).map((row) => row.id);
+}
+
 /** Creates a spreadsheet and returns its snapshot: one page holding one empty table. */
-export async function createSpreadsheet(user: TestClient, name = "Budget"): Promise<Snapshot> {
+export async function createSpreadsheet(user: TestClient, name = "Budget"): Promise<TestSnapshot> {
   const created = await user.json<SpreadsheetSummary>("POST", "/spreadsheets", { name }, 201);
-  return user.json<Snapshot>("GET", `/spreadsheets/${created.id}`);
+  return readSnapshot(user, created.id);
 }
 
 /** Turns `{ A1: "1" }` into the request body for storing cells. */
@@ -158,13 +239,13 @@ export function cellsBody(inputs: Record<string, string>): { cells: object[] } {
   };
 }
 
-/** The stored inputs of one table, keyed by address-like `row:col`, read back through the API. */
+/** The stored inputs of one table, keyed by position as `row:col`, read back through the API. */
 export async function storedInputs(
   user: TestClient,
   spreadsheetId: string,
   tableId: string,
 ): Promise<Record<string, string>> {
-  const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${spreadsheetId}`);
+  const snapshot = await readSnapshot(user, spreadsheetId);
   return Object.fromEntries(
     snapshot.cells
       .filter((cell) => cell.tableId === tableId)
@@ -209,8 +290,120 @@ export async function startTestServer(
   });
 
   const client = (cookie: string | undefined): TestClient => {
-    const request: TestClient["request"] = async (method, path, body, headers = {}, signal) =>
-      app.request(`/api${path}`, {
+    const request: TestClient["request"] = async (method, path, body, headers = {}, signal) => {
+      // Positional fixtures stay readable; translate their addresses to the wire's stable IDs.
+      // Tests that send IDs pass through unchanged and can hold them across intervening edits.
+      const named = /^\/tables\/([0-9a-f-]{36})\/(edits|formats|columns\/(\d+))$/.exec(path);
+      if (named?.[1]) {
+        const [table] = await database.db.select().from(tables).where(eq(tables.id, named[1]));
+        const rows = await database.db
+          .select()
+          .from(tableRows)
+          .where(eq(tableRows.tableId, named[1]))
+          .orderBy(asc(tableRows.orderKey));
+        const missing = "00000000-0000-4000-8000-000000000000";
+        if (named[3])
+          path = `/tables/${named[1]}/columns/${table?.colIds[Number(named[3])] ?? missing}`;
+        if (body && typeof body === "object") {
+          const object = body as Record<string, unknown>;
+          if (
+            named[2] === "edits" &&
+            (object.axis === "row" || object.axis === "col") &&
+            (object.kind === "insert" || object.kind === "delete") &&
+            typeof object.index === "number" &&
+            Number.isInteger(object.index) &&
+            object.index >= 0 &&
+            (object.count === undefined ||
+              (typeof object.count === "number" &&
+                Number.isInteger(object.count) &&
+                object.count > 0 &&
+                object.count <= 1000))
+          ) {
+            const ids = object.axis === "row" ? rows.map((row) => row.id) : (table?.colIds ?? []);
+            const count = typeof object.count === "number" ? object.count : 1;
+            body =
+              object.kind === "insert"
+                ? {
+                    axis: object.axis,
+                    kind: object.kind,
+                    beforeId: object.index === ids.length ? null : (ids[object.index] ?? missing),
+                    ids: Array.from({ length: count }, () => randomUUID()),
+                  }
+                : {
+                    axis: object.axis,
+                    kind: object.kind,
+                    ids: Array.from(
+                      { length: count },
+                      (_, i) => ids[(object.index as number) + i] ?? missing,
+                    ),
+                  };
+          }
+          if (named[2] === "formats" && object.range && typeof object.range === "object") {
+            const range = object.range as Record<string, unknown>;
+            if (typeof range.startRow === "number" && typeof range.startCol === "number")
+              body = {
+                ...object,
+                range: {
+                  startRowId: rows[range.startRow]?.id ?? missing,
+                  endRowId:
+                    range.endRow === null
+                      ? null
+                      : typeof range.endRow === "number"
+                        ? (rows[range.endRow]?.id ?? missing)
+                        : undefined,
+                  startColId: table?.colIds[range.startCol] ?? missing,
+                  endColId:
+                    range.endCol === null
+                      ? null
+                      : typeof range.endCol === "number"
+                        ? (table?.colIds[range.endCol] ?? missing)
+                        : undefined,
+                },
+              };
+          }
+        }
+      }
+      const match = /^\/tables\/([0-9a-f-]{36})\/cells(?:\/(\d+)\/(\d+)\/(click|input))?$/.exec(
+        path,
+      );
+      if (match?.[1]) {
+        const [table] = await database.db.select().from(tables).where(eq(tables.id, match[1]));
+        const rows = await database.db
+          .select()
+          .from(tableRows)
+          .where(eq(tableRows.tableId, match[1]))
+          .orderBy(asc(tableRows.orderKey));
+        const missing = "00000000-0000-4000-8000-000000000000";
+        if (match[2] && match[3])
+          path = `/tables/${match[1]}/cells/${rows[Number(match[2])]?.id ?? missing}/${table?.colIds[Number(match[3])] ?? missing}/${match[4] ?? "click"}`;
+        if (body && typeof body === "object" && "cells" in body && Array.isArray(body.cells)) {
+          body = {
+            ...body,
+            cells: body.cells.map((cell: unknown) => {
+              if (
+                cell &&
+                typeof cell === "object" &&
+                "row" in cell &&
+                "col" in cell &&
+                typeof cell.row === "number" &&
+                typeof cell.col === "number" &&
+                Number.isInteger(cell.row) &&
+                cell.row >= 0 &&
+                Number.isInteger(cell.col) &&
+                cell.col >= 0
+              ) {
+                return {
+                  ...cell,
+                  rowId: rows[cell.row]?.id ?? missing,
+                  colId: table?.colIds[cell.col] ?? missing,
+                };
+              }
+              return cell;
+            }),
+          };
+        }
+      }
+      return app.request(`/api${path}`, {
         method,
         ...(signal ? { signal } : {}),
         headers: {
@@ -221,6 +414,7 @@ export async function startTestServer(
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
+    };
     return {
       request,
       async json<T>(method: string, path: string, body?: unknown, status = 200) {

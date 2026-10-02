@@ -91,6 +91,8 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
    */
   SORT: eager(1, Infinity, (source, ...keys) => {
     const rows = grid(source);
+    // A range over a table with no rows has no column to sort by.
+    if (rows.length === 0) return array([]);
     const criteria: { col: number; direction: number }[] = [];
     for (let index = 0; index < Math.max(keys.length, 1); index += 2) {
       const column = keys[index] === undefined ? 1 : integer(keys[index] ?? null);

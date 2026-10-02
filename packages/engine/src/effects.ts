@@ -2,7 +2,7 @@
  * A side effect an action asks for. The engine only describes effects. The
  * caller applies them, so the engine itself never performs I/O.
  */
-export type Effect = SetCellEffect | EnsureRowsEffect | SendEmailEffect;
+export type Effect = SetCellEffect | EnsureRowsEffect | DeleteRowsEffect | SendEmailEffect;
 
 export interface SetCellEffect {
   type: "setCell";
@@ -18,6 +18,14 @@ export interface EnsureRowsEffect {
   type: "ensureRows";
   tableId: string;
   rowCount: number;
+}
+
+/** Deletes `count` rows of a table, from `startRow` on. Formulas that read the table follow, as for any deleted row. */
+export interface DeleteRowsEffect {
+  type: "deleteRows";
+  tableId: string;
+  startRow: number;
+  count: number;
 }
 
 export interface SendEmailEffect {

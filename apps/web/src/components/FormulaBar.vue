@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { formatAddress, type CellId } from "@spreadsheet-app/engine";
-import { LIMITS } from "@spreadsheet-app/shared";
+import { formatAddress } from "@spreadsheet-app/engine";
+import { LIMITS, type IdentifiedCell } from "@spreadsheet-app/shared";
 import { computed, ref, shallowRef, watch } from "vue";
 import { useFormulaAssist } from "../formula/useFormulaAssist";
 import { useWorkbookStore } from "../stores/workbook";
@@ -13,14 +13,33 @@ const store = useWorkbookStore();
  * click on another cell selects that cell before the field loses focus, and
  * what was typed belongs to this one.
  */
-const editing = shallowRef<CellId | null>(null);
+const editing = shallowRef<IdentifiedCell | null>(null);
 /** The cell the field shows: the one being edited, or else the selected one. */
-const shown = computed(() => editing.value ?? store.selection);
+const shown = computed(() =>
+  editing.value ? (store.positionOf(editing.value) ?? null) : store.selection,
+);
 
 const stored = computed(() => (shown.value ? store.inputOf(shown.value) : ""));
 const draft = ref("");
 // Follow the selection and outside changes, such as a button writing to the selected cell.
-watch(stored, (input) => (draft.value = input), { immediate: true });
+watch(
+  stored,
+  (input) => {
+    if (!editing.value) draft.value = input;
+  },
+  { immediate: true },
+);
+
+watch(shown, (position) => {
+  if (editing.value && !position) {
+    editing.value = null;
+    draft.value = "";
+    store.notice = {
+      kind: "error",
+      text: "The row or column being edited was deleted. Your text was not saved.",
+    };
+  }
+});
 
 const label = computed(() => {
   const { selection } = store;
@@ -40,18 +59,20 @@ const placeholder = computed(() => {
 function commit(): void {
   const target = editing.value;
   if (!target || !store.tables.some((table) => table.id === target.tableId)) return;
-  if (draft.value !== store.inputOf(target)) void store.setCell(target, draft.value);
+  const position = store.positionOf(target);
+  if (!position || draft.value !== store.inputOf(position))
+    void store.setIdentifiedCell(target, draft.value);
 }
 
 /** Saves, and moves on to the cell below, as Enter in a cell does. */
 function finish(): void {
   commit();
-  const target = editing.value;
+  const target = editing.value && store.positionOf(editing.value);
   const table = store.tables.find((candidate) => candidate.id === target?.tableId);
   if (target && table) {
     store.selection = { ...target, row: Math.min(target.row + 1, table.rowCount - 1) };
     // Until the grid takes the keyboard, the field edits the cell now selected.
-    editing.value = store.selection;
+    editing.value = store.identityOf(store.selection) ?? null;
     draft.value = stored.value;
   }
   store.focusGrid();
@@ -85,7 +106,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 function onFocus(): void {
   focused.value = true;
-  editing.value = store.selection;
+  editing.value = store.selection ? (store.identityOf(store.selection) ?? null) : null;
 }
 
 function onBlur(): void {

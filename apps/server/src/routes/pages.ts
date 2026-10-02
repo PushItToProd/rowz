@@ -18,26 +18,24 @@ export function pageRoutes() {
         zValidator("json", nameBody, onInvalid),
         async (c) => {
           const { pageId } = c.req.valid("param");
-          // The cells and views whose formulas named the page, with the new name written in.
           return c.json(await c.var.repository.renamePage(pageId, c.req.valid("json").name));
         },
       )
-      .delete("/:pageId", zValidator("param", pageParam, onInvalid), async (c) => {
-        await c.var.repository.deletePage(c.req.valid("param").pageId);
-        return c.body(null, 204);
-      })
+      .delete("/:pageId", zValidator("param", pageParam, onInvalid), async (c) =>
+        c.json(await c.var.repository.deletePage(c.req.valid("param").pageId)),
+      )
       // Puts the blocks of a page in a new order.
       .put(
         "/:pageId/order",
         zValidator("param", pageParam, onInvalid),
         zValidator("json", reorderBody, onInvalid),
-        async (c) => {
-          await c.var.repository.reorderPage(
-            c.req.valid("param").pageId,
-            c.req.valid("json").blocks,
-          );
-          return c.body(null, 204);
-        },
+        async (c) =>
+          c.json(
+            await c.var.repository.reorderPage(
+              c.req.valid("param").pageId,
+              c.req.valid("json").blocks,
+            ),
+          ),
       )
       .post(
         "/:pageId/views",

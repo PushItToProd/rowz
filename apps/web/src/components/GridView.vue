@@ -7,7 +7,7 @@ import {
   type CellId,
   type ColumnDefinition,
 } from "@spreadsheet-app/engine";
-import { LIMITS } from "@spreadsheet-app/shared";
+import { LIMITS, type IdentifiedCell } from "@spreadsheet-app/shared";
 import {
   computed,
   nextTick,
@@ -40,6 +40,7 @@ const store = useWorkbookStore();
 const grid = ref<HTMLElement>();
 /** The text being typed into the selected cell, or `null` when not editing. */
 const draft = ref<string | null>(null);
+const editing = shallowRef<IdentifiedCell | null>(null);
 
 /** The input of the cell being edited, while there is one. */
 const editor = shallowRef<HTMLInputElement>();
@@ -64,7 +65,21 @@ function isSelected(row: number, col: number): boolean {
 function commit(): void {
   const input = draft.value;
   draft.value = null;
-  if (input !== null && selected.value) void store.setCell(selected.value, input);
+  if (input !== null && editing.value) void store.setIdentifiedCell(editing.value, input);
+  editing.value = null;
+}
+
+/** A structural refresh may remove this input and mount the same draft at its new address. */
+function onEditorBlur(event: FocusEvent): void {
+  const field = event.target;
+  if (!(field instanceof HTMLInputElement) || !field.isConnected) return;
+  const position = editing.value && store.positionOf(editing.value);
+  if (
+    position &&
+    field.closest("[data-cell]")?.getAttribute("data-cell") !== formatAddress(position)
+  )
+    return;
+  commit();
 }
 
 /** The selected cells, when the selection is in this table. */
@@ -319,6 +334,7 @@ onBeforeUnmount(() => {
 
 function edit(initial?: string): void {
   if (!store.canEdit || !selected.value) return;
+  editing.value = store.identityOf(selected.value) ?? null;
   draft.value = initial ?? store.inputOf(selected.value);
 }
 
@@ -338,7 +354,17 @@ watch(
 
 // Keep the selected cell in view when the keyboard moves it past the visible part of the table.
 watch(selected, async (current) => {
-  if (!current) return;
+  if (!current) {
+    if (editing.value) {
+      editing.value = null;
+      draft.value = null;
+      store.notice = {
+        kind: "error",
+        text: "The row or column being edited was deleted. Your text was not saved.",
+      };
+    }
+    return;
+  }
   await nextTick();
   grid.value
     ?.querySelector(`[data-cell="${formatAddress(current)}"]`)
@@ -508,7 +534,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               @input="assist.track"
               @keyup="assist.track"
               @click="assist.track"
-              @blur="commit"
+              @blur="onEditorBlur"
             />
             <CellView
               v-else

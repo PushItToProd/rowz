@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export { keyBetween, keysAfter, rebalanceKeys, MAX_ORDER_KEY_LENGTH } from "./order-keys.ts";
 export {
+  layoutsOf,
   TableLayout,
   type RowIdentity,
   type CellIdentity,
@@ -62,10 +63,12 @@ export const nameBody = z.object({ name });
 /** Bodies for creating a page or table. Without a name the server picks the next free one. */
 export const optionalNameBody = z.object({ name: name.optional() });
 
+/** A size is counted from the start of the table: rows and columns are added or removed at its end. */
 export const updateTableBody = z
   .object({
     name: name.optional(),
-    rowCount: z.int().min(1).max(LIMITS.tableRows).optional(),
+    /** A data table may have no rows. A plain table needs one, which the server checks. */
+    rowCount: z.int().min(0).max(LIMITS.tableRows).optional(),
     colCount: z.int().min(1).max(LIMITS.tableCols).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, {
@@ -110,23 +113,17 @@ export const formatPatch = z.strictObject({
 });
 
 /** A range of cells. A `null` end runs to the edge of the table, however far it grows. */
-const formatRange = z
-  .object({
-    startRow: cellIndex,
-    endRow: cellIndex.nullable(),
-    startCol: cellIndex,
-    endCol: cellIndex.nullable(),
-  })
-  .refine(
-    (range) =>
-      (range.endRow === null || range.endRow >= range.startRow) &&
-      (range.endCol === null || range.endCol >= range.startCol),
-    { message: "A range ends at or after where it starts" },
-  );
+export const identityFormatRange = z.object({
+  startRowId: z.uuid(),
+  endRowId: z.uuid().nullable(),
+  startColId: z.uuid(),
+  endColId: z.uuid().nullable(),
+});
+export type IdentityFormatRange = z.infer<typeof identityFormatRange>;
 
 /** Formatting a range of cells. With `reset`, the cells first lose every format they had. */
 export const formatCellsBody = z.object({
-  range: formatRange,
+  range: identityFormatRange,
   format: formatPatch,
   reset: z.boolean().optional(),
 });
@@ -146,29 +143,57 @@ export const MAX_FORMAT_RULES = 500;
 /** Turning a plain table into a data table. With `headerRow`, its first row becomes the column names. */
 export const makeColumnsBody = z.object({ headerRow: z.boolean() });
 
+/**
+ * The revision of the spreadsheet a tab had applied when the person began to
+ * write a formula. The server refuses the formula when rows or columns have
+ * been inserted or deleted, or something renamed or moved, since then: its
+ * references were written against a spreadsheet that has changed.
+ */
+const writtenAt = z.int().min(0).optional();
+
 export const updateColumnBody = z
   .object({
     name: columnName.optional(),
     type: z.enum(COLUMN_TYPES).optional(),
     formula: z.string().max(LIMITS.inputLength).optional(),
+    revision: writtenAt,
   })
-  .refine((body) => Object.keys(body).length > 0, {
+  .refine((body) => [body.name, body.type, body.formula].some((given) => given !== undefined), {
     message: "Give at least one of name, type, formula",
   });
 
 /**
- * Inserting or deleting rows or columns that sit next to each other: `count`
- * of them, or one. An insert puts the first new one at `index`, and a delete
- * starts there.
+ * An insert or delete of rows or columns as the editor asks for it, by
+ * position. The store turns it into the ids it names before it is queued.
  */
-export const structuralEditBody = z.object({
-  axis: z.enum(["row", "col"]),
-  kind: z.enum(["insert", "delete"]),
-  index: cellIndex,
-  count: z.int().min(1).max(LIMITS.tableRows).optional(),
-});
-export type StructuralEditBody = z.infer<typeof structuralEditBody>;
+export interface StructuralEditBody {
+  axis: "row" | "col";
+  kind: "insert" | "delete";
+  index: number;
+  count?: number;
+}
+const editIds = z
+  .array(z.uuid())
+  .min(1)
+  .max(LIMITS.tableRows)
+  .refine((ids) => new Set(ids).size === ids.length, { message: "IDs must be unique" });
+/**
+ * Inserting or deleting rows or columns. An insert gives the ids of the new
+ * ones and the id of the one they go before, or `null` for the end. A delete
+ * gives the ids to delete, which need not sit next to each other.
+ */
+export const structuralEditBody = z.discriminatedUnion("kind", [
+  z.object({
+    axis: z.enum(["row", "col"]),
+    kind: z.literal("insert"),
+    beforeId: z.uuid().nullable(),
+    ids: editIds,
+  }),
+  z.object({ axis: z.enum(["row", "col"]), kind: z.literal("delete"), ids: editIds }),
+]);
+export type IdentifiedStructuralEditBody = z.infer<typeof structuralEditBody>;
 
+/** A cell of a spreadsheet file, which names cells by position. */
 export const cellInput = z.object({
   row: cellIndex,
   col: cellIndex,
@@ -176,9 +201,37 @@ export const cellInput = z.object({
   input: z.string().max(LIMITS.inputLength),
 });
 
-export const setCellsBody = z.object({
-  cells: z.array(cellInput).min(1).max(LIMITS.cellsPerRequest),
+export const identityCellInput = z.object({
+  rowId: z.uuid(),
+  colId: z.uuid(),
+  /** What the user typed. An empty string clears the cell. */
+  input: z.string().max(LIMITS.inputLength),
 });
+export type IdentityCellInput = z.infer<typeof identityCellInput>;
+export interface IdentifiedCell {
+  tableId: string;
+  rowId: string;
+  colId: string;
+}
+
+export const setCellsBody = z
+  .object({
+    cells: z.array(identityCellInput).max(LIMITS.cellsPerRequest),
+    /**
+     * Ids the client made for rows to add at the end of the table, in order.
+     * The ones that exist already are left as they are, so a repeated request
+     * adds each row once.
+     */
+    appendRows: z
+      .array(z.uuid())
+      .max(LIMITS.tableRows)
+      .refine((ids) => new Set(ids).size === ids.length, { message: "IDs must be unique" })
+      .optional(),
+    revision: writtenAt,
+  })
+  .refine((body) => body.cells.length + (body.appendRows?.length ?? 0) > 0, {
+    message: "Give at least one cell or row",
+  });
 
 /** A value chosen through a checkbox or dropdown. */
 export const controlInputBody = z.object({
@@ -195,8 +248,9 @@ export const updateViewBody = z
     name: name.optional(),
     source: z.string().max(LIMITS.viewSourceLength).optional(),
     chartType: z.enum(["bar", "line", "pie", "scatter"]).optional(),
+    revision: writtenAt,
   })
-  .refine((body) => Object.keys(body).length > 0, {
+  .refine((body) => [body.name, body.source, body.chartType].some((given) => given !== undefined), {
     message: "Give at least one of name, source, chartType",
   });
 
@@ -225,7 +279,8 @@ export const FILE_FORMAT = "spreadsheet-app";
 const fileTable = z.object({
   type: z.literal("table"),
   name,
-  rowCount: z.int().min(1).max(LIMITS.tableRows),
+  /** A data table may have no rows. A plain table has at least one. */
+  rowCount: z.int().min(0).max(LIMITS.tableRows),
   colCount: z.int().min(1).max(LIMITS.tableCols),
   /** The named columns of a data table, one for each column. Left out for a plain table. */
   columns: z.array(columnDefinition).max(LIMITS.tableCols).optional(),
@@ -364,19 +419,26 @@ export const pageParam = z.object({ pageId: z.uuid() });
 export const tableParam = z.object({ tableId: z.uuid() });
 export const columnParam = z.object({
   tableId: z.uuid(),
-  col: z.coerce.number().pipe(cellIndex),
+  colId: z.uuid(),
 });
 export const cellParam = z.object({
   tableId: z.uuid(),
-  row: z.coerce.number().pipe(cellIndex),
-  col: z.coerce.number().pipe(cellIndex),
+  rowId: z.uuid(),
+  colId: z.uuid(),
 });
 
 export type CellInput = z.infer<typeof cellInput>;
 
-/** A stored cell, as sent between server and client. */
-export interface StoredCell extends CellInput {
+/** A stored cell, as sent between server and client: named by the ids of its row and column. */
+export interface StoredCell extends IdentityCellInput {
   tableId: string;
+}
+
+/** A row of a table: its id, and the key that places it among the table's rows. */
+export interface RowRecord {
+  id: string;
+  tableId: string;
+  orderKey: string;
 }
 
 /** The body of every error response. */

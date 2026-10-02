@@ -1,12 +1,17 @@
 import type { ColumnDefinition } from "@spreadsheet-app/engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { ClickResult, PageRecord, Snapshot, SpreadsheetSummary, TableRecord } from "./app";
+import type { Change, ClickResult, PageRecord, SpreadsheetSummary, TableRecord } from "./app";
 import {
+  addTable,
+  addView,
   cellsBody,
+  changedCells,
   createSpreadsheet,
+  readSnapshot,
   startTestServer,
   storedInputs,
   type TestServer,
+  type TestSnapshot,
   type TestUser,
 } from "./testing";
 
@@ -18,14 +23,21 @@ beforeAll(async () => {
 });
 afterAll(() => server.close());
 
+type SizedTable = TestSnapshot["tables"][number];
+
 interface Fixture {
   id: string;
   page: PageRecord;
-  table: TableRecord;
+  table: SizedTable;
   /** The table as the server now has it. */
-  current(): Promise<TableRecord>;
+  current(): Promise<SizedTable>;
   stored(): Promise<Record<string, string>>;
-  patchColumn(col: number, changes: object, status?: number): Promise<{ table: TableRecord }>;
+  /** Changes a column. Resolves to the table as it then is, with the change the server answered with. */
+  patchColumn(
+    col: number,
+    changes: object,
+    status?: number,
+  ): Promise<{ table: SizedTable; change: Change }>;
 }
 
 /** A new spreadsheet whose first table holds `cells`. */
@@ -33,19 +45,22 @@ async function start(cells: Record<string, string> = {}): Promise<Fixture> {
   const snapshot = await createSpreadsheet(user);
   const [page, table] = [snapshot.pages[0]!, snapshot.tables[0]!];
   if (Object.keys(cells).length > 0) {
-    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody(cells), 204);
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody(cells), 200);
   }
+  const current = async (): Promise<SizedTable> =>
+    (await readSnapshot(user, snapshot.id)).tables.find((candidate) => candidate.id === table.id)!;
   return {
     id: snapshot.id,
     page,
     table,
-    current: async () =>
-      (await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`)).tables.find(
-        (candidate) => candidate.id === table.id,
-      )!,
+    current,
     stored: () => storedInputs(user, snapshot.id, table.id),
-    patchColumn: (col, changes, status) =>
-      user.json("PATCH", `/tables/${table.id}/columns/${String(col)}`, changes, status),
+    patchColumn: async (col, changes, status = 200) => {
+      const path = `/tables/${table.id}/columns/${String(col)}`;
+      const change = await user.json<Change>("PATCH", path, changes, status);
+      // A refusal is the whole answer, which the caller compares.
+      return status === 200 ? { table: await current(), change } : (change as never);
+    },
   };
 }
 
@@ -75,25 +90,39 @@ describe("naming a table's columns", () => {
   });
 
   it("names them Column 1, Column 2, ... and leaves the cells alone", async () => {
-    const { table, stored } = await start({ A1: "kept" });
-    const result = await user.json<{ table: TableRecord }>("POST", `/tables/${table.id}/columns`, {
+    const { table, stored, current } = await start({ A1: "kept" });
+    const result = await user.json<Change>("POST", `/tables/${table.id}/columns`, {
       headerRow: false,
     });
-    expect(result).toMatchObject({ cells: [], views: [], tables: [] });
-    expect(result.table.columns).toHaveLength(table.colCount);
-    expect(result.table.columns?.slice(0, 2)).toEqual([
+    expect(result.changed).toMatchObject({ cells: [], views: [] });
+    const named = await current();
+    expect(named.columns).toHaveLength(table.colCount);
+    expect(named.columns?.slice(0, 2)).toEqual([
       { name: "Column 1", type: "any" },
       { name: "Column 2", type: "any" },
     ]);
-    expect(result.table.rowCount).toBe(table.rowCount);
     expect(await stored()).toEqual({ "0:0": "kept" });
   });
 
+  it("deletes the empty rows at the end, so a data table holds only its rows", async () => {
+    const { id, table, current } = await start({ A1: "first", A3: "third", B5: "=SUM(A1:A20)" });
+    await user.json("POST", `/tables/${table.id}/columns`, { headerRow: false });
+    expect((await current()).rowCount).toBe(5);
+    // The rows are deleted as any rows are, so a range that named them follows.
+    expect(await storedInputs(user, id, table.id)).toMatchObject({ "4:1": "=SUM(A1:A5)" });
+  });
+
+  it("leaves a table that holds nothing with no rows", async () => {
+    const { table, current } = await start();
+    await user.json("POST", `/tables/${table.id}/columns`, { headerRow: false });
+    expect((await current()).rowCount).toBe(0);
+  });
+
   it("takes the names from the first row and removes that row", async () => {
-    const { table, stored, current } = await sales();
+    const { stored, current } = await sales();
     const now = await current();
     expect(names(now).slice(0, 4)).toEqual(["Item", "Price", "Qty", "Column 1"]);
-    expect(now.rowCount).toBe(table.rowCount - 1);
+    expect(now.rowCount).toBe(2);
     expect(await stored()).toEqual({
       "0:0": "pen",
       "0:1": "2",
@@ -124,30 +153,36 @@ describe("naming a table's columns", () => {
   });
 
   it("rewrites formulas that read below the header row, which moves up", async () => {
-    const { table, stored } = await start({
+    const fixture = await start({
       A1: "Amount",
       A2: "5",
       A3: "7",
       B3: "=A2+A3",
       C3: "=A1",
     });
-    const result = await user.json<{ cells: object[]; table: TableRecord; tables: TableRecord[] }>(
-      "POST",
-      `/tables/${table.id}/columns`,
-      { headerRow: true },
-    );
+    const { id, table, stored, current } = fixture;
+    const result = await user.json<Change>("POST", `/tables/${table.id}/columns`, {
+      headerRow: true,
+    });
     expect(await stored()).toEqual({ "0:0": "5", "1:0": "7", "1:1": "=A1+A2", "1:2": "=#REF!" });
-    expect(result.cells.length).toBeGreaterThan(0);
-    expect(names(result.table)[0]).toBe("Amount");
-    // The client applies `tables` after `table`, so a copy of the table from before it was named would undo the naming.
-    expect(result.tables.map(({ id }) => id)).not.toContain(table.id);
+    expect(await changedCells(user, id, result)).toEqual(
+      expect.arrayContaining([
+        { tableId: table.id, row: 1, col: 1, input: "=A1+A2" },
+        { tableId: table.id, row: 1, col: 2, input: "=#REF!" },
+      ]),
+    );
+    expect(names(await current())[0]).toBe("Amount");
+    // The table is in the change once, as it is after it was named.
+    expect(result.changed?.tables.map((changed) => changed.table?.columns?.[0]?.name)).toEqual([
+      "Amount",
+    ]);
   });
 
-  it("keeps the one row of a table that has only a header row", async () => {
+  it("leaves no row in a table that has only a header row", async () => {
     const { table, stored, current } = await start({ A1: "Only" });
     await user.json("PATCH", `/tables/${table.id}`, { rowCount: 1 });
     await user.json("POST", `/tables/${table.id}/columns`, { headerRow: true });
-    expect((await current()).rowCount).toBe(1);
+    expect((await current()).rowCount).toBe(0);
     expect(names(await current())[0]).toBe("Only");
     expect(await stored()).toEqual({});
   });
@@ -164,10 +199,17 @@ describe("naming a table's columns", () => {
   it("makes a plain table of a data table again", async () => {
     const { table, current, stored } = await sales();
     expect(await user.json("DELETE", `/tables/${table.id}/columns`)).toMatchObject({
-      columns: null,
+      changed: { tables: [{ id: table.id, table: { columns: null } }] },
     });
     expect((await current()).columns).toBeNull();
     expect(await stored()).toMatchObject({ "0:0": "pen" });
+  });
+
+  it("gives a row to a data table with none when its column names are removed", async () => {
+    const { table, current } = await start();
+    await user.json("POST", `/tables/${table.id}/columns`, { headerRow: false });
+    await user.json("DELETE", `/tables/${table.id}/columns`);
+    expect(await current()).toMatchObject({ columns: null, rowCount: 1 });
   });
 });
 
@@ -212,30 +254,26 @@ describe("changing a column", () => {
   it("renames a column and rewrites everything that names it", async () => {
     const { id, page, table, patchColumn, stored } = await sales();
     await patchColumn(3, { name: "Total", type: "formula", formula: "=[Price] * [Qty]" });
-    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ E1: "=[Price] + 1" }), 204);
-    const other = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ E1: "=[Price] + 1" }), 200);
+    const other = await addTable(user, page.id);
     await user.json(
       "PUT",
       `/tables/${other.id}/cells`,
-      cellsBody({ A1: "=SUM('Table 1'[Price])", A2: "=SUM('Table 1'[Qty])" }),
-      204,
+      cellsBody({ A1: "=SUM('Table 1'[Price])", A2: "=SUM('Table 1'[Qty])" }), 200,
     );
-    const text = await user.json<{ id: string }>(
-      "POST",
-      `/pages/${page.id}/views`,
-      { kind: "text" },
-      201,
-    );
+    const text = await addView(user, page.id);
     await user.json("PATCH", `/views/${text.id}`, { source: "{{ SUM('Table 1'[price]) }}" });
 
     const result = await patchColumn(1, { name: "Unit Price" });
-    expect(result).toMatchObject({
-      cells: expect.arrayContaining([
+    expect(await changedCells(user, id, result.change)).toEqual(
+      expect.arrayContaining([
         { tableId: table.id, row: 0, col: 4, input: "=[Unit Price] + 1" },
         { tableId: other.id, row: 0, col: 0, input: "=SUM('Table 1'[Unit Price])" },
       ]),
-      views: [{ id: text.id, source: "{{ SUM('Table 1'[Unit Price]) }}" }],
-      tables: [],
+    );
+    expect(result.change.changed).toMatchObject({
+      views: [{ id: text.id, view: { source: "{{ SUM('Table 1'[Unit Price]) }}" } }],
+      tables: [{ id: table.id }],
     });
     expect(result.table.columns?.slice(1, 4)).toEqual([
       { name: "Unit Price", type: "any" },
@@ -255,21 +293,18 @@ describe("changing a column", () => {
     expect((await patchColumn(3, { name: "Sum" })).table.columns?.[3]?.formula).toBe("=[Sum] + 1");
   });
 
-  it("returns the other tables whose formula columns it rewrote", async () => {
+  it("tells of the other tables whose formula columns it rewrote", async () => {
     const { page, table, patchColumn } = await sales();
-    const other = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
+    const other = await addTable(user, page.id);
     await user.json("POST", `/tables/${other.id}/columns`, { headerRow: false });
     await user.json("PATCH", `/tables/${other.id}/columns/0`, {
       type: "formula",
       formula: "=SUM('Table 1'[Price])",
     });
-    const result = await patchColumn(1, { name: "Cost" });
-    expect(result).toMatchObject({
-      tables: [{ id: other.id }],
-    });
-    const [rewritten] = (result as unknown as { tables: TableRecord[] }).tables;
-    expect(rewritten?.columns?.[0]?.formula).toBe("=SUM('Table 1'[Cost])");
-    expect(result.table.id).toBe(table.id);
+    const { change } = await patchColumn(1, { name: "Cost" });
+    const changed = new Map(change.changed?.tables.map((entry) => [entry.id, entry.table]));
+    expect([...changed.keys()].sort()).toEqual([other.id, table.id].sort());
+    expect(changed.get(other.id)?.columns?.[0]?.formula).toBe("=SUM('Table 1'[Cost])");
   });
 
   it("refuses a name another column has, without regard to case", async () => {
@@ -294,8 +329,8 @@ describe("changing a column", () => {
 
   it("refuses a column the table does not have, and a table without named columns", async () => {
     const { patchColumn } = await sales();
-    expect(await patchColumn(50, { name: "x" }, 422)).toMatchObject({
-      error: { code: "out_of_bounds" },
+    expect(await patchColumn(50, { name: "x" }, 409)).toMatchObject({
+      error: { code: "column_deleted" },
     });
     const plain = await start();
     expect(await plain.patchColumn(0, { name: "x" }, 422)).toEqual({
@@ -352,15 +387,11 @@ describe("a data table as rows and columns come and go", () => {
   });
 
   it("rewrites formula columns when their table is renamed", async () => {
-    const { table, patchColumn } = await sales();
+    const { table, patchColumn, current } = await sales();
     await patchColumn(3, { type: "formula", formula: "=SUM('Table 1'[Price])" });
-    const result = await user.json<{ table: TableRecord; tables: TableRecord[] }>(
-      "PATCH",
-      `/tables/${table.id}`,
-      { name: "Sales" },
-    );
-    expect(result.table.columns?.[3]?.formula).toBe("=SUM(Sales[Price])");
-    expect(result.tables).toEqual([]);
+    const result = await user.json<Change>("PATCH", `/tables/${table.id}`, { name: "Sales" });
+    expect((await current()).columns?.[3]?.formula).toBe("=SUM(Sales[Price])");
+    expect(result.changed?.tables.map(({ id }) => id)).toEqual([table.id]);
   });
 });
 
@@ -381,20 +412,19 @@ describe("the cells of a formula column", () => {
   });
 
   it("are computed when a button runs, and a button can read them", async () => {
-    const { page, table, patchColumn } = await sales();
+    const { id, page, table, patchColumn } = await sales();
     await patchColumn(3, { name: "Total", type: "formula", formula: "=[Price] * [Qty]" });
-    const other = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
+    const other = await addTable(user, page.id);
     await user.json(
       "PUT",
       `/tables/${other.id}/cells`,
       cellsBody({ A1: `=BUTTON("Sum", EXECUTE(SUM('Table 1'[Total]), B1))` }),
-      204,
     );
     const result = await user.json<ClickResult>("POST", `/tables/${other.id}/cells/0/0/click`);
-    expect(result).toMatchObject({
-      status: "succeeded",
-      cells: [{ tableId: other.id, row: 0, col: 1, input: "35" }],
-    });
+    expect(result).toMatchObject({ status: "succeeded" });
+    expect(await changedCells(user, id, result.change!)).toEqual([
+      { tableId: other.id, row: 0, col: 1, input: "35" },
+    ]);
     expect(table.id).not.toBe(other.id);
   });
 
@@ -405,7 +435,6 @@ describe("the cells of a formula column", () => {
       "PUT",
       `/tables/${table.id}/cells`,
       cellsBody({ E1: '=BUTTON("Bad", EXECUTE(1, D1))' }),
-      204,
     );
     const result = await user.json<ClickResult>("POST", `/tables/${table.id}/cells/0/4/click`);
     expect(result).toMatchObject({
@@ -452,7 +481,7 @@ describe("columns in a spreadsheet file", () => {
       file(),
       201,
     );
-    const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${summary.id}`);
+    const snapshot = await readSnapshot(user, summary.id);
     expect(snapshot.tables[0]?.columns).toEqual([
       { name: "Price", type: "number" },
       { name: "Double", type: "formula", formula: "=[Price] * 2" },

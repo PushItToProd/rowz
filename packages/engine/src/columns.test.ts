@@ -157,27 +157,84 @@ describe("formula columns", () => {
     expect(book.columnOf(at("A1", "t2"))).toBeUndefined();
   });
 
-  it("compute only in rows that hold something, so empty rows stay empty", () => {
+  it("compute in a row that holds nothing typed, because a row is a record", () => {
     const book = workbook({
       t1: { A1: "pen", B1: "2", C1: "10" },
-      t2: { A1: "=COUNTA(Sales[Total])" },
+      t2: { A1: "=COUNTA(Sales[Total])", A2: "=ROWS(Sales[Item])" },
     });
     expect(book.getValue(at("D1"))).toBe(20);
-    expect(book.getValue(at("D2"))).toBeNull();
-    expect(book.getInput(at("D2"))).toBe("");
-    expect(book.getValue(at("A1", "t2"))).toBe(1);
+    expect(book.getValue(at("D2"))).toBe(0);
+    expect(book.getInput(at("D2"))).toBe("=[Price] * [Qty]");
+    expect(book.getValue(at("A1", "t2"))).toBe(3);
+    expect(book.getValue(at("A2", "t2"))).toBe(3);
 
-    // Typing into a row gives it its computed cells, and clearing the row takes them away.
-    book.setCell(at("B2"), "3");
+    // Clearing a row leaves the row, and its computed cells, in place.
+    book.setCell(at("A1"), "");
+    book.setCell(at("B1"), "");
+    book.setCell(at("C1"), "");
+    expect(book.getValue(at("D1"))).toBe(0);
+    expect(book.getValue(at("A1", "t2"))).toBe(3);
+  });
+
+  it("compute nothing in a table with no rows", () => {
+    const book = workbook(
+      {
+        t1: {},
+        t2: {
+          A1: "=SUM(Sales[Total])",
+          A2: "=ROWS(Sales[Total])",
+          A3: "=COUNTA(Sales!A:A)",
+          A4: "=SUM(Sales!A:A)",
+          A5: "=FILTER(Sales!A1:A9, Sales!B1:B9 > 1)",
+          A6: '=QUERY(Sales!A:D, "select A")',
+          A7: "=SORT(Sales!A:D)",
+          A8: "=VLOOKUP(1, Sales!A:D, 2, FALSE)",
+        },
+      },
+      structure(SALES, 0),
+    );
+    expect(book.getValue(at("D1"))).toBeNull();
+    expect(book.getValue(at("A1", "t2"))).toBe(0);
+    expect(book.getValue(at("A2", "t2"))).toBe(0);
+    expect(book.getValue(at("A3", "t2"))).toBe(0);
+    expect(book.getValue(at("A4", "t2"))).toBe(0);
+    expect(book.getValue(at("A5", "t2"))).toMatchObject({ code: "#N/A" });
+    expect(book.getValue(at("A6", "t2"))).toMatchObject({ code: "#N/A" });
+    expect(book.getValue(at("A7", "t2"))).toBeNull();
+    expect(book.getValue(at("A8", "t2"))).toMatchObject({ code: "#N/A" });
+    expect(book.evaluateOnPage("p1", "SUM(Sales[Total])")).toBe(0);
+  });
+
+  it("cover the rows that exist, and no more, when a whole column is read", () => {
+    const book = workbook(
+      { t1: CELLS, t2: { A1: "=ROWS(Sales[Price])", A2: "=ROWS(Sales!A:A)" } },
+      structure(SALES, 3),
+    );
+    expect(book.getValue(at("A1", "t2"))).toBe(3);
+    expect(book.getValue(at("A2", "t2"))).toBe(3);
+    book.setStructure(structure(SALES, 5));
+    expect(book.getValue(at("A1", "t2"))).toBe(5);
+    expect(book.getValue(at("A2", "t2"))).toBe(5);
+    expect(book.getValue(at("D5"))).toBe(0);
+  });
+
+  it("compute through the last row typed into when the table was given no size", () => {
+    const shape = structure();
+    const book = workbook(
+      { t1: { A1: "pen", B1: "2", C1: "10" } },
+      {
+        ...shape,
+        tables: shape.tables.map((table) =>
+          table.id === "t1" ? { id: "t1", pageId: "p1", name: "Sales", columns: SALES } : table,
+        ),
+      },
+    );
+    expect(book.getValue(at("D1"))).toBe(20);
+    expect(book.getValue(at("D3"))).toBeNull();
+    book.setCell(at("B3"), "4");
     expect(book.getValue(at("D2"))).toBe(0);
-    expect(book.getValue(at("A1", "t2"))).toBe(2);
-    book.setCell(at("C2"), "4");
-    expect(book.getValue(at("D2"))).toBe(12);
-    book.setCell(at("B2"), "");
-    expect(book.getValue(at("D2"))).toBe(0);
-    book.setCell(at("C2"), "");
-    expect(book.getValue(at("D2"))).toBeNull();
-    expect(book.getValue(at("A1", "t2"))).toBe(1);
+    expect(book.getValue(at("D3"))).toBe(0);
+    expect(book.getValue(at("D4"))).toBeNull();
   });
 
   it("follow the cells they read, and feed other formulas", () => {
@@ -256,8 +313,8 @@ describe("formula columns", () => {
       ok: true,
       effects: [{ type: "setCell", tableId: "t1", row: 1, col: 0, input: "TRUE" }],
     });
-    // A row with nothing typed into it has no button.
-    expect(book.getValue(at("C1"))).toBeNull();
+    // A row with nothing typed into it is still a row, and has its button.
+    expect(isButton(book.getValue(at("C1")))).toBe(true);
   });
 
   it("are skipped by actions that look for typed cells, and refuse to be written to", () => {

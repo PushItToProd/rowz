@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { columnLabel } from "@spreadsheet-app/engine";
+import { asc, desc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   LIMITS,
@@ -7,16 +8,22 @@ import {
   UNDOABLE_HEADER,
   type JournalLimits,
 } from "@spreadsheet-app/shared";
-import type { SnapshotWithHistory, UndoResult } from "./app";
-import { journal, spreadsheets } from "./db/schema";
+import type { UndoResult } from "./app";
+import { cells as cellRecords, journal, spreadsheets, tableRows } from "./db/schema";
 import {
+  addTable,
+  addView,
   cellsBody,
   createSpreadsheet,
+  readSnapshot,
   routeOf,
+  rowIds,
+  storedInputs,
   startTestServer,
   withClientId,
   type TestClient,
   type TestServer,
+  type TestSnapshot,
   type TestUser,
 } from "./testing";
 
@@ -45,8 +52,8 @@ async function fresh(user: TestClient = owner): Promise<Fixture> {
   };
 }
 
-async function snapshot(client: TestClient, id: string): Promise<SnapshotWithHistory> {
-  return client.json<SnapshotWithHistory>("GET", `/spreadsheets/${id}`);
+function snapshot(client: TestClient, id: string): Promise<TestSnapshot> {
+  return readSnapshot(client, id);
 }
 
 async function versionState(id: string) {
@@ -104,8 +111,14 @@ async function createPage(client: TestClient, spreadsheetId: string, name = "Dat
   );
 }
 
-async function createView(client: TestClient, pageId: string, kind: "chart" | "text" = "text") {
-  return client.json<{ id: string }>("POST", `/pages/${pageId}/views`, { kind }, 201);
+function createView(client: TestClient, pageId: string, kind: "chart" | "text" = "text") {
+  return addView(client, pageId, kind);
+}
+
+function chunks<T>(items: readonly T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+    items.slice(index * size, (index + 1) * size),
+  );
 }
 
 function repeatedFormula(reference: string, count: number): string {
@@ -146,12 +159,11 @@ const routeCases: Route[] = [
     name: "rename a page that a formula and a chart on another page name",
     async prepare({ id, pageId, tableId }) {
       const { page, table } = await createPage(owner, id);
-      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "1" }), 204);
+      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "1" }), 200);
       await owner.json(
         "PUT",
         `/tables/${table.id}/cells`,
-        cellsBody({ A1: "='Page 1'!'Table 1'!A1" }),
-        204,
+        cellsBody({ A1: "='Page 1'!'Table 1'!A1" }), 200,
       );
       const view = await createView(owner, page.id, "chart");
       await owner.json("PATCH", `/views/${view.id}`, { source: "'Page 1'!'Table 1'!A1:B2" });
@@ -166,7 +178,7 @@ const routeCases: Route[] = [
         method: "PUT",
         path: `/pages/${pageId}/order`,
         body: { blocks: [view.id, tableId] },
-        status: 204,
+        status: 200,
       };
     },
   },
@@ -178,7 +190,7 @@ const routeCases: Route[] = [
         method: "PUT",
         path: `/spreadsheets/${id}/pages/order`,
         body: { pages: [page.id, pageId] },
-        status: 204,
+        status: 200,
       };
     },
   },
@@ -227,14 +239,14 @@ const routeCases: Route[] = [
         method: "PUT",
         path: `/tables/${tableId}/cells`,
         body: cellsBody({ C3: "value" }),
-        status: 204,
+        status: 200,
       };
     },
   },
   {
     name: "insert rows",
     async prepare({ tableId }) {
-      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "one", A2: "two" }), 204);
+      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "one", A2: "two" }), 200);
       return {
         method: "POST",
         path: `/tables/${tableId}/edits`,
@@ -249,8 +261,7 @@ const routeCases: Route[] = [
       await owner.json(
         "PUT",
         `/tables/${tableId}/cells`,
-        cellsBody({ A1: "1", A2: "2", A3: "3", B1: "=A2+A3", B4: "=SUM(A1:A3)" }),
-        204,
+        cellsBody({ A1: "1", A2: "2", A3: "3", B1: "=A2+A3", B4: "=SUM(A1:A3)" }), 200,
       );
       await owner.json("POST", `/tables/${tableId}/formats`, {
         range: { startRow: 1, endRow: 2, startCol: 0, endCol: 0 },
@@ -267,8 +278,8 @@ const routeCases: Route[] = [
   {
     name: "delete a column that a formula column reads",
     async prepare({ tableId }) {
+      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "1", B1: "2" }), 200);
       await owner.json("POST", `/tables/${tableId}/columns`, { headerRow: false });
-      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "1", B1: "2" }), 204);
       await owner.json("PATCH", `/tables/${tableId}/columns/2`, {
         type: "formula",
         formula: "=[Column 1]+[Column 2]",
@@ -287,8 +298,7 @@ const routeCases: Route[] = [
       await owner.json(
         "PUT",
         `/tables/${tableId}/cells`,
-        cellsBody({ A1: "1", A5: "5", B1: "=SUM(A1:A5)", C3: "c" }),
-        204,
+        cellsBody({ A1: "1", A5: "5", B1: "=SUM(A1:A5)", C3: "c" }), 200,
       );
       return {
         method: "PATCH",
@@ -309,16 +319,78 @@ const routeCases: Route[] = [
           A2: "last",
           D1: '=BUTTON("Append", APPEND_ROW(A:A, "next"))',
         }),
-        204,
       );
       await owner.json("PATCH", `/tables/${tableId}`, { rowCount: 2 });
       return { method: "POST", path: `/tables/${tableId}/cells/0/3/click`, status: 200 };
     },
   },
   {
+    name: "write a cell into a new row",
+    async prepare({ id, tableId }) {
+      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "first" }));
+      await owner.json("POST", `/tables/${tableId}/columns`, { headerRow: false });
+      const [colId] = (await readSnapshot(owner, id)).tables[0]!.colIds;
+      const rowId = randomUUID();
+      return {
+        method: "PUT",
+        path: `/tables/${tableId}/cells`,
+        body: { appendRows: [rowId], cells: [{ rowId, colId, input: "second" }] },
+        status: 200,
+      };
+    },
+  },
+  {
+    name: "paste past the end of a table",
+    async prepare({ id, tableId }) {
+      await owner.json("PATCH", `/tables/${tableId}`, { rowCount: 2 });
+      const before = await readSnapshot(owner, id);
+      const [colId] = before.tables[0]!.colIds;
+      const added = [randomUUID(), randomUUID()];
+      const rows = [rowIds(before, tableId)[1]!, ...added];
+      return {
+        method: "PUT",
+        path: `/tables/${tableId}/cells`,
+        body: {
+          appendRows: added,
+          cells: rows.map((rowId, index) => ({ rowId, colId, input: `pasted ${String(index)}` })),
+        },
+        status: 200,
+      };
+    },
+  },
+  {
+    name: "run an action that overwrites a data table and deletes the rows it empties",
+    async prepare({ pageId, tableId }) {
+      await owner.json(
+        "PUT",
+        `/tables/${tableId}/cells`,
+        cellsBody({ A1: "one", B1: "1", A2: "two", B2: "2", A3: "three", B3: "=SUM(B1:B2)" }),
+      );
+      await owner.json("PATCH", `/tables/${tableId}`, { colCount: 2 });
+      await owner.json("POST", `/tables/${tableId}/columns`, { headerRow: false });
+      const { table } = await owner.json<{ table: { id: string } }>(
+        "POST",
+        `/pages/${pageId}/tables`,
+        {},
+        201,
+      );
+      await owner.json(
+        "PUT",
+        `/tables/${table.id}/cells`,
+        cellsBody({
+          A1: "kept",
+          B1: "9",
+          C1: `=BUTTON("Replace", OVERWRITE(A1:B1, 'Table 1'!A:B))`,
+          D1: "=SUM('Table 1'!B1:B3)",
+        }),
+      );
+      return { method: "POST", path: `/tables/${table.id}/cells/0/2/click`, status: 200 };
+    },
+  },
+  {
     name: "store a checkbox choice",
     async prepare({ tableId }) {
-      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A2: "=CHECKBOX(B2)" }), 204);
+      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A2: "=CHECKBOX(B2)" }), 200);
       return {
         method: "POST",
         path: `/tables/${tableId}/cells/1/0/input`,
@@ -355,8 +427,7 @@ const routeCases: Route[] = [
       await owner.json(
         "PUT",
         `/tables/${tableId}/cells`,
-        cellsBody({ A1: "Name", B1: "Amount", A2: "x", B2: "=A2" }),
-        204,
+        cellsBody({ A1: "Name", B1: "Amount", A2: "x", B2: "=A2" }), 200,
       );
       return {
         method: "POST",
@@ -412,29 +483,30 @@ const routeCases: Route[] = [
     name: "delete a view",
     async prepare({ pageId }) {
       const view = await createView(owner, pageId);
-      return { method: "DELETE", path: `/views/${view.id}`, status: 204 };
+      return { method: "DELETE", path: `/views/${view.id}`, status: 200 };
     },
   },
   {
     name: "delete a table",
     prepare({ tableId }) {
-      return { method: "DELETE", path: `/tables/${tableId}`, status: 204 };
+      return { method: "DELETE", path: `/tables/${tableId}`, status: 200 };
     },
   },
   {
     name: "delete a page",
     async prepare({ id }) {
       const { page } = await createPage(owner, id);
-      return { method: "DELETE", path: `/pages/${page.id}`, status: 204 };
+      return { method: "DELETE", path: `/pages/${page.id}`, status: 200 };
     },
   },
 ];
 
-function content(snapshot: SnapshotWithHistory) {
+function content(snapshot: TestSnapshot) {
   return {
     id: snapshot.id,
     name: snapshot.name,
     role: snapshot.role,
+    rows: [...snapshot.rows].sort((left, right) => left.id.localeCompare(right.id)),
     pages: [...snapshot.pages].sort((left, right) => left.id.localeCompare(right.id)),
     tables: [...snapshot.tables].sort((left, right) => left.id.localeCompare(right.id)),
     views: [...snapshot.views].sort((left, right) => left.id.localeCompare(right.id)),
@@ -477,22 +549,27 @@ describe("undo round trips", () => {
         routeOf(server.routes, request.method, request.path) ??
           `${request.method} ${request.path}: no such route`,
       );
+      const identities = async () => server.db.select().from(tableRows).orderBy(asc(tableRows.id));
+      const rowsBefore = await identities();
       const before = await snapshot(client, fixture.id);
       const response = await client.request(request.method, request.path, request.body);
       expect(response.status, await response.clone().text()).toBe(request.status);
       expect(response.headers.get(UNDOABLE_HEADER)).toBe("1");
       const after = await snapshot(client, fixture.id);
+      const rowsAfter = await identities();
       expect(content(after)).not.toEqual(content(before));
 
       const undone = await client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`);
       expect(undone.error).toBeNull();
       expect(undone).toMatchObject({ outcome: "done", undoable: false, redoable: true });
       expect(content(await snapshot(client, fixture.id))).toEqual(content(before));
+      expect(await identities()).toEqual(rowsBefore);
 
       const redone = await client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/redo`);
       expect(redone.error).toBeNull();
       expect(redone).toMatchObject({ outcome: "done", undoable: true, redoable: false });
       expect(content(await snapshot(client, fixture.id))).toEqual(content(after));
+      expect(await identities()).toEqual(rowsAfter);
     });
   }
 
@@ -621,8 +698,7 @@ describe("journal identity and grouping", () => {
     await owner.json(
       "POST",
       `/spreadsheets/${fixture.id}/versions/${versions[0]!.id}/restore`,
-      undefined,
-      204,
+      undefined, 200,
     );
     expect(await snapshot(client, fixture.id)).toMatchObject({ undoable: false, redoable: false });
   });
@@ -666,46 +742,25 @@ describe("refused history operations", () => {
     expect(current.cells.map((cell) => cell.input)).toEqual(["second"]);
   });
 
-  it("refuses an older cell edit after a later reference rewrite", async () => {
-    const fixture = await fresh();
-    const first = withClientId(owner);
-    const second = withClientId(owner);
-    await first.request("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ A1: "before" }));
-    await second.request("POST", `/tables/${fixture.tableId}/edits`, {
-      axis: "row",
-      kind: "insert",
-      index: 0,
-    });
-    expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
-      outcome: "refused",
-      undoable: false,
-    });
-  });
-
-  it("refuses a step when a reference rewrite came between its requests", async () => {
+  it("undoes a step of typed values when a row insert came between its requests", async () => {
     const fixture = await fresh();
     const first = withClientId(owner);
     const second = withClientId(owner);
     const step = { [STEP_ID_HEADER]: randomUUID() };
     const cells = `/tables/${fixture.tableId}/cells`;
     await first.request("PUT", cells, cellsBody({ A1: "one" }), step);
-    // Below the cells of the step, so every one of them still holds what the step wrote.
     await second.request("POST", `/tables/${fixture.tableId}/edits`, {
       axis: "row",
       kind: "insert",
-      index: 5,
+      index: 0,
     });
-    await first.request("PUT", cells, cellsBody({ B1: "two" }), step);
+    await first.request("PUT", cells, cellsBody({ B2: "two" }), step);
 
     expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
-      outcome: "refused",
-      error: "A later structural change prevents undoing this change",
+      outcome: "done",
       undoable: false,
     });
-    expect((await snapshot(owner, fixture.id)).cells.map((cell) => cell.input)).toEqual([
-      "one",
-      "two",
-    ]);
+    expect((await snapshot(owner, fixture.id)).cells).toEqual([]);
   });
 
   it("refuses undo of a structural change after a later active write", async () => {
@@ -804,19 +859,14 @@ describe("refused history operations", () => {
 
   it("refuses a cell whose table another tab deleted, then exposes the previous step", async () => {
     const fixture = await fresh();
-    const added = await owner.json<{ id: string }>(
-      "POST",
-      `/pages/${fixture.pageId}/tables`,
-      {},
-      201,
-    );
-    await owner.json("PUT", `/tables/${added.id}/cells`, cellsBody({ A1: "typed" }), 204);
+    const added = await addTable(owner, fixture.pageId);
+    await owner.json("PUT", `/tables/${added.id}/cells`, cellsBody({ A1: "typed" }), 200);
     const first = withClientId(owner);
     const second = withClientId(owner);
     await first.request("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ A1: "older" }));
     // The cell is empty before and after the table goes, so only the missing table stops the undo.
     await first.request("PUT", `/tables/${added.id}/cells`, cellsBody({ A1: "" }));
-    await second.json("DELETE", `/tables/${added.id}`, undefined, 204);
+    await second.json("DELETE", `/tables/${added.id}`, undefined, 200);
 
     expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
       outcome: "refused",
@@ -832,11 +882,11 @@ describe("refused history operations", () => {
   it("refuses a cell whose page another tab deleted", async () => {
     const fixture = await fresh();
     const { page, table } = await createPage(owner, fixture.id);
-    await owner.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "typed" }), 204);
+    await owner.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "typed" }), 200);
     const first = withClientId(owner);
     const second = withClientId(owner);
     await first.request("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "" }));
-    await second.json("DELETE", `/pages/${page.id}`, undefined, 204);
+    await second.json("DELETE", `/pages/${page.id}`, undefined, 200);
 
     expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
       outcome: "refused",
@@ -846,8 +896,8 @@ describe("refused history operations", () => {
 
   it("refuses a cell that another tab's formula column now computes", async () => {
     const fixture = await fresh();
+    await owner.json("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ B1: "typed" }), 200);
     await owner.json("POST", `/tables/${fixture.tableId}/columns`, { headerRow: false });
-    await owner.json("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ B1: "typed" }), 204);
     const first = withClientId(owner);
     const second = withClientId(owner);
     await first.request("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ B1: "" }));
@@ -875,14 +925,13 @@ describe("refused history operations", () => {
         // The row is added, and then the second write is refused as too long.
         D1: `=BUTTON("Append", DO(APPEND_ROW(A:A, "next"), EXECUTE(REPT("x", ${String(LIMITS.inputLength + 1)}), C1)))`,
       }),
-      204,
     );
     await owner.json("PATCH", `/tables/${fixture.tableId}`, { rowCount: 2 });
 
     await expectNoChangeEvent(fixture.id, async () => {
       const response = await client.request("POST", `/tables/${fixture.tableId}/cells/0/3/click`);
       expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ status: "failed", tables: [] });
+      expect(await response.json()).toMatchObject({ status: "failed", change: null });
       expect(response.headers.get(UNDOABLE_HEADER)).toBeNull();
     });
     expect(await snapshot(client, fixture.id)).toMatchObject({ undoable: false });
@@ -917,6 +966,185 @@ describe("refused history operations", () => {
       });
     });
     expect(await versionState(fixture.id)).toEqual(before);
+  });
+});
+
+describe("undo beside changes to rows and columns", () => {
+  /** A spreadsheet that Ada and Grace both have open. */
+  async function shared() {
+    const fixture = await fresh();
+    const cells = `/tables/${fixture.tableId}/cells`;
+    const edits = `/tables/${fixture.tableId}/edits`;
+    const undo = (client: TestClient) =>
+      client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`);
+    const redo = (client: TestClient) =>
+      client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/redo`);
+    const stored = () => storedInputs(owner, fixture.id, fixture.tableId);
+    const rows = async () => rowIds(await snapshot(owner, fixture.id), fixture.tableId);
+    const [ada, grace] = [withClientId(owner), withClientId(owner)];
+    return { ...fixture, ada, grace, cells, edits, undo, redo, stored, rows };
+  }
+  const insertRow = (index: number) => ({ axis: "row", kind: "insert", index });
+  const deleteRow = (index: number) => ({ axis: "row", kind: "delete", index });
+
+  it("undoes and redoes a typed value after a row is inserted above it", async () => {
+    const { ada, grace, cells, edits, undo, redo, stored } = await shared();
+    await ada.json("PUT", cells, cellsBody({ A3: "typed" }));
+    await grace.json("POST", edits, insertRow(0));
+    expect(await stored()).toEqual({ "3:0": "typed" });
+
+    expect(await undo(ada)).toMatchObject({ outcome: "done" });
+    expect(await stored()).toEqual({});
+    expect(await redo(ada)).toMatchObject({ outcome: "done" });
+    expect(await stored()).toEqual({ "3:0": "typed" });
+  });
+
+  it("undoes a row insert after a value is typed elsewhere", async () => {
+    const { ada, grace, cells, edits, undo, stored } = await shared();
+    await grace.json("POST", edits, insertRow(0));
+    await ada.json("PUT", cells, cellsBody({ A5: "typed" }));
+    expect(await undo(grace)).toMatchObject({ outcome: "done" });
+    expect(await stored()).toEqual({ "3:0": "typed" });
+  });
+
+  it("refuses to undo a row insert once someone typed into the new row", async () => {
+    const { ada, grace, cells, edits, undo, stored } = await shared();
+    await grace.json("POST", edits, insertRow(0));
+    await ada.json("PUT", cells, cellsBody({ A1: "in the new row" }));
+    expect(await undo(grace)).toMatchObject({
+      outcome: "refused",
+      error: "A row this step added now holds something typed since",
+    });
+    expect(await stored()).toEqual({ "0:0": "in the new row" });
+  });
+
+  it("undoes a row insert together with what the same step wrote into the row", async () => {
+    const { id, tableId, ada, cells, undo, rows, stored } = await shared();
+    const [colId] = (await snapshot(owner, id)).tables[0]!.colIds;
+    const before = await rows();
+    const rowId = randomUUID();
+    await ada.json("PUT", cells, { appendRows: [rowId], cells: [{ rowId, colId, input: "new" }] });
+    expect(await rows()).toEqual([...before, rowId]);
+    expect(await undo(ada)).toMatchObject({ outcome: "done" });
+    expect(await rows()).toEqual(before);
+    expect(await stored()).toEqual({});
+    expect(tableId).toBeDefined();
+  });
+
+  it("refuses to put a formula back after a row was inserted, because its references are stale", async () => {
+    const { ada, grace, cells, edits, undo, stored } = await shared();
+    await owner.json("PUT", cells, cellsBody({ A5: "5", B1: "=A5" }));
+    await ada.json("PUT", cells, cellsBody({ B1: "7" }));
+    await grace.json("POST", edits, insertRow(0));
+    expect(await undo(ada)).toMatchObject({
+      outcome: "refused",
+      error:
+        "A later change to rows, columns, or names prevents undoing this change to a formula",
+    });
+    expect(await stored()).toEqual({ "5:0": "5", "1:1": "7" });
+  });
+
+  it("refuses to undo a row insert after a formula was written, even in a table that held none", async () => {
+    const { ada, grace, cells, edits, undo, stored } = await shared();
+    await grace.json("POST", edits, insertRow(0));
+    await ada.json("PUT", cells, cellsBody({ D1: "=A6" }));
+    expect(await undo(grace)).toMatchObject({
+      outcome: "refused",
+      error: "A formula written since prevents undoing this change to rows, columns, or names",
+    });
+    expect(await stored()).toEqual({ "0:3": "=A6" });
+  });
+
+  it.each([
+    ["the first insert first", ["grace", "ada"]],
+    ["the second insert first", ["ada", "grace"]],
+  ] as const)("lets two people each undo a row insert, %s", async (_, order) => {
+    const session = await shared();
+    const before = await session.rows();
+    await session.grace.json("POST", session.edits, insertRow(0));
+    await session.ada.json("POST", session.edits, insertRow(5));
+    expect(await session.rows()).toHaveLength(before.length + 2);
+    for (const who of order) {
+      expect(await session.undo(session[who])).toMatchObject({ outcome: "done" });
+    }
+    expect(await session.rows()).toEqual(before);
+  });
+
+  it("refuses to undo a row delete that rewrote a formula once a row is inserted above", async () => {
+    const { ada, grace, cells, edits, undo, stored } = await shared();
+    await owner.json("PUT", cells, cellsBody({ A5: "5", B1: "=A5" }));
+    await grace.json("POST", edits, deleteRow(4));
+    expect(await stored()).toEqual({ "0:1": "=#REF!" });
+    await ada.json("POST", edits, insertRow(0));
+    expect(await undo(grace)).toMatchObject({ outcome: "refused" });
+    expect(await stored()).toEqual({ "1:1": "=#REF!" });
+  });
+
+  it("puts a deleted row back beside the row that has taken its key since", async () => {
+    const { ada, grace, cells, edits, undo, redo, rows, stored } = await shared();
+    await owner.json("PUT", cells, cellsBody({ A2: "deleted and restored" }));
+    const before = await rows();
+    await grace.json("POST", edits, deleteRow(1));
+    await ada.json("POST", edits, insertRow(1));
+    const [inserted] = (await rows()).filter((id) => !before.includes(id));
+    // The new row sits where the deleted one did, and was given the same key.
+    expect((await rows())[1]).toBe(inserted);
+
+    expect(await undo(grace)).toMatchObject({ outcome: "done" });
+    expect(await rows()).toEqual([before[0], inserted, before[1], ...before.slice(2)]);
+    expect(await stored()).toEqual({ "2:0": "deleted and restored" });
+
+    expect(await redo(grace)).toMatchObject({ outcome: "done" });
+    expect(await rows()).toEqual([before[0], inserted, ...before.slice(2)]);
+    expect(await undo(grace)).toMatchObject({ outcome: "done" });
+    expect(await rows()).toHaveLength(before.length + 1);
+    expect(await rows()).toEqual(expect.arrayContaining([inserted, before[1]]));
+  });
+
+  it("refuses to undo a cleared cell once its column is deleted, and stores no cell for the column", async () => {
+    const { id, ada, grace, cells, edits, undo } = await shared();
+    await owner.json("PUT", cells, cellsBody({ B1: "typed" }));
+    await ada.json("PUT", cells, cellsBody({ B1: "" }));
+    await grace.json("POST", edits, { axis: "col", kind: "delete", index: 1 });
+    expect(await undo(ada)).toMatchObject({
+      outcome: "refused",
+      error: "This change would leave a cell in a column its table no longer has",
+    });
+    expect((await snapshot(owner, id)).cells).toEqual([]);
+  });
+
+  it("writes one row record and no cell to insert a row above a full table of cells", async () => {
+    const { id, tableId, grace, cells, edits } = await shared();
+    await owner.json("PATCH", `/tables/${tableId}`, { rowCount: 50, colCount: 100 });
+    const filled = Object.fromEntries(
+      Array.from({ length: 5000 }, (_, index) => {
+        const [row, col] = [Math.floor(index / 100), index % 100];
+        return [`${columnLabel(col)}${String(row + 1)}`, String(index)];
+      }),
+    );
+    for (const batch of chunks(Object.entries(filled), LIMITS.cellsPerRequest)) {
+      await owner.json("PUT", cells, cellsBody(Object.fromEntries(batch)));
+    }
+    const stamps = async () =>
+      server.db
+        .select({ rowId: cellRecords.rowId, colId: cellRecords.colId, at: cellRecords.updatedAt })
+        .from(cellRecords)
+        .where(eq(cellRecords.tableId, tableId))
+        .orderBy(asc(cellRecords.rowId), asc(cellRecords.colId));
+    const before = await stamps();
+    expect(before).toHaveLength(5000);
+
+    await grace.json("POST", edits, insertRow(0));
+    expect(await stamps()).toEqual(before);
+    const [entry] = await server.db
+      .select({ bytes: journal.bytes, data: journal.data })
+      .from(journal)
+      .where(eq(journal.spreadsheetId, id))
+      .orderBy(desc(journal.seq))
+      .limit(1);
+    expect(entry?.data).toMatchObject({ cells: [], tables: [] });
+    expect(entry?.data?.rows[0]?.changes).toHaveLength(1);
+    expect(entry?.bytes).toBeLessThan(500);
   });
 });
 
@@ -980,10 +1208,11 @@ describe("pruning limits", () => {
         .from(journal)
         .where(eq(journal.spreadsheetId, fixture.id));
       expect(entries).toHaveLength(2);
+      const { colIds } = (await snapshot(client, fixture.id)).tables[0]!;
       expect(
         entries.find((entry) =>
           entry.input?.cells.some((group) =>
-            group.changes.some(([row, col]) => row === 0 && col === 1),
+            group.changes.some(([, colId]) => colId === colIds[1]),
           ),
         )?.clientId,
       ).toBeNull();
@@ -993,10 +1222,9 @@ describe("pruning limits", () => {
       expect(
         await client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`),
       ).toMatchObject({ outcome: "nothing" });
-      expect((await snapshot(client, fixture.id)).cells.map((cell) => cell.input)).toEqual([
-        "a",
-        "b",
-      ]);
+      expect(
+        (await snapshot(client, fixture.id)).cells.map((cell) => cell.input),
+      ).toEqual(["a", "b"]);
     } finally {
       await limited.close();
     }
@@ -1027,8 +1255,12 @@ describe("pruning limits", () => {
       expect(kept.length).toBeGreaterThan(0);
       expect(kept.length).toBeLessThan(columns.length);
       expect(kept.reduce((sum, entry) => sum + entry.bytes, 0)).toBeLessThanOrEqual(400);
-      // The newest change is among the kept ones: H1 is column 7.
-      expect(kept.at(-1)?.data?.cells[0]?.changes[0]?.slice(0, 2)).toEqual([0, 7]);
+      // The newest change is among the kept ones: H1 is in the first row and the last column.
+      const after = await snapshot(client, fixture.id);
+      expect(kept.at(-1)?.data?.cells[0]?.changes[0]?.slice(0, 2)).toEqual([
+        rowIds(after, fixture.tableId)[0],
+        after.tables[0]?.colIds[7],
+      ]);
     } finally {
       await limited.close();
     }
@@ -1081,7 +1313,7 @@ describe("pruning limits", () => {
         `/tables/${fixture.tableId}/cells`,
         cellsBody({ A1: "large enough" }),
       );
-      expect(response.status).toBe(204);
+      expect(response.status).toBe(200);
       const [entry] = await limited.app.db
         .select({ data: journal.data, bytes: journal.bytes })
         .from(journal)

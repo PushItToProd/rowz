@@ -1,31 +1,22 @@
 import {
   createWorkbook,
-  formatAddress,
   isButton,
   isControl,
   type ActionPlan,
-  type CellId,
   type CellValue,
   type Effect,
-  type EnsureRowsEffect,
   type ErrorValue,
   type Scalar,
   type SendEmailEffect,
-  type SetCellEffect,
   type Workbook,
 } from "@spreadsheet-app/engine";
-import type { StoredCell } from "@spreadsheet-app/shared";
+import type { IdentifiedCell } from "@spreadsheet-app/shared";
 import { eq } from "drizzle-orm";
-import { rememberChanges } from "../changes";
 import type { Database } from "../db/client";
 import { actionRuns, type RunStatus } from "../db/schema";
 import { ApiFailure, unprocessable } from "../errors";
 import type { Mailer } from "../mail/mailer";
-import {
-  SpreadsheetRepository,
-  type RepositoryOptions,
-  type TableRecord,
-} from "../repo/spreadsheets";
+import { SpreadsheetRepository, type Change, type RepositoryOptions } from "../repo/spreadsheets";
 
 /** The header in which the browser says how many minutes its clock is behind UTC. */
 export const UTC_OFFSET_HEADER = "x-utc-offset-minutes";
@@ -58,10 +49,8 @@ export interface ClickResult {
   status: "succeeded" | "failed";
   /** Why the action did nothing, when `status` is `failed`. */
   error: string | null;
-  /** Cells the action wrote, for the client to apply. */
-  cells: StoredCell[];
-  /** Tables the action resized. */
-  tables: TableRecord[];
+  /** What the action wrote to the spreadsheet. `null` when it wrote nothing. */
+  change: Change | null;
   emailsSent: number;
 }
 
@@ -69,14 +58,6 @@ const HOUR_MS = 60 * 60 * 1000;
 
 function describe(error: ErrorValue): string {
   return error.message === undefined ? error.code : `${error.code} ${error.message}`;
-}
-
-function isSetCell(effect: Effect): effect is SetCellEffect {
-  return effect.type === "setCell";
-}
-
-function isEnsureRows(effect: Effect): effect is EnsureRowsEffect {
-  return effect.type === "ensureRows";
 }
 
 function isSendEmail(effect: Effect): effect is SendEmailEffect {
@@ -94,7 +75,7 @@ interface Planned {
   runId: string;
   failure: string | null;
   effects: Effect[];
-  tables: TableRecord[];
+  change: Change | null;
 }
 
 /**
@@ -113,12 +94,12 @@ type Decide = (workbook: Workbook, value: CellValue) => ActionPlan;
 export function runButton(
   dependencies: ActionDependencies,
   userId: string,
-  cell: CellId,
+  cell: IdentifiedCell,
   now: () => number,
 ): Promise<ClickResult> {
   return runCell(dependencies, userId, cell, now, (workbook, value) => {
     if (!isButton(value)) {
-      throw unprocessable("not_a_button", `${formatAddress(cell)} does not hold a button`);
+      throw unprocessable("not_a_button", "The selected cell does not hold a button");
     }
     return workbook.planAction(value.action);
   });
@@ -132,7 +113,7 @@ export function runButton(
 export function runControl(
   dependencies: ActionDependencies,
   userId: string,
-  cell: CellId,
+  cell: IdentifiedCell,
   input: Scalar,
   now: () => number,
 ): Promise<ClickResult> {
@@ -140,7 +121,7 @@ export function runControl(
     if (!isControl(value)) {
       throw unprocessable(
         "not_a_control",
-        `${formatAddress(cell)} does not hold a checkbox or a dropdown`,
+        "The selected cell does not hold a checkbox or a dropdown",
       );
     }
     return workbook.planInput(value, input);
@@ -148,14 +129,14 @@ export function runControl(
 }
 
 /**
- * Carries out what a cell asks for. Cell writes, table growth, and the audit
- * record commit together. Email is sent after the commit, so a rolled-back
- * run never sends mail.
+ * Carries out what a cell asks for. What the action writes to the spreadsheet
+ * is one change, and it commits together with the audit record. Email is sent
+ * after the commit, so a rolled-back run never sends mail.
  */
 async function runCell(
   { db, mailer, emailsPerHour, repositoryOptions }: ActionDependencies,
   userId: string,
-  cell: CellId,
+  cell: IdentifiedCell,
   now: () => number,
   decide: Decide,
 ): Promise<ClickResult> {
@@ -164,13 +145,16 @@ async function runCell(
     const { spreadsheetId } = await repository.findTable(cell.tableId, "write");
     await repository.lockSpreadsheet(spreadsheetId);
 
-    const workbook = createWorkbook(await repository.getSnapshot(spreadsheetId), { now });
-    const plan = decide(workbook, workbook.getValue(cell));
+    // The request names the cell by id. The engine works by position, and both come from this read.
+    const contents = await repository.read(spreadsheetId);
+    const resolved = contents.position(cell);
+    const workbook = createWorkbook(contents.data, { now });
+    const plan = decide(workbook, workbook.getValue(resolved));
 
     const record = async (
       effects: Effect[],
       failure: string | null,
-      tables: TableRecord[] = [],
+      change: Change | null = null,
     ): Promise<Planned> => {
       const status: RunStatus =
         failure !== null ? "failed" : effects.some(isSendEmail) ? "pending" : "succeeded";
@@ -178,7 +162,7 @@ async function runCell(
         .insert(actionRuns)
         .values({
           spreadsheetId,
-          ...cell,
+          ...resolved,
           userId,
           effects,
           // A refused run sends nothing, so it uses none of the user's limit.
@@ -188,7 +172,7 @@ async function runCell(
         })
         .returning({ id: actionRuns.id });
       if (!run) throw new Error("Insert returned no action run");
-      return { runId: run.id, failure, effects, tables };
+      return { runId: run.id, failure, effects, change };
     };
 
     if (!plan.ok) return record([], describe(plan.error));
@@ -204,42 +188,23 @@ async function runCell(
       }
     }
 
-    const forgetChanges = rememberChanges();
     try {
-      // A nested transaction, so a change that is refused undoes the changes
-      // before it while the failed run is still recorded.
-      const tables = await tx.transaction(async (writes) => {
-        const writer = new SpreadsheetRepository(writes, userId, repositoryOptions);
-        const grown: TableRecord[] = [];
-        // Tables grow first, so the cells written into new rows are inside the table.
-        for (const { tableId, rowCount } of effects.filter(isEnsureRows)) {
-          const table = await writer.ensureRows(tableId, rowCount);
-          if (table) grown.push(table);
-        }
-        for (const [tableId, tableEffects] of Map.groupBy(
-          effects.filter(isSetCell),
-          (effect) => effect.tableId,
-        )) {
-          await writer.setCells(tableId, tableEffects);
-        }
-        return grown;
-      });
-      return await record(effects, null, tables);
+      // The change runs in a transaction of its own, nested in this one, so
+      // one that is refused writes nothing while the failed run is still recorded.
+      const change = await repository.applyEffects(spreadsheetId, effects);
+      return await record(effects, null, change ?? null);
     } catch (cause) {
       if (!(cause instanceof ApiFailure)) throw cause;
-      // The changes made before the refused one are rolled back, so the request
-      // has no step to undo and nothing to tell other sessions about.
-      forgetChanges();
       return record(effects, cause.message);
     }
   });
 
-  const { runId, failure, effects, tables } = planned;
+  const { runId, failure, effects, change } = planned;
   if (failure !== null) {
-    return { runId, status: "failed", error: failure, cells: [], tables: [], emailsSent: 0 };
+    return { runId, status: "failed", error: failure, change: null, emailsSent: 0 };
   }
 
-  const done = { runId, cells: writtenCells(effects), tables };
+  const done = { runId, change };
   const emails = effects.filter(isSendEmail);
   if (emails.length > 0) {
     const { sent, failure: outcome } = await sendAll(mailer, emails);
@@ -256,15 +221,6 @@ async function runCell(
     if (outcome !== null) return { ...done, status: "failed", error: outcome, emailsSent: 0 };
   }
   return { ...done, status: "succeeded", error: null, emailsSent: emails.length };
-}
-
-/** The cells the effects wrote. When one cell was written twice, the last write is the one stored. */
-function writtenCells(effects: readonly Effect[]): StoredCell[] {
-  const cells = new Map<string, StoredCell>();
-  for (const { tableId, row, col, input } of effects.filter(isSetCell)) {
-    cells.set(`${tableId}:${formatAddress({ row, col })}`, { tableId, row, col, input });
-  }
-  return [...cells.values()];
 }
 
 /** Sends the messages in order and stops at the first that fails. Returns the ones sent, and a description of the failure if there was one. */

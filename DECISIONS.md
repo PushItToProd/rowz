@@ -2,15 +2,23 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-01: Persistent addresses in editor requests
+
+Row and column UUIDs now identify saves, button clicks, control inputs, column updates, formats, and structural edits. `TableLayout` resolves them under the spreadsheet lock. Missing identities refuse the whole request with 409. An insertion names its next neighbor and supplies new UUIDs; a deletion names existing UUIDs and removes contiguous groups last first, preserving intervening rows inserted by another editor. Snapshots and returned table records include their layouts, while journal table records omit row arrays and record rows separately.
+
+Selections and drafts follow identities through refreshes. All workbook-store mutations, including undo and redo, enter one ordered queue. File exports still contain positions and no IDs. This replaces the positional-save limitation in "Fixes from a code review". Cell storage, journal cell addresses, and the existing conservative undo rules remain until the following migration and undo steps. Data-table growth, revisioned events, and stale-formula checks are not yet implemented; paste growth still requires the separate positional resize.
+
 ## 2026-10-01: Persistent row identity prerequisites
 
 **Decision.** Begin the persistent row identity plan with shared identity-to-position translation, a base-62 order-key generator, formula-only structural rewrites, and the independent spreadsheet row limit. The database and requests still name cells by position until the rest of step 1 is implemented.
 
-**Order keys.** A letter declares the integer part's length, followed by base-62 digits and an optional fractional suffix. Counting the integer part at either end keeps key length logarithmic. Inserts into a fixed gap add fractional digits. The 311th insert between `a0` and `a1` produces a 65-character key; the server will rebalance above 64 characters when row storage is implemented. Backfilled keys need the prefix: `f` plus a five-digit row index plus `V`. Plain padded digits are incompatible with this generator.
+**Order keys.** A letter declares the integer part's length, followed by base-62 digits and an optional fractional suffix. Counting the integer part at either end keeps key length logarithmic. Inserts into a fixed gap add fractional digits. The 311th insert between `a0` and `a1` produces a 65-character key; the server rebalances above 64 characters. Backfilled keys need the prefix: `f` plus a five-digit row index plus `V`. Plain padded digits are incompatible with this generator.
 
 **Row limit.** Enforce the author's accepted 100,000-row spreadsheet limit now, using existing row counts. `ContentWriter` checks table creation and growth under the transaction's lock. File validation and undo enforce the same limit. A legacy spreadsheet above the limit can still shrink, including through undo. This prevents row-record growth when the migration arrives.
 
 **To change.** The key format is in `packages/shared/src/order-keys.ts`. Change it before applying the row migration; afterward, converting stored keys also requires clearing journal entries that hold old keys. The row limit is `LIMITS.spreadsheetRows`. Raise it with grid virtualization and range indexing, as the plan specifies.
+
+The next preparation stage persists `table_rows` and `tables.col_ids`, backfills them in migration 0009, and clears incompatible undo history. Row changes are journaled separately from table records. Existing IDs survive positional edits, resizing, and undo/redo; imports and version restoration create new IDs. Rebalancing keys clears every tab's spreadsheet history and makes that transaction non-undoable. Batched inserts divide the available key interval recursively so adding many adjacent rows does not lengthen keys linearly. Cell storage and requests remain positional until the remaining integration is implemented.
 
 ## 2026-10-01: Undo through a server-side journal
 

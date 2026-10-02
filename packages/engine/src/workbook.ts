@@ -160,8 +160,11 @@ export class Workbook {
 
   /** Tables whose cells were last read according to named columns. */
   private readonly typed = new Set<string>();
-  /** For each data table, how many cells of each row hold something typed. */
-  private readonly typedInRow = new Map<string, Map<number, number>>();
+  /**
+   * For each data table that was given no size, how many of its rows have
+   * their formula-column cells: the rows through the last one typed into.
+   */
+  private readonly computedRows = new Map<string, number>();
 
   private settling = false;
   /** Counts calls to `invalidate`, so a computing pass can tell that one happened under it. */
@@ -185,7 +188,9 @@ export class Workbook {
       if (!this.cells.has(table.id)) this.cells.set(table.id, new Map());
     }
     for (const tableId of this.cells.keys()) {
-      if (!this.tables.table(tableId)) this.cells.delete(tableId);
+      if (this.tables.table(tableId)) continue;
+      this.cells.delete(tableId);
+      this.computedRows.delete(tableId);
     }
     for (const table of structure.tables) this.applyColumns(table);
 
@@ -204,9 +209,9 @@ export class Workbook {
   }
 
   /**
-   * Makes a table's cells agree with its columns: every row that holds
-   * something computes the formulas of the formula columns, and what was
-   * typed into a typed column is read as that type.
+   * Makes a table's cells agree with its columns: every row computes the
+   * formulas of the formula columns, and what was typed into a typed column
+   * is read as that type.
    */
   private applyColumns(table: TableDefinition): void {
     const records = this.cells.get(table.id);
@@ -215,22 +220,23 @@ export class Workbook {
     if (!table.columns && !this.typed.has(table.id)) return;
     if (table.columns) this.typed.add(table.id);
     else this.typed.delete(table.id);
+    let typedRows = 0;
     for (const [key, record] of records) {
       const column = table.columns?.[record.id.col];
       if (record.computed || column?.type === "formula") records.delete(key);
-      else record.content = parseTyped(record.input, column?.type ?? "any");
+      else {
+        record.content = parseTyped(record.input, column?.type ?? "any");
+        typedRows = Math.max(typedRows, record.id.row + 1);
+      }
     }
-    const filled = new Map<number, number>();
-    for (const { id } of records.values()) filled.set(id.row, (filled.get(id.row) ?? 0) + 1);
-    if (table.columns) this.typedInRow.set(table.id, filled);
-    else this.typedInRow.delete(table.id);
-    for (const row of filled.keys()) this.computeRow(table, row, records);
+    this.computedRows.delete(table.id);
+    if (!table.columns) return;
+    const rows = table.rowCount ?? typedRows;
+    if (table.rowCount === undefined) this.computedRows.set(table.id, rows);
+    for (let row = 0; row < rows; row += 1) this.computeRow(table, row, records);
   }
 
-  /**
-   * Gives a row its formula-column cells. A row gets them once something is
-   * typed into it, so the empty rows at the end of a table stay empty.
-   */
+  /** Gives a row its formula-column cells. */
   private computeRow(
     table: TableDefinition,
     row: number,
@@ -239,7 +245,6 @@ export class Workbook {
     const added: CellRecord[] = [];
     for (const [col, column] of (table.columns ?? []).entries()) {
       if (column.type !== "formula" || column.formula === undefined) continue;
-      if (row >= (table.rowCount ?? Infinity)) continue;
       const id = { tableId: table.id, row, col };
       const record: CellRecord = {
         id,
@@ -255,32 +260,20 @@ export class Workbook {
   }
 
   /**
-   * Keeps count of what is typed into a row of a data table. The first cell
-   * typed into a row gives it its formula-column cells, and clearing the last
-   * takes them away.
+   * Gives the rows through `row` their formula-column cells, in a data table
+   * that was given no size and so ends at the last row typed into.
    */
-  private trackRow(id: CellId, was: boolean, is: boolean, records: Map<string, CellRecord>): void {
-    const filled = this.typedInRow.get(id.tableId);
-    const table = this.tables.table(id.tableId);
-    if (!filled || !table || was === is) return;
-    const count = (filled.get(id.row) ?? 0) + (is ? 1 : -1);
-    if (count > 0) filled.set(id.row, count);
-    else filled.delete(id.row);
-
-    if (is && count === 1) {
-      for (const record of this.computeRow(table, id.row, records)) {
+  private coverRow({ tableId, row }: CellId, records: Map<string, CellRecord>): void {
+    const covered = this.computedRows.get(tableId);
+    const table = this.tables.table(tableId);
+    if (covered === undefined || !table || row < covered) return;
+    for (let next = covered; next <= row; next += 1) {
+      for (const record of this.computeRow(table, next, records)) {
         this.index(record);
         this.invalidate(record.id);
       }
-    } else if (!is && count === 0) {
-      for (const [key, record] of records) {
-        if (!record.computed || record.id.row !== id.row) continue;
-        records.delete(key);
-        this.pending.delete(record);
-        this.dependencies.remove(record.id);
-        this.invalidate(record.id);
-      }
     }
+    this.computedRows.set(tableId, row + 1);
   }
 
   /** The column a cell is in, when its table has named columns. */
@@ -311,7 +304,7 @@ export class Workbook {
       this.index(record);
     }
 
-    this.trackRow(id, replaced !== undefined, input !== "", records);
+    if (input !== "") this.coverRow(id, records);
 
     // An array that had filled this cell no longer fits, and one that did not
     // fit in this table may fit now.
@@ -441,6 +434,10 @@ export class Workbook {
       origin: action.origin,
       evaluate: (node) => evaluate(node, context),
       resolve: (reference) => context.resolve(reference),
+      tableOf: (tableId) => ({
+        ...this.extent(tableId),
+        columns: this.tables.table(tableId)?.columns ?? null,
+      }),
       // A formula column's cells hold nothing a user typed, and nothing can be typed into them.
       inputsIn: (range) =>
         this.recordsIn(range)

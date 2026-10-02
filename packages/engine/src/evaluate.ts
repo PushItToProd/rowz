@@ -190,7 +190,8 @@ function operand(node: Node, context: EvaluationContext): Evaluated {
  * computation. When an operand is an array, the operator is applied cell by
  * cell and the result is an array: a single value pairs with every cell, and
  * an array of one row or one column pairs with every row or column of a
- * larger one. A cell with no partner is `#N/A`.
+ * larger one. A cell with no partner is `#N/A`. An array with no rows gives
+ * an array with no rows.
  */
 function elementwise(
   operands: readonly Evaluated[],
@@ -199,6 +200,8 @@ function elementwise(
   if (!operands.some(isRange)) return operate(...operands.map(scalar));
 
   const grids = operands.map((operand) => (isRange(operand) ? operand.rows : [[scalar(operand)]]));
+  // A range over a table with no rows has no cell to pair with anything.
+  if (grids.some((rows) => rows.length === 0)) return array([]);
   const height = Math.max(...grids.map((rows) => rows.length));
   const width = Math.max(...grids.map((rows) => rows[0]?.length ?? 0));
   const cellAt = (rows: readonly CellValue[][], row: number, col: number): CellValue => {

@@ -6,7 +6,7 @@ import {
   columnLabel,
   formatAddress,
   formatRulesAfterEdit,
-  inputsAfterEdit,
+  formulasAfterEdit,
   inputsAfterMove,
   inputsAfterRename,
   isFormulaInput,
@@ -18,9 +18,11 @@ import {
   type ColumnDefinition,
   type ColumnFormula,
   type ColumnType,
+  type Effect,
   type FormatRule,
   type Move,
   type Rename,
+  type StoredInput,
   type StructuralEdit,
 } from "@spreadsheet-app/engine";
 import {
@@ -29,36 +31,49 @@ import {
   FILE_LIMITS,
   LIMITS,
   MAX_FORMAT_RULES,
+  keysAfter,
+  TableLayout,
+  type IdentityCellInput,
+  type IdentityFormatRange,
+  type IdentifiedStructuralEditBody,
   type CellInput,
   type JournalLimits,
+  type RowRecord,
   type SpreadsheetFile,
   type StoredCell,
   toSpreadsheetFile,
-  type StructuralEditBody,
 } from "@spreadsheet-app/shared";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, asc, count, desc, eq, gte, gt, inArray, notInArray, or, sql, sum } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, gt, inArray, lt, notInArray, sql, sum } from "drizzle-orm";
 import { noteChange, noteJournaled, requestContext } from "../changes";
 import type { Database } from "../db/client";
+import { Contents } from "./contents";
 import {
   applyRecorded,
   ContentWriter,
+  countRows,
+  MAX_ANNOUNCED_CELLS,
+  orderedRows,
+  type Change,
   type ChangedContent,
   type JournalData,
   readInputs,
   touchSame,
   UndoRefusal,
+  writesFormulas,
 } from "./journal";
 import {
   actionRuns,
   cells,
+  deletedRows,
   journal,
   pages,
   spreadsheetMembers,
   versions,
   spreadsheets,
   tables,
+  tableRows,
   users,
   views,
   workspaceMembers,
@@ -67,14 +82,20 @@ import {
   type ViewKind,
 } from "../db/schema";
 import {
+  ApiFailure,
+  columnDeleted,
   conflict,
   forbidden,
   isForeignKeyViolation,
   isUniqueViolation,
   notFound,
   ownerOnly,
+  rowDeleted,
+  staleFormula,
   unprocessable,
 } from "../errors";
+
+export type { Change, ChangedContent } from "./journal";
 
 /** What a caller means to do: read, change the contents, or do what only the owner may. */
 export type Access = "read" | "write" | "own";
@@ -106,13 +127,18 @@ export interface PageRecord {
   position: number;
 }
 
+/**
+ * A table without its rows, which are records of their own. Holding no row
+ * count keeps one person's added row from making the table another person
+ * recorded look changed.
+ */
 export interface TableRecord {
   id: string;
   pageId: string;
   name: string;
   position: number;
-  rowCount: number;
-  colCount: number;
+  /** The ids of the table's columns, in order. */
+  colIds: string[];
   /** The named columns of a data table, one for each column. `null` for a plain table. */
   columns: ColumnDefinition[] | null;
   /** How cells are shown: rules applied in order, later ones over earlier ones. */
@@ -132,16 +158,6 @@ export interface ViewRecord {
 
 /** A page, table, or view as a lookup returns it: with its spreadsheet and the caller's role there. */
 type Found<T> = T & { spreadsheetId: string; role: Role };
-
-/** What a rename or a row or column edit rewrote, for the client to apply. */
-export interface Rewritten {
-  /** Cells that changed. An empty input means the cell is now empty. */
-  cells: StoredCell[];
-  /** Charts and text views whose sources changed. */
-  views: { id: string; source: string }[];
-  /** Tables whose formula columns changed. */
-  tables: TableRecord[];
-}
 
 /** A kept version of a spreadsheet, as the history lists it. */
 export interface VersionRecord {
@@ -163,8 +179,12 @@ export interface Snapshot {
   id: string;
   name: string;
   role: Role;
+  /** How many changes have been made to what the spreadsheet holds. A change carries the revision it made. */
+  revision: number;
   pages: PageRecord[];
   tables: TableRecord[];
+  /** The rows of every table. Their order within a table is the order of their keys. */
+  rows: RowRecord[];
   views: ViewRecord[];
   cells: StoredCell[];
 }
@@ -179,7 +199,8 @@ export interface UndoResult {
   outcome: "done" | "refused" | "nothing";
   label: string | null;
   error: string | null;
-  changed: ChangedContent;
+  /** What the undo or redo wrote. `null` when it wrote nothing. */
+  change: Change | null;
   undoable: boolean;
   redoable: boolean;
 }
@@ -190,8 +211,7 @@ const tableColumns = {
   pageId: tables.pageId,
   name: tables.name,
   position: tables.position,
-  rowCount: tables.rowCount,
-  colCount: tables.colCount,
+  colIds: tables.colIds,
   columns: tables.columns,
   formats: tables.formats,
 };
@@ -239,8 +259,8 @@ function repeated(names: readonly string[]): string | undefined {
 
 /**
  * Refuses a file that breaks a rule the request schema cannot state: names
- * that collide, cells outside their table or listed twice, and too many cells
- * in all.
+ * that collide, a plain table with no rows, cells outside their table or
+ * listed twice, and too many cells or rows in all.
  */
 function checkFile(file: SpreadsheetFile): void {
   const invalid = (message: string): never => {
@@ -257,6 +277,7 @@ function checkFile(file: SpreadsheetFile): void {
     if (table !== undefined) invalid(`Two tables on ${pageName} are named ${table}`);
     for (const { name, rowCount, colCount, cells: fileCells, columns } of fileTables) {
       totalRows += rowCount;
+      if (rowCount === 0 && !columns) invalid(`The table ${name} has no rows`);
       if (columns) {
         if (columns.length !== colCount) {
           invalid(
@@ -359,8 +380,9 @@ export class SpreadsheetRepository {
 
   /**
    * Runs a change to what a spreadsheet holds, under its lock. What `work`
-   * writes through the writer becomes one journal entry, and `touch` follows
-   * the work. Every change goes through here.
+   * writes through the writer becomes one journal entry, one revision, and
+   * one announcement to the sessions that have the spreadsheet open. Every
+   * change goes through here.
    *
    * What a caller read before the lock may be stale by the time `work` runs.
    * `work` reads again whatever it decides by, which `changePage`,
@@ -369,12 +391,13 @@ export class SpreadsheetRepository {
   private async change<T>(
     spreadsheetId: string,
     work: (tx: Database, writer: ContentWriter) => Promise<T>,
-  ): Promise<T> {
+  ): Promise<Outcome<T>> {
     const outcome = await this.locked(spreadsheetId, async (tx) => {
       let journaled = false;
       const writer = new ContentWriter(
         tx,
         this.userId,
+        spreadsheetId,
         this.options.journalLimits?.journalEntryBytes,
       );
       const result = await work(tx, writer);
@@ -400,6 +423,7 @@ export class SpreadsheetRepository {
           userId: this.userId,
           clientId,
           rewrites: writer.rewroteReferences,
+          formulas: recorded.formulas,
           label: writer.label,
           data: recorded.data,
           bytes: recorded.bytes,
@@ -407,11 +431,40 @@ export class SpreadsheetRepository {
         await this.pruneJournal(tx, spreadsheetId);
         journaled = true;
       }
-      await this.touch(tx, spreadsheetId);
-      return { result, journaled };
+      const revision = await this.touch(tx, spreadsheetId, writer.rewroteReferences);
+      const change = { revision, changed: writer.changed() };
+      noteChange(spreadsheetId, change);
+      return { result, change, journaled };
     });
     if (outcome.journaled) noteJournaled();
-    return outcome.result;
+    return { result: outcome.result, change: outcome.change };
+  }
+
+  /**
+   * Reads a spreadsheet for the formula engine, which names cells by
+   * position. Inside a change the read is as current as the lock makes it.
+   */
+  async read(spreadsheetId: string): Promise<Contents> {
+    return new Contents(await this.getSnapshot(spreadsheetId));
+  }
+
+  /**
+   * Refuses formula text that was written before the last change to what
+   * references mean. `revision` is the one the writer's session had applied
+   * when the text was begun. A request that gives none is not checked. Must
+   * run inside `change`.
+   */
+  private async checkWrittenAt(
+    tx: Database,
+    spreadsheetId: string,
+    revision: number | undefined,
+  ): Promise<void> {
+    if (revision === undefined) return;
+    const [current] = await tx
+      .select({ rewriteRevision: spreadsheets.rewriteRevision })
+      .from(spreadsheets)
+      .where(eq(spreadsheets.id, spreadsheetId));
+    if (current && revision < current.rewriteRevision) throw staleFormula();
   }
 
   private async pruneJournal(tx: Database, spreadsheetId: string): Promise<void> {
@@ -433,6 +486,15 @@ export class SpreadsheetRepository {
     for (const entry of entries) {
       if (entry.createdAt.getTime() < cutoff) deleted.add(entry.seq);
     }
+    // The ids of deleted rows are kept as long as a journal entry could bring them back.
+    await tx
+      .delete(deletedRows)
+      .where(
+        and(
+          eq(deletedRows.spreadsheetId, spreadsheetId),
+          lt(deletedRows.deletedAt, new Date(cutoff)),
+        ),
+      );
     const remaining = entries.filter((entry) => !deleted.has(entry.seq));
     let bytes = remaining.reduce((sumOfBytes, entry) => sumOfBytes + entry.bytes, 0);
     while (
@@ -467,7 +529,7 @@ export class SpreadsheetRepository {
   private async changePage<T>(
     pageId: string,
     work: (page: Found<PageRecord>, tx: Database, writer: ContentWriter) => Promise<T>,
-  ): Promise<T> {
+  ): Promise<Outcome<T>> {
     const { spreadsheetId } = await this.findPage(pageId, "write");
     return this.change(spreadsheetId, async (tx, writer) =>
       work(await this.within(tx).findPage(pageId, "write"), tx, writer),
@@ -478,7 +540,7 @@ export class SpreadsheetRepository {
   private async changeTable<T>(
     tableId: string,
     work: (table: Found<TableRecord>, tx: Database, writer: ContentWriter) => Promise<T>,
-  ): Promise<T> {
+  ): Promise<Outcome<T>> {
     const { spreadsheetId } = await this.findTable(tableId, "write");
     return this.change(spreadsheetId, async (tx, writer) =>
       work(await this.within(tx).findTable(tableId, "write"), tx, writer),
@@ -489,7 +551,7 @@ export class SpreadsheetRepository {
   private async changeView<T>(
     viewId: string,
     work: (view: Found<ViewRecord>, tx: Database, writer: ContentWriter) => Promise<T>,
-  ): Promise<T> {
+  ): Promise<Outcome<T>> {
     const { spreadsheetId } = await this.findView(viewId, "write");
     return this.change(spreadsheetId, async (tx, writer) =>
       work(await this.within(tx).findView(viewId, "write"), tx, writer),
@@ -623,12 +685,26 @@ export class SpreadsheetRepository {
     });
   }
 
-  /** Creates the pages of a file, and everything on them, in a spreadsheet that has none. */
+  /**
+   * Creates the pages of a file, and everything on them, in a spreadsheet
+   * that has none. Rows and columns get new ids, as pages and tables do: a
+   * file names them by position.
+   */
   private async insertContents(
     tx: Database,
     spreadsheetId: string,
     file: SpreadsheetFile,
   ): Promise<void> {
+    // A file kept as a version of a spreadsheet that had more rows than the limit is refused too.
+    const fileTables = file.pages.flatMap((page) =>
+      page.blocks.filter((block) => block.type === "table"),
+    );
+    if (fileTables.reduce((total, table) => total + table.rowCount, 0) > LIMITS.spreadsheetRows) {
+      throw unprocessable(
+        "too_many_rows",
+        `A spreadsheet can have at most ${String(LIMITS.spreadsheetRows)} rows`,
+      );
+    }
     for (const [pagePosition, page] of file.pages.entries()) {
       const [created] = await tx
         .insert(pages)
@@ -647,29 +723,31 @@ export class SpreadsheetRepository {
           continue;
         }
         const columns = block.columns?.map(normalized) ?? null;
+        const colIds = Array.from({ length: block.colCount }, () => randomUUID());
         const [table] = await tx
           .insert(tables)
-          .values({
-            ...placed,
-            rowCount: block.rowCount,
-            colCount: block.colCount,
-            columns,
-            formats: block.formats ?? [],
-          })
+          .values({ ...placed, colIds, columns, formats: block.formats ?? [] })
           .returning({ id: tables.id });
         if (!table) throw new Error("Insert returned no table");
-        // A formula column computes its cells, so none are stored for it.
-        const filled = block.cells.filter(
-          (cell) => cell.input !== "" && columns?.[cell.col]?.type !== "formula",
-        );
+        const rows = keysAfter(null, block.rowCount).map((orderKey) => ({
+          id: randomUUID(),
+          tableId: table.id,
+          orderKey,
+        }));
+        for (let from = 0; from < rows.length; from += INSERT_BATCH) {
+          await tx.insert(tableRows).values(rows.slice(from, from + INSERT_BATCH));
+        }
+        const layout = new TableLayout(rows, colIds);
+        const filled = block.cells.flatMap((cell) => {
+          const identity = layout.identity(cell);
+          // A formula column computes its cells, so none are stored for it.
+          const kept = cell.input !== "" && columns?.[cell.col]?.type !== "formula";
+          return kept && identity
+            ? [{ tableId: table.id, ...identity, input: cell.input, updatedBy: this.userId }]
+            : [];
+        });
         for (let from = 0; from < filled.length; from += INSERT_BATCH) {
-          await tx.insert(cells).values(
-            filled.slice(from, from + INSERT_BATCH).map((cell) => ({
-              tableId: table.id,
-              ...cell,
-              updatedBy: this.userId,
-            })),
-          );
+          await tx.insert(cells).values(filled.slice(from, from + INSERT_BATCH));
         }
       }
     }
@@ -693,22 +771,26 @@ export class SpreadsheetRepository {
 
   /**
    * Puts a spreadsheet back as a kept version has it. What it holds now is
-   * kept as a version first, so restoring can itself be undone.
+   * kept as a version first, so restoring can itself be undone. Everything is
+   * replaced, with new ids, so sessions read the spreadsheet again.
    */
-  async restoreVersion(spreadsheetId: string, versionId: string): Promise<void> {
+  async restoreVersion(spreadsheetId: string, versionId: string): Promise<Change> {
     await this.findSpreadsheet(spreadsheetId, "write");
-    await this.change(spreadsheetId, async (tx) => {
+    const { change } = await this.change(spreadsheetId, async (tx, writer) => {
       const version = await this.findVersion(tx, spreadsheetId, versionId);
       await this.keepVersion(tx, spreadsheetId, "Before restoring an earlier version");
       await tx.delete(journal).where(eq(journal.spreadsheetId, spreadsheetId));
-      // Pages take their tables, cells, and views with them.
+      // Pages take their tables, rows, cells, and views with them.
       await tx.delete(pages).where(eq(pages.spreadsheetId, spreadsheetId));
       await tx
         .update(spreadsheets)
         .set({ name: version.name })
         .where(eq(spreadsheets.id, spreadsheetId));
       await this.insertContents(tx, spreadsheetId, version);
+      writer.markRewrites();
+      writer.markUndescribed();
     });
+    return change;
   }
 
   /** Makes a new spreadsheet, in the caller's own workspace, of a kept version. */
@@ -756,22 +838,22 @@ export class SpreadsheetRepository {
     spreadsheetId: string,
     reason: string | null,
   ): Promise<void> {
-    const snapshot = await this.within(db).getSnapshot(spreadsheetId);
+    const { snapshot, data } = await this.within(db).read(spreadsheetId);
     const cellsOf = new Map<string, CellInput[]>();
-    for (const { tableId, ...cell } of snapshot.cells) {
+    for (const { tableId, ...cell } of data.cells) {
       const held = cellsOf.get(tableId);
       // Added in place: copying the list for each cell takes seconds for a full table.
       if (held) held.push(cell);
       else cellsOf.set(tableId, [cell]);
     }
-    const data = toSpreadsheetFile(
+    const file = toSpreadsheetFile(
       snapshot.name,
       snapshot.pages,
-      snapshot.tables,
+      data.tables,
       snapshot.views,
       (table) => cellsOf.get(table.id) ?? [],
     );
-    await db.insert(versions).values({ spreadsheetId, createdBy: this.userId, reason, data });
+    await db.insert(versions).values({ spreadsheetId, createdBy: this.userId, reason, data: file });
 
     const stale = await db
       .select({ id: versions.id })
@@ -790,17 +872,25 @@ export class SpreadsheetRepository {
   }
 
   /**
-   * Marks the spreadsheet as changed now. When no version was kept lately,
-   * one is kept of the spreadsheet as the change leaves it.
+   * Marks the spreadsheet as changed now, and returns the revision the change
+   * made. `rewrites` says the change altered what references mean. When no
+   * version was kept lately, one is kept of the spreadsheet as the change
+   * leaves it.
    */
-  private async touch(db: Database, spreadsheetId: string): Promise<void> {
-    noteChange(spreadsheetId);
-    await db
+  private async touch(db: Database, spreadsheetId: string, rewrites = false): Promise<number> {
+    const next = sql`${spreadsheets.revision} + 1`;
+    const [touched] = await db
       .update(spreadsheets)
       // The clock, not the start of the transaction: a version kept earlier in
       // this transaction must count as older than this change.
-      .set({ updatedAt: sql`clock_timestamp()` })
-      .where(eq(spreadsheets.id, spreadsheetId));
+      .set({
+        updatedAt: sql`clock_timestamp()`,
+        revision: next,
+        ...(rewrites ? { rewriteRevision: next } : {}),
+      })
+      .where(eq(spreadsheets.id, spreadsheetId))
+      .returning({ revision: spreadsheets.revision });
+    if (!touched) throw notFound("Spreadsheet");
     const [latest] = await db
       .select({ createdAt: versions.createdAt })
       .from(versions)
@@ -810,6 +900,7 @@ export class SpreadsheetRepository {
     if (!latest || Date.now() - latest.createdAt.getTime() >= VERSION_INTERVAL_MS) {
       await this.saveVersion(db, spreadsheetId, null);
     }
+    return touched.revision;
   }
 
   /**
@@ -823,19 +914,35 @@ export class SpreadsheetRepository {
     return this.db.transaction(
       async (tx) => {
         const spreadsheet = await this.within(tx).findSpreadsheet(spreadsheetId, "read");
+        const [counted] = await tx
+          .select({ revision: spreadsheets.revision })
+          .from(spreadsheets)
+          .where(eq(spreadsheets.id, spreadsheetId));
         const pageRows = await tx
           .select(pageColumns)
           .from(pages)
           .where(eq(pages.spreadsheetId, spreadsheetId))
           .orderBy(asc(pages.position));
-        const tableRows = await tx
+        const tableRecords = await tx
           .select(tableColumns)
           .from(tables)
           .innerJoin(pages, eq(pages.id, tables.pageId))
           .where(eq(pages.spreadsheetId, spreadsheetId))
           .orderBy(asc(tables.position));
+        const rowRecords = await tx
+          .select({ id: tableRows.id, tableId: tableRows.tableId, orderKey: tableRows.orderKey })
+          .from(tableRows)
+          .innerJoin(tables, eq(tables.id, tableRows.tableId))
+          .innerJoin(pages, eq(pages.id, tables.pageId))
+          .where(eq(pages.spreadsheetId, spreadsheetId))
+          .orderBy(asc(tableRows.tableId), asc(tableRows.orderKey));
         const cellRows = await tx
-          .select({ tableId: cells.tableId, row: cells.row, col: cells.col, input: cells.input })
+          .select({
+            tableId: cells.tableId,
+            rowId: cells.rowId,
+            colId: cells.colId,
+            input: cells.input,
+          })
           .from(cells)
           .innerJoin(tables, eq(tables.id, cells.tableId))
           .innerJoin(pages, eq(pages.id, tables.pageId))
@@ -848,14 +955,26 @@ export class SpreadsheetRepository {
           .orderBy(asc(views.position));
         return {
           ...spreadsheet,
+          revision: counted?.revision ?? 0,
           pages: pageRows,
-          tables: tableRows,
+          tables: tableRecords,
+          rows: rowRecords,
           views: viewRows,
           cells: cellRows,
         };
       },
       { isolationLevel: "repeatable read", accessMode: "read only" },
     );
+  }
+
+  /** How many changes have been made to what a spreadsheet holds. */
+  async revisionOf(spreadsheetId: string): Promise<number> {
+    await this.findSpreadsheet(spreadsheetId, "read");
+    const [counted] = await this.db
+      .select({ revision: spreadsheets.revision })
+      .from(spreadsheets)
+      .where(eq(spreadsheets.id, spreadsheetId));
+    return counted?.revision ?? 0;
   }
 
   async renameSpreadsheet(spreadsheetId: string, name: string): Promise<void> {
@@ -878,9 +997,9 @@ export class SpreadsheetRepository {
   async createPage(
     spreadsheetId: string,
     name?: string,
-  ): Promise<{ page: PageRecord; table: TableRecord }> {
+  ): Promise<Created<{ page: PageRecord; table: TableRecord }>> {
     await this.findSpreadsheet(spreadsheetId, "write");
-    return this.change(spreadsheetId, async (tx, writer) => {
+    const { result, change } = await this.change(spreadsheetId, async (tx, writer) => {
       writer.setLabel("Add page");
       const siblings = await tx
         .select({ name: pages.name, position: pages.position })
@@ -906,20 +1025,17 @@ export class SpreadsheetRepository {
       const table = await this.insertTable(tx, page.id, undefined, writer);
       return { page, table };
     });
+    return { ...result, change };
   }
 
-  /** Renames a page and the formulas that name it. Returns what was rewritten. */
-  async renamePage(pageId: string, name: string): Promise<Rewritten> {
-    return this.changePage(pageId, async (page, tx, writer) => {
+  /** Renames a page and the formulas that name it. */
+  async renamePage(pageId: string, name: string): Promise<Change> {
+    const { change } = await this.changePage(pageId, async (page, tx, writer) => {
       writer.setLabel(`Rename page ${page.name}`);
-      const rewritten = await this.rewriteFormulas(tx, writer, page.spreadsheetId, {
-        kind: "page",
-        pageId,
-        name,
-      });
+      await this.rewriteFormulas(tx, writer, page.spreadsheetId, { kind: "page", pageId, name });
       await writer.updatePage(pageId, { name }).catch(rethrowDuplicate("page", name));
-      return rewritten;
     });
+    return change;
   }
 
   /**
@@ -927,15 +1043,15 @@ export class SpreadsheetRepository {
    * list must name every one of them once, so that a stale client cannot
    * leave two blocks in one place.
    */
-  async reorderPage(pageId: string, blocks: readonly string[]): Promise<void> {
-    await this.changePage(pageId, async (page, tx, writer) => {
+  async reorderPage(pageId: string, blocks: readonly string[]): Promise<Change> {
+    const { change } = await this.changePage(pageId, async (page, tx, writer) => {
       writer.setLabel(`Reorder blocks on ${page.name}`);
-      const [tableRows, viewRows] = await Promise.all([
+      const [tableRecords, viewRecords] = await Promise.all([
         tx.select({ id: tables.id }).from(tables).where(eq(tables.pageId, pageId)),
         tx.select({ id: views.id }).from(views).where(eq(views.pageId, pageId)),
       ]);
-      const tableIds = new Set(tableRows.map((row) => row.id));
-      const present = new Set([...tableIds, ...viewRows.map((row) => row.id)]);
+      const tableIds = new Set(tableRecords.map((table) => table.id));
+      const present = new Set([...tableIds, ...viewRecords.map((view) => view.id)]);
       const complete =
         blocks.length === present.size &&
         new Set(blocks).size === blocks.length &&
@@ -948,6 +1064,7 @@ export class SpreadsheetRepository {
         else await writer.updateView(id, { position });
       }
     });
+    return change;
   }
 
   /**
@@ -955,9 +1072,9 @@ export class SpreadsheetRepository {
    * every one of them once, so that a stale client cannot leave two pages in
    * one place.
    */
-  async reorderPages(spreadsheetId: string, order: readonly string[]): Promise<void> {
+  async reorderPages(spreadsheetId: string, order: readonly string[]): Promise<Change> {
     await this.findSpreadsheet(spreadsheetId, "write");
-    await this.change(spreadsheetId, async (tx, writer) => {
+    const { change } = await this.change(spreadsheetId, async (tx, writer) => {
       writer.setLabel("Reorder pages");
       const rows = await tx
         .select({ id: pages.id })
@@ -975,6 +1092,7 @@ export class SpreadsheetRepository {
         await writer.updatePage(id, { position });
       }
     });
+    return change;
   }
 
   /**
@@ -1000,28 +1118,22 @@ export class SpreadsheetRepository {
    * alone in a formula means a table on the formula's own page, so formulas
    * that would come to mean another table are rewritten to name the page.
    */
-  async moveTable(tableId: string, pageId: string): Promise<Rewritten & { table: TableRecord }> {
-    return this.changeTable(tableId, async (table, tx, writer) => {
+  async moveTable(tableId: string, pageId: string): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
       const page = await this.destination(tx, table, pageId);
       const position = await this.within(tx).nextPosition(pageId);
       writer.setLabel(`Move table ${table.name}`);
-      const rewritten = await this.rewriteForMove(tx, writer, table.spreadsheetId, {
+      await this.rewriteForMove(tx, writer, table.spreadsheetId, {
         kind: "table",
         tableId,
         pageId,
       });
-      const updated = await writer
-        .updateTable(tableId, { pageId, position })
-        .catch((cause: unknown) => {
-          if (!isUniqueViolation(cause)) throw cause;
-          throw conflict(`${page.name} already has a table named ${table.name}`);
-        });
-      return {
-        table: updated,
-        ...rewritten,
-        tables: rewritten.tables.filter((candidate) => candidate.id !== tableId),
-      };
+      await writer.updateTable(tableId, { pageId, position }).catch((cause: unknown) => {
+        if (!isUniqueViolation(cause)) throw cause;
+        throw conflict(`${page.name} already has a table named ${table.name}`);
+      });
     });
+    return change;
   }
 
   /**
@@ -1029,23 +1141,19 @@ export class SpreadsheetRepository {
    * spreadsheet. Where its source named a table by name alone, it now names
    * the page too, and so reads the same table.
    */
-  async moveView(viewId: string, pageId: string): Promise<Rewritten & { view: ViewRecord }> {
-    return this.changeView(viewId, async (view, tx, writer) => {
+  async moveView(viewId: string, pageId: string): Promise<Change> {
+    const { change } = await this.changeView(viewId, async (view, tx, writer) => {
       await this.destination(tx, view, pageId);
       const position = await this.within(tx).nextPosition(pageId);
       writer.setLabel(`Move ${view.kind} ${view.name}`);
-      const rewritten = await this.rewriteForMove(tx, writer, view.spreadsheetId, {
+      await this.rewriteForMove(tx, writer, view.spreadsheetId, {
         kind: "view",
         viewId,
         pageId,
       });
-      const updated = await writer.updateView(viewId, { pageId, position });
-      return {
-        view: updated,
-        ...rewritten,
-        views: rewritten.views.filter((candidate) => candidate.id !== viewId),
-      };
+      await writer.updateView(viewId, { pageId, position });
     });
+    return change;
   }
 
   private async insertTable(
@@ -1067,33 +1175,37 @@ export class SpreadsheetRepository {
           siblings.map((table) => table.name),
         ),
       position: await this.within(tx).nextPosition(pageId),
-      ...DEFAULT_TABLE_SIZE,
     };
-    return writer.insertTable(values).catch(rethrowDuplicate("table", values.name));
+    return writer
+      .insertTable(values, DEFAULT_TABLE_SIZE)
+      .catch(rethrowDuplicate("table", values.name));
   }
 
-  async deletePage(pageId: string): Promise<void> {
-    await this.changePage(pageId, async (page, tx, writer) => {
+  async deletePage(pageId: string): Promise<Change> {
+    const { change } = await this.changePage(pageId, async (page, tx, writer) => {
       writer.setLabel(`Delete page ${page.name}`);
       const remaining = await tx.$count(pages, eq(pages.spreadsheetId, page.spreadsheetId));
       if (remaining <= 1) throw conflict("A spreadsheet needs at least one page");
       await this.keepVersion(tx, page.spreadsheetId, `Before deleting the page ${page.name}`);
       await writer.deletePage(pageId);
     });
+    return change;
   }
 
   /** Creates an empty table. Without a name the table gets the next free `Table N`. */
-  async createTable(pageId: string, name?: string): Promise<TableRecord> {
-    return this.changePage(pageId, async (_page, tx, writer) => {
+  async createTable(pageId: string, name?: string): Promise<Created<{ table: TableRecord }>> {
+    const { result, change } = await this.changePage(pageId, async (_page, tx, writer) => {
       writer.setLabel("Add table");
       return this.insertTable(tx, pageId, name, writer);
     });
+    return { table: result, change };
   }
 
   /**
    * Renames or resizes a table. Renaming rewrites the formulas that name the
-   * table. Making it smaller deletes the rows and columns past the new size
-   * as any others are deleted, so formulas, views, and formats follow.
+   * table. A size is counted from the start of the table: rows and columns
+   * are added at its end, and making it smaller deletes the ones past the new
+   * size as any others are deleted, so formulas, views, and formats follow.
    */
   async updateTable(
     tableId: string,
@@ -1102,106 +1214,124 @@ export class SpreadsheetRepository {
       rowCount?: number | undefined;
       colCount?: number | undefined;
     },
-  ): Promise<Rewritten & { table: TableRecord }> {
-    return this.changeTable(tableId, async (table, tx, writer) => {
+  ): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
       const { spreadsheetId } = table;
       writer.setLabel(
         changes.name !== undefined ? `Rename table ${table.name}` : `Resize table ${table.name}`,
       );
+      const rows = await orderedRows(tx, tableId);
       const sizes = [
-        { axis: "row", from: table.rowCount, to: changes.rowCount ?? table.rowCount },
-        { axis: "col", from: table.colCount, to: changes.colCount ?? table.colCount },
+        { axis: "row", from: rows.length, to: changes.rowCount ?? rows.length },
+        { axis: "col", from: table.colIds.length, to: changes.colCount ?? table.colIds.length },
       ] as const;
+      const [height, width] = sizes;
+      if (height.to === 0 && !table.columns) {
+        throw unprocessable("last_one", "A table needs at least one row");
+      }
       if (sizes.some(({ from, to }) => to < from)) {
         await this.keepVersion(tx, spreadsheetId, `Before making ${table.name} smaller`);
       }
-      let rewritten: Rewritten = { cells: [], views: [], tables: [] };
       for (const { axis, from, to } of sizes) {
         if (to >= from) continue;
         const edit = { tableId, axis, kind: "delete", index: to, count: from - to } as const;
-        rewritten = merged(rewritten, await this.applyEdit(tx, writer, spreadsheetId, edit));
+        await this.applyEdit(tx, writer, spreadsheetId, edit);
       }
       if (changes.name !== undefined) {
         const rename = { kind: "table", tableId, name: changes.name } as const;
-        rewritten = merged(
-          rewritten,
-          await this.rewriteFormulas(tx, writer, spreadsheetId, rename),
-        );
+        await this.rewriteFormulas(tx, writer, spreadsheetId, rename);
+      }
+      if (height.to > height.from) {
+        await writer.insertRows(tableId, height.from, height.to - height.from);
       }
       // The steps above may have rewritten this table's own formula columns.
-      const current =
-        rewritten.tables.find((candidate) => candidate.id === tableId)?.columns ?? table.columns;
-      const columns =
-        current && changes.colCount !== undefined ? resized(current, changes.colCount) : current;
-      const updated = await writer
-        .updateTable(tableId, { ...changes, columns })
+      const current = await this.within(tx).findTable(tableId, "write");
+      const added = Array.from({ length: Math.max(0, width.to - width.from) }, () => randomUUID());
+      await writer
+        .updateTable(tableId, {
+          ...(changes.name === undefined ? {} : { name: changes.name }),
+          colIds: [...current.colIds, ...added],
+          columns: current.columns && resized(current.columns, current.colIds.length + added.length),
+        })
         .catch(rethrowDuplicate("table", changes.name ?? ""));
-      return {
-        table: updated,
-        ...rewritten,
-        tables: rewritten.tables.filter((candidate) => candidate.id !== tableId),
-      };
     });
+    return change;
   }
 
   /**
    * Gives a plain table named columns, which makes it a data table. With
    * `headerRow`, the first row supplies the names and is removed from the
    * data. Otherwise the columns are named Column 1, Column 2, and so on.
+   *
+   * A data table holds the rows that were added to it and no unused ones, so
+   * the empty rows at the end of the table are deleted, which can be all of
+   * them. They are deleted as any rows are, so formulas that read them follow.
    */
-  async nameColumns(
-    tableId: string,
-    headerRow: boolean,
-  ): Promise<Rewritten & { table: TableRecord }> {
-    return this.changeTable(tableId, async (table, tx, writer) => {
+  async nameColumns(tableId: string, headerRow: boolean): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
       if (table.columns) throw conflict(`${table.name} already has named columns`);
+      const { spreadsheetId } = table;
       writer.setLabel(`Name the columns of ${table.name}`);
       if (headerRow) {
-        await this.keepVersion(
-          tx,
-          table.spreadsheetId,
-          `Before naming the columns of ${table.name}`,
-        );
+        await this.keepVersion(tx, spreadsheetId, `Before naming the columns of ${table.name}`);
       }
-      const header = headerRow
-        ? await tx
-            .select({ col: cells.col, input: cells.input })
-            .from(cells)
-            .where(and(eq(cells.tableId, tableId), eq(cells.row, 0)))
-        : [];
-      // Taking the header row out moves every cell up, and formulas follow as for any deleted row.
-      let rewritten: Rewritten = { cells: [], views: [], tables: [] };
-      if (headerRow && table.rowCount > 1) {
-        rewritten = await this.applyEdit(tx, writer, table.spreadsheetId, {
-          tableId,
-          axis: "row",
-          kind: "delete",
-          index: 0,
-          count: 1,
-        });
-      } else if (headerRow) {
-        rewritten.cells = header.map(({ col }) => ({ tableId, row: 0, col, input: "" }));
-        await writer.setCells(rewritten.cells);
-      }
+      const { data } = await this.within(tx).read(spreadsheetId);
+      const filled = data.cells.filter((cell) => cell.tableId === tableId);
+      const taken = headerRow ? 1 : 0;
+      const header = filled.filter((cell) => cell.row < taken);
+      let height = data.tables.find((candidate) => candidate.id === tableId)?.rowCount ?? 0;
+      const remove = async (index: number, count: number): Promise<void> => {
+        if (count <= 0) return;
+        const edit = { tableId, axis: "row", kind: "delete", index, count } as const;
+        await this.applyEdit(tx, writer, spreadsheetId, edit);
+        height -= count;
+      };
+      // Taking the header row out moves every row up, and formulas follow as for any deleted row.
+      await remove(0, Math.min(taken, height));
+      const used = Math.max(0, ...filled.map((cell) => cell.row + 1 - taken));
+      await remove(used, height - used);
+
       const typed = new Map(header.map(({ col, input }) => [col, input]));
       const names: string[] = [];
-      for (let col = 0; col < table.colCount; col += 1)
+      for (let col = 0; col < table.colIds.length; col += 1) {
         names.push(columnNameFrom(typed.get(col), names));
-      const updated = await writer.updateTable(tableId, {
+      }
+      await writer.updateTable(tableId, {
         columns: names.map((name) => ({ name, type: "any" as const })),
       });
-      return {
-        ...rewritten,
-        table: updated,
-        // The edit returned this table as it was before its columns were named.
-        tables: rewritten.tables.filter((candidate) => candidate.id !== tableId),
-      };
     });
+    return change;
   }
 
-  /** Changes how a range of cells is shown. The format is added to whatever the cells already have. */
-  async formatCells(tableId: string, rule: FormatRule): Promise<TableRecord> {
-    return this.changeTable(tableId, async (table, _tx, writer) => {
+  /**
+   * Changes how a range of cells is shown. The format is added to whatever
+   * the cells already have. The range names the rows and columns at its
+   * corners by id, and a format rule holds their positions as they are now.
+   */
+  async formatCells(
+    tableId: string,
+    range: IdentityFormatRange,
+    format: FormatRule["format"],
+    reset?: boolean,
+  ): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
+      const layout = new TableLayout(await orderedRows(tx, tableId), table.colIds);
+      const row = (id: string): number => layout.rowIndex(id) ?? fail(rowDeleted());
+      const col = (id: string): number => layout.colIndex(id) ?? fail(columnDeleted());
+      const rule: FormatRule = {
+        startRow: row(range.startRowId),
+        endRow: range.endRowId === null ? null : row(range.endRowId),
+        startCol: col(range.startColId),
+        endCol: range.endColId === null ? null : col(range.endColId),
+        format,
+        ...(reset ? { reset } : {}),
+      };
+      if (
+        (rule.endRow !== null && rule.endRow < rule.startRow) ||
+        (rule.endCol !== null && rule.endCol < rule.startCol)
+      ) {
+        throw new ApiFailure(400, "invalid_request", "A range ends at or after where it starts");
+      }
       writer.setLabel(`Format cells in ${table.name}`);
       const formats = addFormatRule(table.formats, rule);
       if (formats.length > MAX_FORMAT_RULES) {
@@ -1210,21 +1340,28 @@ export class SpreadsheetRepository {
           `${table.name} has too many separate formats. Clear the formatting of some cells first`,
         );
       }
-      return writer.updateTable(tableId, { formats });
+      await writer.updateTable(tableId, { formats });
     });
+    return change;
   }
 
-  /** Makes a data table a plain table again. Its formula columns stop computing. */
-  async dropColumns(tableId: string): Promise<TableRecord> {
-    return this.changeTable(tableId, async (table, tx, writer) => {
+  /**
+   * Makes a data table a plain table again. Its formula columns stop
+   * computing. A plain table has at least one row, so a table with none
+   * gets one.
+   */
+  async dropColumns(tableId: string): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
       writer.setLabel(`Remove the column names of ${table.name}`);
       await this.keepVersion(
         tx,
         table.spreadsheetId,
         `Before removing the column names of ${table.name}`,
       );
-      return writer.updateTable(tableId, { columns: null });
+      await writer.updateTable(tableId, { columns: null });
+      if ((await orderedRows(tx, tableId)).length === 0) await writer.insertRows(tableId, 0, 1);
     });
+    return change;
   }
 
   /**
@@ -1234,14 +1371,17 @@ export class SpreadsheetRepository {
    */
   async updateColumn(
     tableId: string,
-    col: number,
+    colId: string,
     changes: {
       name?: string | undefined;
       type?: ColumnType | undefined;
       formula?: string | undefined;
+      revision?: number | undefined;
     },
-  ): Promise<Rewritten & { table: TableRecord }> {
-    return this.changeTable(tableId, async (found, tx, writer) => {
+  ): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (found, tx, writer) => {
+      const col = found.colIds.indexOf(colId);
+      if (col < 0) throw columnDeleted();
       const before = found.columns?.[col];
       if (!found.columns)
         throw unprocessable("not_a_data_table", `${found.name} has no named columns`);
@@ -1252,6 +1392,9 @@ export class SpreadsheetRepository {
           ? `Rename column ${before.name}`
           : `Change column ${before.name}`,
       );
+      if (changes.formula !== undefined) {
+        await this.checkWrittenAt(tx, found.spreadsheetId, changes.revision);
+      }
 
       const name = changes.name ?? before.name;
       const taken = found.columns.some(
@@ -1273,17 +1416,16 @@ export class SpreadsheetRepository {
         );
       }
       const renamed = !sameColumnName(before.name, name) || before.name !== name;
-      const rewritten = renamed
-        ? await this.rewriteFormulas(tx, writer, found.spreadsheetId, {
-            kind: "column",
-            tableId,
-            from: before.name,
-            name,
-          })
-        : { cells: [], views: [], tables: [] };
+      if (renamed) {
+        await this.rewriteFormulas(tx, writer, found.spreadsheetId, {
+          kind: "column",
+          tableId,
+          from: before.name,
+          name,
+        });
+      }
       // The rename may have rewritten the other formula columns of this table.
-      const current =
-        rewritten.tables.find((candidate) => candidate.id === tableId)?.columns ?? found.columns;
+      const current = (await this.within(tx).findTable(tableId, "write")).columns ?? found.columns;
       // A formula column's own formula is taken from the request when it gives one, and
       // otherwise from the rewrite, which has the new name written into it.
       const kept = current[col];
@@ -1291,21 +1433,15 @@ export class SpreadsheetRepository {
         type === "formula" && changes.formula === undefined && kept?.formula !== undefined
           ? { ...column, formula: kept.formula }
           : column;
-      const updated = await writer.updateTable(tableId, { columns: current.with(col, next) });
-      if (type === "formula") {
-        await writer.clearCells(tableId, eq(cells.col, col));
-      }
-      return {
-        table: updated,
-        ...rewritten,
-        tables: rewritten.tables.filter((candidate) => candidate.id !== tableId),
-      };
+      await writer.updateTable(tableId, { columns: current.with(col, next) });
+      if (type === "formula") await writer.clearCells(tableId, eq(cells.colId, colId));
     });
+    return change;
   }
 
   /** Adds a chart or a text view to the end of a page. */
-  async createView(pageId: string, kind: ViewKind): Promise<ViewRecord> {
-    return this.changePage(pageId, async (_page, tx, writer) => {
+  async createView(pageId: string, kind: ViewKind): Promise<Created<{ view: ViewRecord }>> {
+    const { result, change } = await this.changePage(pageId, async (_page, tx, writer) => {
       writer.setLabel(kind === "chart" ? "Add chart" : "Add text view");
       const siblings = await tx
         .select({ name: views.name })
@@ -1321,67 +1457,83 @@ export class SpreadsheetRepository {
           : { name: nextName("Text", names), source: STARTER_TEMPLATE }),
       });
     });
+    return { view: result, change };
   }
 
   async updateView(
     viewId: string,
-    changes: {
+    {
+      revision,
+      ...changes
+    }: {
       name?: string | undefined;
       source?: string | undefined;
       chartType?: ChartType | undefined;
+      revision?: number | undefined;
     },
-  ): Promise<ViewRecord> {
-    return this.changeView(viewId, async (view, _tx, writer) => {
+  ): Promise<Change> {
+    const { change } = await this.changeView(viewId, async (view, tx, writer) => {
       writer.setLabel(`Update ${view.kind} ${view.name}`);
       if (changes.chartType !== undefined && view.kind !== "chart") {
         throw unprocessable("not_a_chart", `${view.name} is not a chart`);
       }
-      return writer.updateView(viewId, changes);
+      if (changes.source !== undefined && changes.source !== view.source) {
+        await this.checkWrittenAt(tx, view.spreadsheetId, revision);
+      }
+      await writer.updateView(viewId, changes);
     });
+    return change;
   }
 
-  async deleteView(viewId: string): Promise<void> {
-    await this.changeView(viewId, async (view, tx, writer) => {
+  async deleteView(viewId: string): Promise<Change> {
+    const { change } = await this.changeView(viewId, async (view, tx, writer) => {
       writer.setLabel(`Delete ${view.kind} ${view.name}`);
       await this.keepVersion(tx, view.spreadsheetId, `Before deleting ${view.name}`);
       await writer.deleteView(viewId);
     });
+    return change;
   }
 
-  async deleteTable(tableId: string): Promise<void> {
-    await this.changeTable(tableId, async (table, tx, writer) => {
+  async deleteTable(tableId: string): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
       writer.setLabel(`Delete table ${table.name}`);
       await this.keepVersion(tx, table.spreadsheetId, `Before deleting the table ${table.name}`);
       await writer.deleteTable(tableId);
     });
+    return change;
   }
 
-  /** Stores cell inputs. An empty input deletes the cell. Later entries for the same cell win. */
-  async setCells(tableId: string, inputs: readonly CellInput[]): Promise<void> {
-    await this.changeTable(tableId, async (table, tx, writer) => {
+  /**
+   * Stores cell inputs. An empty input deletes the cell. Later entries for
+   * the same cell win.
+   *
+   * `appendRows` are ids the client made for rows to add at the end of the
+   * table, in the same change as the cells. The ones that exist already are
+   * left alone, so a request sent twice adds each row once. An id that names
+   * a deleted row is refused: adding it would bring back, with its old cells,
+   * a row that was deleted or whose insert was undone.
+   */
+  async setCells(
+    tableId: string,
+    {
+      cells: written,
+      appendRows = [],
+      revision,
+    }: {
+      cells: readonly IdentityCellInput[];
+      appendRows?: readonly string[] | undefined;
+      revision?: number | undefined;
+    },
+  ): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
       writer.setLabel(`Change cells in ${table.name}`);
-      const outside = inputs.find(
-        (cell) => cell.row >= table.rowCount || cell.col >= table.colCount,
-      );
-      if (outside) {
-        throw unprocessable(
-          "cell_out_of_bounds",
-          `${formatAddress(outside)} is outside the table ${table.name}`,
-        );
+      if (written.some((cell) => isFormulaInput(cell.input))) {
+        await this.checkWrittenAt(tx, table.spreadsheetId, revision);
       }
-
-      const computed = inputs
-        .map((cell) => table.columns?.[cell.col])
-        .find((column) => column?.type === "formula");
-      if (computed) {
-        throw unprocessable(
-          "formula_column",
-          `${computed.name} is a formula column. Change the column's formula instead`,
-        );
-      }
-
-      // One statement cannot update the same row twice, so keep the last entry per cell.
-      const latest = [...new Map(inputs.map((cell) => [formatAddress(cell), cell])).values()];
+      // One statement cannot update the same cell twice, so keep the last entry per cell.
+      const latest = [
+        ...new Map(written.map((cell) => [`${cell.rowId}:${cell.colId}`, cell])).values(),
+      ];
       if (latest.length >= BULK_WRITE_CELLS) {
         await this.keepVersion(
           tx,
@@ -1389,11 +1541,54 @@ export class SpreadsheetRepository {
           `Before changing ${String(latest.length)} cells of ${table.name}`,
         );
       }
+
+      let rows = await orderedRows(tx, tableId);
+      const present = new Set(rows.map((row) => row.id));
+      const added = appendRows.filter((id) => !present.has(id));
+      if (added.length > 0) {
+        await this.checkNewRows(tx, added);
+        rows = [...rows, ...(await writer.insertRows(tableId, rows.length, added.length, added))];
+      }
+
+      const layout = new TableLayout(rows, table.colIds);
+      for (const cell of latest) {
+        if (layout.rowIndex(cell.rowId) === undefined) throw rowDeleted();
+        const col = layout.colIndex(cell.colId);
+        if (col === undefined) throw columnDeleted();
+        const column = table.columns?.[col];
+        if (column?.type === "formula") {
+          throw unprocessable(
+            "formula_column",
+            `${column.name} is a formula column. Change the column's formula instead`,
+          );
+        }
+      }
       await writer.setCells(latest.map((cell) => ({ tableId, ...cell })));
       if (latest.some((cell) => cell.input !== "")) {
         await this.checkCellCount(tx, table.spreadsheetId);
       }
     });
+    return change;
+  }
+
+  /**
+   * Refuses ids a client made for new rows when a row has one of them, in
+   * any table of any spreadsheet, or had one and was deleted. The answer does
+   * not say where an id exists.
+   */
+  private async checkNewRows(tx: Database, ids: readonly string[]): Promise<void> {
+    const [existing] = await tx
+      .select({ id: tableRows.id })
+      .from(tableRows)
+      .where(inArray(tableRows.id, [...ids]))
+      .limit(1);
+    if (existing) throw conflict("A new row has an id that is already in use");
+    const [deleted] = await tx
+      .select({ rowId: deletedRows.rowId })
+      .from(deletedRows)
+      .where(inArray(deletedRows.rowId, [...ids]))
+      .limit(1);
+    if (deleted) throw rowDeleted();
   }
 
   /** Refuses a change that leaves a spreadsheet with more filled cells than a file of it may hold. */
@@ -1413,129 +1608,238 @@ export class SpreadsheetRepository {
   }
 
   /**
-   * Grows a table to at least `rowCount` rows. Returns the table when it
-   * grew, and `undefined` when it was already as tall.
+   * Carries out what an action does to the contents of a spreadsheet, as one
+   * change: tables grow, cells are written, and rows are deleted. The effects
+   * name cells and rows by the positions they had when the action was
+   * planned. The caller planned it under the spreadsheet's lock and still
+   * holds it, so the positions mean the same rows here.
+   *
+   * Returns `undefined` when no effect writes to the spreadsheet.
    */
-  async ensureRows(tableId: string, rowCount: number): Promise<TableRecord | undefined> {
-    return this.changeTable(tableId, async (table, _tx, writer) => {
-      if (rowCount <= table.rowCount) return undefined;
-      writer.setLabel(`Grow ${table.name} to ${String(rowCount)} rows`);
-      if (rowCount > LIMITS.tableRows) {
-        throw unprocessable(
-          "table_full",
-          `${table.name} cannot have more than ${String(LIMITS.tableRows)} rows`,
-        );
+  async applyEffects(
+    spreadsheetId: string,
+    effects: readonly Effect[],
+  ): Promise<Change | undefined> {
+    const grown = effects.filter((effect) => effect.type === "ensureRows");
+    const written = effects.filter((effect) => effect.type === "setCell");
+    const removed = effects.filter((effect) => effect.type === "deleteRows");
+    if (grown.length + written.length + removed.length === 0) return undefined;
+
+    const { change } = await this.change(spreadsheetId, async (tx, writer) => {
+      // Tables grow first, so the cells written into new rows are inside the table.
+      for (const [tableId, growths] of Map.groupBy(grown, (effect) => effect.tableId)) {
+        const height = (await orderedRows(tx, tableId)).length;
+        const wanted = Math.max(...growths.map((effect) => effect.rowCount));
+        if (wanted > height) await writer.insertRows(tableId, height, wanted - height);
       }
-      return writer.updateTable(tableId, { rowCount });
+      const contents = await this.within(tx).read(spreadsheetId);
+      const tableOf = (tableId: string): TableRecord =>
+        contents.snapshot.tables.find((table) => table.id === tableId) ?? fail(notFound("Table"));
+      const tableIds = new Set([...grown, ...written, ...removed].map((effect) => effect.tableId));
+      const [only] = tableIds.size === 1 ? [...tableIds] : [];
+      writer.setLabel(only === undefined ? "Run action" : `Change cells in ${tableOf(only).name}`);
+
+      const inputs = written.map(({ tableId, row, col, input }): StoredCell => {
+        const table = tableOf(tableId);
+        const identity = contents.layout(tableId).identity({ row, col });
+        if (!identity) {
+          throw unprocessable(
+            "cell_out_of_bounds",
+            `${formatAddress({ row, col })} is outside the table ${table.name}`,
+          );
+        }
+        const column = table.columns?.[col];
+        if (column?.type === "formula") {
+          throw unprocessable(
+            "formula_column",
+            `${column.name} is a formula column. Change the column's formula instead`,
+          );
+        }
+        return { tableId, ...identity, input };
+      });
+      // The rows to delete are named now, before anything else moves.
+      const doomed = removed.map(({ tableId, startRow, count }) => ({
+        tableId,
+        ids: contents.layout(tableId).rowIds.slice(startRow, startRow + count),
+      }));
+      if (inputs.length >= BULK_WRITE_CELLS || doomed.some(({ ids }) => ids.length > 0)) {
+        await this.keepVersion(tx, spreadsheetId, "Before running an action");
+      }
+      await writer.setCells(inputs);
+      if (inputs.some((cell) => cell.input !== "")) await this.checkCellCount(tx, spreadsheetId);
+      for (const { tableId, ids } of doomed) {
+        await this.deleteLines(tx, writer, spreadsheetId, tableId, "row", ids);
+      }
     });
+    return change;
   }
 
   /**
-   * Inserts or deletes rows or columns that sit next to each other. Cells
-   * past them move, and formulas anywhere in the spreadsheet that read the
-   * table are rewritten to keep reading the same cells, as are charts and
-   * text views.
+   * Inserts or deletes rows or columns. No cell moves: a cell belongs to its
+   * row and column, whose ids do not change. Formulas anywhere in the
+   * spreadsheet that read the table are rewritten to keep reading the same
+   * cells, as are charts, text views, and formats.
    */
-  async editStructure(
-    tableId: string,
-    body: StructuralEditBody,
-  ): Promise<Rewritten & { table: TableRecord }> {
-    return this.changeTable(tableId, async (table, tx, writer) => {
+  async editStructure(tableId: string, body: IdentifiedStructuralEditBody): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
       const { spreadsheetId } = table;
-      const { count = 1 } = body;
-      const edit = { tableId, ...body, count };
-      const rows = edit.axis === "row";
+      const rows = body.axis === "row";
       const noun = rows ? "row" : "column";
+      const several = body.ids.length === 1 ? "" : "s";
       writer.setLabel(
-        `${edit.kind === "insert" ? "Insert" : "Delete"} ${noun}${count === 1 ? "" : "s"} in ${table.name}`,
+        `${body.kind === "insert" ? "Insert" : "Delete"} ${noun}${several} in ${table.name}`,
       );
-      const size = rows ? table.rowCount : table.colCount;
-      const limit = rows ? LIMITS.tableRows : LIMITS.tableCols;
-      const label = (index: number): string => (rows ? String(index + 1) : columnLabel(index));
-      if (edit.kind === "delete") {
-        const last = edit.index + count - 1;
-        if (last >= size) {
-          throw unprocessable("out_of_bounds", `${table.name} has no ${noun} ${label(last)}`);
-        }
-        if (count >= size) throw unprocessable("last_one", `A table needs at least one ${noun}`);
-        const deleted =
-          count === 1
-            ? `${noun} ${label(edit.index)}`
-            : `${noun}s ${label(edit.index)} to ${label(last)}`;
-        await this.keepVersion(tx, spreadsheetId, `Before deleting ${deleted} of ${table.name}`);
-      } else {
-        if (edit.index > size) {
-          const counted = `${String(size)} ${noun}${size === 1 ? "" : "s"}`;
-          throw unprocessable("out_of_bounds", `${table.name} has only ${counted}`);
-        }
-        if (size + count > limit) {
-          throw unprocessable("table_full", `A table can have at most ${String(limit)} ${noun}s`);
-        }
+      if (body.kind === "delete") {
+        await this.deleteLines(tx, writer, spreadsheetId, tableId, body.axis, body.ids);
+        return;
       }
 
-      const { tables: changed, ...rewritten } = await this.applyEdit(
-        tx,
-        writer,
-        spreadsheetId,
-        edit,
-      );
-      const updated = changed.find((candidate) => candidate.id === tableId);
-      if (!updated) throw notFound("Table");
-      return {
-        table: updated,
-        ...rewritten,
-        tables: changed.filter((candidate) => candidate.id !== tableId),
-      };
+      const ordered = rows ? (await orderedRows(tx, tableId)).map((row) => row.id) : table.colIds;
+      const index = body.beforeId === null ? ordered.length : ordered.indexOf(body.beforeId);
+      if (index < 0) throw rows ? rowDeleted() : columnDeleted();
+      if (rows) await this.checkNewRows(tx, body.ids);
+      else {
+        const [existing] = await tx
+          .select({ id: tables.id })
+          .from(tables)
+          .where(
+            sql`${tables.colIds} ?| ARRAY[${sql.join(
+              body.ids.map((id) => sql`${id}`),
+              sql`, `,
+            )}]::text[]`,
+          )
+          .limit(1);
+        if (existing) throw conflict("A new column has an id that is already in use");
+        if (ordered.length + body.ids.length > LIMITS.tableCols) {
+          throw unprocessable(
+            "table_full",
+            `A table can have at most ${String(LIMITS.tableCols)} columns`,
+          );
+        }
+      }
+      await this.applyEdit(tx, writer, spreadsheetId, {
+        tableId,
+        axis: body.axis,
+        kind: "insert",
+        index,
+        count: body.ids.length,
+        ids: body.ids,
+      });
     });
+    return change;
   }
 
   /**
-   * Carries out an edit that is known to fit its table: moves the cells,
-   * rewrites what reads them, and resizes the table. Must run inside `change`.
-   * The tables returned include the edited one.
+   * Deletes rows or columns of a table by id. The ids need not be next to
+   * each other: someone may have inserted a row between two of them since
+   * they were chosen. Each run of neighbors is one edit, last run first, so
+   * that an earlier run's positions are not moved by a later one. Rows and
+   * columns that were not named are kept. Must run inside `change`.
+   */
+  private async deleteLines(
+    tx: Database,
+    writer: ContentWriter,
+    spreadsheetId: string,
+    tableId: string,
+    axis: "row" | "col",
+    ids: readonly string[],
+  ): Promise<void> {
+    if (ids.length === 0) return;
+    const table = await this.within(tx).findTable(tableId, "write");
+    const rows = axis === "row";
+    const noun = rows ? "row" : "column";
+    const ordered = rows ? (await orderedRows(tx, tableId)).map((row) => row.id) : table.colIds;
+    const indexes = ids
+      .map((id) => {
+        const index = ordered.indexOf(id);
+        if (index < 0) throw rows ? rowDeleted() : columnDeleted();
+        return index;
+      })
+      .sort((a, b) => a - b);
+    // A data table can lose every row. A plain table keeps one, and any table keeps a column.
+    const keepsOne = !rows || !table.columns;
+    if (keepsOne && indexes.length >= ordered.length) {
+      throw unprocessable("last_one", `A table needs at least one ${noun}`);
+    }
+    const runs: { index: number; count: number }[] = [];
+    for (const index of indexes) {
+      const last = runs.at(-1);
+      if (last && last.index + last.count === index) last.count += 1;
+      else runs.push({ index, count: 1 });
+    }
+    const label = (index: number): string => (rows ? String(index + 1) : columnLabel(index));
+    const deleted = runs
+      .map(({ index, count }) =>
+        count === 1 ? label(index) : `${label(index)} to ${label(index + count - 1)}`,
+      )
+      .join(", ");
+    await this.keepVersion(
+      tx,
+      spreadsheetId,
+      `Before deleting ${noun}${indexes.length === 1 ? "" : "s"} ${deleted} of ${table.name}`,
+    );
+    for (const run of runs.reverse()) {
+      await this.applyEdit(tx, writer, spreadsheetId, { tableId, axis, kind: "delete", ...run });
+    }
+  }
+
+  /**
+   * Carries out an edit that is known to fit its table: adds or removes the
+   * rows or the column ids, and rewrites the formula text that reads them, in
+   * cells, in views, in formula columns, and in formats. Must run inside
+   * `change`.
    */
   private async applyEdit(
     tx: Database,
     writer: ContentWriter,
     spreadsheetId: string,
-    edit: StructuralEdit & { count: number },
-  ): Promise<Rewritten> {
+    edit: StructuralEdit & { count: number; ids?: readonly string[] },
+  ): Promise<void> {
     writer.markRewrites();
-    const snapshot = await this.within(tx).getSnapshot(spreadsheetId);
-    const table = snapshot.tables.find((candidate) => candidate.id === edit.tableId);
+    const contents = await this.within(tx).read(spreadsheetId);
+    const { data } = contents;
+    const table = data.tables.find((candidate) => candidate.id === edit.tableId);
     if (!table) throw notFound("Table");
+    const layout = contents.layout(table.id);
     const rows = edit.axis === "row";
 
-    const written = inputsAfterEdit(snapshot, edit);
-    await writer.setCells(written);
-    const rewrittenViews = viewsAfterEdit(snapshot, snapshot.views, edit);
-    await this.storeViewSources(writer, rewrittenViews);
-    const changed = await this.storeColumnFormulas(
-      writer,
-      snapshot.tables,
-      columnFormulasAfterEdit(snapshot, edit),
-    );
+    // Each rewritten formula is named by the position its cell had before the
+    // edit. The cell keeps its ids through the edit, so that is where it is stored.
+    const formulas = formulasAfterEdit(data, edit).map((cell) => contents.identify(cell));
+    const sources = viewsAfterEdit(data, data.views, edit);
+    const columnFormulas = columnFormulasAfterEdit(data, edit);
+
+    if (rows && edit.kind === "insert") {
+      await writer.insertRows(table.id, edit.index, edit.count, edit.ids);
+    } else if (rows) {
+      await writer.deleteRows(table.id, layout.rowIds.slice(edit.index, edit.index + edit.count));
+    }
+    await writer.setCells(formulas);
+    await this.storeViewSources(writer, sources);
+    const changed = await this.storeColumnFormulas(writer, data.tables, columnFormulas);
     // The formulas were rewritten at the positions the columns had before the edit.
     const current =
       changed.find((candidate) => candidate.id === table.id)?.columns ?? table.columns;
-    const columns =
-      current && !rows
-        ? edit.kind === "insert"
-          ? withColumnsInserted(current, edit.index, edit.count)
-          : current.toSpliced(edit.index, edit.count)
-        : current;
-    const size =
-      (rows ? table.rowCount : table.colCount) + edit.count * (edit.kind === "insert" ? 1 : -1);
-    const updated = await writer.updateTable(table.id, {
-      ...(rows ? { rowCount: size } : { colCount: size, columns }),
-      // Formats follow the cells they were given to.
-      formats: formatRulesAfterEdit(table.formats, edit),
-    });
-    return {
-      cells: written,
-      views: rewrittenViews,
-      tables: [...changed.filter((candidate) => candidate.id !== table.id), updated],
-    };
+    // Formats follow the cells they were given to.
+    const formats = formatRulesAfterEdit(table.formats, edit);
+    if (rows) {
+      await writer.updateTable(table.id, { formats });
+    } else if (edit.kind === "insert") {
+      const added = edit.ids ?? Array.from({ length: edit.count }, () => randomUUID());
+      await writer.updateTable(table.id, {
+        colIds: table.colIds.toSpliced(edit.index, 0, ...added),
+        columns: current && withColumnsInserted(current, edit.index, edit.count),
+        formats,
+      });
+    } else {
+      const removed = table.colIds.slice(edit.index, edit.index + edit.count);
+      await writer.clearCells(table.id, inArray(cells.colId, removed));
+      await writer.updateTable(table.id, {
+        colIds: table.colIds.toSpliced(edit.index, edit.count),
+        columns: current && current.toSpliced(edit.index, edit.count),
+        formats,
+      });
+    }
   }
 
   /**
@@ -1609,7 +1913,7 @@ export class SpreadsheetRepository {
       // Changes in effect that came after any part of the step. The requests
       // of one step are separate changes, so another tab's can fall between them.
       const others = await tx
-        .select({ seq: journal.seq, rewrites: journal.rewrites })
+        .select({ seq: journal.seq, rewrites: journal.rewrites, formulas: journal.formulas })
         .from(journal)
         .where(
           and(
@@ -1621,17 +1925,33 @@ export class SpreadsheetRepository {
         );
       for (const entry of entries) {
         const later = others.filter((other) => other.seq > entry.seq);
-        const structural =
-          entry.rewrites ||
-          (entry.data !== null &&
-            [...entry.data.pages, ...entry.data.tables, ...entry.data.views].some(
-              ({ before, after }) => before === null || after === null,
-            ));
-        if (structural && later.length > 0) {
-          throw new UndoRefusal("A later change prevents undoing this structural change");
+        const { data } = entry;
+        const createsOrDeletes =
+          data !== null &&
+          [...data.pages, ...data.tables, ...data.views].some(
+            ({ before, after }) => before === null || after === null,
+          );
+        if (createsOrDeletes && later.length > 0) {
+          throw new UndoRefusal(
+            `A later change prevents ${direction}ing the adding or deleting of a page, table, or view`,
+          );
         }
-        if (later.some((other) => other.rewrites)) {
-          throw new UndoRefusal("A later structural change prevents undoing this change");
+        // Ids fix which cell an entry means, and not what a formula's text
+        // means. One of two changes altering what references mean conflicts
+        // with the other writing formula text: the text was written for the
+        // rows, columns, and names of its own moment.
+        if (entry.rewrites && later.some((other) => other.formulas)) {
+          throw new UndoRefusal(
+            `A formula written since prevents ${direction}ing this change to rows, columns, or names`,
+          );
+        }
+        // An entry too large to record is refused below, whatever it would write.
+        const restoresFormulas =
+          data !== null && writesFormulas(data, direction === "undo" ? "before" : "after");
+        if (restoresFormulas && later.some((other) => other.rewrites)) {
+          throw new UndoRefusal(
+            `A later change to rows, columns, or names prevents ${direction}ing this change to a formula`,
+          );
         }
       }
 
@@ -1666,13 +1986,9 @@ export class SpreadsheetRepository {
         }
       }
 
-      const [countedRows] = await tx
-        .select({ rows: sql<number>`coalesce(sum(${tables.rowCount}), 0)`.mapWith(Number) })
-        .from(tables)
-        .innerJoin(pages, eq(pages.id, tables.pageId))
-        .where(eq(pages.spreadsheetId, spreadsheetId));
+      const rowsBefore = await countRows(tx, spreadsheetId);
       const changed = await tx.transaction(async (writes) => {
-        let accumulated = emptyChangedContent();
+        let accumulated: ChangedContent | null = emptyChanged();
         for (const entry of entries) {
           if (!entry.data) {
             throw new UndoRefusal(
@@ -1680,21 +1996,27 @@ export class SpreadsheetRepository {
             );
           }
           await this.assertRecordedMatches(writes, entry.data, direction);
-          accumulated = mergeChangedContent(
+          accumulated = mergeChanged(
             accumulated,
             await applyRecorded(writes, spreadsheetId, this.userId, entry.data, direction),
           );
         }
-        await this.checkRestoredState(writes, spreadsheetId, countedRows?.rows ?? 0);
+        await this.checkRestoredState(writes, spreadsheetId, rowsBefore);
         return accumulated;
       });
       await tx.update(journal).set({ undone: !undone }).where(group);
-      await this.touch(tx, spreadsheetId);
+      const revision = await this.touch(
+        tx,
+        spreadsheetId,
+        entries.some((entry) => entry.rewrites),
+      );
+      const change = { revision, changed };
+      noteChange(spreadsheetId, change);
       return {
         outcome: "done",
         label: latest.label,
         error: null,
-        changed,
+        change,
         ...(await this.stackState(tx, spreadsheetId, clientId)),
       };
     } catch (error) {
@@ -1713,7 +2035,7 @@ export class SpreadsheetRepository {
         outcome: "refused",
         label: latest.label,
         error: message,
-        changed: emptyChangedContent(),
+        change: null,
         ...(await this.stackState(tx, spreadsheetId, clientId)),
       };
     }
@@ -1751,17 +2073,23 @@ export class SpreadsheetRepository {
       outcome,
       label: null,
       error: null,
-      changed: emptyChangedContent(),
+      change: null,
       ...(await this.stackState(db, spreadsheetId, clientId)),
     };
   }
 
+  /**
+   * Refuses an undo or redo of a recorded change when something it wrote is
+   * no longer as the change left it, so that it would write over what someone
+   * did since.
+   */
   private async assertRecordedMatches(
     db: Database,
     data: JournalData,
     direction: "undo" | "redo",
   ): Promise<void> {
     const expected = <T>(before: T, after: T): T => (direction === "undo" ? after : before);
+    const target = <T>(before: T, after: T): T => (direction === "undo" ? before : after);
     for (const { id, before, after } of data.pages) {
       const [current] = await db.select(pageColumns).from(pages).where(eq(pages.id, id)).limit(1);
       if (!sameRecord(current ?? null, expected(before, after))) {
@@ -1784,24 +2112,67 @@ export class SpreadsheetRepository {
         throw new UndoRefusal("This view has changed since this step");
       }
     }
+
+    const recordedCells = new Set(
+      data.cells.flatMap(({ changes }) => changes.map(([rowId, colId]) => `${rowId}:${colId}`)),
+    );
+    for (const { changes } of data.rows) {
+      const ids = changes.map(([id]) => id);
+      // A row is compared by whether it exists. Its key may have changed: a
+      // row put back where another has taken its key gets a key next to it.
+      const present = new Set<string>();
+      for (let start = 0; start < ids.length; start += INSERT_BATCH) {
+        const found = await db
+          .select({ id: tableRows.id })
+          .from(tableRows)
+          .where(inArray(tableRows.id, ids.slice(start, start + INSERT_BATCH)));
+        for (const row of found) present.add(row.id);
+      }
+      for (const [id, before, after] of changes) {
+        if (present.has(id) !== (expected(before, after) !== null)) {
+          throw new UndoRefusal("A row has changed since this step");
+        }
+      }
+      // A row this is about to delete takes its cells with it. It may hold
+      // only what the step itself wrote, or the delete would take what someone
+      // typed into it since.
+      const doomed = changes
+        .filter(([, before, after]) => target(before, after) === null)
+        .map(([id]) => id);
+      for (let start = 0; start < doomed.length; start += INSERT_BATCH) {
+        const held = await db
+          .select({ rowId: cells.rowId, colId: cells.colId })
+          .from(cells)
+          .where(inArray(cells.rowId, doomed.slice(start, start + INSERT_BATCH)));
+        if (held.some(({ rowId, colId }) => !recordedCells.has(`${rowId}:${colId}`))) {
+          throw new UndoRefusal("A row this step added now holds something typed since");
+        }
+      }
+    }
     for (const { tableId, changes } of data.cells) {
       const inputs = await readInputs(
         db,
         tableId,
-        changes.map(([row, col]) => ({ row, col })),
+        changes.map(([rowId, colId]) => ({ rowId, colId })),
       );
-      for (const [row, col, before, after] of changes) {
-        if (inputs.get({ row, col }) !== expected(before, after)) {
+      for (const [rowId, colId, before, after] of changes) {
+        if (inputs.get({ rowId, colId }) !== expected(before, after)) {
           throw new UndoRefusal("A cell has changed since this step");
         }
       }
     }
   }
 
+  /**
+   * Refuses an undo or redo that leaves the spreadsheet in a state no other
+   * change could: over a limit, a table too small, or a cell where none can
+   * be. `rowsBefore` is how many rows the spreadsheet had, which a
+   * spreadsheet already over the row limit may come down from.
+   */
   private async checkRestoredState(
     db: Database,
     spreadsheetId: string,
-    previousRowCount: number,
+    rowsBefore: number,
   ): Promise<void> {
     const pageRows = await db
       .select({ id: pages.id })
@@ -1811,71 +2182,65 @@ export class SpreadsheetRepository {
     if (pageRows.length > FILE_LIMITS.pages) {
       throw new UndoRefusal("This change would exceed the page limit");
     }
-    const tableRows = await db
+    const inSpreadsheet = eq(pages.spreadsheetId, spreadsheetId);
+    const tableRecords = await db
       .select({
         id: tables.id,
         pageId: tables.pageId,
-        rowCount: tables.rowCount,
-        colCount: tables.colCount,
+        colIds: tables.colIds,
         columns: tables.columns,
+        rowCount: sql<number>`(select count(*) from ${tableRows} where ${tableRows.tableId} = ${tables.id})`.mapWith(
+          Number,
+        ),
       })
       .from(tables)
       .innerJoin(pages, eq(pages.id, tables.pageId))
-      .where(eq(pages.spreadsheetId, spreadsheetId));
-    const totalRows = tableRows.reduce((total, table) => total + table.rowCount, 0);
-    if (totalRows > LIMITS.spreadsheetRows && totalRows >= previousRowCount) {
+      .where(inSpreadsheet);
+    const totalRows = tableRecords.reduce((total, table) => total + table.rowCount, 0);
+    if (totalRows > LIMITS.spreadsheetRows && totalRows >= rowsBefore) {
       throw new UndoRefusal("This change would exceed the spreadsheet row limit");
     }
-    if (
-      tableRows.some(
-        (table) =>
-          table.rowCount > LIMITS.tableRows ||
-          table.colCount > LIMITS.tableCols ||
-          table.rowCount < 1 ||
-          table.colCount < 1,
-      )
-    ) {
-      throw new UndoRefusal("This change would exceed a table limit");
-    }
+    const outOfBounds = tableRecords.some(
+      (table) =>
+        table.rowCount > LIMITS.tableRows ||
+        table.colIds.length > LIMITS.tableCols ||
+        table.colIds.length < 1 ||
+        // A data table holds the rows added to it, which can be none.
+        (table.rowCount < 1 && !table.columns),
+    );
+    if (outOfBounds) throw new UndoRefusal("This change would exceed a table limit");
     const [cellCount] = await db
       .select({ filled: count() })
       .from(cells)
       .innerJoin(tables, eq(tables.id, cells.tableId))
       .innerJoin(pages, eq(pages.id, tables.pageId))
-      .where(eq(pages.spreadsheetId, spreadsheetId));
+      .where(inSpreadsheet);
     if ((cellCount?.filled ?? 0) > FILE_LIMITS.cells) {
       throw new UndoRefusal("This change would exceed the spreadsheet cell limit");
     }
+    // The database keeps a cell's row in its table. Nothing but this keeps its column there.
     const outside = await db
       .select({ tableId: cells.tableId })
       .from(cells)
       .innerJoin(tables, eq(tables.id, cells.tableId))
       .innerJoin(pages, eq(pages.id, tables.pageId))
-      .where(
-        and(
-          eq(pages.spreadsheetId, spreadsheetId),
-          or(gte(cells.row, tables.rowCount), gte(cells.col, tables.colCount)),
-        ),
-      )
+      .where(and(inSpreadsheet, sql`NOT (${tables.colIds} ? ${cells.colId}::text)`))
       .limit(1);
-    if (outside.length > 0) throw new UndoRefusal("This change would put a cell outside its table");
+    if (outside.length > 0) {
+      throw new UndoRefusal("This change would leave a cell in a column its table no longer has");
+    }
 
-    const formulaCells = tableRows.flatMap((table) =>
-      (table.columns ?? []).flatMap((column, col) =>
-        column.type === "formula" ? [{ tableId: table.id, col }] : [],
-      ),
+    const formulaColumns = tableRecords.flatMap((table) =>
+      (table.columns ?? []).flatMap((column, col) => {
+        const colId = table.colIds[col];
+        return column.type === "formula" && colId !== undefined ? [colId] : [];
+      }),
     );
-    for (let start = 0; start < formulaCells.length; start += INSERT_BATCH) {
+    for (let start = 0; start < formulaColumns.length; start += INSERT_BATCH) {
       const found = await db
         .select({ tableId: cells.tableId })
         .from(cells)
-        .where(
-          or(
-            ...formulaCells
-              .slice(start, start + INSERT_BATCH)
-              .map(({ tableId, col }) => and(eq(cells.tableId, tableId), eq(cells.col, col))),
-          ),
-        )
+        .where(inArray(cells.colId, formulaColumns.slice(start, start + INSERT_BATCH)))
         .limit(1);
       if (found.length > 0) {
         throw new UndoRefusal("This change would store a value in a formula column");
@@ -1887,12 +2252,12 @@ export class SpreadsheetRepository {
         .select({ pageId: tables.pageId })
         .from(tables)
         .innerJoin(pages, eq(pages.id, tables.pageId))
-        .where(eq(pages.spreadsheetId, spreadsheetId)),
+        .where(inSpreadsheet),
       db
         .select({ pageId: views.pageId })
         .from(views)
         .innerJoin(pages, eq(pages.id, views.pageId))
-        .where(eq(pages.spreadsheetId, spreadsheetId)),
+        .where(inSpreadsheet),
     ]);
     for (const { pageId } of [...blocks[0], ...blocks[1]]) {
       blockCounts.set(pageId, (blockCounts.get(pageId) ?? 0) + 1);
@@ -1958,59 +2323,60 @@ export class SpreadsheetRepository {
   }
 
   /**
-   * Rewrites the formulas that name a page or table about to be renamed, and
-   * returns the cells that changed. Must run inside `change`, before the
-   * rename itself: the old name is how the formulas are recognized, and a
-   * cell saved during the rename would keep the old name.
+   * Rewrites the formulas that name a page, table, or column about to be
+   * renamed. Must run inside `change`, before the rename itself: the old name
+   * is how the formulas are recognized, and a cell saved during the rename
+   * would keep the old name.
    */
   private async rewriteFormulas(
     tx: Database,
     writer: ContentWriter,
     spreadsheetId: string,
     rename: Rename,
-  ): Promise<Rewritten> {
-    const snapshot = await this.within(tx).getSnapshot(spreadsheetId);
-    return this.storeRewrite(writer, snapshot, {
-      cells: inputsAfterRename(snapshot, rename),
-      views: viewsAfterRename(snapshot, snapshot.views, rename),
-      columns: columnFormulasAfterRename(snapshot, rename),
+  ): Promise<void> {
+    const contents = await this.within(tx).read(spreadsheetId);
+    const { data } = contents;
+    await this.storeRewrite(writer, contents, {
+      cells: inputsAfterRename(data, rename),
+      views: viewsAfterRename(data, data.views, rename),
+      columns: columnFormulasAfterRename(data, rename),
     });
   }
 
   /**
    * Rewrites the formulas that must name a page for a table or view to move
-   * to another page, and returns what changed. Must run inside `change`,
-   * before the move itself: where things are now is how the formulas are read.
+   * to another page. Must run inside `change`, before the move itself: where
+   * things are now is how the formulas are read.
    */
   private async rewriteForMove(
     tx: Database,
     writer: ContentWriter,
     spreadsheetId: string,
     move: Move,
-  ): Promise<Rewritten> {
-    const snapshot = await this.within(tx).getSnapshot(spreadsheetId);
-    return this.storeRewrite(writer, snapshot, {
-      cells: inputsAfterMove(snapshot, move),
-      views: viewsAfterMove(snapshot, snapshot.views, move),
-      columns: columnFormulasAfterMove(snapshot, move),
+  ): Promise<void> {
+    const contents = await this.within(tx).read(spreadsheetId);
+    const { data } = contents;
+    await this.storeRewrite(writer, contents, {
+      cells: inputsAfterMove(data, move),
+      views: viewsAfterMove(data, data.views, move),
+      columns: columnFormulasAfterMove(data, move),
     });
   }
 
   /** Stores what a rewrite changed in the three places that hold formulas. */
   private async storeRewrite(
     writer: ContentWriter,
-    snapshot: Snapshot,
+    contents: Contents,
     rewritten: {
-      cells: StoredCell[];
+      cells: StoredInput[];
       views: { id: string; source: string }[];
       columns: ColumnFormula[];
     },
-  ): Promise<Rewritten> {
+  ): Promise<void> {
     writer.markRewrites();
-    await writer.setCells(rewritten.cells);
+    await writer.setCells(rewritten.cells.map((cell) => contents.identify(cell)));
     await this.storeViewSources(writer, rewritten.views);
-    const tables = await this.storeColumnFormulas(writer, snapshot.tables, rewritten.columns);
-    return { cells: rewritten.cells, views: rewritten.views, tables };
+    await this.storeColumnFormulas(writer, contents.data.tables, rewritten.columns);
   }
 
   /** Stores rewritten formulas of formula columns, and returns the tables they belong to as they now are. */
@@ -2124,22 +2490,48 @@ function sameRecord(left: unknown, right: unknown): boolean {
   return isDeepStrictEqual(left, right);
 }
 
-function emptyChangedContent(): ChangedContent {
-  return { pages: [], tables: [], views: [], cells: [] };
+/** Throws, where an expression needs a value. */
+function fail(error: Error): never {
+  throw error;
 }
 
-function mergeChangedContent(earlier: ChangedContent, later: ChangedContent): ChangedContent {
+function emptyChanged(): ChangedContent {
+  return { pages: [], tables: [], views: [], rows: [], cells: [] };
+}
+
+/** What a change made, with what the work inside it returned. */
+interface Outcome<T> {
+  result: T;
+  change: Change;
+}
+
+/** What a request created, with the change that created it. */
+export type Created<Records> = Records & { change: Change };
+
+/**
+ * What two changes applied one after the other wrote together. Where both
+ * wrote the same thing, the later one has it as it now is. Too much to send
+ * is `null`, as it is from one change.
+ */
+function mergeChanged(
+  earlier: ChangedContent | null,
+  later: ChangedContent | null,
+): ChangedContent | null {
+  if (!earlier || !later) return null;
   const latest = <T>(items: readonly T[], key: (item: T) => string): T[] => [
     ...new Map(items.map((item) => [key(item), item])).values(),
   ];
+  const cellsWritten = latest(
+    [...earlier.cells, ...later.cells],
+    ({ rowId, colId }) => `${rowId}:${colId}`,
+  );
+  if (cellsWritten.length > MAX_ANNOUNCED_CELLS) return null;
   return {
     pages: latest([...earlier.pages, ...later.pages], ({ id }) => id),
     tables: latest([...earlier.tables, ...later.tables], ({ id }) => id),
     views: latest([...earlier.views, ...later.views], ({ id }) => id),
-    cells: latest(
-      [...earlier.cells, ...later.cells],
-      ({ tableId, row, col }) => `${tableId}:${String(row)}:${String(col)}`,
-    ),
+    rows: latest([...earlier.rows, ...later.rows], ({ id }) => id),
+    cells: cellsWritten,
   };
 }
 
@@ -2164,24 +2556,6 @@ function nextColumnName(columns: readonly ColumnDefinition[]): string {
     "Column",
     columns.map((column) => column.name),
   );
-}
-
-/**
- * What two rewrites in a row rewrote together. Where both wrote the same
- * cell, view, or table, the later one has it as it now is.
- */
-function merged(earlier: Rewritten, later: Rewritten): Rewritten {
-  const latest = <T>(items: readonly T[], key: (item: T) => string): T[] => [
-    ...new Map(items.map((item) => [key(item), item])).values(),
-  ];
-  return {
-    cells: latest(
-      [...earlier.cells, ...later.cells],
-      (cell) => `${cell.tableId}:${formatAddress(cell)}`,
-    ),
-    views: latest([...earlier.views, ...later.views], (view) => view.id),
-    tables: latest([...earlier.tables, ...later.tables], (table) => table.id),
-  };
 }
 
 /** A table's columns with `count` new ones put in at `index`, each with the next free name. */

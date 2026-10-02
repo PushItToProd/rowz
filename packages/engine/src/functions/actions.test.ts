@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Effect } from "../effects";
-import { at, workbookWith } from "../testing";
+import type { ColumnDefinition } from "../structure";
+import { at, STRUCTURE, workbookWith } from "../testing";
 import { isAction, isButton, type ActionValue, type ErrorValue } from "../values";
-import type { Workbook } from "../workbook";
+import { Workbook } from "../workbook";
 
 /** Reads the button in `address` and plans its action. */
 function click(workbook: Workbook, address: string, tableId = "t1"): Effect[] | ErrorValue {
@@ -515,5 +516,137 @@ describe("INSERT, UPDATE, and OVERWRITE", () => {
       code,
       ...(message === undefined ? {} : { message }),
     });
+  });
+});
+
+describe("actions that add rows to a data table", () => {
+  const COLUMNS: ColumnDefinition[] = [
+    { name: "Name", type: "any" },
+    { name: "Count", type: "any" },
+    { name: "Double", type: "formula", formula: "=[Count] * 2" },
+  ];
+  const set = (address: string, input: string) => ({
+    type: "setCell",
+    ...at(address, "t2"),
+    input,
+  });
+  const grow = (rowCount: number) => ({ type: "ensureRows", tableId: "t2", rowCount });
+
+  /** A workbook whose second table has `rowCount` rows and, unless `plain`, named columns. */
+  function withTable(
+    button: string,
+    cells: Record<string, string>,
+    rowCount: number,
+    plain = false,
+  ): Workbook {
+    const workbook = new Workbook();
+    workbook.setStructure({
+      ...STRUCTURE,
+      tables: STRUCTURE.tables.map((table) =>
+        table.id === "t2"
+          ? { ...table, rowCount, colCount: 3, ...(plain ? {} : { columns: COLUMNS }) }
+          : table,
+      ),
+    });
+    workbook.setCell(at("A1"), "ann");
+    workbook.setCell(at("B1"), "1");
+    workbook.setCell(at("Z99"), `=BUTTON("Go", ${button})`);
+    for (const [address, input] of Object.entries(cells)) {
+      workbook.setCell(at(address, "t2"), input);
+    }
+    return workbook;
+  }
+
+  it("APPEND_ROW adds after the last stored row, and leaves a cleared row at the end alone", () => {
+    const button = "APPEND_ROW('Other Table'!A:B, \"zed\", 9)";
+    const cleared = { A1: "bob", B1: "2" };
+    // The table's second and third rows hold nothing typed.
+    expect(click(withTable(button, cleared, 3), "Z99")).toEqual([
+      grow(4),
+      set("A4", "zed"),
+      set("B4", "9"),
+    ]);
+    // A plain grid has rows that were never used, so the row goes below the content.
+    expect(click(withTable(button, cleared, 3, true), "Z99")).toEqual([
+      grow(2),
+      set("A2", "zed"),
+      set("B2", "9"),
+    ]);
+  });
+
+  it("APPEND_ROW into a range that names its last row goes below the content", () => {
+    const button = "APPEND_ROW('Other Table'!A1:B3, \"zed\", 9)";
+    expect(click(withTable(button, { A1: "bob" }, 3), "Z99")).toEqual([
+      grow(2),
+      set("A2", "zed"),
+      set("B2", "9"),
+    ]);
+  });
+
+  it("APPEND_ROW adds the first row of a table that has none", () => {
+    expect(click(withTable("APPEND_ROW('Other Table'[Name], \"zed\")", {}, 0), "Z99")).toEqual([
+      grow(1),
+      set("A1", "zed"),
+    ]);
+  });
+
+  it("INSERT and UPDATE add after the last stored row", () => {
+    const cells = { A1: "bob", B1: "2" };
+    expect(click(withTable("INSERT(A1:B1, 'Other Table'!A:B)", cells, 2), "Z99")).toEqual([
+      grow(3),
+      set("A3", "ann"),
+      set("B3", "1"),
+    ]);
+    expect(click(withTable("UPDATE(A1:B1, 1, 'Other Table'!A:B)", cells, 2), "Z99")).toEqual([
+      grow(3),
+      set("A3", "ann"),
+      set("B3", "1"),
+    ]);
+    // A row that matches is written over where it is.
+    expect(
+      click(withTable("UPDATE(A1:B1, 1, 'Other Table'!A:B)", { A1: "ANN", B1: "0" }, 2), "Z99"),
+    ).toEqual([set("A1", "ann"), set("B1", "1")]);
+  });
+
+  it("OVERWRITE deletes the rows past its data when the range covers every typed column", () => {
+    const cells = { A1: "bob", B1: "2", A2: "cy", B2: "3", A3: "di", B3: "4" };
+    expect(click(withTable("OVERWRITE(A1:B1, 'Other Table'!A:B)", cells, 3), "Z99")).toEqual([
+      grow(1),
+      set("A1", "ann"),
+      set("B1", "1"),
+      { type: "deleteRows", tableId: "t2", startRow: 1, count: 2 },
+    ]);
+  });
+
+  it("OVERWRITE with no data leaves a data table with no rows", () => {
+    expect(
+      click(withTable("OVERWRITE(A5:B9, 'Other Table'!A:B)", { A1: "bob" }, 2), "Z99"),
+    ).toEqual([{ type: "deleteRows", tableId: "t2", startRow: 0, count: 2 }]);
+  });
+
+  it("OVERWRITE of part of a table's width, or of a plain grid, deletes no row", () => {
+    const cells = { A1: "bob", B1: "2", A2: "cy", B2: "3" };
+    expect(click(withTable("OVERWRITE(A1, 'Other Table'!A:A)", cells, 2), "Z99")).toEqual([
+      set("A2", ""),
+      grow(1),
+      set("A1", "ann"),
+    ]);
+    expect(click(withTable("OVERWRITE(A1:B1, 'Other Table'!A:B)", cells, 2, true), "Z99")).toEqual([
+      set("A2", ""),
+      set("B2", ""),
+      grow(1),
+      set("A1", "ann"),
+      set("B1", "1"),
+    ]);
+  });
+
+  it("OVERWRITE of a range that names its last row deletes the rows of the range past the data", () => {
+    const cells = { A1: "h", A2: "bob", A3: "cy", A4: "di" };
+    expect(click(withTable("OVERWRITE(A1:B1, 'Other Table'!A2:B3)", cells, 4), "Z99")).toEqual([
+      grow(2),
+      set("A2", "ann"),
+      set("B2", "1"),
+      { type: "deleteRows", tableId: "t2", startRow: 2, count: 1 },
+    ]);
   });
 });

@@ -1,11 +1,15 @@
 import { LIMITS } from "@spreadsheet-app/shared";
 import { desc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { ClickResult, PageRecord, Snapshot, TableRecord } from "./app";
+import type { CellInput } from "@spreadsheet-app/shared";
+import type { ClickResult, PageRecord, TableRecord } from "./app";
 import { actionRuns } from "./db/schema";
 import {
   cellsBody,
+  changedCells,
   createSpreadsheet,
+  readSnapshot,
+  rowIds,
   startTestServer,
   storedInputs,
   type TestClient,
@@ -37,21 +41,32 @@ async function sheetWith(inputs: Record<string, string>, as: TestClient = user):
   const snapshot = await createSpreadsheet(as);
   const tableId = snapshot.tables[0]!.id;
   if (Object.keys(inputs).length > 0) {
-    await as.json("PUT", `/tables/${tableId}/cells`, cellsBody(inputs), 204);
+    await as.json("PUT", `/tables/${tableId}/cells`, cellsBody(inputs), 200);
   }
   return { spreadsheetId: snapshot.id, pageId: snapshot.pages[0]!.id, tableId };
 }
 
-function click(
+/** The answer to a click, with the cells it changed by the positions they now have. */
+interface Clicked extends ClickResult {
+  cells: (CellInput & { tableId: string })[];
+}
+
+async function clicked(sheet: Sheet, result: ClickResult, as: TestClient): Promise<Clicked> {
+  const cells = result.change ? await changedCells(as, sheet.spreadsheetId, result.change) : [];
+  return { ...result, cells };
+}
+
+async function click(
   sheet: Sheet,
   row: number,
   col: number,
   as: TestClient = user,
-): Promise<ClickResult> {
-  return as.json<ClickResult>(
+): Promise<Clicked> {
+  const result = await as.json<ClickResult>(
     "POST",
     `/tables/${sheet.tableId}/cells/${String(row)}/${String(col)}/click`,
   );
+  return clicked(sheet, result, as);
 }
 
 async function runsFor(sheet: Sheet): Promise<(typeof actionRuns.$inferSelect)[]> {
@@ -75,10 +90,11 @@ describe("clicking an EXECUTE button", () => {
       runId: expect.any(String),
       status: "succeeded",
       error: null,
+      change: { revision: expect.any(Number), changed: expect.any(Object) },
       cells: [{ tableId: sheet.tableId, row: 2, col: 0, input: "3" }],
-      tables: [],
       emailsSent: 0,
     });
+    expect(result.change?.changed).toMatchObject({ pages: [], tables: [], views: [], rows: [] });
     expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
       "2:0": "3",
     });
@@ -123,7 +139,6 @@ describe("clicking an EXECUTE button", () => {
       "PUT",
       `/tables/${sheet.tableId}/cells`,
       cellsBody({ A1: '=BUTTON("Log it", EXECUTE("done", Log!\'Table 1\'!B2))' }),
-      204,
     );
 
     expect(await click(sheet, 0, 0)).toMatchObject({
@@ -174,7 +189,7 @@ describe("clicks that do nothing", () => {
     expect(result).toMatchObject({
       status: "failed",
       error: "#DIV/0! Division by zero",
-      cells: [],
+      change: null,
       emailsSent: 0,
     });
     expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).not.toHaveProperty("0:1");
@@ -188,7 +203,7 @@ describe("clicks that do nothing", () => {
     expect(await click(sheet, 0, 0)).toMatchObject({
       status: "failed",
       error: "Z99 is outside the table Table 1",
-      cells: [],
+      change: null,
     });
     expect(await runsFor(sheet)).toMatchObject([
       { status: "failed", effects: [{ type: "setCell", row: 98, col: 25 }] },
@@ -213,7 +228,7 @@ describe("clicking a SEND_EMAIL button", () => {
     );
 
     const result = await click(sheet, 0, 1, sender);
-    expect(result).toMatchObject({ status: "succeeded", error: null, cells: [], emailsSent: 1 });
+    expect(result).toMatchObject({ status: "succeeded", error: null, change: null, emailsSent: 1 });
     expect(server.sent).toEqual([
       {
         to: ["ada@example.com"],
@@ -382,7 +397,7 @@ describe("actions that add rows, clear cells, and combine", () => {
     const first = await click(sheet, 0, 3);
     expect(first).toMatchObject({
       status: "succeeded",
-      tables: [],
+      change: { changed: { rows: [] } },
       cells: [
         { row: 1, col: 0, input: "pear" },
         { row: 1, col: 1, input: "3" },
@@ -390,16 +405,27 @@ describe("actions that add rows, clear cells, and combine", () => {
     });
 
     const second = await click(sheet, 0, 3);
+    const snapshot = await readSnapshot(user, sheet.spreadsheetId);
+    expect(snapshot.tables[0]).toMatchObject({ rowCount: 3 });
+    // The row the table grew by and the cells written into it are one change.
     expect(second).toMatchObject({
       status: "succeeded",
-      tables: [{ id: sheet.tableId, rowCount: 3 }],
+      change: {
+        changed: {
+          rows: [
+            {
+              id: rowIds(snapshot, sheet.tableId)[2],
+              tableId: sheet.tableId,
+              orderKey: expect.any(String),
+            },
+          ],
+        },
+      },
       cells: [
         { row: 2, col: 0, input: "pear" },
         { row: 2, col: 1, input: "3" },
       ],
     });
-    const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${sheet.spreadsheetId}`);
-    expect(snapshot.tables[0]).toMatchObject({ rowCount: 3 });
     expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
       "1:0": "pear",
       "2:0": "pear",
@@ -413,17 +439,15 @@ describe("actions that add rows, clear cells, and combine", () => {
     await user.json(
       "PUT",
       `/tables/${sheet.tableId}/cells`,
-      { cells: [{ row: LIMITS.tableRows - 1, col: 0, input: "last" }] },
-      204,
+      { cells: [{ row: LIMITS.tableRows - 1, col: 0, input: "last" }] }, 200,
     );
 
     expect(await click(sheet, 0, 3)).toMatchObject({
       status: "failed",
-      error: `Table 1 cannot have more than ${String(LIMITS.tableRows)} rows`,
-      cells: [],
-      tables: [],
+      error: `A table can have at most ${String(LIMITS.tableRows)} rows`,
+      change: null,
     });
-    const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${sheet.spreadsheetId}`);
+    const snapshot = await readSnapshot(user, sheet.spreadsheetId);
     expect(snapshot.tables[0]).toMatchObject({ rowCount: LIMITS.tableRows });
   });
 
@@ -508,13 +532,15 @@ describe("the clock an action sees", () => {
 });
 
 describe("changing a control", () => {
-  function choose(sheet: Sheet, row: number, col: number, value: unknown, status = 200) {
-    return user.json<ClickResult>(
+  async function choose(sheet: Sheet, row: number, col: number, value: unknown, status = 200) {
+    const result = await user.json<ClickResult>(
       "POST",
       `/tables/${sheet.tableId}/cells/${String(row)}/${String(col)}/input`,
       { value },
       status,
     );
+    // A refusal is the whole answer, which the caller compares.
+    return status === 200 ? clicked(sheet, result, user) : (result as Clicked);
   }
 
   it("writes TRUE or FALSE from a checkbox to its cell, and records the run", async () => {
@@ -539,7 +565,7 @@ describe("changing a control", () => {
     expect(await choose(sheet, 0, 2, "medium")).toMatchObject({
       status: "failed",
       error: "#VALUE! medium is not one of the choices",
-      cells: [],
+      change: null,
     });
     expect(await choose(sheet, 0, 2, null)).toMatchObject({ cells: [{ input: "" }] });
     expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).not.toHaveProperty("0:1");
@@ -576,11 +602,204 @@ describe("changing a control", () => {
   );
 });
 
+describe("actions on a data table", () => {
+  /**
+   * A spreadsheet with a data table of two columns, Name and Count, holding
+   * `rows`, and a second table whose A1 holds the button. The button's formula
+   * names the data table as `Data`.
+   */
+  async function dataTable(rows: [string, string][], action: string, plain = false) {
+    const snapshot = await createSpreadsheet(user);
+    const [page, buttons] = [snapshot.pages[0]!, snapshot.tables[0]!];
+    const { table } = await user.json<{ table: TableRecord }>(
+      "POST",
+      `/pages/${page.id}/tables`,
+      { name: "Data" },
+      201,
+    );
+    await user.json("PATCH", `/tables/${table.id}`, { rowCount: rows.length + 1, colCount: 2 });
+    const cells = Object.fromEntries(
+      [["Name", "Count"], ...rows].flatMap(([name, count], row) => [
+        [`A${String(row + 1)}`, name],
+        [`B${String(row + 1)}`, count],
+      ]),
+    );
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody(cells));
+    if (!plain) await user.json("POST", `/tables/${table.id}/columns`, { headerRow: true });
+    else await user.json("POST", `/tables/${table.id}/edits`, { axis: "row", kind: "delete", index: 0 });
+    await user.json(
+      "PUT",
+      `/tables/${buttons.id}/cells`,
+      cellsBody({ A1: `=BUTTON("Go", ${action})`, C1: "new", D1: "9", C2: "ann", D2: "7" }),
+    );
+    const sheet = { spreadsheetId: snapshot.id, pageId: page.id, tableId: buttons.id };
+    const data = async () => {
+      const now = await readSnapshot(user, snapshot.id);
+      return {
+        rows: rowIds(now, table.id),
+        size: now.tables.find(({ id }) => id === table.id)?.rowCount,
+        cells: await storedInputs(user, snapshot.id, table.id),
+      };
+    };
+    return { sheet, table, data };
+  }
+  const TWO: [string, string][] = [
+    ["ann", "1"],
+    ["bob", "2"],
+  ];
+
+  it.each([
+    ["APPEND_ROW", 'APPEND_ROW(Data!A:B, "new", 9)'],
+    ["INSERT", "INSERT(C1:D1, Data!A:B)"],
+    ["UPDATE", "UPDATE(C1:D1, 1, Data!A:B)"],
+  ])("%s adds a row at the end, and leaves no unused row", async (_, action) => {
+    const { sheet, data } = await dataTable(TWO, action);
+    const before = await data();
+    expect(before.size).toBe(2);
+    expect(await click(sheet, 0, 0)).toMatchObject({ status: "succeeded" });
+    const after = await data();
+    expect(after.rows.slice(0, 2)).toEqual(before.rows);
+    expect(after.size).toBe(3);
+    expect(after.cells).toEqual({ ...before.cells, "2:0": "new", "2:1": "9" });
+  });
+
+  it.each([
+    ["APPEND_ROW", 'APPEND_ROW(Data!A:B, "new", 9)'],
+    ["INSERT", "INSERT(C1:D1, Data!A:B)"],
+    ["UPDATE", "UPDATE(C1:D1, 1, Data!A:B)"],
+  ])("%s leaves a cleared row at the end as it is, and adds a row after it", async (_, action) => {
+    const { sheet, table, data } = await dataTable(TWO, action);
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A2: "", B2: "" }));
+    const before = await data();
+    await click(sheet, 0, 0);
+    const after = await data();
+    // The cleared row keeps its id and stays empty: something may point at it.
+    expect(after.rows).toEqual([...before.rows, expect.any(String)]);
+    expect(after.cells).toEqual({ "0:0": "ann", "0:1": "1", "2:0": "new", "2:1": "9" });
+  });
+
+  it("writes into a cleared row of a plain grid, which has rows nobody used", async () => {
+    const { sheet, table, data } = await dataTable(TWO, 'APPEND_ROW(Data!A:B, "new", 9)', true);
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A2: "", B2: "" }));
+    const before = await data();
+    await click(sheet, 0, 0);
+    const after = await data();
+    expect(after.rows).toEqual(before.rows);
+    expect(after.cells).toEqual({ "0:0": "ann", "0:1": "1", "1:0": "new", "1:1": "9" });
+  });
+
+  it("UPDATE writes over the row that matches, where it is", async () => {
+    const { sheet, data } = await dataTable(TWO, "UPDATE(C2:D2, 1, Data!A:B)");
+    const before = await data();
+    await click(sheet, 0, 0);
+    const after = await data();
+    expect(after.rows).toEqual(before.rows);
+    expect(after.cells).toEqual({ ...before.cells, "0:1": "7" });
+  });
+
+  it("adds the first row of a table that has none", async () => {
+    const { sheet, data } = await dataTable([], 'APPEND_ROW(Data!A:B, "new", 9)');
+    expect((await data()).size).toBe(0);
+    expect(await click(sheet, 0, 0)).toMatchObject({ status: "succeeded" });
+    expect(await data()).toMatchObject({ size: 1, cells: { "0:0": "new", "0:1": "9" } });
+  });
+
+  it("OVERWRITE deletes the rows it empties, so no empty row is left", async () => {
+    const three: [string, string][] = [...TWO, ["cy", "3"]];
+    const { sheet, data } = await dataTable(three, "OVERWRITE(C1:D1, Data!A:B)");
+    const before = await data();
+    const result = await click(sheet, 0, 0);
+    expect(result).toMatchObject({ status: "succeeded" });
+    const after = await data();
+    expect(after).toEqual({ rows: [before.rows[0]], size: 1, cells: { "0:0": "new", "0:1": "9" } });
+    // The rows that went are named. The cells in them are not: they went with their rows.
+    expect(result.change?.changed?.rows).toEqual(
+      before.rows.slice(1).map((id) => ({ id, tableId: expect.any(String), orderKey: null })),
+    );
+    expect(result.cells).toHaveLength(2);
+  });
+
+  it("OVERWRITE with no data leaves a data table with no rows", async () => {
+    const { sheet, data } = await dataTable(TWO, "OVERWRITE(C5:D9, Data!A:B)");
+    expect(await click(sheet, 0, 0)).toMatchObject({ status: "succeeded" });
+    expect(await data()).toEqual({ rows: [], size: 0, cells: {} });
+  });
+
+  it("OVERWRITE of part of a table's width empties cells and deletes no row", async () => {
+    const { sheet, data } = await dataTable(TWO, "OVERWRITE(C1, Data!A:A)");
+    const before = await data();
+    await click(sheet, 0, 0);
+    const after = await data();
+    expect(after.rows).toEqual(before.rows);
+    expect(after.cells).toEqual({ "0:0": "new", "0:1": "1", "1:1": "2" });
+  });
+
+  it("rewrites what read a row that OVERWRITE deleted, in cells and in views, in the same change", async () => {
+    const three: [string, string][] = [...TWO, ["cy", "3"]];
+    const { sheet, data } = await dataTable(three, "OVERWRITE(C1:D1, Data!A:B)");
+    await user.json(
+      "PUT",
+      `/tables/${sheet.tableId}/cells`,
+      cellsBody({ E1: "=SUM(Data!B1:B3)", E2: "=Data!B3" }),
+    );
+    const { view } = await user.json<{ view: { id: string } }>(
+      "POST",
+      `/pages/${sheet.pageId}/views`,
+      { kind: "text" },
+      201,
+    );
+    await user.json("PATCH", `/views/${view.id}`, { source: "{{ Data!A3 }} of {{ ROWS(Data!A:A) }}" });
+
+    const result = await click(sheet, 0, 0);
+    expect((await data()).size).toBe(1);
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "0:4": "=SUM(Data!B1:B1)",
+      "1:4": "=#REF!",
+    });
+    // Another tab hears of the view through the change, which holds its rewritten source.
+    expect(result.change?.changed?.views).toMatchObject([
+      { id: view.id, view: { source: "{{ #REF! }} of {{ ROWS(Data!A:A) }}" } },
+    ]);
+  });
+
+  it("makes one revision and one change of a click that grows a table and writes into two", async () => {
+    const { sheet, table, data } = await dataTable(
+      TWO,
+      'DO(APPEND_ROW(Data!A:B, "new", 9), EXECUTE("logged", B1))',
+    );
+    const before = await readSnapshot(user, sheet.spreadsheetId);
+    const result = await click(sheet, 0, 0);
+    expect(result.change?.revision).toBe(before.revision + 1);
+    expect((await readSnapshot(user, sheet.spreadsheetId)).revision).toBe(before.revision + 1);
+    expect(result.change?.changed?.rows).toEqual([
+      { id: (await data()).rows[2], tableId: table.id, orderKey: expect.any(String) },
+    ]);
+    expect(result.cells).toEqual(
+      expect.arrayContaining([
+        { tableId: table.id, row: 2, col: 0, input: "new" },
+        { tableId: table.id, row: 2, col: 1, input: "9" },
+        { tableId: sheet.tableId, row: 0, col: 1, input: "logged" },
+      ]),
+    );
+  });
+
+  it("makes no revision of a click whose writes are refused", async () => {
+    const { sheet, data } = await dataTable(
+      TWO,
+      'DO(APPEND_ROW(Data!A:B, "new", 9), EXECUTE("too far", Z99))',
+    );
+    const before = await readSnapshot(user, sheet.spreadsheetId);
+    expect(await click(sheet, 0, 0)).toMatchObject({ status: "failed", change: null });
+    expect((await readSnapshot(user, sheet.spreadsheetId)).revision).toBe(before.revision);
+    expect((await data()).size).toBe(2);
+  });
+});
+
 describe("snapshot after a click", () => {
   it("returns the written cell to a later reader", async () => {
     const sheet = await sheetWith({ A1: '=BUTTON("Stamp", EXECUTE("stamped", B1))' });
     await click(sheet, 0, 0);
-    const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${sheet.spreadsheetId}`);
+    const snapshot = await readSnapshot(user, sheet.spreadsheetId);
     expect(snapshot.cells).toContainEqual({
       tableId: sheet.tableId,
       row: 0,

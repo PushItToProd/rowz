@@ -1,8 +1,9 @@
-import { eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FILE_FORMAT, LIMITS, type SpreadsheetFile } from "@spreadsheet-app/shared";
-import type { Snapshot, UndoResult } from "./app";
-import { pages, tables } from "./db/schema";
+import { FILE_FORMAT, keysAfter, LIMITS, type SpreadsheetFile } from "@spreadsheet-app/shared";
+import type { UndoResult } from "./app";
+import { pages, tableRows, tables } from "./db/schema";
 import {
   cellsBody,
   createSpreadsheet,
@@ -10,6 +11,7 @@ import {
   withClientId,
   type TestServer,
   type TestUser,
+  readSnapshot,
 } from "./testing";
 
 let server: TestServer;
@@ -19,6 +21,18 @@ beforeAll(async () => {
   user = await server.signUp("Row limits");
 });
 afterAll(async () => server.close());
+
+/** Adds rows to the end of a table directly, past what the API would allow. */
+async function seedRows(tableId: string, count: number): Promise<void> {
+  const [last] = await server.db
+    .select({ orderKey: tableRows.orderKey })
+    .from(tableRows)
+    .where(eq(tableRows.tableId, tableId))
+    .orderBy(desc(tableRows.orderKey))
+    .limit(1);
+  const keys = keysAfter(last?.orderKey ?? null, count);
+  await server.db.insert(tableRows).values(keys.map((orderKey) => ({ tableId, orderKey })));
+}
 
 /** Seed empty grids directly so each test need not make a hundred requests. */
 async function atLimit() {
@@ -37,11 +51,22 @@ async function atLimit() {
         pageId: index < 49 ? snapshot.pages[0]!.id : others[index < 99 ? 0 : 1]!.id,
         name: `Grid ${String(index)}`,
         position: index < 49 ? index + 1 : index < 99 ? index - 49 : 0,
-        rowCount: index === 99 ? 980 : 1000,
-        colCount: 1,
+        colIds: [randomUUID()],
       })),
     )
     .returning({ id: tables.id });
+  // One statement for all the rows, with the keys the first migration gave existing rows.
+  const spare = inserted.at(-1)!.id;
+  await server.db.execute(sql`
+    INSERT INTO table_rows (table_id, order_key)
+    SELECT ${tables.id}, 'f' || lpad(n::text, 5, '0') || 'V'
+    FROM ${tables}
+    CROSS JOIN LATERAL generate_series(0, CASE WHEN ${tables.id} = ${spare} THEN 979 ELSE 999 END) n
+    WHERE ${inArray(
+      tables.id,
+      inserted.map((table) => table.id),
+    )}
+  `);
   return {
     snapshot,
     tableId: snapshot.tables[0]!.id,
@@ -62,7 +87,7 @@ describe("spreadsheet row limit", () => {
       expect(response.status).toBe(422);
       expect(await response.json()).toMatchObject({ error: { code: "too_many_rows" } });
     }
-    const current = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
+    const current = await readSnapshot(user, snapshot.id);
     expect(current.tables.reduce((sum, table) => sum + table.rowCount, 0)).toBe(
       LIMITS.spreadsheetRows,
     );
@@ -73,7 +98,7 @@ describe("spreadsheet row limit", () => {
     const { snapshot, tableId } = await atLimit();
     await user.json("PATCH", `/tables/${tableId}`, { rowCount: 19 });
     await user.json("POST", `/tables/${tableId}/edits`, { axis: "row", kind: "insert", index: 0 });
-    const current = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
+    const current = await readSnapshot(user, snapshot.id);
     expect(current.tables.reduce((sum, table) => sum + table.rowCount, 0)).toBe(
       LIMITS.spreadsheetRows,
     );
@@ -81,7 +106,7 @@ describe("spreadsheet row limit", () => {
 
   it("lets a legacy spreadsheet above the limit lose rows", async () => {
     const { tableId } = await atLimit();
-    await server.db.update(tables).set({ rowCount: 22 }).where(eq(tables.id, tableId));
+    await seedRows(tableId, 2);
     await user.json("PATCH", `/tables/${tableId}`, { rowCount: 21 });
     const response = await user.request("PATCH", `/tables/${tableId}`, { rowCount: 22 });
     expect(response.status).toBe(422);
@@ -96,11 +121,10 @@ describe("spreadsheet row limit", () => {
         A20: "last",
         D1: '=BUTTON("Add", APPEND_ROW(A:A, "new"))',
       }),
-      204,
     );
     const result = await user.json("POST", `/tables/${tableId}/cells/0/3/click`);
-    expect(result).toMatchObject({ status: "failed", cells: [], tables: [] });
-    const current = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
+    expect(result).toMatchObject({ status: "failed", change: null });
+    const current = await readSnapshot(user, snapshot.id);
     expect(current.tables.find((table) => table.id === tableId)?.rowCount).toBe(20);
     expect(current.cells.some((cell) => cell.input === "new")).toBe(false);
   });
@@ -131,13 +155,13 @@ describe("spreadsheet row limit", () => {
     const client = withClientId(user);
     await client.json("PATCH", `/tables/${tableId}`, { rowCount: 19 });
     // Consume the freed row without introducing a later structural conflict.
-    await server.db.update(tables).set({ rowCount: 981 }).where(eq(tables.id, spareId));
+    await seedRows(spareId, 1);
     const result = await client.json<UndoResult>("POST", `/spreadsheets/${snapshot.id}/undo`);
     expect(result).toMatchObject({
       outcome: "refused",
       error: "This change would exceed the spreadsheet row limit",
     });
-    const current = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
+    const current = await readSnapshot(user, snapshot.id);
     expect(current.tables.find((table) => table.id === tableId)?.rowCount).toBe(19);
   });
 
@@ -146,10 +170,10 @@ describe("spreadsheet row limit", () => {
     const client = withClientId(user);
     await client.json("PATCH", `/tables/${tableId}`, { rowCount: 19 });
     await client.json("PATCH", `/tables/${tableId}`, { rowCount: 20 });
-    await server.db.update(tables).set({ rowCount: 983 }).where(eq(tables.id, spareId));
+    await seedRows(spareId, 3);
     const result = await client.json<UndoResult>("POST", `/spreadsheets/${snapshot.id}/undo`);
     expect(result.outcome).toBe("done");
-    const current = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
+    const current = await readSnapshot(user, snapshot.id);
     expect(current.tables.reduce((sum, table) => sum + table.rowCount, 0)).toBe(
       LIMITS.spreadsheetRows + 2,
     );

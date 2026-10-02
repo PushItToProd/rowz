@@ -44,7 +44,21 @@ interface Destination {
   range: CellRange;
   /** The rows of the range through the last one that holds anything. */
   rows: CellValue[][];
+  /** How many rows of the range are taken. A row added to the range goes after them. */
+  used: number;
   width: number;
+}
+
+/**
+ * How many rows of a range are taken, given the rows it holds. A data table
+ * holds only the rows added to it, so in a range that is open at the bottom
+ * every stored row is taken, and a row cleared at the end keeps its place.
+ * Anywhere else the rows through the last one that holds anything are taken.
+ */
+function usedRows(range: CellRange, rows: readonly CellValue[][], context: PlanContext): number {
+  const table = context.tableOf(range.tableId);
+  if (table.columns && range.endRow === Infinity) return Math.max(0, table.rows - range.startRow);
+  return rows.findLastIndex(filled) + 1;
 }
 
 function destination(target: Node | undefined, context: PlanContext, name: string): Destination {
@@ -56,6 +70,7 @@ function destination(target: Node | undefined, context: PlanContext, name: strin
   return {
     range,
     rows: rows.slice(0, rows.findLastIndex(filled) + 1),
+    used: usedRows(range, rows, context),
     width: range.endCol - range.startCol + 1,
   };
 }
@@ -149,7 +164,9 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
   /**
    * `APPEND_ROW(range, value, ...)` writes the values into the first row of
    * the range after its last row that holds anything, growing the table when
-   * the range has no free row left. An array value takes one cell per element.
+   * the range has no free row left. In a data table, a range that is open at
+   * the bottom takes the row after the table's last. An array value takes one
+   * cell per element.
    */
   APPEND_ROW: {
     kind: "action",
@@ -169,12 +186,8 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
           `APPEND_ROW was given ${String(values.length)} values for ${String(width)} columns`,
         );
       }
-      // The row after the last one with content. Cells an array formula fills count as content.
-      const rows = grid(context.evaluate(target));
-      const used = rows.findLastIndex((cells) =>
-        cells.some((cell) => cell !== null && cell !== ""),
-      );
-      const row = range.startRow + used + 1;
+      // Cells an array formula fills count as content.
+      const row = range.startRow + usedRows(range, grid(context.evaluate(target)), context);
       if (row > range.endRow) fail("#VALUE!", "The range has no empty row left");
       return [
         { type: "ensureRows", tableId: range.tableId, rowCount: row + 1 },
@@ -199,7 +212,7 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
     maxArgs: 2,
     plan([data, target], context): Effect[] {
       const into = destination(target, context, "INSERT");
-      return appendRows(into, into.rows.length, dataRows(data, context, into.width, "INSERT"));
+      return appendRows(into, into.used, dataRows(data, context, into.width, "INSERT"));
     },
   },
 
@@ -239,25 +252,40 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
           effects.push(...writeRow(into.range, into.range.startRow + found, values));
         }
       }
-      return [...effects, ...appendRows(into, into.rows.length, added)];
+      return [...effects, ...appendRows(into, into.used, added)];
     },
   },
 
-  /** `OVERWRITE(data, range)` empties the range and writes the data from its first row. */
+  /**
+   * `OVERWRITE(data, range)` empties the range and writes the data from its
+   * first row. A data table holds no unused rows, so where the range covers
+   * every column that can be typed into, the rows past the data are deleted.
+   */
   OVERWRITE: {
     kind: "action",
     minArgs: 2,
     maxArgs: 2,
     plan([data, target], context): Effect[] {
       const into = destination(target, context, "OVERWRITE");
-      const written = appendRows(into, 0, dataRows(data, context, into.width, "OVERWRITE"));
+      const rows = dataRows(data, context, into.width, "OVERWRITE");
+      const written = appendRows(into, 0, rows);
+      const { range } = into;
+      const table = context.tableOf(range.tableId);
+      const whole =
+        table.columns?.every(
+          (column, col) => column.type === "formula" || (col >= range.startCol && col <= range.endCol),
+        ) ?? false;
+      const firstSpare = range.startRow + rows.length;
+      const spare = whole ? Math.min(range.endRow, table.rows - 1) - firstSpare + 1 : 0;
       const kept = new Set(
         written.flatMap((effect) =>
           effect.type === "setCell" ? [`${String(effect.row)}:${String(effect.col)}`] : [],
         ),
       );
       const cleared = context
-        .inputsIn(into.range)
+        .inputsIn(range)
+        // A row that is deleted takes its cells with it.
+        .filter(({ row }) => spare <= 0 || row < firstSpare)
         .filter(({ row, col }) => !kept.has(`${String(row)}:${String(col)}`))
         .map(({ tableId, row, col }) => ({
           type: "setCell" as const,
@@ -266,7 +294,11 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
           col,
           input: "",
         }));
-      return [...cleared, ...written];
+      const deleted: Effect[] =
+        spare > 0
+          ? [{ type: "deleteRows", tableId: range.tableId, startRow: firstSpare, count: spare }]
+          : [];
+      return [...cleared, ...written, ...deleted];
     },
   },
 

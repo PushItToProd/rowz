@@ -29,6 +29,22 @@ export const notFound = (what: string): ApiFailure =>
 
 export const conflict = (message: string): ApiFailure => new ApiFailure(409, "conflict", message);
 
+/** A request named a row by an id that no row has: the row was deleted, or never existed. */
+export const rowDeleted = (): ApiFailure =>
+  new ApiFailure(409, "row_deleted", "This row no longer exists");
+
+/** A request named a column by an id that its table does not have. */
+export const columnDeleted = (): ApiFailure =>
+  new ApiFailure(409, "column_deleted", "This column no longer exists");
+
+/** Formula text was written before a change to what its references mean. */
+export const staleFormula = (): ApiFailure =>
+  new ApiFailure(
+    409,
+    "stale_formula",
+    "Rows, columns, or names changed while this formula was being written. Check what it refers to and save it again",
+  );
+
 export const unprocessable = (code: string, message: string): ApiFailure =>
   new ApiFailure(422, code, message);
 

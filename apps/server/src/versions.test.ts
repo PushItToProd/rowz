@@ -1,11 +1,15 @@
 import { LIMITS } from "@spreadsheet-app/shared";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { PageRecord, Snapshot, SpreadsheetSummary, TableRecord, VersionRecord } from "./app";
+import type { ClickResult, PageRecord, SpreadsheetSummary, VersionRecord } from "./app";
 import { versions } from "./db/schema";
 import {
+  addTable,
+  addView,
   cellsBody,
+  changedCells,
   createSpreadsheet,
+  readSnapshot,
   startTestServer,
   storedInputs,
   type TestServer,
@@ -25,15 +29,15 @@ afterAll(() => server.close());
 async function start(cells: Record<string, string> = { A1: "1", A2: "2", B1: "=A1+A2" }) {
   const snapshot = await createSpreadsheet(user);
   const [page, table] = [snapshot.pages[0]!, snapshot.tables[0]!];
-  await user.json("PUT", `/tables/${table.id}/cells`, cellsBody(cells), 204);
+  await user.json("PUT", `/tables/${table.id}/cells`, cellsBody(cells), 200);
   const base = `/spreadsheets/${snapshot.id}`;
   return {
     id: snapshot.id,
     page,
     table,
     history: () => user.json<VersionRecord[]>("GET", `${base}/versions`),
-    current: () => user.json<Snapshot>("GET", base),
-    restore: (versionId: string, status = 204) =>
+    current: () => readSnapshot(user, snapshot.id),
+    restore: (versionId: string, status = 200) =>
       user.json("POST", `${base}/versions/${versionId}/restore`, undefined, status),
     /** Makes every kept version look as if it was kept an hour ago. */
     age: () =>
@@ -49,7 +53,7 @@ const reasons = (history: VersionRecord[]): (string | null)[] => history.map((v)
 describe("keeping versions", () => {
   it("keeps one of a new spreadsheet, and no more while changes follow closely", async () => {
     const { history, table } = await start();
-    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ C1: "more" }), 204);
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ C1: "more" }), 200);
     const kept = await history();
     expect(reasons(kept)).toEqual([null]);
     expect(kept[0]).toMatchObject({ createdBy: "Ada" });
@@ -59,7 +63,7 @@ describe("keeping versions", () => {
   it("keeps another once enough time has passed since the last", async () => {
     const { history, table, age } = await start();
     await age();
-    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ C1: "later" }), 204);
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ C1: "later" }), 200);
     expect(reasons(await history())).toEqual([null, null]);
   });
 
@@ -105,16 +109,15 @@ describe("keeping versions", () => {
           `/tables/${table.id}/cells`,
           {
             cells: Array.from({ length: 20 }, (_, row) => ({ row: row % 20, col: 2, input: "x" })),
-          },
-          204,
+          }, 200,
         ),
       "Before changing 20 cells of Table 1",
     ],
     [
       "deleting a table",
       async ({ page, table }) => {
-        await user.json("POST", `/pages/${page.id}/tables`, {}, 201);
-        await user.json("DELETE", `/tables/${table.id}`, undefined, 204);
+        await addTable(user, page.id);
+        await user.json("DELETE", `/tables/${table.id}`, undefined, 200);
       },
       "Before deleting the table Table 1",
     ],
@@ -132,14 +135,9 @@ describe("keeping versions", () => {
       { name: "Extra" },
       201,
     );
-    const view = await user.json<{ id: string }>(
-      "POST",
-      `/pages/${page.id}/views`,
-      { kind: "chart" },
-      201,
-    );
-    await user.json("DELETE", `/views/${view.id}`, undefined, 204);
-    await user.json("DELETE", `/pages/${page.id}`, undefined, 204);
+    const view = await addView(user, page.id, "chart");
+    await user.json("DELETE", `/views/${view.id}`, undefined, 200);
+    await user.json("DELETE", `/pages/${page.id}`, undefined, 200);
     await user.json("POST", `/tables/${fixture.table.id}/columns`, { headerRow: false });
     await user.json("PATCH", `/tables/${fixture.table.id}/columns/2`, {
       type: "formula",
@@ -191,18 +189,13 @@ describe("restoring a version", () => {
       range: { startRow: 0, endRow: 0, startCol: 0, endCol: 0 },
       format: { bold: true },
     });
-    const chart = await user.json<{ id: string }>(
-      "POST",
-      `/pages/${page.id}/views`,
-      { kind: "chart" },
-      201,
-    );
+    const chart = await addView(user, page.id, "chart");
     await user.json("PATCH", `/views/${chart.id}`, { source: "'Table 1'!A1:B2" });
     await user.json("PATCH", `/spreadsheets/${id}`, { name: "Plan" }, 204);
 
     // A deleted row keeps a version of everything above.
     await user.json("POST", `/tables/${table.id}/edits`, { axis: "row", kind: "delete", index: 0 });
-    await user.json("DELETE", `/views/${chart.id}`, undefined, 204);
+    await user.json("DELETE", `/views/${chart.id}`, undefined, 200);
     await user.json("PATCH", `/spreadsheets/${id}`, { name: "Changed" }, 204);
     const before = (await history()).find((v) => v.reason === "Before deleting row 1 of Table 1")!;
 
@@ -235,18 +228,78 @@ describe("restoring a version", () => {
   });
 
   it("still computes after a restore: a button reads the restored cells", async () => {
-    const { table, history, current, restore } = await start({
+    const { id, table, history, current, restore } = await start({
       A1: "5",
       B1: '=BUTTON("Double", EXECUTE(A1 * 2, C1))',
     });
     await user.json("PATCH", `/tables/${table.id}`, { rowCount: 1 });
-    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "100" }), 204);
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "100" }), 200);
     await restore((await history())[0]!.id);
     const restored = (await current()).tables[0]!;
-    expect(await user.json("POST", `/tables/${restored.id}/cells/0/1/click`)).toMatchObject({
-      status: "succeeded",
-      cells: [{ row: 0, col: 2, input: "10" }],
-    });
+    const clicked = await user.json<ClickResult>("POST", `/tables/${restored.id}/cells/0/1/click`);
+    expect(clicked).toMatchObject({ status: "succeeded" });
+    expect(await changedCells(user, id, clicked.change!)).toEqual([
+      { tableId: restored.id, row: 0, col: 2, input: "10" },
+    ]);
+  });
+
+  it("tells sessions to read the spreadsheet again, since everything in it has new ids", async () => {
+    const { table, history, current, restore } = await start();
+    const before = await current();
+    const restored = await restore((await history())[0]!.id);
+    expect(restored).toEqual({ revision: before.revision + 1, changed: null });
+    const after = await current();
+    expect(after.revision).toBe(before.revision + 1);
+    expect(after.tables[0]?.id).not.toBe(table.id);
+  });
+
+  it("puts back a data table that has no rows", async () => {
+    const { table, history, current, restore, age } = await start({ A1: "" });
+    await user.json("POST", `/tables/${table.id}/columns`, { headerRow: false });
+    expect((await current()).tables[0]).toMatchObject({ rowCount: 0 });
+    // A row is added once the version of the empty table is an hour old, so the change keeps one.
+    await age();
+    await user.json("PATCH", `/tables/${table.id}`, { rowCount: 3 });
+    const [, empty] = await history();
+    await restore(empty!.id);
+    const restored = (await current()).tables[0]!;
+    expect(restored).toMatchObject({ rowCount: 0, colCount: table.colCount });
+    expect(restored.columns).toHaveLength(table.colCount);
+  });
+
+  it("refuses to restore or copy a version with more rows than a spreadsheet may have", async () => {
+    const { id, history, restore } = await start();
+    const blocks = Array.from({ length: 50 }, (_, index) => ({
+      type: "table" as const,
+      name: `Grid ${String(index)}`,
+      rowCount: LIMITS.tableRows,
+      colCount: 1,
+      cells: [],
+    }));
+    const [legacy] = await server.db
+      .insert(versions)
+      .values({
+        spreadsheetId: id,
+        reason: "From before the row limit",
+        data: {
+          format: "spreadsheet-app",
+          version: 1,
+          name: "Legacy",
+          pages: Array.from({ length: 3 }, (_, page) => ({
+            name: `Page ${String(page)}`,
+            blocks: page < 2 ? blocks : blocks.slice(0, 1),
+          })),
+        },
+      })
+      .returning({ id: versions.id });
+    const kept = await history();
+
+    expect(await restore(legacy!.id, 422)).toMatchObject({ error: { code: "too_many_rows" } });
+    expect(
+      await user.json("POST", `/spreadsheets/${id}/versions/${legacy!.id}/copy`, undefined, 422),
+    ).toMatchObject({ error: { code: "too_many_rows" } });
+    // Nothing of the refused restore was kept: not the version it would have replaced.
+    expect(await history()).toEqual(kept);
   });
 
   it("refuses a version of another spreadsheet, and one that does not exist", async () => {
@@ -274,9 +327,9 @@ describe("copying a version", () => {
     );
     expect(copy.name).toBe("Budget (copy)");
     expect(copy.id).not.toBe(id);
-    const copied = await user.json<Snapshot>("GET", `/spreadsheets/${copy.id}`);
+    const copied = await readSnapshot(user, copy.id);
     expect(await storedInputs(user, copy.id, copied.tables[0]!.id)).toMatchObject({ "0:0": "1" });
-    expect((await current()).tables.map((t: TableRecord) => t.rowCount)).toEqual([
+    expect((await current()).tables.map((t) => t.rowCount)).toEqual([
       table.rowCount - 1,
     ]);
   });

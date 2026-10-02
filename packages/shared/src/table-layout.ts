@@ -57,3 +57,14 @@ export class TableLayout {
     return rowId === undefined || colId === undefined ? undefined : { rowId, colId };
   }
 }
+
+/** The layout of each table, from the tables and rows of a spreadsheet. */
+export function layoutsOf(
+  tables: readonly { id: string; colIds: readonly string[] }[],
+  rows: readonly (RowIdentity & { tableId: string })[],
+): Map<string, TableLayout> {
+  const rowsOf = Map.groupBy(rows, (row) => row.tableId);
+  return new Map(
+    tables.map((table) => [table.id, new TableLayout(rowsOf.get(table.id) ?? [], table.colIds)]),
+  );
+}

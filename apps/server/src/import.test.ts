@@ -1,7 +1,13 @@
 import { FILE_LIMITS, LIMITS, type SpreadsheetFile } from "@spreadsheet-app/shared";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { Snapshot, SpreadsheetSummary } from "./app";
-import { startTestServer, type TestServer, type TestUser } from "./testing";
+import type { SpreadsheetSummary } from "./app";
+import {
+  readSnapshot,
+  startTestServer,
+  type TestServer,
+  type TestSnapshot,
+  type TestUser,
+} from "./testing";
 
 let server: TestServer;
 let user: TestUser;
@@ -51,14 +57,14 @@ function file(overrides: Partial<SpreadsheetFile> = {}): SpreadsheetFile {
   };
 }
 
-async function imported(contents: SpreadsheetFile): Promise<Snapshot> {
+async function imported(contents: SpreadsheetFile): Promise<TestSnapshot> {
   const summary = await user.json<SpreadsheetSummary>(
     "POST",
     "/spreadsheets/import",
     contents,
     201,
   );
-  return user.json<Snapshot>("GET", `/spreadsheets/${summary.id}`);
+  return readSnapshot(user, summary.id);
 }
 
 describe("importing a spreadsheet file", () => {
@@ -95,8 +101,7 @@ describe("importing a spreadsheet file", () => {
     await user.json(
       "PUT",
       `/tables/${sales.id}/cells`,
-      { cells: [{ row: 0, col: 0, input: "changed" }] },
-      204,
+      { cells: [{ row: 0, col: 0, input: "changed" }] }, 200,
     );
     const history = await user.json<{ id: string }[]>(
       "GET",
@@ -106,10 +111,9 @@ describe("importing a spreadsheet file", () => {
     await user.json(
       "POST",
       `/spreadsheets/${snapshot.id}/versions/${history[0]!.id}/restore`,
-      undefined,
-      204,
+      undefined, 200,
     );
-    const restored = await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`);
+    const restored = await readSnapshot(user, snapshot.id);
     expect(restored.cells.find((cell) => cell.row === 0 && cell.col === 0)?.input).toBe("10");
   });
 
@@ -212,13 +216,13 @@ describe("importing a spreadsheet file", () => {
     ["no name", { ...file(), name: " " }],
     ["an unknown kind of block", { ...file(), pages: [{ name: "P", blocks: [{ type: "map" }] }] }],
     [
-      "a table with no rows",
+      "a table with fewer than no rows",
       {
         ...file(),
         pages: [
           {
             name: "P",
-            blocks: [{ type: "table", name: "T", rowCount: 0, colCount: 1, cells: [] }],
+            blocks: [{ type: "table", name: "T", rowCount: -1, colCount: 1, cells: [] }],
           },
         ],
       },
@@ -230,6 +234,33 @@ describe("importing a spreadsheet file", () => {
     ["something that is not a file", { hello: "world" }],
   ])("refuses a file with %s", async (_, contents) => {
     await user.json("POST", "/spreadsheets/import", contents, 400);
+  });
+
+  it("takes a data table with no rows, and refuses a plain table with none", async () => {
+    const empty = (columns?: { name: string; type: "any" }[]) =>
+      file({
+        pages: [
+          {
+            name: "P",
+            blocks: [
+              {
+                type: "table",
+                name: "T",
+                rowCount: 0,
+                colCount: 1,
+                cells: [],
+                ...(columns ? { columns } : {}),
+              },
+            ],
+          },
+        ],
+      });
+    expect(await user.json("POST", "/spreadsheets/import", empty(), 422)).toEqual({
+      error: { code: "invalid_file", message: "The table T has no rows" },
+    });
+    const snapshot = await imported(empty([{ name: "Amount", type: "any" }]));
+    expect(snapshot.tables).toMatchObject([{ rowCount: 0, colCount: 1 }]);
+    expect(snapshot.rows).toEqual([]);
   });
 
   it("holds a spreadsheet to the limits of a file, so that what is exported can be imported", async () => {
@@ -249,7 +280,7 @@ describe("importing a spreadsheet file", () => {
       file({ pages }),
       201,
     );
-    const snapshot = await other.json<Snapshot>("GET", `/spreadsheets/${summary.id}`);
+    const snapshot = await readSnapshot(other, summary.id);
     const [full, empty] = snapshot.pages;
 
     expect(await other.json("POST", `/spreadsheets/${summary.id}/pages`, {}, 422)).toMatchObject({
@@ -279,7 +310,7 @@ describe("importing a spreadsheet file", () => {
       file({ pages: [{ name: "P", blocks: [full, spare] }] }),
       201,
     );
-    const snapshot = await other.json<Snapshot>("GET", `/spreadsheets/${summary.id}`);
+    const snapshot = await readSnapshot(other, summary.id);
     const [fullId, spareId] = snapshot.tables.map((table) => table.id);
     const put = (tableId: string | undefined, input: string, status: number) =>
       other.json(
@@ -292,9 +323,9 @@ describe("importing a spreadsheet file", () => {
     expect(await put(spareId, "one too many", 422)).toMatchObject({
       error: { code: "too_many_cells" },
     });
-    await put(fullId, "changed", 204);
-    await put(fullId, "", 204);
-    await put(spareId, "fits now", 204);
+    await put(fullId, "changed", 200);
+    await put(fullId, "", 200);
+    await put(spareId, "fits now", 200);
   });
 
   it("refuses a body larger than a file may be", async () => {

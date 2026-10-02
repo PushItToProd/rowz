@@ -33,3 +33,13 @@ it("orders generated and backfilled keys the same way in JavaScript and the data
     .orderBy(sql`key collate "C"`);
   expect(ordered.map(({ key }) => key)).toEqual(keys.toSorted());
 });
+
+it("stores row order keys with C collation", async () => {
+  const result = await server.db
+    .select({ collname: sql<string>`c.collname` })
+    .from(
+      sql`pg_attribute a JOIN pg_class t ON t.oid = a.attrelid JOIN pg_collation c ON c.oid = a.attcollation`,
+    )
+    .where(sql`t.relname = 'table_rows' AND a.attname = 'order_key'`);
+  expect(result).toEqual([{ collname: "C" }]);
+});

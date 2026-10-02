@@ -1,9 +1,12 @@
 import { LIMITS } from "@spreadsheet-app/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { PageRecord, Snapshot, TableRecord, ViewRecord } from "./app";
+import type { Change, PageRecord, TableRecord, ViewRecord } from "./app";
 import {
+  addTable,
+  addView,
   cellsBody,
   createSpreadsheet,
+  readSnapshot,
   startTestServer,
   type TestServer,
   type TestUser,
@@ -26,11 +29,16 @@ async function start(): Promise<{ id: string; page: PageRecord; table: TableReco
 }
 
 function add(pageId: string, kind: ViewRecord["kind"]): Promise<ViewRecord> {
-  return user.json<ViewRecord>("POST", `/pages/${pageId}/views`, { kind }, 201);
+  return addView(user, pageId, kind);
+}
+
+/** The sources a change wrote, by view. */
+function sourcesIn(change: Change): { id: string; source: string | undefined }[] {
+  return (change.changed?.views ?? []).map(({ id, view }) => ({ id, source: view?.source }));
 }
 
 async function viewsOf(spreadsheetId: string): Promise<ViewRecord[]> {
-  return (await user.json<Snapshot>("GET", `/spreadsheets/${spreadsheetId}`)).views;
+  return (await readSnapshot(user, spreadsheetId)).views;
 }
 
 describe("creating views", () => {
@@ -63,7 +71,7 @@ describe("creating views", () => {
   it("puts tables and views on a page in the order they were added", async () => {
     const { id, page, table } = await start();
     const chart = await add(page.id, "chart");
-    const second = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
+    const second = await addTable(user, page.id);
     const text = await add(page.id, "text");
     expect([table, chart, second, text].map((item) => item.position)).toEqual([0, 1, 2, 3]);
     expect((await viewsOf(id)).map((view) => view.id)).toEqual([chart.id, text.id]);
@@ -82,9 +90,8 @@ describe("changing views", () => {
     const { id, page } = await start();
     const chart = await add(page.id, "chart");
     const changes = { name: "Sales by month", source: "'Table 1'!A1:B6", chartType: "line" };
-    expect(await user.json("PATCH", `/views/${chart.id}`, changes)).toEqual({
-      ...chart,
-      ...changes,
+    expect(await user.json("PATCH", `/views/${chart.id}`, changes)).toMatchObject({
+      changed: { views: [{ id: chart.id, view: { ...chart, ...changes } }] },
     });
     expect(await viewsOf(id)).toEqual([{ ...chart, ...changes }]);
   });
@@ -93,7 +100,9 @@ describe("changing views", () => {
     const { id, page } = await start();
     const text = await add(page.id, "text");
     const source = "# Report\n\nTotal: {{ SUM('Table 1'!A:A) }}";
-    expect(await user.json("PATCH", `/views/${text.id}`, { source })).toMatchObject({ source });
+    expect(await user.json("PATCH", `/views/${text.id}`, { source })).toMatchObject({
+      changed: { views: [{ view: { source } }] },
+    });
     expect(await user.json("PATCH", `/views/${text.id}`, { chartType: "pie" }, 422)).toEqual({
       error: { code: "not_a_chart", message: "Text 1 is not a chart" },
     });
@@ -130,7 +139,7 @@ describe("deleting", () => {
     const { id, page } = await start();
     const chart = await add(page.id, "chart");
     const text = await add(page.id, "text");
-    await user.json("DELETE", `/views/${chart.id}`, undefined, 204);
+    await user.json("DELETE", `/views/${chart.id}`, undefined, 200);
     expect((await viewsOf(id)).map((view) => view.id)).toEqual([text.id]);
   });
 
@@ -143,7 +152,7 @@ describe("deleting", () => {
       201,
     );
     await add(page.id, "chart");
-    await user.json("DELETE", `/pages/${page.id}`, undefined, 204);
+    await user.json("DELETE", `/pages/${page.id}`, undefined, 200);
     expect(await viewsOf(id)).toEqual([]);
   });
 });
@@ -166,13 +175,11 @@ describe("keeping views pointed at the same cells", () => {
       "'Table 1'!A1:B3",
       "Total: {{ SUM('Table 1'!A:A) }}",
     );
-    const renamed = await user.json("PATCH", `/tables/${table.id}`, { name: "Sales" });
-    expect(renamed).toMatchObject({
-      views: [
-        { id: chart.id, source: "Sales!A1:B3" },
-        { id: text.id, source: "Total: {{ SUM(Sales!A:A) }}" },
-      ],
-    });
+    const renamed = await user.json<Change>("PATCH", `/tables/${table.id}`, { name: "Sales" });
+    expect(sourcesIn(renamed)).toEqual([
+      { id: chart.id, source: "Sales!A1:B3" },
+      { id: text.id, source: "Total: {{ SUM(Sales!A:A) }}" },
+    ]);
     expect(await sources()).toEqual(["Sales!A1:B3", "Total: {{ SUM(Sales!A:A) }}"]);
   });
 
@@ -181,11 +188,9 @@ describe("keeping views pointed at the same cells", () => {
       "='Page 1'!'Table 1'!A1:B3",
       "{{ 'Table 1'!A1 }}",
     );
-    expect(await user.json("PATCH", `/pages/${page.id}`, { name: "Data" })).toEqual({
-      cells: [],
-      views: [{ id: chart.id, source: "=Data!'Table 1'!A1:B3" }],
-      tables: [],
-    });
+    const renamed = await user.json<Change>("PATCH", `/pages/${page.id}`, { name: "Data" });
+    expect(sourcesIn(renamed)).toEqual([{ id: chart.id, source: "=Data!'Table 1'!A1:B3" }]);
+    expect(renamed.changed).toMatchObject({ cells: [], tables: [] });
     expect(await sources()).toEqual(["=Data!'Table 1'!A1:B3", "{{ 'Table 1'!A1 }}"]);
   });
 
@@ -194,19 +199,17 @@ describe("keeping views pointed at the same cells", () => {
       "'Table 1'!A2:B4",
       "{% for row in 'Table 1'!A2:B4 %}{{ row }}{% endfor %} and {{ 'Table 1'!C1 }}",
     );
-    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A2: "1", B2: "2" }), 204);
-    const inserted = await user.json("POST", `/tables/${table.id}/edits`, {
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A2: "1", B2: "2" }), 200);
+    const inserted = await user.json<Change>("POST", `/tables/${table.id}/edits`, {
       axis: "row",
       kind: "insert",
       index: 0,
     });
     const moved = "{% for row in 'Table 1'!A3:B5 %}{{ row }}{% endfor %} and {{ 'Table 1'!C2 }}";
-    expect(inserted).toMatchObject({
-      views: [
-        { id: chart.id, source: "'Table 1'!A3:B5" },
-        { id: text.id, source: moved },
-      ],
-    });
+    expect(sourcesIn(inserted)).toEqual([
+      { id: chart.id, source: "'Table 1'!A3:B5" },
+      { id: text.id, source: moved },
+    ]);
     expect(await sources()).toEqual(["'Table 1'!A3:B5", moved]);
 
     await user.json("POST", `/tables/${table.id}/edits`, { axis: "col", kind: "delete", index: 2 });
@@ -218,7 +221,7 @@ describe("keeping views pointed at the same cells", () => {
 
   it("leaves views alone when a rename is refused", async () => {
     const { page, table, sources } = await withViews("'Table 1'!A1", "{{ 'Table 1'!A1 }}");
-    const other = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
+    const other = await addTable(user, page.id);
     await user.json("PATCH", `/tables/${table.id}`, { name: other.name }, 409);
     expect(await sources()).toEqual(["'Table 1'!A1", "{{ 'Table 1'!A1 }}"]);
   });
@@ -230,12 +233,12 @@ describe("reordering a page", () => {
     const chart = await add(started.page.id, "chart");
     const text = await add(started.page.id, "text");
     const order = async (): Promise<string[]> => {
-      const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${started.id}`);
+      const snapshot = await readSnapshot(user, started.id);
       return [...snapshot.tables, ...snapshot.views]
         .sort((a, b) => a.position - b.position)
         .map((item) => item.id);
     };
-    const put = (blocks: string[], status = 204) =>
+    const put = (blocks: string[], status = 200) =>
       user.json("PUT", `/pages/${started.page.id}/order`, { blocks }, status);
     return { ...started, chart, text, order, put };
   }
@@ -257,7 +260,7 @@ describe("reordering a page", () => {
       put,
     } = await page();
     await put([chart.id, text.id, table.id]);
-    const added = await user.json<TableRecord>("POST", `/pages/${pageId}/tables`, {}, 201);
+    const added = await addTable(user, pageId);
     expect(await order()).toEqual([chart.id, text.id, table.id, added.id]);
   });
 
@@ -297,8 +300,8 @@ describe("reordering pages", () => {
     );
     const ids = [started.page.id, second.page.id, third.page.id];
     const order = async (): Promise<string[]> =>
-      (await user.json<Snapshot>("GET", `/spreadsheets/${started.id}`)).pages.map(({ id }) => id);
-    const put = (pages: string[], status = 204) =>
+      (await readSnapshot(user, started.id)).pages.map(({ id }) => id);
+    const put = (pages: string[], status = 200) =>
       user.json("PUT", `/spreadsheets/${started.id}/pages/order`, { pages }, status);
     return { ...started, ids, order, put };
   }
@@ -350,7 +353,7 @@ describe("moving a block to another page", () => {
       {},
       201,
     );
-    const snapshot = () => user.json<Snapshot>("GET", `/spreadsheets/${started.id}`);
+    const snapshot = () => readSnapshot(user, started.id);
     const inputs = async (tableId: string): Promise<Record<string, string>> =>
       Object.fromEntries(
         (await snapshot()).cells
@@ -362,37 +365,34 @@ describe("moving a block to another page", () => {
 
   it("moves a table to the end of the page, and keeps every formula reading what it read", async () => {
     const { page, table, other, snapshot, inputs } = await twoPages();
-    const sibling = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
+    const sibling = await addTable(user, page.id);
     const chart = await add(page.id, "chart");
     await user.json("PATCH", `/views/${chart.id}`, { source: "'Table 2'!A1:B2" });
     await user.json("PATCH", `/tables/${sibling.id}`, { name: "Moved" });
     await user.json(
       "PUT",
       `/tables/${table.id}/cells`,
-      cellsBody({ A1: "=Moved!A1 + 1", A2: "5" }),
-      204,
+      cellsBody({ A1: "=Moved!A1 + 1", A2: "5" }), 200,
     );
     await user.json(
       "PUT",
       `/tables/${sibling.id}/cells`,
-      cellsBody({ A1: "='Table 1'!A2 * 2", A2: "=Moved!A1" }),
-      204,
+      cellsBody({ A1: "='Table 1'!A2 * 2", A2: "=Moved!A1" }), 200,
     );
     await user.json(
       "PUT",
       `/tables/${other.table.id}/cells`,
-      cellsBody({ A1: "='Page 1'!Moved!A1" }),
-      204,
+      cellsBody({ A1: "='Page 1'!Moved!A1" }), 200,
     );
 
-    const result = await user.json<{ table: TableRecord; cells: object[]; views: object[] }>(
-      "PUT",
-      `/tables/${sibling.id}/page`,
-      { pageId: other.page.id },
-    );
-    expect(result.table).toMatchObject({ id: sibling.id, pageId: other.page.id, position: 1 });
-    expect(result.cells).toHaveLength(3);
-    expect(result.views).toEqual([{ id: chart.id, source: "'Page 2'!Moved!A1:B2" }]);
+    const result = await user.json<Change>("PUT", `/tables/${sibling.id}/page`, {
+      pageId: other.page.id,
+    });
+    expect(result.changed?.tables).toMatchObject([
+      { id: sibling.id, table: { pageId: other.page.id, position: 1 } },
+    ]);
+    expect(result.changed?.cells).toHaveLength(3);
+    expect(sourcesIn(result)).toEqual([{ id: chart.id, source: "'Page 2'!Moved!A1:B2" }]);
     expect(await inputs(table.id)).toEqual({ "0:0": "='Page 2'!Moved!A1 + 1", "1:0": "5" });
     expect(await inputs(sibling.id)).toEqual({
       "0:0": "='Page 1'!'Table 1'!A2 * 2",
@@ -406,16 +406,16 @@ describe("moving a block to another page", () => {
 
   it("rewrites the formula columns of a moved table", async () => {
     const { page, table, other } = await twoPages();
-    const sibling = await user.json<TableRecord>("POST", `/pages/${page.id}/tables`, {}, 201);
+    const sibling = await addTable(user, page.id);
     await user.json("POST", `/tables/${sibling.id}/columns`, { headerRow: false });
     await user.json("PATCH", `/tables/${sibling.id}/columns/1`, {
       type: "formula",
       formula: "='Table 1'!A1 + [Column 1]",
     });
-    const result = await user.json<{ table: TableRecord }>("PUT", `/tables/${sibling.id}/page`, {
+    const result = await user.json<Change>("PUT", `/tables/${sibling.id}/page`, {
       pageId: other.page.id,
     });
-    expect(result.table.columns?.[1]).toMatchObject({
+    expect(result.changed?.tables[0]?.table?.columns?.[1]).toMatchObject({
       formula: "='Page 1'!'Table 1'!A1 + [Column 1]",
     });
     expect(table.name).toBe("Table 1");
@@ -425,19 +425,18 @@ describe("moving a block to another page", () => {
     const { page, other, snapshot } = await twoPages();
     const text = await add(page.id, "text");
     await user.json("PATCH", `/views/${text.id}`, { source: "{{ SUM('Table 1'!A1:A3) }}" });
-    const result = await user.json<{ view: ViewRecord; views: object[] }>(
-      "PUT",
-      `/views/${text.id}/page`,
-      { pageId: other.page.id },
-    );
-    expect(result.view).toMatchObject({
+    const result = await user.json<Change>("PUT", `/views/${text.id}/page`, {
+      pageId: other.page.id,
+    });
+    const [moved] = result.changed?.views ?? [];
+    expect(moved?.view).toMatchObject({
       id: text.id,
       pageId: other.page.id,
       position: 1,
       source: "{{ SUM('Page 1'!'Table 1'!A1:A3) }}",
     });
-    expect(result.views).toEqual([]);
-    expect((await snapshot()).views).toEqual([result.view]);
+    expect(result.changed?.views).toHaveLength(1);
+    expect((await snapshot()).views).toEqual([moved?.view]);
   });
 
   it("refuses a page that already has a table of the same name", async () => {

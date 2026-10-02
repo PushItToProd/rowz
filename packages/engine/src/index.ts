@@ -34,7 +34,13 @@ export {
 } from "./docs";
 export { chartData, type ChartData, type ChartSeries } from "./charts";
 export { dateFromParts, dateParts, formatDate, isDate, parseDate, type DateValue } from "./dates";
-export type { Effect, EnsureRowsEffect, SendEmailEffect, SetCellEffect } from "./effects";
+export type {
+  DeleteRowsEffect,
+  Effect,
+  EnsureRowsEffect,
+  SendEmailEffect,
+  SetCellEffect,
+} from "./effects";
 export { defaultFunctions } from "./functions";
 export type {
   ActionFunction,

@@ -26,9 +26,8 @@ export function viewRoutes() {
           return c.json(await c.var.repository.moveView(viewId, c.req.valid("json").pageId));
         },
       )
-      .delete("/:viewId", zValidator("param", viewParam, onInvalid), async (c) => {
-        await c.var.repository.deleteView(c.req.valid("param").viewId);
-        return c.body(null, 204);
-      })
+      .delete("/:viewId", zValidator("param", viewParam, onInvalid), async (c) =>
+        c.json(await c.var.repository.deleteView(c.req.valid("param").viewId)),
+      )
   );
 }

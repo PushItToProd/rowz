@@ -1,3 +1,4 @@
+import { positionalFormatRange } from "../testing";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,7 +31,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   // The server answers with the table holding the rule that was asked for.
   server.formatCells.mockImplementation((_id, range, format, reset) =>
-    Promise.resolve({ ...TABLE, formats: [{ ...range, format, ...(reset ? { reset } : {}) }] }),
+    Promise.resolve({
+      ...TABLE,
+      formats: [{ ...positionalFormatRange(range), format, ...(reset ? { reset } : {}) }],
+    }),
   );
 });
 afterEach(() => {
@@ -53,7 +57,7 @@ describe("FormatBar", () => {
     store.extendSelection({ row: 2, col: 2 });
     await wrapper.vm.$nextTick();
     await control("Bold").trigger("click");
-    const range = { startRow: 1, endRow: 2, startCol: 1, endCol: 2 };
+    const range = { startRowId: "r1", endRowId: "r2", startColId: "c2", endColId: "c3" };
     expect(server.formatCells).toHaveBeenCalledExactlyOnceWith("t1", range, { bold: true }, false);
     await vi.waitFor(() => {
       expect(control("Bold").attributes("aria-pressed")).toBe("true");
@@ -105,7 +109,7 @@ describe("FormatBar", () => {
     await control(label).setValue(value);
     expect(server.formatCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      { startRow: 0, endRow: 0, startCol: 0, endCol: 0 },
+      { startRowId: "r0", endRowId: "r0", startColId: "c1", endColId: "c1" },
       patch,
       false,
     );
@@ -133,7 +137,7 @@ describe("FormatBar", () => {
     await control("Italic").trigger("click");
     expect(server.formatCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      { startRow: 0, endRow: null, startCol: 1, endCol: 1 },
+      { startRowId: "r0", endRowId: null, startColId: "c2", endColId: "c2" },
       { italic: true },
       false,
     );
@@ -148,7 +152,7 @@ describe("FormatBar", () => {
     await clear!.trigger("click");
     expect(server.formatCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      { startRow: 0, endRow: null, startCol: 0, endCol: null },
+      { startRowId: "r0", endRowId: null, startColId: "c1", endColId: null },
       {},
       true,
     );

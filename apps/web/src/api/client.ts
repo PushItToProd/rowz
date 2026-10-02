@@ -15,17 +15,13 @@ import type {
 import { CLIENT_ID_HEADER, STEP_ID_HEADER, UNDOABLE_HEADER } from "@spreadsheet-app/shared";
 import type {
   ApiError,
-  CellInput,
+  IdentityCellInput,
+  IdentifiedCell,
   SpreadsheetFile,
-  StructuralEditBody,
+  IdentifiedStructuralEditBody,
+  IdentityFormatRange,
 } from "@spreadsheet-app/shared";
-import type {
-  CellId,
-  ChartType,
-  ColumnType,
-  FormatPatch,
-  FormatRule,
-} from "@spreadsheet-app/engine";
+import type { ChartType, ColumnType, FormatPatch } from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
 export type {
@@ -235,14 +231,14 @@ export const api = {
   /** Inserts or deletes a row or column. Resolves to the resized table and every cell that changed. */
   editTable: (
     tableId: string,
-    edit: StructuralEditBody,
+    edit: IdentifiedStructuralEditBody,
   ): Promise<Rewritten & { table: TableRecord }> =>
     body(routes.tables[":tableId"].edits.$post({ param: { tableId }, json: edit })),
 
   /** Changes how a range of cells is shown. With `reset`, the cells first lose every format they had. */
   formatCells: (
     tableId: string,
-    range: Pick<FormatRule, "startRow" | "endRow" | "startCol" | "endCol">,
+    range: IdentityFormatRange,
     format: FormatPatch,
     reset = false,
   ): Promise<TableRecord> =>
@@ -264,12 +260,12 @@ export const api = {
   /** Changes a column's name, type, or formula. Resolves to the table and what a rename rewrote. */
   updateColumn: (
     tableId: string,
-    col: number,
+    colId: string,
     changes: { name?: string; type?: ColumnType; formula?: string },
   ): Promise<Rewritten & { table: TableRecord }> =>
     body(
-      routes.tables[":tableId"].columns[":col"].$patch({
-        param: { tableId, col: String(col) },
+      routes.tables[":tableId"].columns[":colId"].$patch({
+        param: { tableId, colId },
         json: changes,
       }),
     ),
@@ -290,7 +286,7 @@ export const api = {
   deleteTable: (tableId: string): Promise<void> =>
     done(routes.tables[":tableId"].$delete({ param: { tableId } })),
 
-  setCells: (tableId: string, cells: CellInput[], stepId?: string): Promise<void> =>
+  setCells: (tableId: string, cells: IdentityCellInput[], stepId?: string): Promise<void> =>
     done(
       routes.tables[":tableId"].cells.$put({
         param: { tableId },
@@ -300,18 +296,18 @@ export const api = {
     ),
 
   /** Stores a value chosen through the checkbox or dropdown in a cell. */
-  input: ({ tableId, row, col }: CellId, value: ControlInput): Promise<ClickResult> =>
+  input: ({ tableId, rowId, colId }: IdentifiedCell, value: ControlInput): Promise<ClickResult> =>
     body(
-      routes.tables[":tableId"].cells[":row"][":col"].input.$post(
-        { param: { tableId, row: String(row), col: String(col) }, json: { value } },
+      routes.tables[":tableId"].cells[":rowId"][":colId"].input.$post(
+        { param: { tableId, rowId, colId }, json: { value } },
         clock(),
       ),
     ),
 
-  click: ({ tableId, row, col }: CellId): Promise<ClickResult> =>
+  click: ({ tableId, rowId, colId }: IdentifiedCell): Promise<ClickResult> =>
     body(
-      routes.tables[":tableId"].cells[":row"][":col"].click.$post(
-        { param: { tableId, row: String(row), col: String(col) } },
+      routes.tables[":tableId"].cells[":rowId"][":colId"].click.$post(
+        { param: { tableId, rowId, colId } },
         clock(),
       ),
     ),

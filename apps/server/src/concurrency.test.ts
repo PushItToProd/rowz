@@ -1,17 +1,19 @@
-import type { FormatRule } from "@spreadsheet-app/engine";
 import { and, eq, ilike, sql } from "drizzle-orm";
 import { integer, pgTable, text } from "drizzle-orm/pg-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Snapshot, TableRecord } from "./app";
 import type { Database } from "./db/client";
 import { spreadsheets } from "./db/schema";
 import { SpreadsheetRepository } from "./repo/spreadsheets";
 import {
+  addTable,
   cellsBody,
   createSpreadsheet,
+  readSnapshot,
+  rowIds,
   startTestServer,
   storedInputs,
   type TestServer,
+  type TestSnapshot,
   type TestUser,
 } from "./testing";
 
@@ -57,18 +59,26 @@ function overtakenBy(other: () => Promise<unknown>): SpreadsheetRepository {
   return new SpreadsheetRepository(db, user.userId);
 }
 
+type SizedTable = TestSnapshot["tables"][number];
+
+/**
+ * A new spreadsheet whose first table holds one typed cell, in A1. `rows` and
+ * the table's `colIds` are the ids a request made now would name.
+ */
 async function start(): Promise<{
   id: string;
-  table: TableRecord;
-  current(): Promise<TableRecord>;
+  table: SizedTable;
+  rows: string[];
+  current(): Promise<SizedTable>;
 }> {
-  const snapshot = await createSpreadsheet(user);
-  const table = snapshot.tables[0]!;
+  const created = await createSpreadsheet(user);
+  const table = created.tables[0]!;
+  await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "first" }));
   return {
-    id: snapshot.id,
+    id: created.id,
     table,
-    current: async () =>
-      (await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`)).tables[0]!,
+    rows: rowIds(created, table.id),
+    current: async () => (await readSnapshot(user, created.id)).tables[0]!,
   };
 }
 
@@ -100,27 +110,39 @@ async function waitForSpreadsheetLockWait(db: Database): Promise<void> {
 }
 
 describe("a change that another change overtakes", () => {
-  it("refuses a cell that a deleted column left outside the table", async () => {
-    const { id, table } = await start();
-    const last = table.colCount - 1;
+  it("refuses a cell whose column was deleted", async () => {
+    const { id, table, rows } = await start();
     const repository = overtakenBy(() =>
-      user.json("POST", `/tables/${table.id}/edits`, { axis: "col", kind: "delete", index: 0 }),
+      user.json("POST", `/tables/${table.id}/edits`, { axis: "col", kind: "delete", index: 1 }),
     );
+    const late = { rowId: rows[0]!, colId: table.colIds[1]!, input: "late" };
 
-    await expect(
-      repository.setCells(table.id, [{ row: 0, col: last, input: "late" }]),
-    ).rejects.toMatchObject({ code: "cell_out_of_bounds" });
-    expect(await storedInputs(user, id, table.id)).toEqual({});
+    await expect(repository.setCells(table.id, { cells: [late] })).rejects.toMatchObject({
+      code: "column_deleted",
+    });
+    expect(await storedInputs(user, id, table.id)).toEqual({ "0:0": "first" });
+  });
+
+  it("writes a cell where its row and column are after a column before it was deleted", async () => {
+    const { id, table, rows } = await start();
+    const repository = overtakenBy(() =>
+      user.json("POST", `/tables/${table.id}/edits`, { axis: "col", kind: "delete", index: 1 }),
+    );
+    const late = { rowId: rows[2]!, colId: table.colIds[3]!, input: "late" };
+
+    await repository.setCells(table.id, { cells: [late] });
+    expect(await storedInputs(user, id, table.id)).toEqual({ "0:0": "first", "2:2": "late" });
   });
 
   it("refuses a cell in a column that became a formula column", async () => {
-    const { id, table } = await start();
+    const { id, table, rows } = await start();
     const repository = overtakenBy(() => withFormulaColumn(table.id, "=1"));
+    const typed = { rowId: rows[0]!, colId: table.colIds[1]!, input: "typed" };
 
-    await expect(
-      repository.setCells(table.id, [{ row: 0, col: 1, input: "typed" }]),
-    ).rejects.toMatchObject({ code: "formula_column" });
-    expect(await storedInputs(user, id, table.id)).toEqual({});
+    await expect(repository.setCells(table.id, { cells: [typed] })).rejects.toMatchObject({
+      code: "formula_column",
+    });
+    expect(await storedInputs(user, id, table.id)).toEqual({ "0:0": "first" });
   });
 
   it("keeps a column's new formula when the table is resized at the same time", async () => {
@@ -142,7 +164,7 @@ describe("a change that another change overtakes", () => {
       user.json("PATCH", `/tables/${table.id}/columns/1`, { formula: "=2" }),
     );
 
-    await repository.updateColumn(table.id, 0, { name: "First" });
+    await repository.updateColumn(table.id, table.colIds[0]!, { name: "First" });
     const { columns } = await current();
     expect(columns?.[0]).toMatchObject({ name: "First" });
     expect(columns?.[1]).toMatchObject({ formula: "=2" });
@@ -155,21 +177,15 @@ describe("a change that another change overtakes", () => {
       user.json("POST", `/tables/${table.id}/edits`, { axis: "col", kind: "insert", index: 0 }),
     );
 
-    await repository.updateColumn(table.id, 0, { name: "Renamed" });
+    await repository.updateColumn(table.id, table.colIds[0]!, { name: "Renamed" });
     const after = await current();
     expect(after.columns).toHaveLength(after.colCount);
     expect(after.columns?.map((column) => column.name)).toContain("Renamed");
   });
 
   it("keeps both formats when two are given at the same time", async () => {
-    const { table, current } = await start();
-    const rule = (row: number, format: FormatRule["format"]): FormatRule => ({
-      startRow: row,
-      endRow: row,
-      startCol: 0,
-      endCol: 0,
-      format,
-    });
+    const { table, rows, current } = await start();
+    const [colId] = table.colIds as [string];
     const repository = overtakenBy(() =>
       user.json("POST", `/tables/${table.id}/formats`, {
         range: { startRow: 0, endRow: 0, startCol: 0, endCol: 0 },
@@ -177,21 +193,26 @@ describe("a change that another change overtakes", () => {
       }),
     );
 
-    await repository.formatCells(table.id, rule(1, { italic: true }));
+    await repository.formatCells(
+      table.id,
+      { startRowId: rows[1]!, endRowId: rows[1]!, startColId: colId, endColId: colId },
+      { italic: true },
+    );
     expect((await current()).formats).toHaveLength(2);
   });
 
   it("does not bring back a table that was deleted", async () => {
-    const { id, table } = await start();
-    await user.json("POST", `/pages/${table.pageId}/tables`, {}, 201);
+    const { id, table, rows } = await start();
+    await addTable(user, table.pageId);
     const repository = overtakenBy(() =>
-      user.json("DELETE", `/tables/${table.id}`, undefined, 204),
+      user.json("DELETE", `/tables/${table.id}`, undefined, 200),
     );
+    const late = { rowId: rows[0]!, colId: table.colIds[0]!, input: "late" };
 
-    await expect(
-      repository.setCells(table.id, cellsBody({ A1: "late" }).cells as never),
-    ).rejects.toMatchObject({ status: 404 });
-    expect((await user.json<Snapshot>("GET", `/spreadsheets/${id}`)).cells).toEqual([]);
+    await expect(repository.setCells(table.id, { cells: [late] })).rejects.toMatchObject({
+      status: 404,
+    });
+    expect((await readSnapshot(user, id)).cells).toEqual([]);
   });
 });
 

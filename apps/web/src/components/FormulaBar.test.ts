@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, snapshotWith, type MockedApi } from "../testing";
+import { at, snapshotWith, TABLE, type MockedApi } from "../testing";
 import FormulaBar from "./FormulaBar.vue";
 
 vi.mock("../api/client", async () => {
@@ -63,7 +63,7 @@ describe("FormulaBar", () => {
     await field(wrapper).trigger("keydown", { key: "Enter" });
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      [{ row: 0, col: 0, input: "=1+1" }],
+      [{ rowId: "r0", colId: "c1", input: "=1+1" }],
       expect.any(String),
     );
     expect(store.valueOf(at("A1"))).toBe(2);
@@ -112,7 +112,7 @@ describe("FormulaBar", () => {
 
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      [{ row: 0, col: 0, input: "typed for A1" }],
+      [{ rowId: "r0", colId: "c1", input: "typed for A1" }],
       expect.any(String),
     );
     expect(useWorkbookStore().inputOf(at("B1"))).toBe("5");
@@ -186,4 +186,26 @@ describe("FormulaBar", () => {
     expect(field(wrapper).element.value).toBe("2");
     expect(field(wrapper).attributes("disabled")).toBeDefined();
   });
+});
+
+it("preserves a focused draft and its IDs when a remote row insertion moves the cell", async () => {
+  const wrapper = await render({ A2: "old" });
+  const store = useWorkbookStore();
+  await select(wrapper, "A2");
+  await field(wrapper).trigger("focus");
+  await field(wrapper).setValue("draft survives");
+  const snapshot = snapshotWith({ A3: "old" });
+  snapshot.tables = [
+    { ...TABLE, rowCount: 5, rows: [{ id: "new", orderKey: "Zz" }, ...TABLE.rows!] },
+  ];
+  server.getSnapshot.mockResolvedValue(snapshot);
+  await store.refresh();
+  await wrapper.vm.$nextTick();
+  expect(field(wrapper).element.value).toBe("draft survives");
+  await field(wrapper).trigger("blur");
+  expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+    "t1",
+    [{ rowId: "r1", colId: "c1", input: "draft survives" }],
+    expect.any(String),
+  );
 });

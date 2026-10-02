@@ -1,3 +1,5 @@
+import { expectedEdit } from "../testing";
+import { sizedTable } from "../testing";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -73,7 +75,7 @@ describe("row and column actions", () => {
     await select("B3");
     await button(name).trigger("click");
     await vi.waitFor(() => {
-      expect(server.editTable).toHaveBeenCalledExactlyOnceWith("t1", edit);
+      expect(server.editTable).toHaveBeenCalledExactlyOnceWith("t1", expectedEdit(edit));
     });
     expect(confirm).not.toHaveBeenCalled();
   });
@@ -116,10 +118,12 @@ describe("table actions", () => {
     server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
     await wrapper.get('button[aria-label="Add row"]').trigger("click");
     await wrapper.get('button[aria-label="Add column"]').trigger("click");
-    expect(server.updateTable.mock.calls).toEqual([
-      ["t1", { rowCount: 5 }],
-      ["t1", { colCount: 4 }],
-    ]);
+    await vi.waitFor(() => {
+      expect(server.updateTable.mock.calls).toEqual([
+        ["t1", { rowCount: 5 }],
+        ["t1", { colCount: 4 }],
+      ]);
+    });
   });
 
   it("has no strips for a viewer", async () => {
@@ -271,7 +275,7 @@ describe("the menu of row, column, and cell actions", () => {
   ])("%s edits the table and closes the menu", async (name, edit) => {
     await open("B2");
     await item(name).trigger("click");
-    expect(server.editTable).toHaveBeenCalledWith("t1", edit);
+    expect(server.editTable).toHaveBeenCalledWith("t1", expectedEdit(edit));
     expect(wrapper.find('[role="menu"]').exists()).toBe(false);
   });
 
@@ -310,7 +314,7 @@ describe("the menu of row, column, and cell actions", () => {
   ])("%s edits that many rows or columns in one request", async (name, edit) => {
     await openOnRange("C4", "B2", "B3");
     await item(name).trigger("click");
-    expect(server.editTable).toHaveBeenCalledExactlyOnceWith("t1", edit);
+    expect(server.editTable).toHaveBeenCalledExactlyOnceWith("t1", expectedEdit(edit));
   });
 
   it("asks before deleting several rows or columns when one of them holds content", async () => {
@@ -369,7 +373,7 @@ describe("the menu of row, column, and cell actions", () => {
     await item("Clear cells").trigger("click");
     expect(server.setCells).toHaveBeenCalledWith(
       "t1",
-      [{ row: 1, col: 1, input: "" }],
+      [{ rowId: "r1", colId: "c2", input: "" }],
       expect.any(String),
     );
   });
@@ -410,10 +414,10 @@ describe("files", () => {
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
       [
-        { row: 0, col: 0, input: "x" },
-        { row: 0, col: 1, input: "y, z" },
-        { row: 1, col: 0, input: "1" },
-        { row: 1, col: 1, input: "=A2*2" },
+        { rowId: "r0", colId: "c1", input: "x" },
+        { rowId: "r0", colId: "c2", input: "y, z" },
+        { rowId: "r1", colId: "c1", input: "1" },
+        { rowId: "r1", colId: "c2", input: "=A2*2" },
       ],
       expect.any(String),
     );
@@ -426,7 +430,7 @@ describe("files", () => {
   it("grows the table to fit the file", async () => {
     await render();
     server.updateTable.mockResolvedValue({
-      table: { ...TABLE, rowCount: 6, colCount: 5 },
+      table: sizedTable({ rowCount: 6, colCount: 5 }),
       cells: [],
       views: [],
       tables: [],
@@ -452,7 +456,7 @@ describe("files", () => {
     await choose("data.csv", "x");
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      [{ row: 0, col: 0, input: "x" }],
+      [{ rowId: "r0", colId: "c1", input: "x" }],
       expect.any(String),
     );
     expect(useWorkbookStore().inputOf(at("C3"))).toBe("kept");
@@ -524,7 +528,7 @@ describe("column names", () => {
       "Column holds: A formula…",
     ]);
     await item("Column holds: Date").trigger("click");
-    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", 0, { type: "date" });
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", { type: "date" });
   });
 
   it("asks for the formula of a formula column, starting from the one it has", async () => {
@@ -533,7 +537,7 @@ describe("column names", () => {
     prompt.mockReturnValue("=[Price] + 1");
     await item("✓ Column holds: A formula…").trigger("click");
     expect(prompt.mock.calls[0]?.[1]).toBe("=[Price] * [Qty]");
-    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", 2, {
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c3", {
       type: "formula",
       formula: "=[Price] + 1",
     });

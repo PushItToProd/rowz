@@ -97,7 +97,10 @@ export const lookupFunctions: Record<string, FunctionDefinition> = {
     const rows = grid(range);
     const position = integer(column);
     if (position < 1) fail("#VALUE!", "The column must be 1 or more");
-    if (position > (rows[0]?.length ?? 0)) fail("#REF!", "The column is outside the range");
+    // A range with no rows has no width to check the column against, and no key to find.
+    if (rows.length > 0 && position > (rows[0]?.length ?? 0)) {
+      fail("#REF!", "The column is outside the range");
+    }
     const keys = rows.map(([cell]) => cell ?? null);
     const wanted = scalar(key);
     const row = found(boolean(sorted) ? nearest(wanted, keys) : exact(wanted, keys));

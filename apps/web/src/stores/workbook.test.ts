@@ -1,3 +1,5 @@
+import { sizedTable } from "../testing";
+import { identifiedAt } from "../testing";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ColumnDefinition } from "@spreadsheet-app/engine";
@@ -197,7 +199,7 @@ describe("setCell", () => {
     await done;
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      [{ row: 0, col: 0, input: "10" }],
+      [{ rowId: "r0", colId: "c1", input: "10" }],
       expect.any(String),
     );
     expect(store.notice).toBeNull();
@@ -248,7 +250,7 @@ describe("setCell", () => {
     expect(store.inputOf(at("A1"))).toBe("3");
     expect(server.setCells).toHaveBeenLastCalledWith(
       "t1",
-      [{ row: 0, col: 0, input: "3" }],
+      [{ rowId: "r0", colId: "c1", input: "3" }],
       expect.any(String),
     );
   });
@@ -278,9 +280,9 @@ describe("setCell", () => {
     server.setCells.mockReturnValue(save.promise);
 
     const done = store.setCell(at("A1"), "2");
-    await store.deleteTable("t1");
+    const deleted = store.deleteTable("t1");
     save.reject(new Error("Table not found"));
-    await done;
+    await Promise.all([done, deleted]);
     expect(store.tables).toEqual([]);
   });
 });
@@ -348,8 +350,8 @@ describe("setCells", () => {
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
       [
-        { row: 0, col: 1, input: "=A1+1" },
-        { row: 1, col: 0, input: "x" },
+        { rowId: "r0", colId: "c2", input: "=A1+1" },
+        { rowId: "r1", colId: "c1", input: "x" },
       ],
       expect.any(String),
     );
@@ -370,7 +372,7 @@ describe("setCells", () => {
   it("splits a large change into requests the server accepts, and keeps what was saved if a later one fails", async () => {
     const store = await open();
     server.updateTable.mockResolvedValue({
-      table: { ...TABLE, rowCount: 1000, colCount: 3 },
+      table: sizedTable({ rowCount: 1000, colCount: 3 }),
       cells: [],
       views: [],
       tables: [],
@@ -426,7 +428,7 @@ describe("selection", () => {
     const store = await open();
     const cols = Array.from({ length: 101 }, (_, index) => String(index)).join("\t");
     server.updateTable.mockResolvedValue({
-      table: { ...TABLE, colCount: 100 },
+      table: sizedTable({ colCount: 100 }),
       cells: [],
       views: [],
       tables: [],
@@ -474,7 +476,7 @@ describe("click", () => {
     server.click.mockResolvedValue(clickResult({ cells: [{ ...at("A3"), input: "3" }] }));
 
     await store.click(at("B1"));
-    expect(server.click).toHaveBeenCalledExactlyOnceWith(at("B1"));
+    expect(server.click).toHaveBeenCalledExactlyOnceWith(identifiedAt("B1"));
     expect(store.valueOf(at("A3"))).toBe(3);
     expect(store.valueOf(at("C1"))).toBe(6);
     expect(store.notice).toEqual({ kind: "success", text: "Updated A3" });
@@ -528,7 +530,7 @@ describe("click", () => {
     const store = await open({ B1: BUTTON });
     server.click.mockResolvedValue(
       clickResult({
-        tables: [{ ...TABLE, rowCount: 5 }],
+        tables: [sizedTable({ rowCount: 5 })],
         cells: [{ tableId: "t1", row: 4, col: 0, input: "appended" }],
       }),
     );
@@ -541,7 +543,7 @@ describe("click", () => {
     const store = await open({ A1: "FALSE", B1: "=CHECKBOX(A1)" });
     server.input.mockResolvedValue(clickResult({ cells: [{ ...at("A1"), input: "TRUE" }] }));
     await store.input(at("B1"), true);
-    expect(server.input).toHaveBeenCalledExactlyOnceWith(at("B1"), true);
+    expect(server.input).toHaveBeenCalledExactlyOnceWith(identifiedAt("B1"), true);
     expect(store.valueOf(at("A1"))).toBe(true);
     expect(store.notice).toBeNull();
 
@@ -674,7 +676,7 @@ describe("structure", () => {
     const store = await open({ A1: "1", A2: "2", A4: "=A1+A2" });
     store.selection = at("C4");
     server.editTable.mockResolvedValue({
-      table: { ...TABLE, rowCount: 3 },
+      table: { ...TABLE, rowCount: 3, rows: TABLE.rows!.slice(1) },
       cells: [
         { ...at("A1"), input: "2" },
         { ...at("A2"), input: "" },
@@ -698,13 +700,13 @@ describe("structure", () => {
     store.selection = at("A2");
     store.extendSelection(at("C4"));
     server.editTable.mockResolvedValue({
-      table: { ...TABLE, rowCount: 3 },
+      table: { ...TABLE, rowCount: 3, rows: TABLE.rows!.slice(1) },
       cells: [],
       views: [],
       tables: [],
     });
     await store.editTable("t1", { axis: "row", kind: "delete", index: 0 });
-    expect(store.selectedRange).toEqual({ startRow: 1, endRow: 2, startCol: 0, endCol: 2 });
+    expect(store.selectedRange).toEqual({ startRow: 0, endRow: 2, startCol: 0, endCol: 2 });
   });
 
   it("applies a smaller size: drops the cells that went, and keeps the selection inside", async () => {
@@ -712,7 +714,7 @@ describe("structure", () => {
     store.selection = at("B2");
     store.extendSelection(at("C4"));
     server.updateTable.mockResolvedValue({
-      table: { ...TABLE, rowCount: 2, colCount: 2 },
+      table: sizedTable({ rowCount: 2, colCount: 2 }),
       cells: [
         { ...at("C4"), input: "" },
         { ...at("B1"), input: "=#REF!" },
@@ -728,13 +730,13 @@ describe("structure", () => {
 
     store.selection = at("A2");
     server.updateTable.mockResolvedValue({
-      table: { ...TABLE, rowCount: 1, colCount: 2 },
+      table: sizedTable({ rowCount: 1, colCount: 2 }),
       cells: [],
       views: [],
       tables: [],
     });
     await store.updateTable("t1", { rowCount: 1 });
-    expect(store.selection).toEqual(at("A1"));
+    expect(store.selection).toBeNull();
   });
 
   it("stores pending cell edits before asking the server to move cells", async () => {
@@ -1019,7 +1021,7 @@ describe("data tables", () => {
       tables: [],
     });
     await store.setCell(at("C2"), "=[Price] + 1");
-    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", 2, {
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c3", {
       formula: "=[Price] + 1",
     });
     expect(server.setCells).not.toHaveBeenCalled();
@@ -1047,8 +1049,8 @@ describe("data tables", () => {
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
       [
-        { row: 0, col: 1, input: "7" },
-        { row: 1, col: 1, input: "9" },
+        { rowId: "r0", colId: "c2", input: "7" },
+        { rowId: "r1", colId: "c2", input: "9" },
       ],
       expect.any(String),
     );
@@ -1501,11 +1503,14 @@ describe("undo and redo", () => {
     const history = store.undo();
     await vi.waitFor(() => {
       expect(server.reorderPages).toHaveBeenCalledOnce();
-      expect(server.updateView).toHaveBeenCalledOnce();
     });
     expect(server.undo).not.toHaveBeenCalled();
 
+    expect(server.updateView).not.toHaveBeenCalled();
     reordering.resolve();
+    await vi.waitFor(() => {
+      expect(server.updateView).toHaveBeenCalledOnce();
+    });
     finishView({ ...view, source: "after" });
     notifyJournaled();
     await Promise.all([pageMove, viewUpdate, history]);
@@ -1628,7 +1633,7 @@ describe("refreshing after a change made elsewhere", () => {
     store.selection = at("C4");
     server.getSnapshot.mockResolvedValue({
       ...snapshotWith(),
-      tables: [{ ...TABLE, rowCount: 2 }],
+      tables: [sizedTable({ rowCount: 2 })],
     });
     await store.refresh();
     expect(store.selection).toBeNull();
@@ -1720,4 +1725,50 @@ describe("refreshing after a change made elsewhere", () => {
     await useWorkbookStore().refresh();
     expect(server.getSnapshot).not.toHaveBeenCalled();
   });
+});
+
+it("keeps the selected cell and saves its captured IDs after a remote row insertion", async () => {
+  const store = await open({ A2: "original" });
+  store.selection = at("A2");
+  const identity = store.identityOf(at("A2"))!;
+  const shifted = snapshotWith({ A3: "original" });
+  shifted.tables = [
+    { ...TABLE, rowCount: 5, rows: [{ id: "inserted", orderKey: "Zz" }, ...TABLE.rows!] },
+  ];
+  server.getSnapshot.mockResolvedValue(shifted);
+  await store.refresh();
+  expect(store.selection).toEqual(at("A3"));
+  await store.setIdentifiedCell(identity, "edited");
+  expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+    "t1",
+    [{ rowId: "r1", colId: "c1", input: "edited" }],
+    expect.any(String),
+  );
+  expect(store.inputOf(at("A3"))).toBe("edited");
+  expect(store.inputOf(at("A2"))).toBe("");
+});
+
+it("queues formatting and renaming behind an earlier cell save, and continues after failures", async () => {
+  const store = await open();
+  const saving = deferred();
+  server.setCells.mockReturnValueOnce(saving.promise);
+  server.formatCells.mockResolvedValueOnce(TABLE);
+  server.renamePage.mockResolvedValueOnce({ cells: [], views: [], tables: [] });
+  store.selection = at("A1");
+  const saved = store.setCell(at("A1"), "first");
+  const formatted = store.formatSelection({ bold: true });
+  const renamed = store.renamePage("p1", "After");
+  await idle();
+  expect(server.formatCells).not.toHaveBeenCalled();
+  expect(server.renamePage).not.toHaveBeenCalled();
+  saving.reject(new Error("offline"));
+  await Promise.all([saved, formatted, renamed]);
+  expect(server.formatCells).toHaveBeenCalledOnce();
+  expect(server.renamePage).toHaveBeenCalledOnce();
+  expect(server.setCells.mock.invocationCallOrder[0]).toBeLessThan(
+    server.formatCells.mock.invocationCallOrder[0]!,
+  );
+  expect(server.formatCells.mock.invocationCallOrder[0]).toBeLessThan(
+    server.renamePage.mock.invocationCallOrder[0]!,
+  );
 });

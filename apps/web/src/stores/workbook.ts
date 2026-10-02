@@ -21,6 +21,10 @@ import {
 } from "@spreadsheet-app/engine";
 import {
   LIMITS,
+  TableLayout,
+  type IdentifiedCell,
+  type IdentityCellInput,
+  type IdentifiedStructuralEditBody,
   type CellInput,
   type SpreadsheetFile,
   type StructuralEditBody,
@@ -74,6 +78,14 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const spreadsheet = ref<{ id: string; name: string; role: string } | null>(null);
   const pages = ref<PageRecord[]>([]);
   const tables = ref<TableRecord[]>([]);
+  const layouts = computed(
+    () =>
+      new Map(
+        tables.value.flatMap((table) =>
+          table.rows ? [[table.id, new TableLayout(table.rows, table.colIds)] as const] : [],
+        ),
+      ),
+  );
   /** Charts and text views: the things on a page that are not tables. */
   const views = ref<ViewRecord[]>([]);
   /** The selected cell: the one the keyboard edits and the formula bar shows. */
@@ -111,10 +123,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
   /** How many saves have failed, which `stored` compares across a wait. */
   let failedSaves = 0;
 
-  /** New writes wait for an undo or redo that started before them. */
-  let writeBarrier: Promise<void> = Promise.resolve();
-  const pendingWrites = new Set<Promise<unknown>>();
-  let historyActions: Promise<void> = Promise.resolve();
+  /** Every content mutation, including undo and redo, enters this queue immediately. */
+  let mutations: Promise<unknown> = Promise.resolve();
   let acceptedPageOrder: string[] | undefined;
   const acceptedBlockOrders = new Map<string, string[]>();
   const pendingPageReorders = new Map<string, number>();
@@ -142,18 +152,10 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return request;
   }
 
-  function trackWrite<T>(write: Promise<T>): Promise<T> {
-    pendingWrites.add(write);
-    void write.then(
-      () => pendingWrites.delete(write),
-      () => pendingWrites.delete(write),
-    );
-    return countUnanswered(write);
-  }
-
   function enqueueWrite<T>(change: () => Promise<T>): Promise<T> {
-    const barrier = writeBarrier;
-    return trackWrite(barrier.then(change));
+    const queued = mutations.then(change);
+    mutations = queued.catch(() => undefined);
+    return countUnanswered(queued);
   }
 
   /** Waits for the edits made so far to be saved. Resolves to whether every one of them was. */
@@ -176,6 +178,47 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   function hasTable(tableId: string): boolean {
     return tables.value.some((table) => table.id === tableId);
+  }
+
+  function identityOf(id: CellId): IdentifiedCell | undefined {
+    const table = tables.value.find((candidate) => candidate.id === id.tableId);
+    if (!table?.rows) return undefined;
+    const identity = layouts.value.get(id.tableId)?.identity(id);
+    return identity && { tableId: table.id, ...identity };
+  }
+
+  function positionOf(id: IdentifiedCell): CellId | undefined {
+    const table = tables.value.find((candidate) => candidate.id === id.tableId);
+    if (!table?.rows) return undefined;
+    const position = layouts.value.get(id.tableId)?.position(id);
+    return position && position.row < table.rowCount && position.col < table.colCount
+      ? { tableId: table.id, ...position }
+      : undefined;
+  }
+
+  function withStableSelection(change: () => void): void {
+    const anchor = selection.value && identityOf(selection.value);
+    const end =
+      selection.value &&
+      selectionEnd.value &&
+      identityOf({ tableId: selection.value.tableId, ...selectionEnd.value });
+    change();
+    if (anchor) {
+      selection.value = positionOf(anchor) ?? null;
+      selectionEnd.value = selection.value && end ? (positionOf(end) ?? null) : null;
+    }
+  }
+
+  async function setIdentifiedCell(id: IdentifiedCell, input: string): Promise<void> {
+    const position = positionOf(id);
+    if (!position) {
+      notice.value = {
+        kind: "error",
+        text: "The row or column being edited was deleted. Your text was not saved.",
+      };
+      return;
+    }
+    await setCell(position, input);
   }
 
   function apply(id: CellId, input: string): void {
@@ -264,6 +307,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
     );
     if (!snapshot) return;
 
+    const anchored = selection.value && identityOf(selection.value);
+    const end =
+      selection.value &&
+      selectionEnd.value &&
+      identityOf({ tableId: selection.value.tableId, ...selectionEnd.value });
     engine.value = createWorkbook(snapshot);
     spreadsheet.value = { id: snapshot.id, name: snapshot.name, role: snapshot.role };
     pages.value = snapshot.pages;
@@ -275,14 +323,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     acceptedBlockOrders.clear();
     for (const page of snapshot.pages) acceptedBlockOrders.set(page.id, blocksOn(page.id));
 
-    const selected = selection.value;
-    const table = snapshot.tables.find((candidate) => candidate.id === selected?.tableId);
-    const inside =
-      table && selected && selected.row < table.rowCount && selected.col < table.colCount;
-    if (!inside) {
-      selection.value = null;
-      selectionEnd.value = null;
-    }
+    const selected = anchored && positionOf(anchored);
+    selection.value = selected ?? null;
+    selectionEnd.value = selected && end ? (positionOf(end) ?? null) : null;
   }
 
   /**
@@ -379,7 +422,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     for (const { tableId, changes } of unsavedChanges) {
       if (!hasTable(tableId)) continue;
       for (const change of changes) {
-        const id = { tableId, row: change.row, col: change.col };
+        const id = positionOf({ tableId, ...change });
+        if (!id) continue;
         if (!written.has(cellKey(id))) continue;
         // A save that fails puts back what the cell holds on the server.
         change.previous = engine.value.getInput(id);
@@ -391,27 +435,17 @@ export const useWorkbookStore = defineStore("workbook", () => {
   async function runHistory(direction: "undo" | "redo"): Promise<void> {
     const current = spreadsheet.value;
     if (!current || !canEdit.value) return;
-    const waiting = [...pendingWrites];
-    if (waiting.length === 0 && !(direction === "undo" ? undoable.value : redoable.value)) {
-      return;
-    }
-
-    const previousBarrier = writeBarrier;
-    let release!: () => void;
-    writeBarrier = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    if (!(direction === "undo" ? undoable.value : redoable.value)) return;
     try {
-      await Promise.allSettled(waiting);
-      await previousBarrier;
-      if (!(direction === "undo" ? undoable.value : redoable.value)) return;
       const result = await (direction === "undo" ? api.undo(current.id) : api.redo(current.id));
       // The answer is about the spreadsheet that was open when it was asked for.
       if (spreadsheet.value?.id !== current.id) return;
       undoable.value = result.undoable;
       redoable.value = result.redoable;
       if (result.outcome === "done") {
-        applyChanged(result.changed);
+        withStableSelection(() => {
+          applyChanged(result.changed);
+        });
         showUnsavedOver(result.changed.cells);
         if (
           result.changed.pages.length > 0 ||
@@ -432,21 +466,15 @@ export const useWorkbookStore = defineStore("workbook", () => {
         cause,
         direction === "undo" ? "The change could not be undone" : "The change could not be redone",
       );
-    } finally {
-      release();
     }
   }
 
   function undo(): Promise<void> {
-    const queued = historyActions.then(() => runHistory("undo"));
-    historyActions = queued.catch(() => undefined);
-    return countUnanswered(queued);
+    return enqueueWrite(() => runHistory("undo"));
   }
 
   function redo(): Promise<void> {
-    const queued = historyActions.then(() => runHistory("redo"));
-    historyActions = queued.catch(() => undefined);
-    return countUnanswered(queued);
+    return enqueueWrite(() => runHistory("redo"));
   }
 
   function valueOf(id: CellId): CellValue {
@@ -479,11 +507,14 @@ export const useWorkbookStore = defineStore("workbook", () => {
     if (!selected || !table || !canEdit.value) return Promise.resolve(false);
     const wholeRows = selected.startRow === 0 && selected.endRow >= table.rowCount - 1;
     const wholeCols = selected.startCol === 0 && selected.endCol >= table.colCount - 1;
+    const start = identityOf({ tableId: table.id, row: selected.startRow, col: selected.startCol });
+    const end = identityOf({ tableId: table.id, row: selected.endRow, col: selected.endCol });
+    if (!start || !end) return Promise.resolve(false);
     const range = {
-      startRow: selected.startRow,
-      endRow: wholeRows ? null : selected.endRow,
-      startCol: selected.startCol,
-      endCol: wholeCols ? null : selected.endCol,
+      startRowId: start.rowId,
+      endRowId: wholeRows ? null : end.rowId,
+      startColId: start.colId,
+      endColId: wholeCols ? null : end.colId,
     };
     return attempt(async () => {
       const updated = await api.formatCells(table.id, range, patch, reset);
@@ -519,14 +550,18 @@ export const useWorkbookStore = defineStore("workbook", () => {
   }
 
   /** A cell write that changes what the cell holds, with what it held. */
-  type CellChange = CellInput & { previous: string };
+  type CellChange = CellInput & IdentityCellInput & { previous: string };
 
   /** Shows new inputs for cells of one table, and returns the ones that changed a cell. */
   function showInputs(tableId: string, writes: readonly CellInput[]): CellChange[] {
     const changes = writes
       // A fill or paste that crosses a formula column leaves that column to its formula.
       .filter((write) => columnOf({ tableId, ...write })?.type !== "formula")
-      .map((write) => ({ ...write, previous: engine.value.getInput({ tableId, ...write }) }))
+      .map((write) => {
+        const identity = identityOf({ tableId, ...write });
+        if (!identity) throw new Error("The row or column being edited no longer exists");
+        return { ...write, ...identity, previous: engine.value.getInput({ tableId, ...write }) };
+      })
       .filter((change) => change.previous !== change.input);
     for (const { row, col, input } of changes) apply({ tableId, row, col }, input);
     return changes;
@@ -552,7 +587,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   /** Puts cells back as they were before changes that could not be saved. */
   function putBack(tableId: string, changes: readonly CellChange[]): void {
-    for (const { row, col, input, previous } of changes) {
+    for (const change of changes) {
+      const { input, previous } = change;
+      const position = positionOf({ tableId, ...change });
+      if (!position) continue;
+      const { row, col } = position;
       // A later edit to the same cell has its own save. Leave it alone.
       if (engine.value.getInput({ tableId, row, col }) === input) {
         apply({ tableId, row, col }, previous);
@@ -593,7 +632,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
         const batch = changes.slice(saved, saved + LIMITS.cellsPerRequest);
         await api.setCells(
           tableId,
-          batch.map(({ row, col, input }) => ({ row, col, input })),
+          batch.map(({ rowId, colId, input }) => ({ rowId, colId, input })),
           stepId,
         );
       }
@@ -730,7 +769,10 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const fitting = writes.filter((write) => write.row < rowCount && write.col < colCount);
     // The growth and the cells are one undo step.
     const stepId = crypto.randomUUID();
-    const changes = showInputs(table.id, fitting);
+    const changes = showInputs(
+      table.id,
+      fitting.filter((write) => write.row < table.rowCount && write.col < table.colCount),
+    );
 
     const queuedSaves = saves;
     const operation = enqueueWrite(async () => {
@@ -753,6 +795,12 @@ export const useWorkbookStore = defineStore("workbook", () => {
         syncStructure();
         applyRewritten(rewritten);
       }
+      changes.push(
+        ...showInputs(
+          table.id,
+          fitting.filter((write) => write.row >= table.rowCount || write.col >= table.colCount),
+        ),
+      );
       await saveCellChanges(table.id, changes, stepId);
       // Leave what was pasted selected.
       extendSelection({ row: rowCount - 1, col: colCount - 1 });
@@ -827,7 +875,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   /** Asks the server to run the button in a cell. */
   async function click(id: CellId): Promise<void> {
-    const result = await run(id, () => api.click(id));
+    const identity = identityOf(id);
+    if (!identity) return;
+    const result = await run(id, () => api.click(identity));
     if (result) notice.value = describe(result, id.tableId);
   }
 
@@ -835,7 +885,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
   async function input(id: CellId, value: Scalar): Promise<void> {
     // JSON has no date, so a chosen date travels as its text and the server reads it back.
     const sent = isDate(value) ? formatDate(value) : value;
-    const result = await run(id, () => api.input(id, sent));
+    const identity = identityOf(id);
+    if (!identity) return;
+    const result = await run(id, () => api.input(identity, sent));
     if (result?.status === "failed") notice.value = describe(result, id.tableId);
   }
 
@@ -1043,11 +1095,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
       // A smaller table loses cells, so pending edits must be stored first.
       await queuedSaves;
       const { table: updated, ...rewritten } = await api.updateTable(tableId, changes);
-      tables.value = tables.value.map((table) => (table.id === tableId ? updated : table));
-      syncStructure();
-      // The server rewrote the formulas that named a renamed table, or that read rows and
-      // columns a smaller table no longer has.
-      applyRewritten(rewritten);
+      showTable(updated, rewritten);
       keepSelectionInside(updated);
     }, "The table could not be changed");
   }
@@ -1068,9 +1116,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   /** Shows a table as the server now has it, with what the change rewrote elsewhere. */
   function showTable(updated: TableRecord, rewritten: Rewritten): void {
-    tables.value = tables.value.map((table) => (table.id === updated.id ? updated : table));
-    syncStructure();
-    applyRewritten(rewritten);
+    withStableSelection(() => {
+      tables.value = tables.value.map((table) => (table.id === updated.id ? updated : table));
+      syncStructure();
+      applyRewritten(rewritten);
+    });
   }
 
   /** Names a table's columns, which makes it a data table. With `headerRow`, its first row gives the names. */
@@ -1096,24 +1146,37 @@ export const useWorkbookStore = defineStore("workbook", () => {
     col: number,
     changes: { name?: string; type?: ColumnType; formula?: string },
   ): Promise<boolean> {
+    const colId = tables.value.find((table) => table.id === tableId)?.colIds[col];
+    if (!colId) return Promise.resolve(false);
     const queuedSaves = saves;
     return attempt(async () => {
       await queuedSaves;
-      const { table, ...rewritten } = await api.updateColumn(tableId, col, changes);
+      const { table, ...rewritten } = await api.updateColumn(tableId, colId, changes);
       showTable(table, rewritten);
     }, "The column could not be changed");
   }
 
   /** Inserts or deletes a row or column, and shows the cells the server moved and rewrote. */
   function editTable(tableId: string, edit: StructuralEditBody): Promise<boolean> {
+    const layout = layouts.value.get(tableId);
+    if (!layout) return Promise.resolve(false);
+    const ids = edit.axis === "row" ? layout.rowIds : layout.colIds;
+    const count = edit.count ?? 1;
+    const request: IdentifiedStructuralEditBody =
+      edit.kind === "insert"
+        ? {
+            axis: edit.axis,
+            kind: "insert",
+            beforeId: ids[edit.index] ?? null,
+            ids: Array.from({ length: count }, () => crypto.randomUUID()),
+          }
+        : { axis: edit.axis, kind: "delete", ids: ids.slice(edit.index, edit.index + count) };
     const queuedSaves = saves;
     return attempt(async () => {
       // The server shifts stored cells, so pending edits must be stored first.
       await queuedSaves;
-      const { table: updated, ...rewritten } = await api.editTable(tableId, edit);
-      tables.value = tables.value.map((table) => (table.id === tableId ? updated : table));
-      syncStructure();
-      applyRewritten(rewritten);
+      const { table: updated, ...rewritten } = await api.editTable(tableId, request);
+      showTable(updated, rewritten);
 
       keepSelectionInside(updated);
     }, "The table could not be changed");
@@ -1173,6 +1236,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     addView,
     updateView,
     deleteView,
+    identityOf,
+    positionOf,
+    setIdentifiedCell,
     selection,
     selectionEnd,
     selectedRange,

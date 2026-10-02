@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -107,6 +108,14 @@ export const spreadsheets = pgTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    /** Counts the changes to what the spreadsheet holds. Open sessions apply changes in this order. */
+    revision: bigint("revision", { mode: "number" }).notNull().default(0),
+    /**
+     * The revision of the last change to what references mean: a row or column
+     * inserted or deleted, or something renamed or moved. A formula written
+     * before it is refused.
+     */
+    rewriteRevision: bigint("rewrite_revision", { mode: "number" }).notNull().default(0),
     createdAt,
     updatedAt,
   },
@@ -160,14 +169,36 @@ export const tables = pgTable(
       .references(() => pages.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     position: integer("position").notNull(),
-    rowCount: integer("row_count").notNull(),
-    colCount: integer("col_count").notNull(),
+    /** The ids of the table's columns, in order. Its rows are in `table_rows`. */
+    colIds: jsonb("col_ids").$type<string[]>().notNull().default([]),
     /** The named columns of a data table, one for each column. Null for a plain table. */
     columns: jsonb("columns").$type<ColumnDefinition[]>(),
     /** How cells are shown: rules applied in order, later ones over earlier ones. */
     formats: jsonb("formats").$type<FormatRule[]>().notNull().default([]),
   },
   (table) => [uniqueIndex("tables_name").on(table.pageId, sql`lower(${table.name})`)],
+);
+
+/**
+ * The rows of every table. A row's place in its table is the place of its
+ * order key among the table's keys in byte order, so inserting a row writes
+ * one record. `order_key` has the C collation, which makes Postgres order keys
+ * as JavaScript compares strings. The migration states it, because this
+ * schema cannot.
+ */
+export const tableRows = pgTable(
+  "table_rows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tableId: uuid("table_id")
+      .notNull()
+      .references(() => tables.id, { onDelete: "cascade" }),
+    orderKey: text("order_key").notNull(),
+  },
+  (row) => [
+    uniqueIndex("table_rows_order").on(row.tableId, row.orderKey),
+    uniqueIndex("table_rows_table_id").on(row.tableId, row.id),
+  ],
 );
 
 export type ViewKind = "chart" | "text";
@@ -190,20 +221,52 @@ export const views = pgTable("views", {
   chartType: text("chart_type").$type<ChartType>(),
 });
 
-/** Holds what the user typed. Computed values are derived by the engine. Empty cells have no row. */
+/**
+ * Rows that were deleted, so that a request repeated after its row was
+ * deleted cannot bring the row back. Entries are pruned with the journal.
+ */
+export const deletedRows = pgTable(
+  "deleted_rows",
+  {
+    rowId: uuid("row_id").primaryKey(),
+    spreadsheetId: uuid("spreadsheet_id")
+      .notNull()
+      .references(() => spreadsheets.id, { onDelete: "cascade" }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [index("deleted_rows_spreadsheet_time").on(table.spreadsheetId, table.deletedAt)],
+);
+
+/**
+ * Holds what the user typed. Computed values are derived by the engine. Empty
+ * cells have no record. A cell is named by the ids of its row and column, so
+ * inserting or deleting a row or column moves no cell. The database refuses a
+ * cell whose row is in another table. Column ids live in `tables.col_ids`,
+ * where no foreign key reaches, so the repository checks them.
+ */
 export const cells = pgTable(
   "cells",
   {
     tableId: uuid("table_id")
       .notNull()
       .references(() => tables.id, { onDelete: "cascade" }),
-    row: integer("row_index").notNull(),
-    col: integer("col_index").notNull(),
+    rowId: uuid("row_id").notNull(),
+    colId: uuid("col_id").notNull(),
     input: text("input").notNull(),
     updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
     updatedAt,
   },
-  (table) => [primaryKey({ columns: [table.tableId, table.row, table.col] })],
+  (table) => [
+    primaryKey({ columns: [table.rowId, table.colId] }),
+    foreignKey({
+      name: "cells_row",
+      columns: [table.tableId, table.rowId],
+      foreignColumns: [tableRows.tableId, tableRows.id],
+    }).onDelete("cascade"),
+    index("cells_table").on(table.tableId),
+  ],
 );
 
 /**
@@ -244,7 +307,10 @@ export const journal = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     clientId: text("client_id"),
     undone: boolean("undone").notNull().default(false),
+    /** Whether the change altered what references mean, whether or not it changed any formula. */
     rewrites: boolean("rewrites").notNull(),
+    /** Whether the state the change left holds formula text that it wrote. */
+    formulas: boolean("formulas").notNull().default(false),
     label: text("label").notNull(),
     data: jsonb("data").$type<JournalData | null>(),
     bytes: integer("bytes").notNull(),
@@ -267,6 +333,7 @@ export const actionRuns = pgTable(
       .references(() => spreadsheets.id, { onDelete: "cascade" }),
     // Not a foreign key: the record outlives the table the button was in.
     tableId: uuid("table_id").notNull(),
+    // Where the cell was when it was clicked.
     row: integer("row_index").notNull(),
     col: integer("col_index").notNull(),
     userId: text("user_id").references(() => users.id, { onDelete: "set null" }),

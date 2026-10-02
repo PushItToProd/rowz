@@ -1,9 +1,16 @@
 import { MAX_FORMAT_RULES } from "@spreadsheet-app/shared";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Snapshot, SpreadsheetSummary, TableRecord } from "./app";
+import type { SpreadsheetSummary, TableRecord } from "./app";
 import { tables } from "./db/schema";
-import { createSpreadsheet, startTestServer, type TestServer, type TestUser } from "./testing";
+import {
+  cellsBody,
+  createSpreadsheet,
+  readSnapshot,
+  startTestServer,
+  type TestServer,
+  type TestUser,
+} from "./testing";
 
 let server: TestServer;
 let user: TestUser;
@@ -18,20 +25,23 @@ type Range = [startRow: number, endRow: number | null, startCol: number, endCol:
 async function start() {
   const snapshot = await createSpreadsheet(user);
   const table = snapshot.tables[0]!;
-  const format = (
+  const current = async (): Promise<TableRecord> =>
+    (await readSnapshot(user, snapshot.id)).tables[0]!;
+  /** Formats a range. Resolves to the table as it then is, or to the refusal. */
+  const format = async (
     [startRow, endRow, startCol, endCol]: Range,
     patch: object,
     extra: object = {},
-    status?: number,
-  ) =>
-    user.json<TableRecord>(
+    status = 200,
+  ): Promise<TableRecord> => {
+    const answer = await user.json<TableRecord>(
       "POST",
       `/tables/${table.id}/formats`,
       { range: { startRow, endRow, startCol, endCol }, format: patch, ...extra },
       status,
     );
-  const current = async (): Promise<TableRecord> =>
-    (await user.json<Snapshot>("GET", `/spreadsheets/${snapshot.id}`)).tables[0]!;
+    return status === 200 ? current() : answer;
+  };
   return { id: snapshot.id, table, format, current };
 }
 
@@ -88,6 +98,7 @@ describe("formatting cells", () => {
   it("moves formats up when the first row becomes the column names", async () => {
     const { table, format, current } = await start();
     await format([1, 1, 0, 0], { bold: true });
+    await user.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A2: "kept" }));
     await user.json("POST", `/tables/${table.id}/columns`, { headerRow: true });
     expect((await current()).formats).toMatchObject([{ startRow: 0, endRow: 0 }]);
   });
@@ -148,7 +159,7 @@ describe("formatting cells", () => {
       ],
     };
     const summary = await user.json<SpreadsheetSummary>("POST", "/spreadsheets/import", file, 201);
-    const snapshot = await user.json<Snapshot>("GET", `/spreadsheets/${summary.id}`);
+    const snapshot = await readSnapshot(user, summary.id);
     expect(snapshot.tables[0]?.formats).toEqual(formats);
   });
 });

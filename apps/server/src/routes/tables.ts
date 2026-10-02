@@ -34,10 +34,9 @@ export function tableRoutes(dependencies: ActionDependencies) {
           return c.json(await c.var.repository.updateTable(tableId, c.req.valid("json")));
         },
       )
-      .delete("/:tableId", zValidator("param", tableParam, onInvalid), async (c) => {
-        await c.var.repository.deleteTable(c.req.valid("param").tableId);
-        return c.body(null, 204);
-      })
+      .delete("/:tableId", zValidator("param", tableParam, onInvalid), async (c) =>
+        c.json(await c.var.repository.deleteTable(c.req.valid("param").tableId)),
+      )
       // Moves the table to another page of its spreadsheet.
       .put(
         "/:tableId/page",
@@ -64,8 +63,14 @@ export function tableRoutes(dependencies: ActionDependencies) {
         zValidator("json", formatCellsBody, onInvalid),
         async (c) => {
           const { range, format, reset } = c.req.valid("json");
-          const rule = { ...range, format, ...(reset ? { reset } : {}) };
-          return c.json(await c.var.repository.formatCells(c.req.valid("param").tableId, rule));
+          return c.json(
+            await c.var.repository.formatCells(
+              c.req.valid("param").tableId,
+              range,
+              format,
+              reset,
+            ),
+          );
         },
       )
       // Names the table's columns, which makes it a data table.
@@ -83,25 +88,25 @@ export function tableRoutes(dependencies: ActionDependencies) {
         c.json(await c.var.repository.dropColumns(c.req.valid("param").tableId)),
       )
       .patch(
-        "/:tableId/columns/:col",
+        "/:tableId/columns/:colId",
         zValidator("param", columnParam, onInvalid),
         zValidator("json", updateColumnBody, onInvalid),
         async (c) => {
-          const { tableId, col } = c.req.valid("param");
-          return c.json(await c.var.repository.updateColumn(tableId, col, c.req.valid("json")));
+          const { tableId, colId } = c.req.valid("param");
+          return c.json(await c.var.repository.updateColumn(tableId, colId, c.req.valid("json")));
         },
       )
       .put(
         "/:tableId/cells",
         zValidator("param", tableParam, onInvalid),
         zValidator("json", setCellsBody, onInvalid),
-        async (c) => {
-          await c.var.repository.setCells(c.req.valid("param").tableId, c.req.valid("json").cells);
-          return c.body(null, 204);
-        },
+        async (c) =>
+          c.json(
+            await c.var.repository.setCells(c.req.valid("param").tableId, c.req.valid("json")),
+          ),
       )
       .post(
-        "/:tableId/cells/:row/:col/input",
+        "/:tableId/cells/:rowId/:colId/input",
         zValidator("param", cellParam, onInvalid),
         zValidator("json", controlInputBody, onInvalid),
         async (c) => {
@@ -113,7 +118,7 @@ export function tableRoutes(dependencies: ActionDependencies) {
         },
       )
       .post(
-        "/:tableId/cells/:row/:col/click",
+        "/:tableId/cells/:rowId/:colId/click",
         zValidator("param", cellParam, onInvalid),
         async (c) =>
           c.json(

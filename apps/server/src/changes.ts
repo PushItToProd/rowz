@@ -4,16 +4,30 @@ import { CLIENT_ID_HEADER, STEP_ID_HEADER, UNDOABLE_HEADER } from "@spreadsheet-
 import { z } from "zod";
 import { createMiddleware } from "hono/factory";
 import { ApiFailure } from "./errors";
+import type { Change } from "./repo/journal";
 
 /**
  * The header a client sends to name itself. It gives the same name when it
- * opens the stream of changes, and the stream leaves out the changes made
- * under that name. The name is never sent to another client: whoever knew it
- * could make changes under it that its owner would not hear of.
+ * opens the stream of changes, which lets the stream leave out what the
+ * client need not hear of again. The name is never sent to another client:
+ * whoever knew it could make changes under it that its owner would not hear
+ * of.
  */
 export { CLIENT_ID_HEADER } from "@spreadsheet-app/shared";
 
-type Listener = (origin: string) => void;
+/**
+ * Something that happened to a spreadsheet, for its open sessions. `change`
+ * is a change to what it holds, with its revision. Without one, something
+ * else about the spreadsheet changed, such as its name or who may open it,
+ * and a session reads it again.
+ */
+export interface Announcement {
+  /** The id of the client that caused it, or an empty string. */
+  origin: string;
+  change?: Change;
+}
+
+type Listener = (announcement: Announcement) => void;
 
 /**
  * Tells the open sessions of a spreadsheet that it changed. It lives in this
@@ -22,7 +36,7 @@ type Listener = (origin: string) => void;
 export class ChangeFeed {
   private readonly listeners = new Map<string, Set<Listener>>();
 
-  /** Calls `listener` with the id of the client that made each change. Returns what stops it. */
+  /** Calls `listener` with each announcement about a spreadsheet. Returns what stops it. */
   subscribe(spreadsheetId: string, listener: Listener): () => void {
     const listening = this.listeners.get(spreadsheetId) ?? new Set<Listener>();
     listening.add(listener);
@@ -33,8 +47,8 @@ export class ChangeFeed {
     };
   }
 
-  publish(spreadsheetId: string, origin: string): void {
-    for (const listener of this.listeners.get(spreadsheetId) ?? []) listener(origin);
+  publish(spreadsheetId: string, announcement: Announcement): void {
+    for (const listener of this.listeners.get(spreadsheetId) ?? []) listener(announcement);
   }
 }
 
@@ -42,7 +56,8 @@ export interface RequestContext {
   clientId: string | null;
   stepId: string;
   journaled: boolean;
-  changed: Set<string>;
+  /** What the request did to each spreadsheet, in order. `undefined` is a change to something other than its content. */
+  changed: { spreadsheetId: string; change: Change | undefined }[];
 }
 
 /** The spreadsheet changes and undo identity for the current request. */
@@ -59,25 +74,12 @@ export function noteJournaled(): void {
 }
 
 /**
- * Remembers what the current request has journaled and changed so far, and
- * returns what puts that back. A caller that runs changes inside a
- * transaction of its own calls the result when it rolls that transaction
- * back, which removes the entries and the changes with it.
+ * Records that the request being handled changed a spreadsheet. `change` is
+ * given for a change to what the spreadsheet holds. Outside a request it does
+ * nothing.
  */
-export function rememberChanges(): () => void {
-  const context = current.getStore();
-  if (!context) return () => undefined;
-  const { journaled } = context;
-  const changed = [...context.changed];
-  return () => {
-    context.journaled = journaled;
-    context.changed = new Set(changed);
-  };
-}
-
-/** Records that the request being handled changed a spreadsheet. Outside a request it does nothing. */
-export function noteChange(spreadsheetId: string): void {
-  current.getStore()?.changed.add(spreadsheetId);
+export function noteChange(spreadsheetId: string, change?: Change): void {
+  current.getStore()?.changed.push({ spreadsheetId, change });
 }
 
 /**
@@ -96,12 +98,14 @@ export function announceChanges(feed: ChangeFeed) {
       clientId,
       stepId: requestedStep ?? randomUUID(),
       journaled: false,
-      changed: new Set(),
+      changed: [],
     };
     await current.run(context, next);
     // A request that failed rolled back whatever it had begun.
     if (c.res.status >= 400) return;
-    for (const spreadsheetId of context.changed) feed.publish(spreadsheetId, clientId ?? "");
+    for (const { spreadsheetId, change } of context.changed) {
+      feed.publish(spreadsheetId, { origin: clientId ?? "", ...(change ? { change } : {}) });
+    }
     if (clientId !== null && context.journaled) c.header(UNDOABLE_HEADER, "1");
   });
 }

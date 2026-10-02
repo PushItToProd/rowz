@@ -58,7 +58,6 @@ describe("sharing a spreadsheet", () => {
       "PUT",
       `/tables/${table.id}/cells`,
       cellsBody({ A1: '=BUTTON("Go", EXECUTE(7, B1))' }),
-      204,
     );
     expect(await guest.json("POST", `/tables/${table.id}/cells/0/0/click`)).toMatchObject({
       status: "succeeded",
@@ -89,7 +88,7 @@ describe("sharing a spreadsheet", () => {
     await share(guest.email, "viewer");
     const members = await share(guest.email, "editor");
     expect(members.filter((member) => member.shared)).toMatchObject([{ role: "editor" }]);
-    await guest.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "x" }), 204);
+    await guest.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "x" }), 200);
     expect(await guest.json<Snapshot>("GET", base)).toMatchObject({ role: "editor" });
   });
 

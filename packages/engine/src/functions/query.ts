@@ -319,6 +319,8 @@ export const queryFunctions: Record<string, FunctionDefinition> = {
    */
   QUERY: lazy(2, 3, ([data, source, headers], context) => {
     const cells = grid(data?.() ?? null);
+    // A range over a table with no rows has no columns to name either.
+    if (cells.length === 0) fail("#N/A", "The query matches no rows");
     const width = Math.max(0, ...cells.map((row) => row.length));
     const headerRows = headers ? integer(headers()) : detectHeaders(cells);
     if (headerRows < 0 || headerRows > cells.length) {

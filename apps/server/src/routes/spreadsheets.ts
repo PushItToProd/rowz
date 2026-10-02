@@ -12,7 +12,7 @@ import {
 } from "@spreadsheet-app/shared";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import type { ChangeFeed } from "../changes";
+import type { Announcement, ChangeFeed } from "../changes";
 import { onInvalid, type Env } from "../http";
 
 /** How long an open stream of changes goes without a word, at most. Proxies drop a connection that says nothing. */
@@ -57,9 +57,14 @@ export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
         return c.body(null, 204);
       })
       /**
-       * A stream of the changes made to a spreadsheet, for the sessions that
-       * have it open. A session that names itself in `client` is not told of
-       * the changes it made itself, which it already shows.
+       * A stream of what happens to a spreadsheet, for the sessions that have
+       * it open. A change to what it holds is sent with its revision and its
+       * content, to every session, the one that made it included: a session
+       * applies changes in the order of their revisions and would take a
+       * missing one for a gap. Anything else that happens is sent as an event
+       * with no data, on which a session reads the spreadsheet again. A
+       * session that names itself in `client` is not sent those for what it
+       * did itself.
        */
       .get(
         "/:spreadsheetId/events",
@@ -68,16 +73,18 @@ export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
         async (c) => {
           const { spreadsheetId } = c.req.valid("param");
           const { client } = c.req.valid("query");
-          await c.var.repository.findSpreadsheet(spreadsheetId, "read");
+          const { repository } = c.var;
+          await repository.findSpreadsheet(spreadsheetId, "read");
           return streamSSE(c, async (stream) => {
-            let pending = 0;
+            const pending: Announcement[] = [];
             let closed = false;
             // Asked through a function, because the abort handler changes the answer between two awaits.
             const isOpen = (): boolean => !closed;
             let wake = (): void => undefined;
-            const unsubscribe = changes.subscribe(spreadsheetId, (origin) => {
-              if (client !== undefined && origin === client) return;
-              pending += 1;
+            const unsubscribe = changes.subscribe(spreadsheetId, (announcement) => {
+              const own = client !== undefined && announcement.origin === client;
+              if (own && !announcement.change) return;
+              pending.push(announcement);
               wake();
             });
             const end = (): void => {
@@ -90,9 +97,12 @@ export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
             shutdown?.addEventListener("abort", end);
             if (shutdown?.aborted) end();
 
-            await stream.writeSSE({ event: "ready", data: "" });
+            // Read after subscribing, so no change falls between this revision and the first event.
+            // A session that has applied fewer changes than this reads the spreadsheet again.
+            const revision = await repository.revisionOf(spreadsheetId);
+            await stream.writeSSE({ event: "ready", data: JSON.stringify({ revision }) });
             while (isOpen()) {
-              if (pending === 0) {
+              if (pending.length === 0) {
                 await new Promise<void>((resolve) => {
                   const timer = setTimeout(resolve, HEARTBEAT_MS);
                   wake = () => {
@@ -102,9 +112,25 @@ export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
                 });
               }
               if (!isOpen()) break;
-              const event = pending === 0 ? "ping" : "change";
-              pending = Math.max(0, pending - 1);
-              await stream.writeSSE({ event, data: "" });
+              const next = pending.shift();
+              if (!next) {
+                await stream.writeSSE({ event: "ping", data: "" });
+                continue;
+              }
+              // An event with content is sent only to someone who may still read the
+              // spreadsheet. Whoever no longer may is told that something changed, reads
+              // again, and learns so from that.
+              const allowed =
+                !next.change ||
+                (await repository.findSpreadsheet(spreadsheetId, "read").then(
+                  () => true,
+                  () => false,
+                ));
+              await stream.writeSSE({
+                event: "change",
+                data: allowed && next.change ? JSON.stringify(next.change) : "",
+              });
+              if (!allowed) end();
             }
           });
         },
@@ -146,8 +172,7 @@ export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
         zValidator("param", versionParam, onInvalid),
         async (c) => {
           const { spreadsheetId, versionId } = c.req.valid("param");
-          await c.var.repository.restoreVersion(spreadsheetId, versionId);
-          return c.body(null, 204);
+          return c.json(await c.var.repository.restoreVersion(spreadsheetId, versionId));
         },
       )
       // Makes a new spreadsheet of a kept version, and leaves this one alone.
@@ -177,13 +202,13 @@ export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
         "/:spreadsheetId/pages/order",
         zValidator("param", spreadsheetParam, onInvalid),
         zValidator("json", reorderPagesBody, onInvalid),
-        async (c) => {
-          await c.var.repository.reorderPages(
-            c.req.valid("param").spreadsheetId,
-            c.req.valid("json").pages,
-          );
-          return c.body(null, 204);
-        },
+        async (c) =>
+          c.json(
+            await c.var.repository.reorderPages(
+              c.req.valid("param").spreadsheetId,
+              c.req.valid("json").pages,
+            ),
+          ),
       )
   );
 }

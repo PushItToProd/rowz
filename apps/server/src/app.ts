@@ -16,10 +16,12 @@ import { viewRoutes } from "./routes/views";
 
 export type { ClickResult } from "./actions/run";
 export type {
+  Change,
+  ChangedContent,
+  Created,
   ListedSpreadsheet,
   MemberRecord,
   PageRecord,
-  Rewritten,
   Snapshot,
   SnapshotWithHistory,
   SpreadsheetSummary,

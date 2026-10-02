@@ -8,6 +8,7 @@ import {
 } from "./template";
 import { STRUCTURE, workbookWith } from "./testing";
 import type { Evaluated } from "./values";
+import { Workbook } from "./workbook";
 
 // A sales table on page 1 and a summary on the Archive page, both named Table1.
 const workbook = workbookWith({
@@ -144,6 +145,23 @@ describe("for", () => {
       markdown("{% for row in Table1!A1:B2 %}{{ COLUMNS(row) }}{{ INDEX(row, 1) }} {% end %}"),
     ).toBe("2pear 2apple ");
     expect(markdown("{% for name in Table1!A1:A3 %}{{ name }},{% end %}")).toBe("pear,apple,fig,");
+  });
+
+  it("runs no times over a table that has no rows", () => {
+    const empty = new Workbook();
+    empty.setStructure({
+      ...STRUCTURE,
+      tables: STRUCTURE.tables.map((table) =>
+        table.id === "t1"
+          ? { ...table, rowCount: 0, colCount: 2, columns: [{ name: "Name", type: "any" }] }
+          : table,
+      ),
+    });
+    const blocks = renderTemplate(
+      "{% for name in Table1[Name] %}{{ name }},{% end %}{{ ROWS(Table1!A:B) }} rows",
+      (expression, names) => empty.evaluateOnPage(PAGE, expression, names),
+    );
+    expect(blocks).toEqual([{ type: "markdown", text: "0 rows" }]);
   });
 
   it("works on the result of a formula, such as a sorted and shortened range", () => {
