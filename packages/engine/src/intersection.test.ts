@@ -77,6 +77,32 @@ describe("a whole column or row as an operand", () => {
     expect(valueAt("A5", "=A:A + 1")).toMatchObject({ code: "#CYCLE!" });
   });
 
+  it("depends only on the cell it reads", () => {
+    // A2 reads the formula in the other table, which reads row 1 of column A and not A2.
+    const workbook = workbookWith({
+      t1: { A1: "1", A2: "='Other Table'!A1 + 1", B1: "5", C3: "=1:1 + D3", D3: "7" },
+      t2: { A1: "=Table1!A:A + 1", C1: "=-Table1!A:A" },
+    });
+    expect(workbook.getValue(at("A1", "t2"))).toBe(2);
+    expect(workbook.getValue(at("A2"))).toBe(3);
+    // C3 reads C1 of row 1, which is empty, and not B1.
+    expect(workbook.getValue(at("C3"))).toBe(7);
+    expect(workbook.getValue(at("C1", "t2"))).toBe(-1);
+
+    workbook.setCell(at("A1"), "10");
+    expect(workbook.getValue(at("A1", "t2"))).toBe(11);
+    expect(workbook.getValue(at("A2"))).toBe(12);
+    expect(workbook.getValue(at("C1", "t2"))).toBe(-10);
+    workbook.setCell(at("C1"), "100");
+    expect(workbook.getValue(at("C3"))).toBe(107);
+  });
+
+  it("is not a cycle when a cell in another row of the column reads the formula", () => {
+    const workbook = workbookWith({ t1: { A1: "1", B1: "=A:A + 1", A2: "=B1 + 1" } });
+    expect(workbook.getValue(at("B1"))).toBe(2);
+    expect(workbook.getValue(at("A2"))).toBe(3);
+  });
+
   it("fails when the other table has no such row, or does not exist", () => {
     const workbook = workbookWith({
       t1: DATA,

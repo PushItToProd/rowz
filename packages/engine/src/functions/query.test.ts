@@ -214,6 +214,22 @@ describe("ordering and paging", () => {
       ["Banana"],
     ]);
   });
+
+  it("knows a name given with AS in a clause written before the SELECT", () => {
+    const [, ...rows] = run("limit 2 order by Negative select A, C * -1 as Negative");
+    expect(rows).toEqual([
+      ["Banana", -20],
+      ["Apple", -10],
+    ]);
+    const [, ...groups] = run(
+      "having Total > 10 order by Total desc select B, sum(C) as Total group by B",
+    );
+    expect(groups).toEqual([
+      ["Fruit", 37],
+      ["Vegetable", 13],
+    ]);
+    expect(failure("where A = 'x' select A select B").message).toBe("SELECT appears twice");
+  });
 });
 
 describe("grouping", () => {

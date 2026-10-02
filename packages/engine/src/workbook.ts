@@ -2,7 +2,7 @@ import { cellKey, formatAddress, rangeContains, type CellId, type CellRange } fr
 import { isColumnReference, type Node, type Reference } from "./ast";
 import { formatDate, isDate, parseDate } from "./dates";
 import type { Effect } from "./effects";
-import { evaluate, referencesOf, type EvaluationContext } from "./evaluate";
+import { evaluate, referencesOf, type EvaluationContext, type Read } from "./evaluate";
 import { defaultFunctions } from "./functions";
 import { fail, Failure } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
@@ -481,10 +481,24 @@ export class Workbook {
     record.precedents =
       record.content.type === "formula"
         ? referencesOf(record.content.ast, this.functions)
-            .map((reference) => this.resolve(reference, record.id))
+            .map((read) => this.precedent(read, record.id))
             .filter((range) => range !== undefined)
         : [];
     this.dependencies.set(record.id, record.precedents);
+  }
+
+  /**
+   * The cells a formula at `origin` reads through one of its references. A
+   * whole column written as an operand is read in the formula's own row only.
+   * Recording the whole column would make the formula depend on cells it
+   * never reads, and one of those may depend on the formula.
+   */
+  private precedent({ reference, own }: Read, origin: CellId): CellRange | undefined {
+    const range = this.resolve(reference, origin);
+    if (!range || own === undefined) return range;
+    return own === "row"
+      ? { ...range, startRow: origin.row, endRow: origin.row }
+      : { ...range, startCol: origin.col, endCol: origin.col };
   }
 
   private resolve(reference: Reference, origin: CellId): CellRange | undefined {

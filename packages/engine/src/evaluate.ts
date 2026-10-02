@@ -127,6 +127,27 @@ function readReference(reference: Reference, context: EvaluationContext): Evalua
   return { kind: "range", rows };
 }
 
+/** The formula's own row or its own column. */
+export type OwnLine = "row" | "col";
+
+/**
+ * Which cells of a reference an operator reads when the reference is its
+ * operand: `"row"` for a whole column, which gives its cell in the formula's
+ * own row, and `"col"` for a whole row, which gives its cell in the formula's
+ * own column. `undefined` for anything else, which is read whole.
+ */
+function ownLineOf(node: Node): OwnLine | undefined {
+  if (node.type !== "reference") return undefined;
+  const { reference } = node;
+  // `Sales[Price]` is a whole column just as `A:A` is.
+  if (isColumnReference(reference)) return reference.table === undefined ? undefined : "row";
+  const { start, end } = reference;
+  if (end === undefined) return undefined;
+  if (start.row === null && end.row === null) return "row";
+  if (start.col === null && end.col === null) return "col";
+  return undefined;
+}
+
 /**
  * Evaluates an operand of an operator. A whole column written as an operand
  * means that column's cell in the formula's own row, so `=A:A + B:B` in row 5
@@ -136,26 +157,16 @@ function readReference(reference: Reference, context: EvaluationContext): Evalua
  */
 function operand(node: Node, context: EvaluationContext): Evaluated {
   const { origin } = context;
-  if (node.type !== "reference" || origin.tableId === "") return compute(node, context);
+  const own = origin.tableId === "" ? undefined : ownLineOf(node);
+  if (node.type !== "reference" || own === undefined) return compute(node, context);
   const { reference } = node;
-  // `Sales[Price]` is a whole column just as `A:A` is.
-  const named = isColumnReference(reference);
-  const columns = named
-    ? reference.table !== undefined
-    : reference.end !== undefined && reference.start.row === null && reference.end.row === null;
-  const rows =
-    !named &&
-    reference.end !== undefined &&
-    reference.start.col === null &&
-    reference.end.col === null;
-  if (!columns && !rows) return compute(node, context);
 
   const range = context.resolve(reference);
   if (!range) fail("#REF!", missing(reference));
   const { tableId } = range;
   const extent = context.extent(tableId);
   const written = formatReference(reference);
-  if (columns) {
+  if (own === "row") {
     if (origin.row >= extent.rows)
       fail("#VALUE!", `${written} has no row ${String(origin.row + 1)}`);
     const cells: CellValue[] = [];
@@ -330,21 +341,36 @@ export function evaluate(node: Node, context: EvaluationContext): Evaluated {
   }
 }
 
+/** A reference a formula in a cell reads. */
+export interface Read {
+  reference: Reference;
+  /** Set when the formula reads the reference only where it crosses the formula's own row or column. */
+  own?: OwnLine;
+}
+
 /**
- * Lists the references a formula reads during recalculation. Arguments of
- * action functions are left out: they are evaluated when the action runs, so
- * a cell holding `=BUTTON("Add", EXECUTE(A1+1, A1))` does not depend on A1.
+ * Lists the references a formula in a cell reads during recalculation, each
+ * with as much of it as `operand` reads. Arguments of action functions are
+ * left out: they are evaluated when the action runs, so a cell holding
+ * `=BUTTON("Add", EXECUTE(A1+1, A1))` does not depend on A1.
  */
-export function referencesOf(node: Node, functions: FunctionRegistry): Reference[] {
-  const all = (nodes: readonly Node[]): Reference[] =>
+export function referencesOf(node: Node, functions: FunctionRegistry): Read[] {
+  const all = (nodes: readonly Node[]): Read[] =>
     nodes.flatMap((child) => referencesOf(child, functions));
+  const operands = (nodes: readonly Node[]): Read[] =>
+    nodes.flatMap((child) => {
+      const own = ownLineOf(child);
+      return child.type === "reference" && own !== undefined
+        ? [{ reference: child.reference, own }]
+        : referencesOf(child, functions);
+    });
   switch (node.type) {
     case "reference":
-      return [node.reference];
+      return [{ reference: node.reference }];
     case "unary":
-      return referencesOf(node.operand, functions);
+      return operands([node.operand]);
     case "binary":
-      return all([node.left, node.right]);
+      return operands([node.left, node.right]);
     case "call":
       return functions.get(node.name)?.kind === "action" ? [] : all(node.args);
     case "apply":

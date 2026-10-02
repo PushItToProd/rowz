@@ -224,6 +224,19 @@ class Parser {
       offset: 0,
       labels: [],
     };
+    // Any clause may use a name that SELECT gives with AS, and clauses come in
+    // any order, so a SELECT written after another clause is read before it.
+    const selectAt = this.tokens.findIndex(
+      (token) => token.kind === "word" && token.value === "SELECT",
+    );
+    let afterSelect = selectAt;
+    if (selectAt > 0) {
+      this.index = selectAt + 1;
+      query.select = this.select();
+      afterSelect = this.index;
+      this.index = 0;
+    }
+
     const seen = new Set<string>();
     while (this.peek().kind !== "end") {
       const clause = this.peek();
@@ -234,6 +247,10 @@ class Parser {
       }
       if (seen.has(clause.value)) throw new QuerySyntaxError(`${clause.value} appears twice`);
       seen.add(clause.value);
+      if (selectAt > 0 && this.index === selectAt) {
+        this.index = afterSelect;
+        continue;
+      }
       this.index += 1;
       this.clause(clause.value, query);
     }
