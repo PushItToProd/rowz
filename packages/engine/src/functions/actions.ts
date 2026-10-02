@@ -1,4 +1,4 @@
-import { isSingleCell, type Node } from "../ast";
+import type { Node } from "../ast";
 import type { Effect } from "../effects";
 import type { CellRange } from "../address";
 import {
@@ -62,8 +62,9 @@ function usedRows(range: CellRange, rows: readonly CellValue[][], context: PlanC
 }
 
 function destination(target: Node | undefined, context: PlanContext, name: string): Destination {
-  if (target?.type !== "reference") fail("#VALUE!", `${name} needs a range to write to`);
-  const range = context.resolve(target.reference);
+  const named = context.target(target);
+  if (!target || !named) fail("#VALUE!", `${name} needs a range to write to`);
+  const { range } = named;
   if (!range) fail("#REF!", "The range to write to does not exist");
   const rows = grid(context.evaluate(target));
   // Cells an array formula fills count as content.
@@ -144,10 +145,9 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
     minArgs: 2,
     maxArgs: 2,
     plan([expression, target], context): Effect[] {
-      if (target?.type !== "reference" || !isSingleCell(target.reference)) {
-        fail("#VALUE!", "EXECUTE needs a single cell to write to");
-      }
-      const cell = context.resolve(target.reference);
+      const named = context.target(target);
+      if (!named?.single) fail("#VALUE!", "EXECUTE needs a single cell to write to");
+      const cell = named.range;
       if (!cell) fail("#REF!", "The cell to write to does not exist");
       return grid(argument(expression, context)).flatMap((cells, rowOffset) =>
         cells.map((value, colOffset) => ({
@@ -173,9 +173,9 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
     minArgs: 2,
     maxArgs: Infinity,
     plan([target, ...valueNodes], context): Effect[] {
-      const range = target?.type === "reference" ? context.resolve(target.reference) : undefined;
-      if (target?.type !== "reference")
-        fail("#VALUE!", "APPEND_ROW needs a range to add the row to");
+      const named = context.target(target);
+      if (!target || !named) fail("#VALUE!", "APPEND_ROW needs a range to add the row to");
+      const { range } = named;
       if (!range) fail("#REF!", "The range to add the row to does not exist");
 
       const values = valueNodes.flatMap((node) => grid(context.evaluate(node)).flat().map(scalar));
@@ -309,8 +309,9 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
     minArgs: 1,
     maxArgs: 1,
     plan([target], context): Effect[] {
-      if (target?.type !== "reference") fail("#VALUE!", "CLEAR needs a cell or range to empty");
-      const range = context.resolve(target.reference);
+      const named = context.target(target);
+      if (!named) fail("#VALUE!", "CLEAR needs a cell or range to empty");
+      const { range } = named;
       if (!range) fail("#REF!", "The range to empty does not exist");
       return context.inputsIn(range).map(({ tableId, row, col }) => ({
         type: "setCell" as const,

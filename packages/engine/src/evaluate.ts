@@ -23,6 +23,20 @@ import {
   type Scalar,
 } from "./values";
 
+/**
+ * The names a document defines, as a formula sees them from where it is
+ * written. Each method throws `Failure` for a name that cannot be read.
+ */
+export interface NameScope {
+  /**
+   * The value of a word written alone, or `undefined` when the document has
+   * nothing of that name. A word with more than one meaning fails.
+   */
+  bare(name: string): Evaluated | undefined;
+  /** The value of a name written with the table or script that holds it. */
+  qualified(node: Node & { type: "qualified" }): Evaluated;
+}
+
 export interface EvaluationContext {
   /** The cell whose formula is being evaluated. */
   origin: CellId;
@@ -34,6 +48,8 @@ export interface EvaluationContext {
   extent(tableId: string): { rows: number; cols: number };
   /** Values bound by `LET` and `LAMBDA`, keyed by name in lower case. */
   names?: ReadonlyMap<string, Evaluated>;
+  /** The names the document defines. A binding in `names` comes before them. */
+  document?: NameScope;
   /** How many function calls deep the evaluation is. */
   depth?: number;
   /** The current date and time on the user's clock, in the milliseconds a `DateValue` holds. */
@@ -273,7 +289,12 @@ function call(name: string, args: readonly Node[], context: EvaluationContext): 
   if (bound !== undefined) return applyValue(bound, args, context);
 
   const definition = context.functions.get(name);
-  if (!definition) fail("#NAME?", `Unknown function ${name}`);
+  if (!definition) {
+    // A name cannot be spelled like a built-in function, so the order of these two does not matter.
+    const named = context.document?.bare(name);
+    if (named !== undefined) return applyValue(named, args, context);
+    fail("#NAME?", `Unknown function ${name}`);
+  }
   if (args.length < definition.minArgs || args.length > definition.maxArgs) {
     fail("#ERROR!", arity(name, definition.minArgs, definition.maxArgs));
   }
@@ -306,9 +327,14 @@ function compute(node: Node, context: EvaluationContext): Evaluated {
     case "name": {
       // A name can be bound to an empty cell, whose value is null, so presence is what counts.
       const key = node.name.toLowerCase();
-      if (!context.names?.has(key)) fail("#NAME?", `Unknown name ${node.name}`);
-      return context.names.get(key) ?? null;
+      if (context.names?.has(key)) return context.names.get(key) ?? null;
+      const named = context.document?.bare(node.name);
+      if (named === undefined) fail("#NAME?", `Unknown name ${node.name}`);
+      return named;
     }
+    case "qualified":
+      if (!context.document) fail("#NAME?", `Unknown name ${node.name}`);
+      return context.document.qualified(node);
     case "call":
       return call(node.name, node.args, context);
     case "apply":

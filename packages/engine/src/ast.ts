@@ -64,8 +64,16 @@ export type Node =
   | { type: "reference"; reference: Reference }
   | { type: "unary"; operator: UnaryOperator; operand: Node }
   | { type: "binary"; operator: BinaryOperator; left: Node; right: Node }
-  /** A word that is not a cell address: a name bound by `LET` or a parameter of `LAMBDA`. */
+  /**
+   * A word that is not a cell address: a name bound by `LET`, a parameter of
+   * `LAMBDA`, or a name the document defines.
+   */
   | { type: "name"; name: string }
+  /**
+   * A name written with the table or script that holds it: `Summary!Total`,
+   * or `Page!Summary!Total` when that is on another page.
+   */
+  | { type: "qualified"; page?: string; holder: string; name: string }
   /** A call by name: a built-in function, or a name bound to a function. */
   | { type: "call"; name: string; args: Node[] }
   /** A call of the function an expression evaluates to: `A1(5)`, `LAMBDA(x, x+1)(5)`. */
@@ -79,8 +87,8 @@ function printReferenceCell(cell: ReferenceCell): string {
 
 const BARE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-/** Writes a page or table name for a reference, in single quotes unless it is a plain word. */
-function quoteName(name: string): string {
+/** Writes a page, table, or other name as it is typed in a formula, in single quotes unless it is a plain word. */
+export function quoteName(name: string): string {
   return BARE_NAME.test(name) ? name : `'${name.replaceAll("'", "''")}'`;
 }
 
@@ -121,7 +129,12 @@ export function printNode(node: Node): string {
     case "binary":
       return `(${printNode(node.left)}${node.operator}${printNode(node.right)})`;
     case "name":
-      return node.name;
+      return quoteName(node.name);
+    case "qualified":
+      return [node.page, node.holder, node.name]
+        .filter((part) => part !== undefined)
+        .map(quoteName)
+        .join("!");
     case "call":
       return `${node.name}(${node.args.map(printNode).join(",")})`;
     case "apply": {

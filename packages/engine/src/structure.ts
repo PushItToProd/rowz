@@ -57,9 +57,44 @@ export interface TableDefinition {
   colCount?: number;
 }
 
+/** A block that holds names and has no cells. */
+export interface ScriptDefinition {
+  id: string;
+  pageId: string;
+  name: string;
+}
+
+/**
+ * A name for a value: an identifier and the formula that computes it. A plain
+ * table or a script holds it, and the formula is written there. In a table, a
+ * reference with no table name means that table. In a script, as in a text
+ * view, a reference names its table.
+ *
+ * A data table holds no names. Its rows can be sorted and filtered for
+ * display while `B2` keeps meaning a position, so a named cell could appear
+ * to point at a row it does not read, and its columns already have names.
+ */
+export interface NameDefinition {
+  /** The id of the table or script that holds the name. */
+  holderId: string;
+  name: string;
+  /** With or without the leading `=`. */
+  formula: string;
+}
+
+/** What holds a name: a table or a script, either of which is on a page and has a name. */
+export interface Holder {
+  kind: "table" | "script";
+  id: string;
+  pageId: string;
+  name: string;
+}
+
 export interface WorkbookStructure {
   pages: readonly PageDefinition[];
   tables: readonly TableDefinition[];
+  scripts?: readonly ScriptDefinition[];
+  names?: readonly NameDefinition[];
 }
 
 export type StoredInput = CellId & { input: string };
@@ -84,12 +119,19 @@ function nameKey(name: string): string {
  */
 export class TableResolver {
   private readonly tablesById: ReadonlyMap<string, TableDefinition>;
+  private readonly pages: ReadonlyMap<string, PageDefinition>;
+  private readonly holders: readonly Holder[];
   private readonly pageIdByName: ReadonlyMap<string, string>;
   /** Keyed by page ID, then by table name. */
   private readonly tablesByPage: ReadonlyMap<string, ReadonlyMap<string, TableDefinition>>;
 
-  constructor({ pages, tables }: WorkbookStructure) {
+  constructor({ pages, tables, scripts = [] }: WorkbookStructure) {
     this.tablesById = new Map(tables.map((table) => [table.id, table]));
+    this.pages = new Map(pages.map((page) => [page.id, page]));
+    this.holders = [
+      ...tables.map(({ id, pageId, name }) => ({ kind: "table" as const, id, pageId, name })),
+      ...scripts.map(({ id, pageId, name }) => ({ kind: "script" as const, id, pageId, name })),
+    ];
     this.pageIdByName = new Map(pages.map((page) => [nameKey(page.name), page.id]));
     const byPage = new Map<string, Map<string, TableDefinition>>();
     for (const table of tables) {
@@ -126,6 +168,35 @@ export class TableResolver {
       reference.page === undefined ? originPageId : this.pageIdByName.get(nameKey(reference.page));
     if (pageId === undefined) return undefined;
     return this.tablesByPage.get(pageId)?.get(nameKey(reference.table));
+  }
+
+  /** The table or script with an id. */
+  holder(id: string): Holder | undefined {
+    return this.holders.find((holder) => holder.id === id);
+  }
+
+  /**
+   * Finds the table or script a qualified name is held by. With no page name
+   * it is the one on the page the formula is written on.
+   */
+  findHolder(
+    name: string,
+    page: string | undefined,
+    originPageId: string | undefined,
+  ): Holder | undefined {
+    const pageId = page === undefined ? originPageId : this.pageIdByName.get(nameKey(page));
+    const key = nameKey(name);
+    return this.holders.find((holder) => holder.pageId === pageId && nameKey(holder.name) === key);
+  }
+
+  /** Every table of a name, on any page. */
+  tablesNamed(name: string): Holder[] {
+    const key = nameKey(name);
+    return this.holders.filter((holder) => holder.kind === "table" && nameKey(holder.name) === key);
+  }
+
+  pageName(pageId: string): string | undefined {
+    return this.pages.get(pageId)?.name;
   }
 
   /** Whether a page qualifier names the given page. */

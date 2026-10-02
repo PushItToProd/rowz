@@ -107,7 +107,10 @@ export {
   TableResolver,
   type ColumnDefinition,
   type ColumnType,
+  type Holder,
+  type NameDefinition,
   type PageDefinition,
+  type ScriptDefinition,
   type StoredInput,
   type TableDefinition,
   type WorkbookData,
@@ -128,4 +131,6 @@ export {
   type ViewKind,
   type ViewSource,
 } from "./views";
+export { namesOf, type NameUse } from "./scope";
+export { refusedName } from "./names";
 export { createWorkbook, Workbook, type ActionPlan, type WorkbookOptions } from "./workbook";

@@ -1,17 +1,27 @@
 import { cellKey, formatAddress, rangeContains, type CellId, type CellRange } from "./address";
-import { isColumnReference, type Node, type Reference } from "./ast";
+import { isColumnReference, isSingleCell, quoteName, type Node, type Reference } from "./ast";
 import { formatDate, isDate, parseDate } from "./dates";
 import type { Effect } from "./effects";
-import { evaluate, referencesOf, type EvaluationContext, type Read } from "./evaluate";
+import {
+  evaluate,
+  referencesOf,
+  type EvaluationContext,
+  type NameScope,
+  type Read,
+} from "./evaluate";
 import { defaultFunctions } from "./functions";
 import { fail, Failure } from "./functions/arguments";
 import type { FunctionRegistry } from "./functions/registry";
 import { DependencyIndex, evaluationOrder } from "./graph";
+import { refusedName } from "./names";
 import { parseFormula } from "./parser";
+import { namesOf, type NameUse } from "./scope";
 import {
   findColumn,
   TableResolver,
   type ColumnDefinition,
+  type Holder,
+  type NameDefinition,
   type TableDefinition,
   type WorkbookData,
   type WorkbookStructure,
@@ -51,6 +61,21 @@ interface CellRecord {
   /** The ranges the formula reads during recalculation. Empty for non-formulas. */
   precedents: CellRange[];
 }
+
+/** A name the document defines, with what its formula parsed to. */
+interface NameRecord {
+  holder: Holder;
+  name: string;
+  content: { ast: Node } | { error: ErrorValue };
+  /** The cells the formula reads, through other names as well. */
+  precedents: CellRange[];
+  /** The value computed for it, and the state of the cells it was computed from. */
+  kept?: { epoch: number; value: Evaluated };
+  evaluating: boolean;
+}
+
+/** The value a qualified name stands for when no cell holds its formula. */
+const NO_CELL: CellId = { tableId: "", row: 0, col: 0 };
 
 const TEXT_PREFIX = "'";
 
@@ -166,6 +191,11 @@ export class Workbook {
    */
   private readonly computedRows = new Map<string, number>();
 
+  /** The names the document defines, by spelling in lower case. Several may share one. */
+  private names = new Map<string, NameRecord[]>();
+  /** Counts discarded cell values, so a name's kept value can tell that a cell it read may have changed. */
+  private epoch = 0;
+
   private settling = false;
   /** Counts calls to `invalidate`, so a computing pass can tell that one happened under it. */
   private invalidations = 0;
@@ -193,6 +223,7 @@ export class Workbook {
       this.computedRows.delete(tableId);
     }
     for (const table of structure.tables) this.applyColumns(table);
+    this.defineNames(structure.names ?? []);
 
     this.cache.clear();
     this.pending.clear();
@@ -371,16 +402,25 @@ export class Workbook {
       if (!(cause instanceof FormulaSyntaxError)) throw cause;
       return error(cause.code, cause.message);
     }
-    return evaluate(ast, {
-      // No cell holds this formula. An action made here has nowhere to run from.
-      origin: { tableId: "", row: 0, col: 0 },
-      functions: this.functions,
-      resolve: (reference) => this.rangeOf(reference, this.tables.findFromPage(reference, pageId)),
-      read: (cell) => this.current(cell),
-      extent: (tableId) => this.extent(tableId),
-      now: this.now,
-      ...(names ? { names } : {}),
-    });
+    return evaluate(ast, { ...this.pageContext(pageId), ...(names ? { names } : {}) });
+  }
+
+  /**
+   * The value of a name that a table or script holds, or `undefined` when it
+   * holds none of that spelling.
+   */
+  getName(holderId: string, name: string): Evaluated | undefined {
+    this.settle();
+    const record = this.names
+      .get(name.toLowerCase())
+      ?.find((candidate) => candidate.holder.id === holderId);
+    if (!record) return undefined;
+    try {
+      return this.nameValue(record);
+    } catch (cause) {
+      if (cause instanceof Failure) return cause.error;
+      throw cause;
+    }
   }
 
   /**
@@ -434,6 +474,7 @@ export class Workbook {
       origin: action.origin,
       evaluate: (node) => evaluate(node, context),
       resolve: (reference) => context.resolve(reference),
+      target: (node) => this.targetOf(node, action.origin),
       tableOf: (tableId) => ({
         ...this.extent(tableId),
         columns: this.tables.table(tableId)?.columns ?? null,
@@ -473,15 +514,202 @@ export class Workbook {
     }
   }
 
-  /** Resolves a record's references and registers them with the dependency index. */
+  /**
+   * Resolves a record's references and registers them with the dependency
+   * index. A name is not in the index: a cell that uses one is recorded as
+   * reading the cells the name reads.
+   */
   private index(record: CellRecord): void {
-    record.precedents =
-      record.content.type === "formula"
-        ? referencesOf(record.content.ast, this.functions)
-            .map((read) => this.precedent(read, record.id))
-            .filter((range) => range !== undefined)
-        : [];
+    if (record.content.type !== "formula") record.precedents = [];
+    else {
+      const { ast } = record.content;
+      const pageId = this.tables.table(record.id.tableId)?.pageId;
+      record.precedents = [
+        ...referencesOf(ast, this.functions)
+          .map((read) => this.precedent(read, record.id))
+          .filter((range) => range !== undefined),
+        ...namesOf(ast, this.functions).flatMap(
+          (use) => this.nameUsed(use, pageId)?.precedents ?? [],
+        ),
+      ];
+    }
     this.dependencies.set(record.id, record.precedents);
+  }
+
+  /**
+   * Reads the document's names. A name that cannot be defined is kept with
+   * the reason as its value, so a formula that uses it shows why.
+   */
+  private defineNames(definitions: readonly NameDefinition[]): void {
+    this.names = new Map();
+    for (const { holderId, name, formula } of definitions) {
+      const holder = this.tables.holder(holderId);
+      if (!holder) continue;
+      const key = name.toLowerCase();
+      const sharing = this.names.get(key) ?? [];
+      this.names.set(key, sharing);
+      const refuse = (message: string): NameRecord["content"] => ({
+        error: error("#NAME?", message),
+      });
+      const refused = refusedName(name, this.functions);
+      let content: NameRecord["content"];
+      if (refused !== undefined) content = refuse(refused);
+      else if (this.tables.table(holderId)?.columns?.length) {
+        content = refuse(`${holder.name} has named columns, and such a table holds no names`);
+      } else if (sharing.some((other) => other.holder.id === holderId)) {
+        content = refuse(`${holder.name} defines ${name} twice`);
+      } else {
+        try {
+          content = { ast: parseFormula(formula.startsWith("=") ? formula.slice(1) : formula) };
+        } catch (cause) {
+          if (!(cause instanceof FormulaSyntaxError)) throw cause;
+          content = { error: error(cause.code, cause.message) };
+        }
+      }
+      sharing.push({ holder, name, content, precedents: [], evaluating: false });
+    }
+    for (const record of [...this.names.values()].flat()) {
+      record.precedents = this.namePrecedents(record, new Set());
+    }
+  }
+
+  /** The cells a name's formula reads, directly and through the names it uses. */
+  private namePrecedents(record: NameRecord, seen: Set<NameRecord>): CellRange[] {
+    if (seen.has(record) || !("ast" in record.content)) return [];
+    seen.add(record);
+    const { ast } = record.content;
+    const { holder } = record;
+    return [
+      ...referencesOf(ast, this.functions)
+        .map(({ reference }) => this.resolveFrom(holder, reference))
+        .filter((range) => range !== undefined),
+      ...namesOf(ast, this.functions).flatMap((use) => {
+        const used = this.nameUsed(use, holder.pageId);
+        return used ? this.namePrecedents(used, seen) : [];
+      }),
+    ];
+  }
+
+  /** The cells a reference written in a table or script means. */
+  private resolveFrom(holder: Holder, reference: Reference): CellRange | undefined {
+    return holder.kind === "table"
+      ? this.rangeOf(reference, this.tables.find(reference, holder.id))
+      : this.rangeOf(reference, this.tables.findFromPage(reference, holder.pageId));
+  }
+
+  /** How a name or table is written in full, for a message. */
+  private written(holder: Holder, name?: string): string {
+    const parts = [this.tables.pageName(holder.pageId) ?? "", holder.name];
+    return [...parts, ...(name === undefined ? [] : [name])].map(quoteName).join("!");
+  }
+
+  /**
+   * Everything a word written alone can mean: every name of that spelling,
+   * and every table of that spelling, on any page. More than one meaning is
+   * an error wherever the word is used. Nothing wins by being nearer to the
+   * formula, so adding a name cannot quietly change what a formula reads.
+   */
+  private meanings(word: string): { names: NameRecord[]; tables: Holder[] } {
+    return {
+      names: this.names.get(word.toLowerCase()) ?? [],
+      tables: this.tables.tablesNamed(word),
+    };
+  }
+
+  /** The one name a word written alone means, or `undefined`. Fails when the word has several meanings. */
+  private bareName(word: string): NameRecord | undefined {
+    const { names, tables } = this.meanings(word);
+    if (names.length + tables.length > 1) {
+      const all = [
+        ...names.map((record) => this.written(record.holder, record.name)),
+        ...tables.map((table) => this.written(table)),
+      ];
+      fail("#NAME?", `${word} has more than one meaning: ${all.join(", ")}. Write the one meant`);
+    }
+    return names[0];
+  }
+
+  private qualifiedName(
+    { page, holder: holderName, name }: Node & { type: "qualified" },
+    pageId: string | undefined,
+  ): NameRecord {
+    const holder = this.tables.findHolder(holderName, page, pageId);
+    if (!holder) fail("#NAME?", `There is no table or script named ${holderName}`);
+    const record = this.names
+      .get(name.toLowerCase())
+      ?.find((candidate) => candidate.holder.id === holder.id);
+    return record ?? fail("#NAME?", `${holder.name} has no name ${name}`);
+  }
+
+  /** The name a formula on a page uses, or `undefined` when the use is an error. */
+  private nameUsed(use: NameUse, pageId: string | undefined): NameRecord | undefined {
+    try {
+      return "holder" in use
+        ? this.qualifiedName({ type: "qualified", ...use }, pageId)
+        : this.bareName(use.name);
+    } catch (cause) {
+      if (cause instanceof Failure) return undefined;
+      throw cause;
+    }
+  }
+
+  /**
+   * Computes a name, or returns the value kept for it. A kept value stands
+   * until a cell's value is discarded. The cells a name reads are precedents
+   * of every cell that uses the name, so they are computed before it is.
+   */
+  private nameValue(record: NameRecord): Evaluated {
+    if ("error" in record.content) return record.content.error;
+    if (record.kept?.epoch === this.epoch) return record.kept.value;
+    if (record.evaluating) fail("#CYCLE!", `${record.name} depends on itself`);
+    record.evaluating = true;
+    try {
+      const { holder } = record;
+      const value = evaluate(
+        record.content.ast,
+        holder.kind === "table"
+          ? this.context({ ...NO_CELL, tableId: holder.id })
+          : this.pageContext(holder.pageId),
+      );
+      record.kept = { epoch: this.epoch, value };
+      return value;
+    } finally {
+      record.evaluating = false;
+    }
+  }
+
+  /** The document's names as a formula written on a page sees them. */
+  private scope(pageId: string | undefined): NameScope {
+    return {
+      bare: (word) => {
+        const record = this.bareName(word);
+        return record && this.nameValue(record);
+      },
+      qualified: (node) => this.nameValue(this.qualifiedName(node, pageId)),
+    };
+  }
+
+  /**
+   * The cells an action's argument names: a reference, or a name whose
+   * formula is one reference. Such a name stands for those cells wherever
+   * cells are asked for.
+   */
+  private targetOf(
+    node: Node | undefined,
+    origin: CellId,
+  ): { range: CellRange | undefined; single: boolean } | undefined {
+    if (node?.type === "reference") {
+      return { range: this.resolve(node.reference, origin), single: isSingleCell(node.reference) };
+    }
+    if (node?.type !== "name" && node?.type !== "qualified") return undefined;
+    const pageId = this.tables.table(origin.tableId)?.pageId;
+    const record =
+      node.type === "name" ? this.bareName(node.name) : this.qualifiedName(node, pageId);
+    if (!record || !("ast" in record.content) || record.content.ast.type !== "reference") {
+      return undefined;
+    }
+    const { reference } = record.content.ast;
+    return { range: this.resolveFrom(record.holder, reference), single: isSingleCell(reference) };
   }
 
   /**
@@ -560,6 +788,21 @@ export class Workbook {
       read: (cell) => this.current(cell),
       extent: (tableId) => this.extent(tableId),
       now: this.now,
+      document: this.scope(this.tables.table(origin.tableId)?.pageId),
+    };
+  }
+
+  /** The context of a formula written on a page and not in a table, which names the table of every cell it reads. */
+  private pageContext(pageId: string): EvaluationContext {
+    return {
+      // No cell holds this formula. An action made here has nowhere to run from.
+      origin: NO_CELL,
+      functions: this.functions,
+      resolve: (reference) => this.rangeOf(reference, this.tables.findFromPage(reference, pageId)),
+      read: (cell) => this.current(cell),
+      extent: (tableId) => this.extent(tableId),
+      now: this.now,
+      document: this.scope(pageId),
     };
   }
 
@@ -570,6 +813,7 @@ export class Workbook {
    */
   private invalidate(start: CellId): void {
     this.invalidations += 1;
+    this.epoch += 1;
     const queue = [start, ...this.dependencies.transitiveDependents(start)];
     const seen = new Set<string>();
     for (let id = queue.pop(); id; id = queue.pop()) {

@@ -4,6 +4,14 @@ This plan adds names to documents. A name is an identifier with a formula, and a
 
 The plan describes the code at commit `797a764`. It is a proposal. The decisions in the first table are the author's. Everything under [Proposed design](#proposed-design) and [Open questions](#open-questions) awaits review.
 
+## Progress
+
+Step 1 is implemented in `packages/engine`: `scope.ts`, `names.ts`, and the name records in `workbook.ts`, with tests in `names.test.ts`. Three parts of it are left:
+
+- `CHECKBOX` and `DROPDOWN` do not accept a name as the cell they write to. `EXECUTE`, `APPEND_ROW`, `CLEAR`, and the data actions do.
+- The parser does not record where a bare word or a qualified name is written. Step 3 needs that for qualified names, and step 7 for bare words.
+- A bare word that only a table matches is still `#NAME?`. Step 7 gives it the table's rows.
+
 ## Decisions made
 
 | Question              | Decision                                                                                                                            |
@@ -85,7 +93,7 @@ The syntax:
 
 ### Names in tables
 
-A plain table record gains a list of names, each an identifier and a formula. A data table has none: its rows can be sorted and filtered for display while `B2` stays positional, so a named cell could appear to point at the wrong row, and its columns already have names. Naming a table's columns is refused while it has names. A comment on the list in `structure.ts` and an entry in `DECISIONS.md` record this when step 6 is built. They are kept the way column formulas are: rewritten in the same transaction as a rename, a move, or a row or column edit, and written through `ContentWriter` so undo records them. The file format gains the same list on a table.
+A plain table record gains a list of names, each an identifier and a formula. A data table has none: its rows can be sorted and filtered for display while `B2` stays positional, so a named cell could appear to point at the wrong row, and its columns already have names. Naming a table's columns is refused while it has names. `DECISIONS.md` records this, and step 6 adds a comment on the list in `structure.ts`. They are kept the way column formulas are: rewritten in the same transaction as a rename, a move, or a row or column edit, and written through `ContentWriter` so undo records them. The file format gains the same list on a table.
 
 The first way to define one is to select a range and choose "Name this range", which writes the name with the selection's address as its formula. A table's names are listed in a panel on its block, where each can be renamed, edited, or removed.
 
@@ -107,7 +115,7 @@ A bare word bound by `LET` or `LAMBDA`, or by `let` and `for` in a text view, me
 - every name of that spelling in the document, whatever holds it
 - every table of that spelling in the document
 
-One candidate is the meaning. A table found this way must be on the formula's page, as `Sales!A1` requires today. More than one candidate makes the word `#NAME?`, with a message that lists the candidates and shows the qualified form of each. No candidate wins by being nearer: a name in the formula's own script does not beat the same name in another script, and a name does not beat a table. A script that reuses a name from elsewhere in the document therefore shows errors until its uses are qualified.
+One candidate is the meaning. A table found this way can be on any page, so `SUM(Sales)` works throughout a document that has one table named Sales. `Sales!A1` keeps its meaning of the table on the formula's page. More than one candidate makes the word `#NAME?`, with a message that lists the candidates and shows the qualified form of each. No candidate wins by being nearer: a name in the formula's own script does not beat the same name in another script, and a name does not beat a table. A script that reuses a name from elsewhere in the document therefore shows errors until its uses are qualified.
 
 `A!B`, where `B` is not a cell or a range, has two readings: the name `B` held by `A` on the formula's page, and the table `B` on the page `A`. When both exist it is `#NAME?`. `Page!A!B` then writes the name. The table has no unambiguous form until `Sales[#All]` exists.
 
@@ -159,19 +167,13 @@ Each step ends with `pnpm check` passing.
 5. **ASSERT.** The function, its entry in `docs.ts`, the `#ASSERT!` code, the report from `Workbook`, and the header indicator.
 6. **Names in tables.** The list on the table record with its migration, rewriting and undo, the file format, "Name this range", and the names panel.
 7. **Whole-table references.** The bare table name, column names carried on a range, `QUERY` headers from them, and rewriting of bare words on a rename of a table or a name.
-8. **Documentation and the reference document.** README and help page sections. Build the monthly budget and record what gets in the way in `todo.md`.
+8. **Documentation and the reference document.** README and help page sections. Both state that an ambiguous name is an error and recommend distinct names or the qualified form, with `February!Total` and `March!Total` as the example. Build the monthly budget and record what gets in the way in `todo.md`.
 
 Steps 1 to 5 make scripts usable. Step 6 adds named ranges. Step 7 belongs to the data tables theme and can move after its other items, but the rewriting of bare words in it is also what a "rename this name" command needs. That part can be split off and done any time after step 2.
 
 ## Open questions
 
 1. **Struct values.** `todo.md` has a note on cells that hold structs, arrays, and nested tables. A script read as a whole (`Summary`) could then be a struct of its names, and `Summary!Name` a field of it. Nothing here builds that, and nothing here prevents it.
-2. **A table on another page as a candidate.** The proposal counts a table anywhere in the document as a candidate meaning of a bare word, so that a word means the same thing on every page or is an error. Counting only tables on the formula's page would let a name and a table on another page coexist, and the word would then mean different things on different pages.
-
-## To add to `todo.md` when this plan is done
-
-- Consider resolving an ambiguous bare word by nearness: a name in the formula's own table or script first, then names and tables on the formula's page. The author considers this dangerous and has not decided to do it. If it is done, every use of a word that has more than one meaning in the document gets a warning, shown as a yellow wavy underline.
-- A command that renames a name and rewrites its uses, if step 7 did not include one.
 
 ## Not checked
 

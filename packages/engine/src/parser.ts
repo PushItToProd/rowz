@@ -144,9 +144,8 @@ class Parser {
         return { type: "error", code: token.value };
       case "quotedName":
         if (this.columnFollows(token)) return this.columnOf({ table: token.value }, token.position);
-        if (!this.isPunctuation("!")) {
-          throw new FormulaSyntaxError("Expected ! after a quoted name", token.position);
-        }
+        // Single quotes always write a name, so a quoted name alone is a name with spaces in it.
+        if (!this.isPunctuation("!")) return { type: "name", name: token.value };
         return this.qualifiedReference(token.value, token.position);
       case "column":
         return this.located({ column: token.value }, token.position);
@@ -224,7 +223,11 @@ class Parser {
     return this.located({ ...qualifier, column: column.value }, position);
   }
 
-  /** Parses `Table!A1`, `Page!Table!A1`, or `Page!Table[Column]`, positioned at the first `!`. */
+  /**
+   * Parses `Table!A1`, `Page!Table!A1`, or `Page!Table[Column]`, positioned at
+   * the first `!`. A last part that is not a cell or a range makes a qualified
+   * name: `Summary!Total`, `Page!Summary!Total`.
+   */
   private qualifiedReference(firstName: string, position: number): Node {
     this.expectPunctuation("!");
     const names = [firstName];
@@ -246,10 +249,30 @@ class Parser {
     }
 
     const token = this.next();
+    const [page, holder = firstName] = names.length === 2 ? names : [undefined, ...names];
+    if (this.isName(token)) {
+      return {
+        type: "qualified",
+        ...(page === undefined ? {} : { page }),
+        holder,
+        name: token.value,
+      };
+    }
     const start = this.corner(token);
     const qualifier =
       names.length === 2 ? { page: names[0], table: names[1] } : { table: names[0] };
     return this.located({ ...qualifier, ...this.rangeFrom(start, token) }, position);
+  }
+
+  /**
+   * Whether a token after `!` is a name and not the start of a cell or range.
+   * A word that reads as a column, such as `Tax`, is a name unless a `:` follows.
+   */
+  private isName(token: Token): token is Token & { type: "identifier" | "quotedName" } {
+    if (token.type === "quotedName") return true;
+    if (token.type !== "identifier") return false;
+    const corner = this.cornerOf(token);
+    return !corner || (!isWholeCell(corner) && !this.isPunctuation(":"));
   }
 
   /** Reads a token as a corner: an identifier such as `A1` or `B`, or a whole number as a row. */
