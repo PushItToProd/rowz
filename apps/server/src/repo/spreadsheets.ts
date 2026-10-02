@@ -47,6 +47,7 @@ import {
   type ChangedContent,
   type JournalData,
   readInputs,
+  touchSame,
   UndoRefusal,
 } from "./journal";
 import {
@@ -1626,6 +1627,37 @@ export class SpreadsheetRepository {
         }
         if (later.some((other) => other.rewrites)) {
           throw new UndoRefusal("A later structural change prevents undoing this change");
+        }
+      }
+
+      // Comparing what the spreadsheet holds with what the step left does not
+      // show a later change that put the same value back: a cell typed over
+      // and then typed again as it was. Reversing the step would erase that
+      // change, so what later changes wrote is compared too. A later change
+      // too large to record has no state to compare, and only the comparison
+      // of values in `assertRecordedMatches` stands against it.
+      const laterStates =
+        others.length === 0
+          ? []
+          : await tx
+              .select({ seq: journal.seq, data: journal.data })
+              .from(journal)
+              .where(
+                inArray(
+                  journal.seq,
+                  others.map((other) => other.seq),
+                ),
+              );
+      for (const entry of entries) {
+        const { data } = entry;
+        if (data === null) continue;
+        const overwritten = laterStates.some(
+          (other) => other.seq > entry.seq && other.data !== null && touchSame(data, other.data),
+        );
+        if (overwritten) {
+          throw new UndoRefusal(
+            `A later change to the same content prevents ${direction}ing this change`,
+          );
         }
       }
 

@@ -735,6 +735,73 @@ describe("refused history operations", () => {
     });
   });
 
+  it("refuses undo when another tab typed over the cell and then typed the same value", async () => {
+    const fixture = await fresh();
+    const first = withClientId(owner);
+    const second = withClientId(owner);
+    const cells = `/tables/${fixture.tableId}/cells`;
+    await first.request("PUT", cells, cellsBody({ A1: "same" }));
+    await second.request("PUT", cells, cellsBody({ A1: "other" }));
+    // The cell holds what the first tab's step left, and the second tab is who put it there.
+    await second.request("PUT", cells, cellsBody({ A1: "same" }));
+
+    expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
+      outcome: "refused",
+      error: "A later change to the same content prevents undoing this change",
+      undoable: false,
+    });
+    expect((await snapshot(owner, fixture.id)).cells.map((cell) => cell.input)).toEqual(["same"]);
+  });
+
+  it("undoes once the other tab has undone its changes to the cell", async () => {
+    const fixture = await fresh();
+    const first = withClientId(owner);
+    const second = withClientId(owner);
+    const cells = `/tables/${fixture.tableId}/cells`;
+    await first.request("PUT", cells, cellsBody({ A1: "same" }));
+    await second.request("PUT", cells, cellsBody({ A1: "other" }));
+    await second.json("POST", `/spreadsheets/${fixture.id}/undo`);
+
+    expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
+      outcome: "done",
+    });
+    expect((await snapshot(owner, fixture.id)).cells).toEqual([]);
+  });
+
+  it("refuses redo when another tab filled the cell and then emptied it", async () => {
+    const fixture = await fresh();
+    const first = withClientId(owner);
+    const second = withClientId(owner);
+    const cells = `/tables/${fixture.tableId}/cells`;
+    await first.request("PUT", cells, cellsBody({ A1: "first" }));
+    await first.json("POST", `/spreadsheets/${fixture.id}/undo`);
+    await second.request("PUT", cells, cellsBody({ A1: "second" }));
+    await second.request("PUT", cells, cellsBody({ A1: "" }));
+
+    expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/redo`)).toMatchObject({
+      outcome: "refused",
+      error: "A later change to the same content prevents redoing this change",
+      redoable: false,
+    });
+    expect((await snapshot(owner, fixture.id)).cells).toEqual([]);
+  });
+
+  it("refuses undo when another tab changed the view and then changed it back", async () => {
+    const fixture = await fresh();
+    const first = withClientId(owner);
+    const second = withClientId(owner);
+    const view = await createView(owner, fixture.pageId);
+    await first.request("PATCH", `/views/${view.id}`, { source: "same" });
+    await second.request("PATCH", `/views/${view.id}`, { source: "other" });
+    await second.request("PATCH", `/views/${view.id}`, { source: "same" });
+
+    expect(await first.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject({
+      outcome: "refused",
+      error: "A later change to the same content prevents undoing this change",
+    });
+    expect((await snapshot(owner, fixture.id)).views[0]?.source).toBe("same");
+  });
+
   it("refuses a cell whose table another tab deleted, then exposes the previous step", async () => {
     const fixture = await fresh();
     const added = await owner.json<{ id: string }>(

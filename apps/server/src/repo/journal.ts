@@ -482,6 +482,28 @@ export class ContentWriter {
   }
 }
 
+/**
+ * Whether two recorded changes wrote the same page, table, view, or cell.
+ * `step` is the smaller of the two: its items are indexed and the other's are
+ * looked up among them.
+ */
+export function touchSame(step: JournalData, other: JournalData): boolean {
+  const cell = (tableId: string, row: number, col: number): string =>
+    `${tableId}:${String(row)}:${String(col)}`;
+  const items = new Set([...step.pages, ...step.tables, ...step.views].map(({ id }) => id));
+  const cells = new Set(
+    step.cells.flatMap(({ tableId, changes }) =>
+      changes.map(([row, col]) => cell(tableId, row, col)),
+    ),
+  );
+  return (
+    [...other.pages, ...other.tables, ...other.views].some(({ id }) => items.has(id)) ||
+    other.cells.some(({ tableId, changes }) =>
+      changes.some(([row, col]) => cells.has(cell(tableId, row, col))),
+    )
+  );
+}
+
 /** Applies a recorded state without making another journal entry. */
 export async function applyRecorded(
   db: Database,

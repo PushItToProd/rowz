@@ -20,7 +20,7 @@ Choices made by agents while acting autonomously, for the author to review. Each
 
 1. A step that rewrote references, or that created or deleted a page, table, or view, is refused after any later change. Its recorded cells no longer say what the reverse should do: a formula typed after a row insert uses the new row numbers.
 2. Any step is refused after a later change that rewrote references, because the text it would put back names rows or names that have since changed.
-3. Each recorded page, table, view, and cell must still be as the step left it. A cell someone else has retyped fails this.
+3. Each recorded page, table, view, and cell must still be as the step left it, and no later change may have written it. A cell someone else has retyped fails this, including one they typed over and then typed again as it was: the cell holds what the step left, but reversing the step would erase their change. A later change too large to record has no state to compare, so against it only the comparison of values applies.
 4. What the undo writes must still fit: the page or table it belongs to exists, the spreadsheet keeps at least one page, no cell is outside its table or in a formula column, names stay unique, and the size limits hold.
 5. A change too large to record is refused.
 
