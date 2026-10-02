@@ -135,4 +135,10 @@ export {
 export { namesOf, type NameUse } from "./scope";
 export { refusedName } from "./names";
 export { parseScript, rewriteScript, scriptNames, type ScriptStatement } from "./script";
-export { createWorkbook, Workbook, type ActionPlan, type WorkbookOptions } from "./workbook";
+export {
+  createWorkbook,
+  Workbook,
+  type ActionPlan,
+  type AssertionFailure,
+  type WorkbookOptions,
+} from "./workbook";

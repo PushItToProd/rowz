@@ -1,4 +1,4 @@
-/** `#ERROR!` means the formula text could not be parsed, or a function got the wrong number of arguments. */
+/** `#ASSERT!` is the failure of an `ASSERT` the user wrote. `#ERROR!` means the formula text could not be parsed, or a function got the wrong number of arguments. */
 export const ERROR_CODES = [
   "#DIV/0!",
   "#VALUE!",
@@ -7,6 +7,7 @@ export const ERROR_CODES = [
   "#N/A",
   "#SPILL!",
   "#CYCLE!",
+  "#ASSERT!",
   "#ERROR!",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];

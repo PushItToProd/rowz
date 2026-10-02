@@ -1514,3 +1514,24 @@ select.cell-control--dropdown {
   font-family: system-ui, sans-serif;
   font-size: 0.85rem;
 }
+
+.editor__assertions {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.assertions__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assertions__list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.assertions__list span {
+  display: block;
+}

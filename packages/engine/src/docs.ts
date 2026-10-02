@@ -216,6 +216,14 @@ const ENTRIES: readonly FunctionDoc[] = [
     example: 'IF(A1 > 2, "big", "small")',
   },
   {
+    name: "ASSERT",
+    category: "Logic",
+    syntax: "ASSERT(condition, [message])",
+    summary:
+      "Gives TRUE when the condition is true, and the error `#ASSERT!` with the message when it is false. The editor header counts the assertions that fail.",
+    example: 'ASSERT(1 + 1 = 2, "Arithmetic works")',
+  },
+  {
     name: "IFERROR",
     category: "Logic",
     syntax: "IFERROR(value, fallback)",
@@ -1354,5 +1362,6 @@ export const errorDocs: Record<ErrorCode, string> = {
   "#SPILL!":
     "The result is several values, and a cell they would fill is not empty or is outside the table.",
   "#CYCLE!": "The formula depends on its own cell, directly or through other cells.",
+  "#ASSERT!": "An ASSERT in the document is false. Its message says what should have held.",
   "#ERROR!": "The formula could not be read, or a function was given the wrong number of values.",
 };

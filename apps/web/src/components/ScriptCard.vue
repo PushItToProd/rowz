@@ -83,7 +83,11 @@ const statements = computed(() =>
       return { line: statement.line, label: "", value: { text: "", error: statement.message } };
     }
     if (statement.kind === "expression") {
-      return { line: statement.line, label: statement.formula.trim(), value: { text: "" } };
+      return {
+        line: statement.line,
+        label: statement.formula.trim(),
+        value: shown(store.statementValue(props.view.id, statement.line)),
+      };
     }
     const params = statement.params ? `(${statement.params.join(", ")})` : "";
     return {

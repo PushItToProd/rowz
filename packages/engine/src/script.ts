@@ -139,6 +139,18 @@ export function scriptNames(scriptId: string, source: string): NameDefinition[] 
   });
 }
 
+/** The bare formulas of a script, such as an `ASSERT`, and the lines they are on. */
+export function scriptStatements(
+  scriptId: string,
+  source: string,
+): { holderId: string; line: number; formula: string }[] {
+  return parseScript(source).flatMap((statement) =>
+    statement.kind === "expression"
+      ? [{ holderId: scriptId, line: statement.line, formula: statement.formula }]
+      : [],
+  );
+}
+
 /**
  * Rewrites the references in each statement of a script and leaves every
  * other character, comments included, as the user typed it.

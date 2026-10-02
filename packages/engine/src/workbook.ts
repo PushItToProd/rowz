@@ -16,7 +16,7 @@ import { DependencyIndex, evaluationOrder } from "./graph";
 import { refusedName } from "./names";
 import { parseFormula } from "./parser";
 import { namesOf, type NameUse } from "./scope";
-import { scriptNames } from "./script";
+import { scriptNames, scriptStatements } from "./script";
 import {
   findColumn,
   TableResolver,
@@ -36,6 +36,7 @@ import {
   literalInput,
   toText,
   type ControlValue,
+  isError,
   isRange,
   parseLiteralInput,
   parseNumber,
@@ -73,7 +74,16 @@ interface NameRecord {
   /** The value computed for it, and the state of the cells it was computed from. */
   kept?: { epoch: number; value: Evaluated };
   evaluating: boolean;
+  /** Set for a bare formula of a script, which has no name: the line it is written on. */
+  line?: number;
 }
+
+/** An `ASSERT` that is false, and where it is. */
+export type AssertionFailure = { message: string } & (
+  | { kind: "cell"; cell: CellId }
+  | { kind: "name"; holderId: string; name: string }
+  | { kind: "statement"; holderId: string; line: number }
+);
 
 /** The value a qualified name stands for when no cell holds its formula. */
 const NO_CELL: CellId = { tableId: "", row: 0, col: 0 };
@@ -194,6 +204,8 @@ export class Workbook {
 
   /** The names the document defines, by spelling in lower case. Several may share one. */
   private names = new Map<string, NameRecord[]>();
+  /** The bare formulas of scripts. They define no name, so nothing reads them. */
+  private statements: NameRecord[] = [];
   /** Counts discarded cell values, so a name's kept value can tell that a cell it read may have changed. */
   private epoch = 0;
 
@@ -224,10 +236,14 @@ export class Workbook {
       this.computedRows.delete(tableId);
     }
     for (const table of structure.tables) this.applyColumns(table);
-    this.defineNames([
-      ...(structure.names ?? []),
-      ...(structure.scripts ?? []).flatMap((script) => scriptNames(script.id, script.source)),
-    ]);
+    const scripts = structure.scripts ?? [];
+    this.defineNames(
+      [
+        ...(structure.names ?? []),
+        ...scripts.flatMap((script) => scriptNames(script.id, script.source)),
+      ],
+      scripts.flatMap((script) => scriptStatements(script.id, script.source)),
+    );
 
     this.cache.clear();
     this.pending.clear();
@@ -418,7 +434,62 @@ export class Workbook {
     const record = this.names
       .get(name.toLowerCase())
       ?.find((candidate) => candidate.holder.id === holderId);
-    if (!record) return undefined;
+    return record && this.valueOfName(record);
+  }
+
+  /**
+   * The value of a bare formula of a script, such as an `ASSERT`, by the line
+   * it is written on, or `undefined` when that line holds none.
+   */
+  getStatement(holderId: string, line: number): Evaluated | undefined {
+    this.settle();
+    const record = this.statements.find(
+      (candidate) => candidate.holder.id === holderId && candidate.line === line,
+    );
+    return record && this.valueOfName(record);
+  }
+
+  /**
+   * Every `ASSERT` that is false: in a cell, as the value of a name, or as a
+   * statement of a script. A name that only reads a failed cell is reported
+   * too, since it has the cell's error as its value.
+   */
+  failedAssertions(): AssertionFailure[] {
+    this.settle();
+    const failures: AssertionFailure[] = [];
+    for (const records of this.cells.values()) {
+      for (const { id } of records.values()) {
+        const value = this.current(id);
+        if (isError(value) && value.code === "#ASSERT!") {
+          failures.push({ kind: "cell", cell: id, message: value.message ?? "" });
+        }
+      }
+    }
+    for (const record of [...this.names.values()].flat()) {
+      const value = this.valueOfName(record);
+      if (!isError(value) || value.code !== "#ASSERT!") continue;
+      failures.push({
+        kind: "name",
+        holderId: record.holder.id,
+        name: record.name,
+        message: value.message ?? "",
+      });
+    }
+    for (const record of this.statements) {
+      const value = this.valueOfName(record);
+      if (!isError(value) || value.code !== "#ASSERT!" || record.line === undefined) continue;
+      failures.push({
+        kind: "statement",
+        holderId: record.holder.id,
+        line: record.line,
+        message: value.message ?? "",
+      });
+    }
+    return failures;
+  }
+
+  /** A name's value, with a failure to read it as an error value. */
+  private valueOfName(record: NameRecord): Evaluated {
     try {
       return this.nameValue(record);
     } catch (cause) {
@@ -544,8 +615,12 @@ export class Workbook {
    * Reads the document's names. A name that cannot be defined is kept with
    * the reason as its value, so a formula that uses it shows why.
    */
-  private defineNames(definitions: readonly NameDefinition[]): void {
+  private defineNames(
+    definitions: readonly NameDefinition[],
+    statements: readonly { holderId: string; line: number; formula: string }[],
+  ): void {
     this.names = new Map();
+    this.statements = [];
     for (const { holderId, name, formula } of definitions) {
       const holder = this.tables.holder(holderId);
       if (!holder) continue;
@@ -574,6 +649,25 @@ export class Workbook {
     }
     for (const record of [...this.names.values()].flat()) {
       record.precedents = this.namePrecedents(record, new Set());
+    }
+    for (const { holderId, line, formula } of statements) {
+      const holder = this.tables.holder(holderId);
+      if (!holder) continue;
+      let content: NameRecord["content"];
+      try {
+        content = { ast: parseFormula(formula) };
+      } catch (cause) {
+        if (!(cause instanceof FormulaSyntaxError)) throw cause;
+        content = { error: error(cause.code, cause.message) };
+      }
+      this.statements.push({
+        holder,
+        name: `line ${String(line)}`,
+        line,
+        content,
+        precedents: [],
+        evaluating: false,
+      });
     }
   }
 

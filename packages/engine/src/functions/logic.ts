@@ -1,5 +1,5 @@
 import { compare, isError, type Evaluated } from "../values";
-import { boolean, booleans, eager, fail, lazy, scalar } from "./arguments";
+import { boolean, booleans, eager, fail, lazy, scalar, text } from "./arguments";
 import type { FunctionDefinition } from "./registry";
 
 function combine(compute: (values: readonly boolean[]) => boolean): FunctionDefinition {
@@ -32,6 +32,10 @@ export const logicFunctions: Record<string, FunctionDefinition> = {
     }
     return hasDefault ? (rest.at(-1)?.() ?? null) : fail("#N/A", "No case matches");
   }),
+  /** A check the document makes of itself. The editor lists the ones that fail. */
+  ASSERT: eager(1, 2, (condition, message) =>
+    boolean(condition ?? null) ? true : fail("#ASSERT!", text(message ?? "Assertion failed")),
+  ),
   IFERROR: lazy(2, 2, ([value, fallback]): Evaluated => {
     const result = value?.() ?? null;
     return isError(result) ? (fallback?.() ?? null) : result;

@@ -10,7 +10,9 @@ Step 4 is implemented. `ScriptCard.vue` shows each statement with its value, the
 
 Step 3 is implemented. The server and the file format accept views of kind `script`, `Contents` gives scripts to the engine, and the click path therefore reads names. A script and a table on one page cannot share a name, checked in `checkHolderName` in `apps/server/src/repo/spreadsheets.ts`. Renaming or moving a script, a table, or a page rewrites qualified names such as `Summary!Total`: the parser records them as located references with `qualified` set. Tests are in `apps/server/src/scripts.test.ts` and `packages/engine/src/script.test.ts`. No route was added, so `access.test.ts` and `undo.test.ts` needed no new cases.
 
-Step 2 is implemented in `packages/engine/src/script.ts`, with tests in `script.test.ts`. A script's names come from its source: `ScriptDefinition` carries the source, and `Workbook` reads the names from it. Bare formulas such as `ASSERT(...)` are parsed but not evaluated until step 5.
+Step 2 is implemented in `packages/engine/src/script.ts`, with tests in `script.test.ts`. A script's names come from its source: `ScriptDefinition` carries the source, and `Workbook` reads the names from it.
+
+Step 5 is implemented. `ASSERT` is in `functions/logic.ts`. `Workbook.failedAssertions()` reports failing cells, names, and bare script statements, and `getStatement(scriptId, line)` gives a bare statement's value. The editor header shows the count and opens `AssertionsPanel.vue`.
 
 Step 1 is implemented in `packages/engine`: `scope.ts`, `names.ts`, and the name records in `workbook.ts`, with tests in `names.test.ts`. Three parts of it are left:
 

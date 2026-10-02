@@ -9,6 +9,7 @@ import ChartCard from "../components/ChartCard.vue";
 import ContextMenu from "../components/ContextMenu.vue";
 import type { MenuItem } from "../components/menu";
 import FormatBar from "../components/FormatBar.vue";
+import AssertionsPanel from "../components/AssertionsPanel.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
 import SharePanel from "../components/SharePanel.vue";
 import { useSessionStore } from "../stores/session";
@@ -43,6 +44,16 @@ function exportFile(): void {
 
 const historyOpen = ref(false);
 const shareOpen = ref(false);
+const assertionsOpen = ref(false);
+
+/** Opens the page of a failing assertion and selects its cell. */
+async function goToAssertion(target: (typeof store.assertions)[number]): Promise<void> {
+  await router.push({
+    name: "editor",
+    params: { spreadsheetId: props.spreadsheetId, pageId: target.pageId },
+  });
+  if (target.cell) store.selection = target.cell;
+}
 const session = useSessionStore();
 
 /** Reads the spreadsheet again after a version was restored. Its pages are new, so the first one opens. */
@@ -192,6 +203,15 @@ watch(
         >
           {{ store.saving ? "Saving…" : "Saved" }}
         </span>
+        <button
+          v-if="loaded && store.assertions.length > 0"
+          type="button"
+          class="editor__assertions"
+          @click="assertionsOpen = true"
+        >
+          {{ store.assertions.length }} failing
+          {{ store.assertions.length === 1 ? "assertion" : "assertions" }}
+        </button>
         <button v-if="loaded" type="button" class="editor__export" @click="shareOpen = true">
           Share
         </button>
@@ -275,6 +295,11 @@ watch(
       :user-id="session.user?.id"
       @close="shareOpen = false"
       @left="router.push({ name: 'spreadsheets' })"
+    />
+    <AssertionsPanel
+      v-if="assertionsOpen && loaded"
+      @close="assertionsOpen = false"
+      @go="goToAssertion"
     />
     <HistoryPanel
       v-if="historyOpen && loaded"

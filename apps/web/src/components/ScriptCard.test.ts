@@ -112,4 +112,21 @@ describe("ScriptCard", () => {
     );
     expect(rows()).toEqual([["Total", "2"]]);
   });
+
+  it("shows what an assertion gives, and lists the ones that fail", async () => {
+    await render(
+      ["ASSERT('Table 1'!A1 > 0, \"A1 must be positive\")", "ASSERT(1 = 1)"].join("\n"),
+      {
+        A1: "-1",
+        A2: '=ASSERT(A1 > 0, "Cell fails")',
+      },
+    );
+    const shown = rows();
+    expect(shown[0]?.[1]).toMatch(/^#ASSERT!\s*A1 must be positive/);
+    expect(shown[1]?.[1]).toBe("TRUE");
+    expect(useWorkbookStore().assertions.map(({ label, message }) => [label, message])).toEqual([
+      ["Table 1!A2", "Cell fails"],
+      ["Summary line 1", "A1 must be positive"],
+    ]);
+  });
 });

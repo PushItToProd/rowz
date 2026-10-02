@@ -141,3 +141,44 @@ describe("rewriting qualified names", () => {
     ]);
   });
 });
+
+describe("assertions", () => {
+  const source = [
+    "Total = SUM(Table1!A1:A2)",
+    'Positive = ASSERT(Total > 0, "Total must be positive")',
+    "",
+    'ASSERT(Total < 100, "Total is too large")',
+    "ASSERT(Total > 0)",
+  ].join("\n");
+
+  function withTotal(a1: string): Workbook {
+    const workbook = new Workbook();
+    workbook.setStructure({
+      ...STRUCTURE,
+      scripts: [{ id: "s1", pageId: "p1", name: "Summary", source }],
+    });
+    workbook.setCell(at("A1"), a1);
+    workbook.setCell(at("A3"), '=ASSERT(A1 <> 5, "A1 is five")');
+    return workbook;
+  }
+
+  it("reports nothing while every assertion holds", () => {
+    const workbook = withTotal("1");
+    expect(workbook.failedAssertions()).toEqual([]);
+    expect(workbook.getStatement("s1", 4)).toBe(true);
+  });
+
+  it("reports a cell, a name, and a statement, with their messages", () => {
+    const workbook = withTotal("500");
+    expect(workbook.failedAssertions()).toEqual([
+      { kind: "statement", holderId: "s1", line: 4, message: "Total is too large" },
+    ]);
+    workbook.setCell(at("A1"), "5");
+    workbook.setCell(at("A2"), "-5");
+    expect(workbook.failedAssertions()).toEqual([
+      { kind: "cell", cell: at("A3"), message: "A1 is five" },
+      { kind: "name", holderId: "s1", name: "Positive", message: "Total must be positive" },
+      { kind: "statement", holderId: "s1", line: 5, message: "Assertion failed" },
+    ]);
+  });
+});

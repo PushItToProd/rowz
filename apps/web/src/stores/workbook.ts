@@ -417,6 +417,36 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return engine.value.getName(holderId, name);
   }
 
+  /** A bare formula of a script, by its line: an `ASSERT` has a value, and shows it there. */
+  function statementValue(holderId: string, line: number): Evaluated | undefined {
+    return engine.value.getStatement(holderId, line);
+  }
+
+  /** The `ASSERT`s that are false, each with where it is and the page to open to see it. */
+  const assertions = computed(() =>
+    engine.value.failedAssertions().flatMap((failure) => {
+      const where = ((): { pageId: string; label: string; cell?: CellId } | undefined => {
+        if (failure.kind === "cell") {
+          const table = tables.value.find((candidate) => candidate.id === failure.cell.tableId);
+          return (
+            table && {
+              pageId: table.pageId,
+              label: `${table.name}!${formatAddress(failure.cell)}`,
+              cell: failure.cell,
+            }
+          );
+        }
+        const script = views.value.find((candidate) => candidate.id === failure.holderId);
+        const label =
+          failure.kind === "name"
+            ? `${script?.name ?? ""}!${failure.name}`
+            : `${script?.name ?? ""} line ${String(failure.line)}`;
+        return script && { pageId: script.pageId, label };
+      })();
+      return where ? [{ ...where, message: failure.message }] : [];
+    }),
+  );
+
   /** The names the document's scripts define, with the script that holds each, for completion. */
   const documentNames = computed(() =>
     views.value
@@ -1262,6 +1292,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     toFile,
     evaluateOnPage,
     nameValue,
+    statementValue,
+    assertions,
     documentNames,
     addView,
     updateView,
