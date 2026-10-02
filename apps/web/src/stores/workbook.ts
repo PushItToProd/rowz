@@ -754,6 +754,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const rowCount = Math.min(LIMITS.tableRows, Math.max(...writes.map((write) => write.row + 1)));
     const colCount = Math.min(LIMITS.tableCols, Math.max(...writes.map((write) => write.col + 1)));
     const fitting = writes.filter((write) => write.row < rowCount && write.col < colCount);
+    const selectionAnchor =
+      selectWritten && selection.value ? identityOf(selection.value) : undefined;
     const stepId = crypto.randomUUID();
     const appendRows = Array.from({ length: Math.max(0, rowCount - table.rowCount) }, () =>
       crypto.randomUUID(),
@@ -790,6 +792,17 @@ export const useWorkbookStore = defineStore("workbook", () => {
           const grown = change.changed?.tables.find((record) => record.id === table.id)?.table;
           await receiveChange(change);
           if (!grown) throw new Error("The resized table was not returned");
+          // Extending immediately can point into a column that does not have an
+          // identity yet. Restore that endpoint after growth only if the user
+          // still has the selection that this paste started from.
+          const currentAnchor = selection.value && identityOf(selection.value);
+          if (
+            selectionAnchor &&
+            currentAnchor &&
+            cellIdentityKey(selectionAnchor) === cellIdentityKey(currentAnchor)
+          ) {
+            extendSelection({ row: rowCount - 1, col: colCount - 1 });
+          }
           colIds.push(...grown.colIds.slice(current.colCount));
           for (const write of fitting.filter((write) => write.col >= table.colCount)) {
             const rowId = rowIds[write.row];

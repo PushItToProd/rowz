@@ -17,16 +17,16 @@ Implementation decisions carried forward from the snapshot:
 - OVERWRITE removes surplus rows when its range covers every writable column of a data table. Formula columns need not be included. This extends the original full-width condition because action destinations cannot write formula columns.
 - Existing data tables retain trailing empty rows during migration. Their formula columns now compute in those rows.
 
-Regression coverage includes pending typing across structural responses, paste growth behind queued insertions, consecutive failed saves to one cell, repeated Add row clicks, running buttons following IDs, queued version restoration, duplicate and out-of-order content notifications, stale draft revisions, and typing into an empty data table.
+Regression coverage includes pending typing across structural responses, paste growth behind queued insertions, delayed paste selection, selection across newly created columns, overlapping optimistic block and page moves, consecutive failed saves to one cell, repeated Add row clicks, running buttons following IDs, queued version restoration, duplicate and out-of-order content notifications, stale draft revisions, and typing into an empty data table.
 
 ### Validation
 
-- `pnpm check` passed: 76 files, 2,848 tests passed and 2 skipped (`/tmp/full-check3.txt`). The final rerun after the selection/reorder fixes stopped at Prettier on the unrelated `todo-pending.nocommit.md`; see `/tmp/persistent-identity-final-check.txt`.
-- The latest web run passed all 554 tests after the selection/reorder fixes (`/tmp/web-run6.txt`).
+- Focused store validation passed: 128 tests across `identity.test.ts` and `workbook.test.ts`.
+- `pnpm check` passed after the deferred-response regressions: lint, formatting, typecheck, and all 76 test files; 2,852 tests passed and 2 were skipped.
 - User-run PostgreSQL validation passed all 415 tests in `_scratch/2026-10-02T06-15-pnpm-e2e-test-postgres.log`. The later run hit an unordered deleted-row assertion; that assertion is now order-independent locally.
-- Latest user-run browser validation: 23/25 passed in `_scratch/2026-10-02T06-22-pnpm-e2e-test-postgres.log`, including the new two-tab draft-preservation test. Two failures exposed delayed paste selection and optimistic reorder issues; fixes are in the working tree and need another browser run.
+- Latest user-run browser validation: 23/25 passed in `_scratch/2026-10-02T06-22-pnpm-e2e-test-postgres.log`, including the two-tab draft-preservation test. The two failures exposed delayed paste selection and optimistic reorder issues. Both fixes now have deferred-response regression tests, and the e2e block-order reader now reads atomically and polls expected orders.
 - Docker socket permissions and Node proxy handling prevent integration runs in this sandbox. The user asked agents to request that they run these tests; do not bypass the restrictions.
-- Work is paused at the user's request due to their session limit. See `plans/persistent-row-identity-handoff.md` for the remaining work.
+- Browser and PostgreSQL validation still need a user-run integration pass. See `plans/persistent-row-identity-handoff.md` for the requested run and follow-up.
 
 ## Decisions in brief
 

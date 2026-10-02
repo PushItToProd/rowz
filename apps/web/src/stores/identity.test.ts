@@ -1,7 +1,15 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type Change } from "../api/client";
-import { at, changeWith, identifiedAt, snapshotWith, TABLE, type MockedApi } from "../testing";
+import {
+  at,
+  changeWith,
+  identifiedAt,
+  sizedTable,
+  snapshotWith,
+  TABLE,
+  type MockedApi,
+} from "../testing";
 import { useWorkbookStore } from "./workbook";
 
 vi.mock("../api/client", async () => {
@@ -37,6 +45,57 @@ beforeEach(() => {
 });
 
 describe("identity and revision ordering", () => {
+  it("does not extend the selection when a delayed paste finishes", async () => {
+    const store = await open();
+    const response = deferred<Change>();
+    server.setCells.mockReturnValueOnce(response.promise);
+    store.selection = at("A1");
+
+    const paste = store.paste("first\nsecond");
+    expect(store.selectedRange).toEqual({ startRow: 0, startCol: 0, endRow: 1, endCol: 0 });
+    await vi.waitFor(() => {
+      expect(server.setCells).toHaveBeenCalledOnce();
+    });
+
+    store.selection = at("C4");
+    response.resolve(
+      changeWith(
+        {
+          cells: [
+            { ...identifiedAt("A1"), input: "first" },
+            { ...identifiedAt("A2"), input: "second" },
+          ],
+        },
+        1,
+      ),
+    );
+    await paste;
+
+    expect(store.selectedRange).toEqual({ startRow: 3, startCol: 2, endRow: 3, endCol: 2 });
+  });
+
+  it("keeps a paste selection that reaches newly created columns", async () => {
+    const store = await open();
+    const response = deferred<Change>();
+    server.updateTable.mockReturnValueOnce(response.promise);
+    server.setCells.mockImplementationOnce((tableId, cells) =>
+      Promise.resolve(changeWith({ cells: cells.map((cell) => ({ tableId, ...cell })) }, 2)),
+    );
+    store.selection = at("C1");
+
+    const paste = store.paste("last\textra");
+    expect(store.selectedRange).toEqual({ startRow: 0, startCol: 2, endRow: 0, endCol: 3 });
+    await vi.waitFor(() => {
+      expect(server.updateTable).toHaveBeenCalledOnce();
+    });
+
+    response.resolve(changeWith(sizedTable({ colCount: 4 }), 1));
+    await paste;
+
+    expect(store.inputOf(at("D1"))).toBe("extra");
+    expect(store.selectedRange).toEqual({ startRow: 0, startCol: 2, endRow: 0, endCol: 3 });
+  });
+
   it("preserves later optimistic typing when a structural response arrives", async () => {
     const store = await open({ A2: "old" });
     const response = deferred<Change>();

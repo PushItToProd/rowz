@@ -1239,6 +1239,56 @@ describe("the order of a page", () => {
     expect(store.blocksOn("p1")).toEqual(["v2", "t1", "v1"]);
   });
 
+  it("keeps a later optimistic block order when the first response arrives", async () => {
+    const store = await openPage();
+    const first = deferred();
+    const second = deferred();
+    server.reorderPage
+      .mockImplementationOnce(async () => {
+        await first.promise;
+        return changeWith(
+          {
+            table: { ...TABLE, position: 1 },
+            views: [
+              { id: "v1", position: 0 },
+              { id: "v2", position: 2 },
+            ],
+          },
+          1,
+        );
+      })
+      .mockImplementationOnce(async () => {
+        await second.promise;
+        return changeWith(
+          {
+            table: { ...TABLE, position: 2 },
+            views: [
+              { id: "v1", position: 0 },
+              { id: "v2", position: 1 },
+            ],
+          },
+          2,
+        );
+      });
+
+    const firstMove = store.moveBlock("p1", "t1", 1);
+    const secondMove = store.moveBlock("p1", "t1", 1);
+    expect(store.blocksOn("p1")).toEqual(["v1", "v2", "t1"]);
+    await vi.waitFor(() => {
+      expect(server.reorderPage).toHaveBeenCalledOnce();
+    });
+
+    first.resolve();
+    await vi.waitFor(() => {
+      expect(server.reorderPage).toHaveBeenCalledTimes(2);
+    });
+    expect(store.blocksOn("p1")).toEqual(["v1", "v2", "t1"]);
+
+    second.resolve();
+    await Promise.all([firstMove, secondMove]);
+    expect(store.blocksOn("p1")).toEqual(["v1", "v2", "t1"]);
+  });
+
   it("does nothing at either end of the page, or for a block that is not on it", async () => {
     const store = await openPage();
     expect(await store.moveBlock("p1", "t1", -1)).toBe(false);
@@ -1315,6 +1365,56 @@ describe("the order of the pages, and moving a block between them", () => {
     expect(store.pages.map((page) => page.position)).toEqual([0, 1, 2]);
     await store.movePage("p1", 1);
     expect(order(store)).toEqual(["p3", "p1", "p2"]);
+  });
+
+  it("keeps a later optimistic page order when the first response arrives", async () => {
+    const store = await openPages();
+    const first = deferred();
+    const second = deferred();
+    server.reorderPages
+      .mockImplementationOnce(async () => {
+        await first.promise;
+        return changeWith(
+          {
+            pages: [
+              { id: "p2", page: { id: "p2", name: "Page 2", position: 0 } },
+              { id: "p1", page: { id: "p1", name: "Page 1", position: 1 } },
+              { id: "p3", page: { id: "p3", name: "Page 3", position: 2 } },
+            ],
+          },
+          1,
+        );
+      })
+      .mockImplementationOnce(async () => {
+        await second.promise;
+        return changeWith(
+          {
+            pages: [
+              { id: "p2", page: { id: "p2", name: "Page 2", position: 0 } },
+              { id: "p3", page: { id: "p3", name: "Page 3", position: 1 } },
+              { id: "p1", page: { id: "p1", name: "Page 1", position: 2 } },
+            ],
+          },
+          2,
+        );
+      });
+
+    const firstMove = store.movePage("p1", 1);
+    const secondMove = store.movePage("p1", 1);
+    expect(order(store)).toEqual(["p2", "p3", "p1"]);
+    await vi.waitFor(() => {
+      expect(server.reorderPages).toHaveBeenCalledOnce();
+    });
+
+    first.resolve();
+    await vi.waitFor(() => {
+      expect(server.reorderPages).toHaveBeenCalledTimes(2);
+    });
+    expect(order(store)).toEqual(["p2", "p3", "p1"]);
+
+    second.resolve();
+    await Promise.all([firstMove, secondMove]);
+    expect(order(store)).toEqual(["p2", "p3", "p1"]);
   });
 
   it("does nothing at either end of the tabs, and keeps the order when the server refuses", async () => {
