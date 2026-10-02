@@ -19,7 +19,7 @@ The list was read from the Rows documentation index on 2026-09-30. Signatures fo
 | Type checks | `ISTEXT ISNUMBER ISBLANK ISLOGICAL ISERROR ISERR ISNA ISNONTEXT`                                                                                                                                                                                              |
 | Actions     | `BUTTON EXECUTE SEND_EMAIL CLEAR INSERT UPDATE OVERWRITE`                                                                                                                                                                                                     |
 
-`QUERY` follows the language Rows documented, with the differences recorded in DECISIONS.md. Rows' `APPEND` stacks tables; here that is `VSTACK`. `INSERT`, `UPDATE`, and `OVERWRITE` take a range as their data. Rows also took JSON from an integration, and named `UPDATE`'s keys as JSON keys. Here the keys are column positions counted from 1. `APPEND_ROW(range, value, ...)` is this app's own, for one row of separate values.
+`QUERY` follows the language Rows documented, with the differences recorded in AGENT_DECISIONS.md. Rows' `APPEND` stacks tables; here that is `VSTACK`. `INSERT`, `UPDATE`, and `OVERWRITE` take a range as their data. Rows also took JSON from an integration, and named `UPDATE`'s keys as JSON keys. Here the keys are column positions counted from 1. `APPEND_ROW(range, value, ...)` is this app's own, for one row of separate values.
 
 ## Candidates, most useful first
 

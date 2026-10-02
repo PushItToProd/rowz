@@ -14,6 +14,10 @@ This applies when you are asked to review the code or the project, or to suggest
 
 The author sets priorities. When the author gives a task that is hardening work, do it without questioning its priority.
 
+## Decision records
+
+[DECISIONS.md](DECISIONS.md) holds decisions the author made or approved. Add an entry only for a decision the author stated or confirmed. [AGENT_DECISIONS.md](AGENT_DECISIONS.md) holds choices an agent made while working on its own, for the author to review.
+
 ## Commands
 
 - `pnpm check` runs lint, typecheck, and unit tests. Run it before calling work done.

@@ -14,7 +14,7 @@ The implementation, regression coverage, and local validation are complete. Do n
 - Added data-table new-row editing, including zero-row tables and remote appends during drafts. Rapid Add row clicks allocate distinct IDs. Running button state follows IDs. Formula revisions are captured when editing starts; rejected stale drafts reopen.
 - Live ready events compare revisions; EditorView loads before subscribing and cancels obsolete subscriptions.
 - Removed engine inputsAfterEdit; retained formula rewrite coverage through formulasAfterEdit.
-- Updated CLAUDE.md, README.md, DECISIONS.md, todo.md, help/action docs, and plan progress.
+- Updated CLAUDE.md, README.md, AGENT_DECISIONS.md, todo.md, help/action docs, and plan progress.
 - Migrated web test fixtures and added `apps/web/src/stores/identity.test.ts`, component regressions, and an e2e two-tab draft test.
 
 Decisions retained from the original snapshot: migration 0010 combines undeployed steps; one click is one Change/revision/journal step; OVERWRITE removes rows when all writable columns are covered (formula columns excluded); migration retains existing data-table trailing rows. These are documented. The stale-formula guard remains spreadsheet-wide; narrowing it is a todo.

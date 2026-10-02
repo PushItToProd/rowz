@@ -498,7 +498,7 @@ Tests: `click.test.ts` overwrites a data table with fewer rows and finds no empt
 - "How it works": one paragraph on row and column ids and where positions are computed.
 - "Size": the row limit.
 
-**`DECISIONS.md`:** one new entry, "Rows and columns have ids", with the decisions and rejected alternatives of this plan, including those listed under "Decisions made while revising the plan". It names what it replaces in earlier entries:
+**`AGENT_DECISIONS.md`:** one new entry, "Rows and columns have ids", with the decisions and rejected alternatives of this plan, including those listed under "Decisions made while revising the plan". It names what it replaces in earlier entries:
 
 - Undo through a server-side journal: rules 1 and 2, and the risk about reversing a row insert in a full table.
 - Fixes from a code review: "A save still names a cell by its row and column".
@@ -545,7 +545,7 @@ The author accepted each of these on 2026-10-01. The sections above already stat
 
 ### Decisions made while revising the plan
 
-The author asked for these to be recorded here. Each goes into the `DECISIONS.md` entry when the step that implements it is merged, with what to change if it proves wrong.
+The author asked for these to be recorded here. Each goes into the `AGENT_DECISIONS.md` entry when the step that implements it is merged, with what to change if it proves wrong.
 
 - **`deleted_rows` entries are kept for one day,** the journal's age limit (step 7). A request repeated more than a day after its row was deleted can bring the row back. Keeping entries forever closes that and grows the table without bound.
 - **Renumbering a table's order keys empties the undo stacks of every tab on the spreadsheet** (step 1), because journal entries hold the old keys. How often a table is renumbered in practice is unknown.
