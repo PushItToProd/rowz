@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   LIMITS,
@@ -900,7 +900,7 @@ describe("pruning limits", () => {
     }
   });
 
-  it("prunes by total bytes and by age", async () => {
+  it("prunes the oldest entries when the journal is over its size", async () => {
     const limited = await limitedServer({
       journalBytes: 400,
       journalEntryBytes: 1000,
@@ -917,33 +917,38 @@ describe("pruning limits", () => {
           cellsBody({ [`${col}1`]: String(index) }),
         );
       }
-      const [sum] = await limited.app.db
-        .select({ bytes: sql<number>`sum(${journal.bytes})`.mapWith(Number) })
-        .from(journal)
-        .where(eq(journal.spreadsheetId, fixture.id));
-      expect(sum?.bytes ?? 0).toBeLessThanOrEqual(400);
-
-      const [oldest] = await limited.app.db
-        .select({ seq: journal.seq })
+      const kept = await limited.app.db
+        .select({ bytes: journal.bytes, data: journal.data })
         .from(journal)
         .where(eq(journal.spreadsheetId, fixture.id))
-        .orderBy(journal.seq)
-        .limit(1);
-      if (oldest) {
-        await limited.app.db
-          .update(journal)
-          .set({ createdAt: new Date(Date.now() - 60_000) })
-          .where(and(eq(journal.spreadsheetId, fixture.id), eq(journal.seq, oldest.seq)));
-      }
-      await client.request("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ D1: "d" }));
-      const afterAge = await limited.app.db
-        .select({ seq: journal.seq })
-        .from(journal)
-        .where(eq(journal.spreadsheetId, fixture.id));
-      expect(afterAge.every((entry) => entry.seq !== oldest?.seq)).toBe(true);
+        .orderBy(journal.seq);
+      expect(kept.length).toBeGreaterThan(0);
+      expect(kept.length).toBeLessThan(columns.length);
+      expect(kept.reduce((sum, entry) => sum + entry.bytes, 0)).toBeLessThanOrEqual(400);
+      // The newest change is among the kept ones: H1 is column 7.
+      expect(kept.at(-1)?.data?.cells[0]?.changes[0]?.slice(0, 2)).toEqual([0, 7]);
     } finally {
       await limited.close();
     }
+  });
+
+  it("prunes an entry older than the age limit when a later change is recorded", async () => {
+    const fixture = await fresh();
+    const client = withClientId(owner);
+    await client.request("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ A1: "old" }));
+    await server.db
+      .update(journal)
+      .set({ createdAt: new Date(Date.now() - LIMITS.journalAgeMs - 60_000) })
+      .where(eq(journal.spreadsheetId, fixture.id));
+    await client.request("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ B1: "new" }));
+
+    expect(
+      await server.db.select().from(journal).where(eq(journal.spreadsheetId, fixture.id)),
+    ).toHaveLength(1);
+    expect(await client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject(
+      { outcome: "done", undoable: false },
+    );
+    expect((await snapshot(client, fixture.id)).cells.map((cell) => cell.input)).toEqual(["old"]);
   });
 
   it("does not undo a step older than the age limit in a spreadsheet nobody has changed since", async () => {
