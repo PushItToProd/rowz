@@ -4,6 +4,10 @@ Itmes added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author
 
 Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions. When instructed to work autonomously, execute these items first in ascending order (do all P0s first, then P1s, etc.). Items with the same priority are co-equal unless you're instructed otherwise. Items with priority "P10" and above are backlogged and generally shouldn't be picked up unless the author says so explicitly (this is primarily about allocation of work and the author's perceived necessity of the feature). Remove these priority prefixes when checking items off. Check these items off before making commits.
 
+## Plans
+
+- [ ] **P1** implement [persistent row identity](plans/persistent-row-identity.md)
+
 ## Bugs
 
 - [x] Wildcard criteria can stall synchronous formula evaluation. [criteria.ts](packages/engine/src/functions/criteria.ts:28) turns `*` and `?` into a backtracking regular expression, then tests cell text at [line 56](packages/engine/src/functions/criteria.ts:56). A crafted criterion and long near-matching text can trigger catastrophic backtracking. Formula evaluation has no time limit, and the server evaluates workbook formulas while handling action clicks. Use a matcher with bounded runtime.
@@ -261,7 +265,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] (Claude) store versions compressed or as differences if large spreadsheets make them costly
 - [x] (Claude) live sync between sessions: open sessions re-read the spreadsheet when another changes it
 - [ ] **P3** send the changed cells with a change event, so sessions need not re-read the whole spreadsheet; show who else has it open
-- [ ] **P1** a save names a cell by row and column, so one that crosses another person's row or column insert lands on the wrong cell. Needs the client to send the table version it saw
+- [ ] **P1** a save names a cell by row and column, so one that crosses another person's row or column insert lands on the wrong cell. Needs persistent row identity
   - (Claude) a button click and a checkbox or dropdown change name their cell the same way. The row identity plan under Tables decides between a table version and row ids, and its first step should fix this
 - [ ] **P2** (Claude) send every change the editor makes through one ordered queue. The workbook store orders cell saves in `saves`, holds writes behind `writeBarrier` during an undo, and keeps separate queues for reorders and view updates. Structure changes go through `attempt`, which waits for the barrier and not for `saves`, so each function that needs the pending saves stored first waits for them itself. Resizing, row and column edits, naming columns, changing a column, moving a block to another page, pasting, and clicks do. Formatting, adding, renaming, and deleting pages, tables, and views, and dropping column names do not, and can reach the server before a cell save made earlier. One queue would make the order a property of the queue, and would give the version restore below a place to go
 - [ ] (Claude) show a version restore in the save indicator. `HistoryPanel` calls the server itself, so the header says "Saved" and the leave warning stays off while a restore runs. The request is sent on the click and the server finishes it if the page is closed, so nothing is lost; routing the restore through the workbook store would also order it after edits still being saved
