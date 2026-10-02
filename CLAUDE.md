@@ -2,6 +2,18 @@
 
 A Rows-style spreadsheet: pages, tables, formulas, and formulas that describe side effects run by buttons. [README.md](README.md) covers the formula language, the architecture, and configuration.
 
+## Project stage
+
+rowz is a proof of concept. One person uses it, on their own machine. Features that make it more useful come before hardening for several users, hostile input, or a deployed server.
+
+This applies when you are asked to review the code or the project, or to suggest priorities:
+
+- Report every problem you find, including one that matters only with several users or hostile input. The project's stage changes the priority a finding gets, not whether you report it.
+- Rank high a bug that one person would hit in ordinary use, and a design flaw that would make much later work harder.
+- Rank low a race between simultaneous editors, abuse by a hostile user, a deployment concern, and a bug that needs unlikely input. These go in `todo.md` under "Before sharing with others".
+
+The author sets priorities. When the author gives a task that is hardening work, do it without questioning its priority.
+
 ## Commands
 
 - `pnpm check` runs lint, typecheck, and unit tests. Run it before calling work done.
