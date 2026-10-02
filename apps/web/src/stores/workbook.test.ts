@@ -1344,6 +1344,39 @@ describe("undo and redo", () => {
     expect(store.inputOf(at("A1"))).toBe("3");
   });
 
+  it("leaves another spreadsheet alone when it was opened before the answer came", async () => {
+    const store = await open({ A1: "2" });
+    notifyJournaled();
+    let answer!: (result: Awaited<ReturnType<typeof api.undo>>) => void;
+    server.undo.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const undo = store.undo();
+    await vi.waitFor(() => {
+      expect(server.undo).toHaveBeenCalledOnce();
+    });
+
+    const other = { ...TABLE, id: "t2", name: "Theirs" };
+    server.getSnapshot.mockResolvedValue({
+      ...snapshotWith(),
+      id: "s2",
+      tables: [other],
+      undoable: true,
+    });
+    await store.load("s2");
+    answer({
+      outcome: "done",
+      label: "Delete table Table 1",
+      error: null,
+      changed: { pages: [], tables: [{ id: "t1", table: TABLE }], views: [], cells: [] },
+      undoable: false,
+      redoable: true,
+    });
+    await undo;
+    expect(store.tables).toEqual([other]);
+    expect(store.canUndo).toBe(true);
+    expect(store.canRedo).toBe(false);
+    expect(store.notice).toBeNull();
+  });
+
   it("waits for pending page reorders and view updates before sending undo", async () => {
     const pages = [
       { id: "p1", name: "Page 1", position: 0 },

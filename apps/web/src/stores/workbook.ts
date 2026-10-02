@@ -380,6 +380,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
       await previousBarrier;
       if (!(direction === "undo" ? undoable.value : redoable.value)) return;
       const result = await (direction === "undo" ? api.undo(current.id) : api.redo(current.id));
+      // The answer is about the spreadsheet that was open when it was asked for.
+      if (spreadsheet.value?.id !== current.id) return;
       undoable.value = result.undoable;
       redoable.value = result.redoable;
       if (result.outcome === "done") {
@@ -399,6 +401,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
         notice.value = { kind: "error", text: result.error ?? "This change cannot be restored" };
       }
     } catch (cause) {
+      if (spreadsheet.value?.id !== current.id) return;
       fail(
         cause,
         direction === "undo" ? "The change could not be undone" : "The change could not be redone",
