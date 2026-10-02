@@ -32,6 +32,11 @@ function deferred(): { promise: Promise<void>; resolve(): void; reject(cause: Er
   return { promise, resolve, reject };
 }
 
+/** Lets everything that can run without another answer from the server run. */
+function idle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve));
+}
+
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
@@ -90,6 +95,93 @@ describe("loading", () => {
     gone.reject(new Error("Spreadsheet not found"));
     await expect(first).resolves.toBeUndefined();
     expect(store.spreadsheet?.id).toBe("s2");
+  });
+
+  /** Another spreadsheet, whose page and table have other ids. */
+  const OTHER: Snapshot = {
+    ...snapshotWith(),
+    id: "s2",
+    name: "Second",
+    pages: [{ id: "p9", name: "Page 1", position: 0 }],
+    tables: [{ ...TABLE, id: "t9", pageId: "p9" }],
+  };
+
+  it("keeps a page added to one spreadsheet out of the one opened before the server answered", async () => {
+    const store = await open();
+    const answered = deferred();
+    server.createPage.mockImplementation(async () => {
+      await answered.promise;
+      return {
+        page: { id: "p2", name: "Page 2", position: 1 },
+        table: { ...TABLE, id: "t2", pageId: "p2" },
+      };
+    });
+    const added = store.addPage();
+    server.getSnapshot.mockResolvedValue(OTHER);
+    const opened = store.load("s2");
+    await idle();
+    answered.resolve();
+    await Promise.all([added, opened]);
+
+    expect(store.spreadsheet?.id).toBe("s2");
+    expect(store.pages.map((page) => page.id)).toEqual(["p9"]);
+    expect(store.tables.map((table) => table.id)).toEqual(["t9"]);
+  });
+
+  it("keeps the name given to one spreadsheet off the one opened before the server answered", async () => {
+    const store = await open();
+    const answered = deferred();
+    server.renameSpreadsheet.mockImplementation(() => answered.promise);
+    const renamed = store.renameSpreadsheet("Renamed");
+    server.getSnapshot.mockResolvedValue(OTHER);
+    const opened = store.load("s2");
+    await idle();
+    answered.resolve();
+    await Promise.all([renamed, opened]);
+
+    expect(store.spreadsheet).toMatchObject({ id: "s2", name: "Second" });
+  });
+
+  it("does not show the failure of a change to one spreadsheet over the one opened next", async () => {
+    const store = await open();
+    const answered = deferred();
+    server.createPage.mockImplementation(async () => {
+      await answered.promise;
+      throw new Error("Too many pages");
+    });
+    const added = store.addPage();
+    server.getSnapshot.mockResolvedValue(OTHER);
+    const opened = store.load("s2");
+    await idle();
+    answered.resolve();
+    await Promise.all([added, opened]);
+
+    expect(store.spreadsheet?.id).toBe("s2");
+    expect(store.notice).toBeNull();
+  });
+
+  it("reads a spreadsheet again when a change was made while it was being read", async () => {
+    const store = await open();
+    const reads: (() => void)[] = [];
+    server.getSnapshot.mockImplementation(
+      () =>
+        new Promise<Snapshot>((resolve) =>
+          reads.push(() => {
+            resolve(snapshotWith({ A1: reads.length === 1 ? "stale" : "typed" }));
+          }),
+        ),
+    );
+    const opened = store.load("s1");
+    // Typed after the read began, so the first answer may not hold it.
+    await store.setCell(at("A1"), "typed");
+    reads[0]?.();
+    await vi.waitFor(() => {
+      expect(reads).toHaveLength(2);
+    });
+    reads[1]?.();
+    await opened;
+
+    expect(store.inputOf(at("A1"))).toBe("typed");
   });
 });
 
@@ -1344,7 +1436,7 @@ describe("undo and redo", () => {
     expect(store.inputOf(at("A1"))).toBe("3");
   });
 
-  it("leaves another spreadsheet alone when it was opened before the answer came", async () => {
+  it("leaves another spreadsheet alone when it was asked for before the answer came", async () => {
     const store = await open({ A1: "2" });
     notifyJournaled();
     let answer!: (result: Awaited<ReturnType<typeof api.undo>>) => void;
@@ -1361,7 +1453,10 @@ describe("undo and redo", () => {
       tables: [other],
       undoable: true,
     });
-    await store.load("s2");
+    // The other spreadsheet is shown once the undo is answered, so the answer has nothing of it to change.
+    const opened = store.load("s2");
+    await idle();
+    expect(store.spreadsheet?.id).toBe("s1");
     answer({
       outcome: "done",
       label: "Delete table Table 1",
@@ -1370,7 +1465,8 @@ describe("undo and redo", () => {
       undoable: false,
       redoable: true,
     });
-    await undo;
+    await Promise.all([undo, opened]);
+    expect(store.spreadsheet?.id).toBe("s2");
     expect(store.tables).toEqual([other]);
     expect(store.canUndo).toBe(true);
     expect(store.canRedo).toBe(false);

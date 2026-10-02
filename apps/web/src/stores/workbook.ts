@@ -34,6 +34,7 @@ import {
   type ClickResult,
   type PageRecord,
   type Rewritten,
+  type Snapshot,
   type TableRecord,
   type UndoResult,
   type ViewRecord,
@@ -199,14 +200,42 @@ export const useWorkbookStore = defineStore("workbook", () => {
     redoable.value = false;
   });
 
+  /**
+   * Reads a spreadsheet to show in place of what the editor holds. It gives
+   * the snapshot at a moment when no change, undo, or redo made here is
+   * unanswered, or `undefined` once `wanted` says the read is out of date.
+   *
+   * The answer to a change is applied to whatever the editor holds when it
+   * arrives. Replacing the editor's contents only when none is on its way
+   * keeps the answer to a change made in one spreadsheet out of the next one
+   * opened, and keeps a snapshot read before a change from hiding it.
+   */
+  async function readSettled(
+    spreadsheetId: string,
+    wanted: () => boolean,
+  ): Promise<Snapshot | undefined> {
+    for (;;) {
+      // What was changed here is answered first, so that what comes back includes it.
+      while (unanswered.size > 0) await Promise.allSettled(unanswered);
+      const before = begun;
+      const snapshot = await api.getSnapshot(spreadsheetId);
+      if (!wanted()) return undefined;
+      // Something was changed, undone, or redone here while the spreadsheet was
+      // being read, and its result may be newer than what was read: read again.
+      if (begun === before) return snapshot;
+    }
+  }
+
   async function load(spreadsheetId: string): Promise<void> {
     const turn = ++loads;
-    const snapshot = await api.getSnapshot(spreadsheetId).catch((cause: unknown) => {
-      // A spreadsheet the editor has moved on from is not one to report on.
-      if (turn === loads) throw cause;
-      return undefined;
-    });
-    if (!snapshot || turn !== loads) return;
+    const snapshot = await readSettled(spreadsheetId, () => turn === loads).catch(
+      (cause: unknown) => {
+        // A spreadsheet the editor has moved on from is not one to report on.
+        if (turn === loads) throw cause;
+        return undefined;
+      },
+    );
+    if (!snapshot) return;
     engine.value = createWorkbook(snapshot);
     spreadsheet.value = { id: snapshot.id, name: snapshot.name, role: snapshot.role };
     pages.value = snapshot.pages;
@@ -228,15 +257,12 @@ export const useWorkbookStore = defineStore("workbook", () => {
   async function refresh(): Promise<void> {
     const open = spreadsheet.value;
     if (!open) return;
-    // What was changed here is answered first, so that what comes back includes it.
     const [turn, loaded] = [++refreshes, loads];
-    while (unanswered.size > 0) await Promise.allSettled(unanswered);
-    const before = begun;
-    const snapshot = await api.getSnapshot(open.id);
-    if (turn !== refreshes || loaded !== loads || spreadsheet.value?.id !== open.id) return;
-    // Something was changed, undone, or redone here while the spreadsheet was
-    // being read, and its result may be newer than what was read: read again.
-    if (begun !== before) return refresh();
+    const snapshot = await readSettled(
+      open.id,
+      () => turn === refreshes && loaded === loads && spreadsheet.value?.id === open.id,
+    );
+    if (!snapshot) return;
 
     engine.value = createWorkbook(snapshot);
     spreadsheet.value = { id: snapshot.id, name: snapshot.name, role: snapshot.role };
