@@ -1,6 +1,6 @@
-import { sizedTable } from "../testing";
+import { wireSnapshot, changeWith } from "../testing";
 import { identifiedAt } from "../testing";
-import { DOMWrapper, mount, type VueWrapper } from "@vue/test-utils";
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
@@ -17,7 +17,7 @@ const server = api as unknown as MockedApi;
 let wrapper: VueWrapper;
 
 async function mountGrid(inputs: Record<string, string> = {}, role = "owner"): Promise<void> {
-  server.getSnapshot.mockResolvedValue(snapshotWith(inputs, role));
+  server.getSnapshot.mockResolvedValue(wireSnapshot(snapshotWith(inputs, role)));
   await useWorkbookStore().load("s1");
   wrapper = mount(GridView, { props: { table: TABLE }, attachTo: document.body });
 }
@@ -173,6 +173,8 @@ describe("editing", () => {
       "t1",
       [{ rowId: "r0", colId: "c1", input: "75" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
     expect(cellAt("A1").text()).toBe("75");
     expect(selectedAddress()).toBe("A2");
@@ -280,6 +282,8 @@ describe("editing", () => {
       "t1",
       [{ rowId: "r0", colId: "c1", input: "" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
   });
 
@@ -368,6 +372,8 @@ describe("selecting a range", () => {
         { rowId: "r1", colId: "c1", input: "" },
       ],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
   });
 
@@ -412,6 +418,8 @@ describe("filling", () => {
         { rowId: "r2", colId: "c2", input: "=A3*10" },
       ],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
     expect(wrapper.findAll(".grid__cell--in-range")).toHaveLength(3);
     expect(wrapper.find(".grid__cell--fill-preview").exists()).toBe(false);
@@ -528,28 +536,18 @@ describe("copy and paste", () => {
 
   it("grows the table when what is pasted does not fit", async () => {
     await mountGrid();
-    server.updateTable.mockResolvedValue({
-      table: sizedTable({ rowCount: 6 }),
-      cells: [],
-      views: [],
-      tables: [],
-    });
     await focusAndSelect("C4");
     clipboard("paste", "one\ntwo\nthree");
     await vi.waitFor(() => {
-      expect(server.updateTable).toHaveBeenCalledExactlyOnceWith(
-        "t1",
-        {
-          rowCount: 6,
-          colCount: 3,
-        },
-        expect.any(String),
-      );
-    });
-    await vi.waitFor(() => {
       expect(server.setCells).toHaveBeenCalledOnce();
     });
-    expect(server.updateTable.mock.calls[0]?.[2]).toBe(server.setCells.mock.calls[0]?.[2]);
+    expect(server.updateTable).not.toHaveBeenCalled();
+    const [, cells, , revision, appended] = server.setCells.mock.calls[0]!;
+    expect(revision).toBe(0);
+    expect(appended).toHaveLength(2);
+    expect(cells.map((cell) => cell.rowId)).toEqual(["r3", ...appended!]);
+    await flushPromises();
+    expect(useWorkbookStore().tables[0]?.rowCount).toBe(6);
   });
 
   it("cuts by copying and then clearing", async () => {
@@ -627,6 +625,8 @@ describe("formula suggestions", () => {
       "t1",
       [{ rowId: "r0", colId: "c1", input: "=ab" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
     expect(selectedAddress()).toBe("A2");
     expect(document.querySelector(".formula-assist")).toBeNull();
@@ -1018,7 +1018,9 @@ describe("a data table", () => {
   };
 
   async function mountData(inputs: Record<string, string> = {}, role = "owner"): Promise<void> {
-    server.getSnapshot.mockResolvedValue({ ...snapshotWith(inputs, role), tables: [DATA_TABLE] });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({ ...snapshotWith(inputs, role), tables: [DATA_TABLE] }),
+    );
     await useWorkbookStore().load("s1");
     wrapper = mount(GridView, { props: { table: DATA_TABLE }, attachTo: document.body });
   }
@@ -1036,7 +1038,9 @@ describe("a data table", () => {
 
   it("renames a column from its header", async () => {
     await mountData();
-    server.updateColumn.mockResolvedValue({ table: DATA_TABLE, cells: [], views: [], tables: [] });
+    server.updateColumn.mockResolvedValue(
+      changeWith({ table: DATA_TABLE, cells: [], views: [], tables: [] }),
+    );
     await header("Item").get(".editable-name").trigger("dblclick");
     const input = header("Item").get("input");
     // A press inside the box places the caret and does not select the column.
@@ -1044,7 +1048,10 @@ describe("a data table", () => {
     expect(useWorkbookStore().selection).toBeNull();
     await input.setValue("Thing");
     await input.trigger("keydown", { key: "Enter" });
-    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", { name: "Thing" });
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", {
+      revision: expect.any(Number),
+      name: "Thing",
+    });
   });
 
   it("still selects the column when its header is pressed", async () => {
@@ -1069,12 +1076,16 @@ describe("a data table", () => {
       "t1",
       [{ rowId: "r2", colId: "c2", input: "TRUE" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
     await boxes[0]!.setValue(false);
     expect(server.setCells).toHaveBeenLastCalledWith(
       "t1",
       [{ rowId: "r0", colId: "c2", input: "FALSE" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
   });
 
@@ -1117,10 +1128,12 @@ describe("formats", () => {
         format: { numberFormat: "0.00", color: "green" as const },
       },
     ];
-    server.getSnapshot.mockResolvedValue({
-      ...snapshotWith({ A1: "x", B1: "2", B2: "=1/0", B3: "3.14159" }),
-      tables: [{ ...TABLE, formats }],
-    });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith({ A1: "x", B1: "2", B2: "=1/0", B3: "3.14159" }),
+        tables: [{ ...TABLE, formats }],
+      }),
+    );
     await useWorkbookStore().load("s1");
     wrapper = mount(GridView, { props: { table: { ...TABLE, formats } }, attachTo: document.body });
 
@@ -1145,22 +1158,36 @@ describe("undo from the keyboard", () => {
     await press("Enter");
     expect(cellAt("A1").text()).toBe("new");
     notifyJournaled();
-    server.undo.mockResolvedValue({
-      outcome: "done",
-      label: "Change cells in Table 1",
-      error: null,
-      changed: { pages: [], tables: [], views: [], cells: [{ ...at("A1"), input: "old" }] },
-      undoable: false,
-      redoable: true,
-    });
-    server.redo.mockResolvedValue({
-      outcome: "done",
-      label: "Change cells in Table 1",
-      error: null,
-      changed: { pages: [], tables: [], views: [], cells: [{ ...at("A1"), input: "new" }] },
-      undoable: true,
-      redoable: false,
-    });
+    server.undo.mockImplementation(() =>
+      Promise.resolve({
+        outcome: "done",
+        label: "Change cells in Table 1",
+        error: null,
+        change: changeWith({
+          pages: [],
+          tables: [],
+          views: [],
+          cells: [{ ...at("A1"), input: "old" }],
+        }),
+        undoable: false,
+        redoable: true,
+      }),
+    );
+    server.redo.mockImplementation(() =>
+      Promise.resolve({
+        outcome: "done",
+        label: "Change cells in Table 1",
+        error: null,
+        change: changeWith({
+          pages: [],
+          tables: [],
+          views: [],
+          cells: [{ ...at("A1"), input: "new" }],
+        }),
+        undoable: true,
+        redoable: false,
+      }),
+    );
 
     await press("z", { ctrlKey: true });
     await vi.waitFor(() => {
@@ -1188,11 +1215,11 @@ it("keeps a grid draft attached to its row after a remote insertion", async () =
   await press("d");
   await wrapper.get<HTMLInputElement>(".grid__editor").setValue("draft");
   const store = useWorkbookStore();
-  const snapshot = snapshotWith({ A3: "old" });
+  const snapshot = snapshotWith({ A2: "old" });
   snapshot.tables = [
-    { ...TABLE, rowCount: 5, rows: [{ id: "new", orderKey: "Zz" }, ...TABLE.rows!] },
+    { ...TABLE, rowCount: 5, rows: [{ id: "new", orderKey: "Zz" }, ...TABLE.rows] },
   ];
-  server.getSnapshot.mockResolvedValue(snapshot);
+  server.getSnapshot.mockResolvedValue(wireSnapshot(snapshot));
   await store.refresh();
   await wrapper.vm.$nextTick();
   expect(selectedAddress()).toBe("A3");
@@ -1204,6 +1231,87 @@ it("keeps a grid draft attached to its row after a remote insertion", async () =
       "t1",
       [{ rowId: "r1", colId: "c1", input: "draft" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
   });
+});
+
+async function mountEmptyDataTable(): Promise<void> {
+  const table = {
+    ...TABLE,
+    rowCount: 0,
+    rows: [],
+    columns: [
+      { name: "Item", type: "any" as const },
+      { name: "Count", type: "number" as const },
+      { name: "Twice", type: "formula" as const, formula: "=[Count]*2" },
+    ],
+  };
+  server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(), tables: [table] }));
+  const store = useWorkbookStore();
+  await store.load("s1");
+  wrapper = mount(
+    {
+      components: { GridView },
+      setup: () => ({ store }),
+      template: '<GridView v-if="store.tables[0]" :table="store.tables[0]" />',
+    },
+    { attachTo: document.body },
+  );
+}
+
+it("types into an empty data table's new-row line and moves the line down", async () => {
+  await mountEmptyDataTable();
+  expect(wrapper.findAll("tbody tr")).toHaveLength(1);
+  await select("A1");
+  await press("x");
+  await press("Enter");
+  await flushPromises();
+  expect(server.setCells).toHaveBeenCalledOnce();
+  const [, cells, , , appended] = server.setCells.mock.calls[0]!;
+  expect(appended).toHaveLength(1);
+  expect(cells).toEqual([{ rowId: appended?.[0], colId: "c1", input: "x" }]);
+  expect(wrapper.findAll("tbody tr")).toHaveLength(2);
+  expect(cellAt("A1").text()).toBe("x");
+  expect(cellAt("A2").text()).toBe("");
+});
+
+it("keeps a new-row draft separate from a row appended remotely", async () => {
+  await mountEmptyDataTable();
+  await select("A1");
+  await press("m");
+  const store = useWorkbookStore();
+  await store.receiveChange(
+    changeWith({
+      rows: [{ id: "remote", tableId: "t1", orderKey: "a0" }],
+      cells: [{ tableId: "t1", rowId: "remote", colId: "c1", input: "theirs" }],
+    }),
+  );
+  await wrapper.vm.$nextTick();
+  expect(selectedAddress()).toBe("A2");
+  await press("Enter");
+  await flushPromises();
+  expect(cellAt("A1").text()).toBe("theirs");
+  expect(cellAt("A2").text()).toBe("m");
+  expect(store.tables[0]?.rowCount).toBe(2);
+});
+
+it("reopens a stale formula draft after restoring the confirmed cell", async () => {
+  await mountGrid({ A1: "old" });
+  await select("A1");
+  await press("=");
+  await wrapper.get(".grid__editor").setValue("=A2");
+  const store = useWorkbookStore();
+  await store.receiveChange(
+    changeWith({ rows: [{ id: "remote", tableId: "t1", orderKey: "Zz" }] }),
+  );
+  server.setCells.mockRejectedValueOnce(
+    Object.assign(new Error("The structure changed"), { code: "stale_formula" }),
+  );
+  await press("Enter");
+  await flushPromises();
+  expect(server.setCells.mock.calls[0]?.[3]).toBe(0);
+  expect(store.inputOf(at("A2"))).toBe("old");
+  expect(wrapper.get<HTMLInputElement>(".grid__editor").element.value).toBe("=A2");
 });

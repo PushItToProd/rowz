@@ -53,7 +53,6 @@ export type {
 export { parseFormula, parseFormulaWithReferences, type LocatedReference } from "./parser";
 export {
   formulasAfterEdit,
-  inputsAfterEdit,
   inputsAfterMove,
   inputsAfterRename,
   type Move,

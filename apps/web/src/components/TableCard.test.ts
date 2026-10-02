@@ -1,3 +1,4 @@
+import { wireSnapshot, changeWith } from "../testing";
 import { expectedEdit } from "../testing";
 import { sizedTable } from "../testing";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
@@ -23,7 +24,7 @@ let wrapper: VueWrapper;
 const confirm = vi.spyOn(window, "confirm");
 
 async function render(inputs: Record<string, string> = {}, role = "owner"): Promise<void> {
-  server.getSnapshot.mockResolvedValue(snapshotWith(inputs, role));
+  server.getSnapshot.mockResolvedValue(wireSnapshot(snapshotWith(inputs, role)));
   await useWorkbookStore().load("s1");
   wrapper = mount(TableCard, { props: { table: TABLE }, attachTo: document.body });
 }
@@ -43,7 +44,9 @@ beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
   confirm.mockReturnValue(true);
-  server.editTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
+  server.editTable.mockResolvedValue(
+    changeWith({ table: TABLE, cells: [], views: [], tables: [] }),
+  );
 });
 afterEach(() => {
   wrapper.unmount();
@@ -115,14 +118,20 @@ describe("row and column actions", () => {
 describe("table actions", () => {
   it("adds a row from the strip under the grid, and a column from the strip beside it", async () => {
     await render();
-    server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
+    server.updateTable.mockResolvedValue(
+      changeWith({ table: TABLE, cells: [], views: [], tables: [] }),
+    );
+    server.editTable.mockResolvedValue(changeWith());
     await wrapper.get('button[aria-label="Add row"]').trigger("click");
     await wrapper.get('button[aria-label="Add column"]').trigger("click");
     await vi.waitFor(() => {
-      expect(server.updateTable.mock.calls).toEqual([
-        ["t1", { rowCount: 5 }],
-        ["t1", { colCount: 4 }],
-      ]);
+      expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", { colCount: 4 });
+      expect(server.editTable).toHaveBeenCalledExactlyOnceWith("t1", {
+        axis: "row",
+        kind: "insert",
+        beforeId: null,
+        ids: [expect.any(String)],
+      });
     });
   });
 
@@ -142,7 +151,9 @@ describe("table actions", () => {
 
   it("sets the size of the table from a form that starts at its size", async () => {
     await render();
-    server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
+    server.updateTable.mockResolvedValue(
+      changeWith({ table: TABLE, cells: [], views: [], tables: [] }),
+    );
     await button("Resize").trigger("click");
     const form = wrapper.get('[role="dialog"]');
     expect(form.attributes("aria-label")).toBe("Resize Table 1");
@@ -163,7 +174,9 @@ describe("table actions", () => {
 
   it("asks before a smaller size discards content, and keeps the form open if refused", async () => {
     await render({ A1: "kept", C4: "would go" });
-    server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
+    server.updateTable.mockResolvedValue(
+      changeWith({ table: TABLE, cells: [], views: [], tables: [] }),
+    );
     confirm.mockReturnValue(false);
     await resizeTo("2", "4");
     expect(confirm).toHaveBeenCalledExactlyOnceWith(
@@ -184,7 +197,9 @@ describe("table actions", () => {
 
   it("does not ask when the rows and columns that go are empty", async () => {
     await render({ A1: "kept", B2: "kept" });
-    server.updateTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
+    server.updateTable.mockResolvedValue(
+      changeWith({ table: TABLE, cells: [], views: [], tables: [] }),
+    );
     await resizeTo("2", "2");
     expect(confirm).not.toHaveBeenCalled();
     await vi.waitFor(() => {
@@ -375,6 +390,8 @@ describe("the menu of row, column, and cell actions", () => {
       "t1",
       [{ rowId: "r1", colId: "c2", input: "" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
   });
 
@@ -420,6 +437,8 @@ describe("files", () => {
         { rowId: "r1", colId: "c2", input: "=A2*2" },
       ],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
     const store = useWorkbookStore();
     expect(store.valueOf(at("B2"))).toBe(2);
@@ -429,16 +448,18 @@ describe("files", () => {
 
   it("grows the table to fit the file", async () => {
     await render();
-    server.updateTable.mockResolvedValue({
-      table: sizedTable({ rowCount: 6, colCount: 5 }),
-      cells: [],
-      views: [],
-      tables: [],
-    });
+    server.updateTable.mockResolvedValue(
+      changeWith({
+        table: sizedTable({ colCount: 5 }),
+        cells: [],
+        views: [],
+        tables: [],
+      }),
+    );
     await choose("data.csv", Array.from({ length: 6 }, () => "1,2,3,4,5").join("\n"));
     expect(server.updateTable).toHaveBeenCalledExactlyOnceWith(
       "t1",
-      { rowCount: 6, colCount: 5 },
+      { colCount: 5 },
       expect.any(String),
     );
     expect(server.updateTable.mock.calls[0]?.[2]).toBe(server.setCells.mock.calls[0]?.[2]);
@@ -458,6 +479,8 @@ describe("files", () => {
       "t1",
       [{ rowId: "r0", colId: "c1", input: "x" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
     expect(useWorkbookStore().inputOf(at("C3"))).toBe("kept");
   });
@@ -473,10 +496,12 @@ describe("column names", () => {
   const DATA_TABLE = { ...TABLE, columns: COLUMNS };
 
   async function renderData(): Promise<void> {
-    server.getSnapshot.mockResolvedValue({ ...snapshotWith(), tables: [DATA_TABLE] });
+    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(), tables: [DATA_TABLE] }));
     await useWorkbookStore().load("s1");
     wrapper = mount(TableCard, { props: { table: DATA_TABLE }, attachTo: document.body });
-    server.updateColumn.mockResolvedValue({ table: DATA_TABLE, cells: [], views: [], tables: [] });
+    server.updateColumn.mockResolvedValue(
+      changeWith({ table: DATA_TABLE, cells: [], views: [], tables: [] }),
+    );
   }
 
   function item(name: string) {
@@ -489,7 +514,9 @@ describe("column names", () => {
 
   it("offers two ways to name the columns of a plain table", async () => {
     await render();
-    server.nameColumns.mockResolvedValue({ table: DATA_TABLE, cells: [], views: [], tables: [] });
+    server.nameColumns.mockResolvedValue(
+      changeWith({ table: DATA_TABLE, cells: [], views: [], tables: [] }),
+    );
     await button("Name columns").trigger("click");
     expect(wrapper.get('[role="menu"]').attributes("aria-label")).toBe("Name columns");
     await item("Use the first row as the names").trigger("click");
@@ -502,7 +529,7 @@ describe("column names", () => {
 
   it("removes the names of a data table after confirming, with a warning about formula columns", async () => {
     await renderData();
-    server.dropColumns.mockResolvedValue(TABLE);
+    server.dropColumns.mockResolvedValue(changeWith(TABLE));
     expect(wrapper.findAll("button").some((found) => found.text() === "Name columns")).toBe(false);
     confirm.mockReturnValue(false);
     await button("Remove column names").trigger("click");
@@ -528,7 +555,10 @@ describe("column names", () => {
       "Column holds: A formula…",
     ]);
     await item("Column holds: Date").trigger("click");
-    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", { type: "date" });
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", {
+      revision: expect.any(Number),
+      type: "date",
+    });
   });
 
   it("asks for the formula of a formula column, starting from the one it has", async () => {
@@ -538,6 +568,7 @@ describe("column names", () => {
     await item("✓ Column holds: A formula…").trigger("click");
     expect(prompt.mock.calls[0]?.[1]).toBe("=[Price] * [Qty]");
     expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c3", {
+      revision: expect.any(Number),
       type: "formula",
       formula: "=[Price] + 1",
     });
@@ -560,4 +591,18 @@ describe("column names", () => {
     const labels = wrapper.findAll('[role="menuitem"]').map((found) => found.text());
     expect(labels.some((label) => label.includes("Column holds"))).toBe(false);
   });
+});
+
+it("sends distinct row insertions for rapid clicks on Add row", async () => {
+  await render();
+  server.editTable.mockImplementation(() => Promise.resolve(changeWith()));
+  const button = wrapper.get('button[aria-label="Add row"]');
+  await button.trigger("click");
+  await button.trigger("click");
+  await flushPromises();
+  expect(server.editTable).toHaveBeenCalledTimes(2);
+  const requests = server.editTable.mock.calls.map((call) => call[1]);
+  expect(requests[0]).toMatchObject({ kind: "insert", beforeId: null });
+  expect(requests[1]).toMatchObject({ kind: "insert", beforeId: null });
+  expect(requests[0]?.ids[0]).not.toBe(requests[1]?.ids[0]);
 });

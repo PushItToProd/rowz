@@ -259,7 +259,8 @@ describe("changing a column", () => {
     await user.json(
       "PUT",
       `/tables/${other.id}/cells`,
-      cellsBody({ A1: "=SUM('Table 1'[Price])", A2: "=SUM('Table 1'[Qty])" }), 200,
+      cellsBody({ A1: "=SUM('Table 1'[Price])", A2: "=SUM('Table 1'[Qty])" }),
+      200,
     );
     const text = await addView(user, page.id);
     await user.json("PATCH", `/views/${text.id}`, { source: "{{ SUM('Table 1'[price]) }}" });

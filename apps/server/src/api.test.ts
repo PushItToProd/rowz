@@ -28,7 +28,10 @@ beforeAll(async () => {
 afterAll(() => server.close());
 
 /** The first page and table of a new spreadsheet. */
-function first(snapshot: TestSnapshot): { page: PageRecord; table: TestSnapshot["tables"][number] } {
+function first(snapshot: TestSnapshot): {
+  page: PageRecord;
+  table: TestSnapshot["tables"][number];
+} {
   return { page: snapshot.pages[0]!, table: snapshot.tables[0]! };
 }
 
@@ -250,7 +253,8 @@ describe("tables", () => {
     await user.json(
       "PUT",
       `/tables/${table.id}/cells`,
-      cellsBody({ A1: "keep", C1: "col gone", A5: "row gone", B2: "keep too" }), 200,
+      cellsBody({ A1: "keep", C1: "col gone", A5: "row gone", B2: "keep too" }),
+      200,
     );
 
     const kept = rowIds(snapshot, table.id).slice(0, 4);
@@ -321,12 +325,14 @@ describe("renaming rewrites formulas", () => {
     await user.json(
       "PUT",
       `/tables/${table.id}/cells`,
-      cellsBody({ A1: "=SUM('Table 2'!A1:A3) + 1", A2: "=A1", A3: "Table 2" }), 200,
+      cellsBody({ A1: "=SUM('Table 2'!A1:A3) + 1", A2: "=A1", A3: "Table 2" }),
+      200,
     );
     await user.json(
       "PUT",
       `/tables/${other.table.id}/cells`,
-      cellsBody({ B2: "='page 1'!'table 2'!A1", B3: "='Table 2'!A1" }), 200,
+      cellsBody({ B2: "='page 1'!'table 2'!A1", B3: "='Table 2'!A1" }),
+      200,
     );
 
     const renamed = await user.json<Change>("PATCH", `/tables/${sales.id}`, { name: "Sales" });
@@ -353,7 +359,8 @@ describe("renaming rewrites formulas", () => {
     await user.json(
       "PUT",
       `/tables/${table.id}/cells`,
-      cellsBody({ A1: "='Page 1'!'Table 1'!B1" }), 200,
+      cellsBody({ A1: "='Page 1'!'Table 1'!B1" }),
+      200,
     );
 
     const renamed = await user.json<Change>("PATCH", `/pages/${page.id}`, { name: "Summary" });
@@ -537,7 +544,8 @@ describe("inserting and deleting rows and columns", () => {
     await user.json(
       "PUT",
       `/tables/${sibling.id}/cells`,
-      cellsBody({ A1: "=SUM('Table 1'!A1:A5)" }), 200,
+      cellsBody({ A1: "=SUM('Table 1'!A1:A5)" }),
+      200,
     );
     await user.json("PATCH", `/tables/${table.id}`, { name: "Small", rowCount: 2, colCount: 30 });
     expect(await sized()).toMatchObject({ name: "Small", rowCount: 2, colCount: 30 });
@@ -563,7 +571,8 @@ describe("inserting and deleting rows and columns", () => {
       cellsBody({
         A1: "=SUM('Page 1'!'Table 1'!A:A) + 'Page 1'!'Table 1'!A5",
         A2: "='Table 1'!A5",
-      }), 200,
+      }),
+      200,
     );
 
     await edit({ axis: "row", kind: "insert", index: 0 });

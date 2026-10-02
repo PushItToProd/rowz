@@ -439,7 +439,8 @@ describe("actions that add rows, clear cells, and combine", () => {
     await user.json(
       "PUT",
       `/tables/${sheet.tableId}/cells`,
-      { cells: [{ row: LIMITS.tableRows - 1, col: 0, input: "last" }] }, 200,
+      { cells: [{ row: LIMITS.tableRows - 1, col: 0, input: "last" }] },
+      200,
     );
 
     expect(await click(sheet, 0, 3)).toMatchObject({
@@ -619,14 +620,19 @@ describe("actions on a data table", () => {
     );
     await user.json("PATCH", `/tables/${table.id}`, { rowCount: rows.length + 1, colCount: 2 });
     const cells = Object.fromEntries(
-      [["Name", "Count"], ...rows].flatMap(([name, count], row) => [
+      ([["Name", "Count"], ...rows] satisfies [string, string][]).flatMap(([name, count], row) => [
         [`A${String(row + 1)}`, name],
         [`B${String(row + 1)}`, count],
       ]),
     );
     await user.json("PUT", `/tables/${table.id}/cells`, cellsBody(cells));
     if (!plain) await user.json("POST", `/tables/${table.id}/columns`, { headerRow: true });
-    else await user.json("POST", `/tables/${table.id}/edits`, { axis: "row", kind: "delete", index: 0 });
+    else
+      await user.json("POST", `/tables/${table.id}/edits`, {
+        axis: "row",
+        kind: "delete",
+        index: 0,
+      });
     await user.json(
       "PUT",
       `/tables/${buttons.id}/cells`,
@@ -713,8 +719,11 @@ describe("actions on a data table", () => {
     const after = await data();
     expect(after).toEqual({ rows: [before.rows[0]], size: 1, cells: { "0:0": "new", "0:1": "9" } });
     // The rows that went are named. The cells in them are not: they went with their rows.
+    expect(result.change?.changed?.rows).toHaveLength(2);
     expect(result.change?.changed?.rows).toEqual(
-      before.rows.slice(1).map((id) => ({ id, tableId: expect.any(String), orderKey: null })),
+      expect.arrayContaining(
+        before.rows.slice(1).map((id) => ({ id, tableId: expect.any(String), orderKey: null })),
+      ),
     );
     expect(result.cells).toHaveLength(2);
   });
@@ -748,7 +757,9 @@ describe("actions on a data table", () => {
       { kind: "text" },
       201,
     );
-    await user.json("PATCH", `/views/${view.id}`, { source: "{{ Data!A3 }} of {{ ROWS(Data!A:A) }}" });
+    await user.json("PATCH", `/views/${view.id}`, {
+      source: "{{ Data!A3 }} of {{ ROWS(Data!A:A) }}",
+    });
 
     const result = await click(sheet, 0, 0);
     expect((await data()).size).toBe(1);

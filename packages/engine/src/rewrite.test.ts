@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Reference } from "./ast";
-import { cellKey, formatAddress } from "./address";
+import { formatAddress } from "./address";
 import {
   formulasAfterEdit,
-  inputsAfterEdit,
   inputsAfterMove,
   inputsAfterRename,
   rewriteReferences,
@@ -302,7 +301,7 @@ describe("inputsAfterMove", () => {
   });
 });
 
-describe("inputsAfterEdit", () => {
+describe("structural formula rewrites", () => {
   const deleteRow = (index: number): StructuralEdit => ({
     tableId: "t1",
     axis: "row",
@@ -339,65 +338,16 @@ describe("inputsAfterEdit", () => {
 
   /** The writes for an edit, as `table address input` lines sorted for comparison. */
   function writes(cells: Record<string, Record<string, string>>, edit: StructuralEdit): string[] {
-    checkFormulaWrites(data(cells), edit);
-    return inputsAfterEdit(data(cells), edit)
+    return formulasAfterEdit(data(cells), edit)
       .map((cell) => `${cell.tableId} ${formatAddress(cell)} ${cell.input || "(cleared)"}`)
       .sort();
   }
 
   /** How a formula in another table, reading Table1, is written after an edit to Table1. */
   function rewritten(formula: string, edit: StructuralEdit): string {
-    checkFormulaWrites(data({ t2: { A1: formula } }), edit);
-    const result = inputsAfterEdit(data({ t2: { A1: formula } }), edit);
+    const result = formulasAfterEdit(data({ t2: { A1: formula } }), edit);
     return result[0]?.input ?? formula;
   }
-
-  describe("moving cells", () => {
-    it("deletes a row: its cells go and the rows below move up", () => {
-      expect(
-        writes({ t1: { A1: "one", A2: "two", A3: "three", B4: "four" } }, deleteRow(1)),
-      ).toEqual(["t1 A2 three", "t1 A3 (cleared)", "t1 B3 four", "t1 B4 (cleared)"]);
-    });
-
-    it("inserts a row: the rows from there down move down", () => {
-      expect(writes({ t1: { A1: "one", A2: "two", A3: "three" } }, insertRow(1))).toEqual([
-        "t1 A2 (cleared)",
-        "t1 A3 two",
-        "t1 A4 three",
-      ]);
-    });
-
-    it("deletes and inserts a column the same way", () => {
-      const cells = { t1: { A1: "a", B1: "b", C1: "c" } };
-      expect(writes(cells, deleteCol(0))).toEqual(["t1 A1 b", "t1 B1 c", "t1 C1 (cleared)"]);
-      expect(writes(cells, insertCol(0))).toEqual([
-        "t1 A1 (cleared)",
-        "t1 B1 a",
-        "t1 C1 b",
-        "t1 D1 c",
-      ]);
-    });
-
-    it("writes nothing for cells that keep their place and content", () => {
-      expect(writes({ t1: { A1: "same", A2: "same", A3: "same" } }, deleteRow(1))).toEqual([
-        "t1 A3 (cleared)",
-      ]);
-      expect(writes({ t1: { A1: "above" }, t2: { A5: "elsewhere" } }, deleteRow(3))).toEqual([]);
-    });
-
-    it("leaves cells of other tables where they are", () => {
-      expect(writes({ t1: { A2: "x" }, t2: { A2: "y", A3: "z" } }, deleteRow(0))).toEqual([
-        "t1 A1 x",
-        "t1 A2 (cleared)",
-      ]);
-    });
-
-    it("moves a formula and rewrites its references in one step", () => {
-      expect(writes({ t1: { A1: "1", A2: "2", A3: "=A1+A2", A4: "=A3*2" } }, insertRow(0))).toEqual(
-        ["t1 A1 (cleared)", "t1 A2 1", "t1 A3 2", "t1 A4 =A2+A3", "t1 A5 =A4*2"],
-      );
-    });
-  });
 
   describe("rewriting references after deleting row 3", () => {
     it.each([
@@ -473,23 +423,6 @@ describe("inputsAfterEdit", () => {
   });
 
   describe("several rows or columns at once", () => {
-    it("deletes rows 2 to 3: their cells go and the rows below move up by two", () => {
-      const cells = { t1: { A1: "one", A2: "two", A3: "three", A4: "four", B5: "five" } };
-      expect(writes(cells, { ...deleteRow(1), count: 2 })).toEqual([
-        "t1 A2 four",
-        "t1 A3 (cleared)",
-        "t1 A4 (cleared)",
-        "t1 B3 five",
-        "t1 B5 (cleared)",
-      ]);
-    });
-
-    it("inserts two columns: the columns from there on move right by two", () => {
-      expect(
-        writes({ t1: { A1: "a", B1: "=A1", C1: "c" } }, { ...insertCol(1), count: 2 }),
-      ).toEqual(["t1 B1 (cleared)", "t1 C1 (cleared)", "t1 D1 =A1", "t1 E1 c"]);
-    });
-
     it.each([
       ["=Table1!A2", "=Table1!A2"],
       ["=Table1!A3", "=#REF!"],
@@ -527,48 +460,7 @@ describe("inputsAfterEdit", () => {
       '=BUTTON("Add", EXECUTE(Table1!A3+1, Table1!A3))',
     );
   });
-
-  it("restores every input when an inserted row is deleted again", () => {
-    const original = data({
-      t1: { A1: "1", A2: "2", A3: "=SUM(A1:A2)", B1: "=A3*2", B3: "=SUM(A:A)" },
-      t2: { A1: "=Table1!B1 + SUM(Table1!2:3)" },
-    });
-    const apply = (state: WorkbookData, edit: StructuralEdit): WorkbookData => {
-      const cells = new Map(state.cells.map((cell) => [cellKey(cell), cell]));
-      for (const write of inputsAfterEdit(state, edit)) {
-        if (write.input === "") cells.delete(cellKey(write));
-        else cells.set(cellKey(write), write);
-      }
-      return { ...state, cells: [...cells.values()] };
-    };
-    const inputs = (state: WorkbookData): string[] =>
-      state.cells.map((cell) => `${cell.tableId} ${formatAddress(cell)} ${cell.input}`).sort();
-
-    const inserted = apply(original, insertRow(1));
-    expect(inputs(inserted)).not.toEqual(inputs(original));
-    expect(inputs(apply(inserted, deleteRow(1)))).toEqual(inputs(original));
-
-    const three = apply(original, { ...insertRow(1), count: 3 });
-    expect(inputs(apply(three, { ...deleteRow(1), count: 3 }))).toEqual(inputs(original));
-  });
 });
-
-/** Compare formula-only writes with the final inputs produced by the existing positional edit. */
-function checkFormulaWrites(data: WorkbookData, edit: StructuralEdit): void {
-  const after = new Map(data.cells.map((cell) => [cellKey(cell), cell.input]));
-  for (const write of inputsAfterEdit(data, edit)) after.set(cellKey(write), write.input);
-  const expected = data.cells.flatMap((cell) => {
-    let position = cell[edit.axis];
-    if (cell.tableId === edit.tableId && position >= edit.index) {
-      const count = edit.count ?? 1;
-      if (edit.kind === "delete" && position < edit.index + count) return [];
-      position += edit.kind === "insert" ? count : -count;
-    }
-    const input = after.get(cellKey({ ...cell, [edit.axis]: position }));
-    return input === cell.input ? [] : [{ ...cell, input }];
-  });
-  expect(formulasAfterEdit(data, edit)).toEqual(expected);
-}
 
 describe("formulasAfterEdit", () => {
   it("leaves unchanged formulas and moved literals out of the writes", () => {
@@ -582,7 +474,6 @@ describe("formulasAfterEdit", () => {
     };
     const edit = { tableId: "t1", axis: "row", kind: "insert", index: 1 } as const;
     expect(formulasAfterEdit(data, edit)).toEqual([{ ...at("C3", "t1"), input: "=A4" }]);
-    checkFormulaWrites(data, edit);
   });
 
   it.each(["row", "col"] as const)("omits a rewritten formula in a deleted %s", (axis) => {
@@ -600,6 +491,5 @@ describe("formulasAfterEdit", () => {
         (cell) => cell.tableId === "t1" && cell.row === 0 && cell.col === 0,
       ),
     ).toBe(false);
-    checkFormulaWrites(data, edit);
   });
 });

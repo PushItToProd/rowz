@@ -1251,7 +1251,8 @@ export class SpreadsheetRepository {
         .updateTable(tableId, {
           ...(changes.name === undefined ? {} : { name: changes.name }),
           colIds: [...current.colIds, ...added],
-          columns: current.columns && resized(current.columns, current.colIds.length + added.length),
+          columns:
+            current.columns && resized(current.columns, current.colIds.length + added.length),
         })
         .catch(rethrowDuplicate("table", changes.name ?? ""));
     });
@@ -1836,7 +1837,7 @@ export class SpreadsheetRepository {
       await writer.clearCells(table.id, inArray(cells.colId, removed));
       await writer.updateTable(table.id, {
         colIds: table.colIds.toSpliced(edit.index, edit.count),
-        columns: current && current.toSpliced(edit.index, edit.count),
+        columns: current?.toSpliced(edit.index, edit.count) ?? null,
         formats,
       });
     }
@@ -2189,9 +2190,10 @@ export class SpreadsheetRepository {
         pageId: tables.pageId,
         colIds: tables.colIds,
         columns: tables.columns,
-        rowCount: sql<number>`(select count(*) from ${tableRows} where ${tableRows.tableId} = ${tables.id})`.mapWith(
-          Number,
-        ),
+        rowCount:
+          sql<number>`(select count(*) from ${tableRows} where ${tableRows.tableId} = ${tables.id})`.mapWith(
+            Number,
+          ),
       })
       .from(tables)
       .innerJoin(pages, eq(pages.id, tables.pageId))

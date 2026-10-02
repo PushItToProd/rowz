@@ -1,3 +1,5 @@
+import { savedCells } from "../testing";
+import { wireSnapshot, changeWith, createdTable, createdPage, createdView } from "../testing";
 import { sizedTable } from "../testing";
 import { identifiedAt } from "../testing";
 import { createPinia, setActivePinia } from "pinia";
@@ -17,7 +19,7 @@ const server = api as unknown as MockedApi;
 type Store = ReturnType<typeof useWorkbookStore>;
 
 async function open(inputs: Record<string, string> = {}, role = "owner"): Promise<Store> {
-  server.getSnapshot.mockResolvedValue(snapshotWith(inputs, role));
+  server.getSnapshot.mockResolvedValue(wireSnapshot(snapshotWith(inputs, role)));
   const store = useWorkbookStore();
   await store.load("s1");
   return store;
@@ -42,8 +44,13 @@ function idle(): Promise<void> {
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
-  server.setCells.mockResolvedValue(undefined);
-  server.deleteTable.mockResolvedValue(undefined);
+  server.setCells.mockImplementation(savedCells);
+  server.deleteTable.mockImplementation((id) =>
+    Promise.resolve(changeWith({ tables: [{ id, table: null }] })),
+  );
+  server.renamePage.mockImplementation((id, name) =>
+    Promise.resolve(changeWith({ pages: [{ id, page: { id, name, position: 0 } }] })),
+  );
   server.click.mockResolvedValue(clickResult());
 });
 
@@ -92,7 +99,7 @@ describe("loading", () => {
       return snapshotWith();
     });
     const first = store.load("s1");
-    server.getSnapshot.mockResolvedValue({ ...snapshotWith(), id: "s2" });
+    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(), id: "s2" }));
     await store.load("s2");
     gone.reject(new Error("Spreadsheet not found"));
     await expect(first).resolves.toBeUndefined();
@@ -113,13 +120,13 @@ describe("loading", () => {
     const answered = deferred();
     server.createPage.mockImplementation(async () => {
       await answered.promise;
-      return {
+      return createdPage({
         page: { id: "p2", name: "Page 2", position: 1 },
         table: { ...TABLE, id: "t2", pageId: "p2" },
-      };
+      });
     });
     const added = store.addPage();
-    server.getSnapshot.mockResolvedValue(OTHER);
+    server.getSnapshot.mockResolvedValue(wireSnapshot(OTHER));
     const opened = store.load("s2");
     await idle();
     answered.resolve();
@@ -135,7 +142,7 @@ describe("loading", () => {
     const answered = deferred();
     server.renameSpreadsheet.mockImplementation(() => answered.promise);
     const renamed = store.renameSpreadsheet("Renamed");
-    server.getSnapshot.mockResolvedValue(OTHER);
+    server.getSnapshot.mockResolvedValue(wireSnapshot(OTHER));
     const opened = store.load("s2");
     await idle();
     answered.resolve();
@@ -152,7 +159,7 @@ describe("loading", () => {
       throw new Error("Too many pages");
     });
     const added = store.addPage();
-    server.getSnapshot.mockResolvedValue(OTHER);
+    server.getSnapshot.mockResolvedValue(wireSnapshot(OTHER));
     const opened = store.load("s2");
     await idle();
     answered.resolve();
@@ -191,7 +198,7 @@ describe("setCell", () => {
   it("shows the new value before the save finishes, then saves it", async () => {
     const store = await open({ A1: "1", B1: "=A1+1" });
     const save = deferred();
-    server.setCells.mockReturnValue(save.promise);
+    server.setCells.mockImplementation((...args) => save.promise.then(() => savedCells(...args)));
 
     const done = store.setCell(at("A1"), "10");
     expect(store.valueOf(at("B1"))).toBe(11);
@@ -201,6 +208,8 @@ describe("setCell", () => {
       "t1",
       [{ rowId: "r0", colId: "c1", input: "10" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
     expect(store.notice).toBeNull();
   });
@@ -240,7 +249,9 @@ describe("setCell", () => {
   it("keeps a later edit when an earlier save of the same cell fails", async () => {
     const store = await open({ A1: "1" });
     const first = deferred();
-    server.setCells.mockReturnValueOnce(first.promise);
+    server.setCells.mockImplementationOnce((...args) =>
+      first.promise.then(() => savedCells(...args)),
+    );
 
     const firstDone = store.setCell(at("A1"), "2");
     const secondDone = store.setCell(at("A1"), "3");
@@ -252,13 +263,17 @@ describe("setCell", () => {
       "t1",
       [{ rowId: "r0", colId: "c1", input: "3" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
   });
 
   it("saves edits one at a time, in the order they were made", async () => {
     const store = await open();
     const first = deferred();
-    server.setCells.mockReturnValueOnce(first.promise);
+    server.setCells.mockImplementationOnce((...args) =>
+      first.promise.then(() => savedCells(...args)),
+    );
 
     void store.setCell(at("A1"), "first");
     const second = store.setCell(at("A2"), "second");
@@ -277,7 +292,7 @@ describe("setCell", () => {
   it("does not fail when the table is deleted while its save is failing", async () => {
     const store = await open({ A1: "1" });
     const save = deferred();
-    server.setCells.mockReturnValue(save.promise);
+    server.setCells.mockImplementation((...args) => save.promise.then(() => savedCells(...args)));
 
     const done = store.setCell(at("A1"), "2");
     const deleted = store.deleteTable("t1");
@@ -292,7 +307,9 @@ describe("saving", () => {
     const store = await open({ A1: "1" });
     const first = deferred();
     const second = deferred();
-    server.setCells.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    server.setCells
+      .mockImplementationOnce((...args) => first.promise.then(() => savedCells(...args)))
+      .mockImplementationOnce((...args) => second.promise.then(() => savedCells(...args)));
     expect(store.saving).toBe(false);
 
     const one = store.setCell(at("A1"), "2");
@@ -324,7 +341,7 @@ describe("saving", () => {
         outcome: "nothing",
         label: null,
         error: null,
-        changed: { pages: [], tables: [], views: [], cells: [] },
+        change: changeWith({ pages: [], tables: [], views: [], cells: [] }),
         undoable: false,
         redoable: false,
       })),
@@ -354,6 +371,8 @@ describe("setCells", () => {
         { rowId: "r1", colId: "c1", input: "x" },
       ],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
   });
 
@@ -371,19 +390,21 @@ describe("setCells", () => {
 
   it("splits a large change into requests the server accepts, and keeps what was saved if a later one fails", async () => {
     const store = await open();
-    server.updateTable.mockResolvedValue({
-      table: sizedTable({ rowCount: 1000, colCount: 3 }),
-      cells: [],
-      views: [],
-      tables: [],
-    });
+    server.updateTable.mockResolvedValue(
+      changeWith({
+        table: sizedTable({ rowCount: 1000, colCount: 3 }),
+        cells: [],
+        views: [],
+        tables: [],
+      }),
+    );
     await store.updateTable("t1", { rowCount: 1000 });
     const writes = Array.from({ length: 1500 }, (_, index) => ({
       row: index % 1000,
       col: Math.floor(index / 1000),
       input: String(index),
     }));
-    server.setCells.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("too slow"));
+    server.setCells.mockImplementationOnce(savedCells).mockRejectedValueOnce(new Error("too slow"));
 
     await store.setCells("t1", writes);
     expect(server.setCells.mock.calls.map(([, cells]) => cells.length)).toEqual([1000, 500]);
@@ -427,18 +448,19 @@ describe("selection", () => {
   it("pastes other text as typed, and says so when part of it cannot fit", async () => {
     const store = await open();
     const cols = Array.from({ length: 101 }, (_, index) => String(index)).join("\t");
-    server.updateTable.mockResolvedValue({
-      table: sizedTable({ colCount: 100 }),
-      cells: [],
-      views: [],
-      tables: [],
-    });
+    server.updateTable.mockResolvedValue(
+      changeWith({
+        table: sizedTable({ colCount: 100 }),
+        cells: [],
+        views: [],
+        tables: [],
+      }),
+    );
     store.selection = at("A1");
     await store.paste(cols);
     expect(server.updateTable).toHaveBeenCalledExactlyOnceWith(
       "t1",
       {
-        rowCount: 4,
         colCount: 100,
       },
       expect.any(String),
@@ -453,10 +475,12 @@ describe("selection", () => {
 
   it("does not paste when the table could not be grown", async () => {
     const store = await open();
-    server.updateTable.mockRejectedValue(new Error("no"));
+    server.setCells.mockRejectedValue(new Error("no"));
     store.selection = at("A4");
     await store.paste("a\nb");
-    expect(server.setCells).not.toHaveBeenCalled();
+    expect(store.tables[0]?.rowCount).toBe(4);
+    expect(store.inputOf(at("A4"))).toBe("");
+    expect(store.notice?.text).toBe("no");
   });
 
   it("copies nothing and clears nothing without a selection", async () => {
@@ -485,7 +509,9 @@ describe("click", () => {
 
   it("names the table of a cell written outside the button's table", async () => {
     const store = await open({ B1: BUTTON });
-    server.createTable.mockResolvedValue({ ...TABLE, id: "t2", name: "Log", position: 1 });
+    server.createTable.mockResolvedValue(
+      createdTable({ ...TABLE, id: "t2", name: "Log", position: 1 }),
+    );
     await store.addTable("p1");
     server.click.mockResolvedValue(
       clickResult({
@@ -563,7 +589,7 @@ describe("click", () => {
   it("waits for pending saves, so the server evaluates what the user sees", async () => {
     const store = await open({ A1: "1", B1: BUTTON });
     const save = deferred();
-    server.setCells.mockReturnValue(save.promise);
+    server.setCells.mockImplementation((...args) => save.promise.then(() => savedCells(...args)));
 
     void store.setCell(at("A1"), "5");
     const clicked = store.click(at("B1"));
@@ -578,7 +604,7 @@ describe("click", () => {
   it("does not run when a pending save fails, and leaves the save's error showing", async () => {
     const store = await open({ A1: "1", B1: BUTTON });
     const save = deferred();
-    server.setCells.mockReturnValue(save.promise);
+    server.setCells.mockImplementation((...args) => save.promise.then(() => savedCells(...args)));
 
     void store.setCell(at("A1"), "5");
     const clicked = store.click(at("B1"));
@@ -623,7 +649,7 @@ describe("structure", () => {
 
     const page = { id: "p2", name: "Data", position: 1 };
     const table = { ...TABLE, id: "t2", pageId: "p2" };
-    server.createPage.mockResolvedValue({ page, table });
+    server.createPage.mockResolvedValue(createdPage({ page, table }));
     expect(await store.addPage()).toEqual(page);
     expect(store.pages).toHaveLength(2);
     expect(store.tables).toHaveLength(2);
@@ -636,12 +662,14 @@ describe("structure", () => {
     const store = await open({ A1: "5", B1: "=Sales!A1" });
     expect(store.valueOf(at("B1"))).toMatchObject({ code: "#REF!" });
 
-    server.updateTable.mockResolvedValue({
-      table: { ...TABLE, name: "Sales" },
-      cells: [],
-      views: [],
-      tables: [],
-    });
+    server.updateTable.mockResolvedValue(
+      changeWith({
+        table: { ...TABLE, name: "Sales" },
+        cells: [],
+        views: [],
+        tables: [],
+      }),
+    );
     expect(await store.updateTable("t1", { name: "Sales" })).toBe(true);
     expect(store.tables[0]?.name).toBe("Sales");
     expect(store.valueOf(at("B1"))).toBe(5);
@@ -649,12 +677,14 @@ describe("structure", () => {
 
   it("applies the formulas the server rewrote for a renamed table", async () => {
     const store = await open({ A1: "5", B1: "='Table 1'!A1" });
-    server.updateTable.mockResolvedValue({
-      table: { ...TABLE, name: "Sales" },
-      cells: [{ ...at("B1"), input: "=Sales!A1" }],
-      views: [],
-      tables: [],
-    });
+    server.updateTable.mockResolvedValue(
+      changeWith({
+        table: { ...TABLE, name: "Sales" },
+        cells: [{ ...at("B1"), input: "=Sales!A1" }],
+        views: [],
+        tables: [],
+      }),
+    );
     await store.updateTable("t1", { name: "Sales" });
     expect(store.inputOf(at("B1"))).toBe("=Sales!A1");
     expect(store.valueOf(at("B1"))).toBe(5);
@@ -662,11 +692,14 @@ describe("structure", () => {
 
   it("applies the formulas the server rewrote for a renamed page", async () => {
     const store = await open({ A1: "5", B1: "='Page 1'!'Table 1'!A1" });
-    server.renamePage.mockResolvedValue({
-      cells: [{ ...at("B1"), input: "=Summary!'Table 1'!A1" }],
-      views: [],
-      tables: [],
-    });
+    server.renamePage.mockResolvedValue(
+      changeWith({
+        pages: [{ id: "p1", page: { id: "p1", name: "Summary", position: 0 } }],
+        cells: [{ ...at("B1"), input: "=Summary!'Table 1'!A1" }],
+        views: [],
+        tables: [],
+      }),
+    );
     await store.renamePage("p1", "Summary");
     expect(store.inputOf(at("B1"))).toBe("=Summary!'Table 1'!A1");
     expect(store.valueOf(at("B1"))).toBe(5);
@@ -675,17 +708,14 @@ describe("structure", () => {
   it("applies a row deletion: resizes the table, moves cells, and keeps the selection inside", async () => {
     const store = await open({ A1: "1", A2: "2", A4: "=A1+A2" });
     store.selection = at("C4");
-    server.editTable.mockResolvedValue({
-      table: { ...TABLE, rowCount: 3, rows: TABLE.rows!.slice(1) },
-      cells: [
-        { ...at("A1"), input: "2" },
-        { ...at("A2"), input: "" },
-        { ...at("A3"), input: "=#REF!+A1" },
-        { ...at("A4"), input: "" },
-      ],
-      views: [],
-      tables: [],
-    });
+    server.editTable.mockResolvedValue(
+      changeWith({
+        table: { ...TABLE, rowCount: 3, rows: TABLE.rows.slice(1) },
+        cells: [{ ...identifiedAt("A4"), input: "=#REF!+A1" }],
+        views: [],
+        tables: [],
+      }),
+    );
 
     expect(await store.editTable("t1", { axis: "row", kind: "delete", index: 0 })).toBe(true);
     expect(store.tables[0]?.rowCount).toBe(3);
@@ -699,12 +729,14 @@ describe("structure", () => {
     const store = await open();
     store.selection = at("A2");
     store.extendSelection(at("C4"));
-    server.editTable.mockResolvedValue({
-      table: { ...TABLE, rowCount: 3, rows: TABLE.rows!.slice(1) },
-      cells: [],
-      views: [],
-      tables: [],
-    });
+    server.editTable.mockResolvedValue(
+      changeWith({
+        table: { ...TABLE, rowCount: 3, rows: TABLE.rows.slice(1) },
+        cells: [],
+        views: [],
+        tables: [],
+      }),
+    );
     await store.editTable("t1", { axis: "row", kind: "delete", index: 0 });
     expect(store.selectedRange).toEqual({ startRow: 0, endRow: 2, startCol: 0, endCol: 2 });
   });
@@ -713,15 +745,17 @@ describe("structure", () => {
     const store = await open({ A1: "1", C4: "gone", B1: "=C4" });
     store.selection = at("B2");
     store.extendSelection(at("C4"));
-    server.updateTable.mockResolvedValue({
-      table: sizedTable({ rowCount: 2, colCount: 2 }),
-      cells: [
-        { ...at("C4"), input: "" },
-        { ...at("B1"), input: "=#REF!" },
-      ],
-      views: [],
-      tables: [],
-    });
+    server.updateTable.mockResolvedValue(
+      changeWith({
+        table: sizedTable({ rowCount: 2, colCount: 2 }),
+        cells: [
+          { ...at("C4"), input: "" },
+          { ...at("B1"), input: "=#REF!" },
+        ],
+        views: [],
+        tables: [],
+      }),
+    );
     expect(await store.updateTable("t1", { rowCount: 2, colCount: 2 })).toBe(true);
     expect(store.inputOf(at("C4"))).toBe("");
     expect(store.inputOf(at("B1"))).toBe("=#REF!");
@@ -729,12 +763,14 @@ describe("structure", () => {
     expect(store.selectedRange).toEqual({ startRow: 1, endRow: 1, startCol: 1, endCol: 1 });
 
     store.selection = at("A2");
-    server.updateTable.mockResolvedValue({
-      table: sizedTable({ rowCount: 1, colCount: 2 }),
-      cells: [],
-      views: [],
-      tables: [],
-    });
+    server.updateTable.mockResolvedValue(
+      changeWith({
+        table: sizedTable({ rowCount: 1, colCount: 2 }),
+        cells: [],
+        views: [],
+        tables: [],
+      }),
+    );
     await store.updateTable("t1", { rowCount: 1 });
     expect(store.selection).toBeNull();
   });
@@ -742,8 +778,10 @@ describe("structure", () => {
   it("stores pending cell edits before asking the server to move cells", async () => {
     const store = await open({ A1: "1" });
     const save = deferred();
-    server.setCells.mockReturnValue(save.promise);
-    server.editTable.mockResolvedValue({ table: TABLE, cells: [], views: [], tables: [] });
+    server.setCells.mockImplementation((...args) => save.promise.then(() => savedCells(...args)));
+    server.editTable.mockResolvedValue(
+      changeWith({ table: TABLE, cells: [], views: [], tables: [] }),
+    );
 
     void store.setCell(at("A1"), "5");
     const edited = store.editTable("t1", { axis: "row", kind: "insert", index: 0 });
@@ -763,7 +801,9 @@ describe("structure", () => {
 
   it("adds a table to a page", async () => {
     const store = await open();
-    server.createTable.mockResolvedValue({ ...TABLE, id: "t2", name: "Table 2", position: 1 });
+    server.createTable.mockResolvedValue(
+      createdTable({ ...TABLE, id: "t2", name: "Table 2", position: 1 }),
+    );
     expect(await store.addTable("p1")).toBe(true);
     expect(store.tables.map((table) => table.name)).toEqual(["Table 1", "Table 2"]);
   });
@@ -785,10 +825,15 @@ describe("structure", () => {
   it("deletes a page with its tables and drops a selection inside them", async () => {
     const store = await open();
     const page = { id: "p2", name: "Page 2", position: 1 };
-    server.createPage.mockResolvedValue({ page, table: { ...TABLE, id: "t2", pageId: "p2" } });
+    server.createPage.mockResolvedValue(
+      createdPage({ page, table: { ...TABLE, id: "t2", pageId: "p2" } }),
+    );
     await store.addPage();
     store.selection = at("A1", "t2");
 
+    server.deletePage.mockResolvedValue(
+      changeWith({ pages: [{ id: "p2", page: null }], tables: [{ id: "t2", table: null }] }),
+    );
     expect(await store.deletePage("p2")).toBe(true);
     expect(store.pages.map((item) => item.id)).toEqual(["p1"]);
     expect(store.tables.map((item) => item.id)).toEqual(["t1"]);
@@ -831,7 +876,7 @@ describe("views", () => {
   const TEXT: ViewRecord = { ...CHART, id: "v2", kind: "text", name: "Text 1", position: 2 };
 
   async function openWith(views: ViewRecord[], inputs: Record<string, string> = {}) {
-    server.getSnapshot.mockResolvedValue({ ...snapshotWith(inputs), views });
+    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(inputs), views }));
     const store = useWorkbookStore();
     await store.load("s1");
     return store;
@@ -858,7 +903,7 @@ describe("views", () => {
 
   it("adds a view to the page", async () => {
     const store = await openWith([]);
-    server.createView.mockResolvedValue(CHART);
+    server.createView.mockResolvedValue(createdView(CHART));
     expect(await store.addView("p1", "chart")).toBe(true);
     expect(server.createView).toHaveBeenCalledWith("p1", "chart");
     expect(store.views).toEqual([CHART]);
@@ -866,7 +911,7 @@ describe("views", () => {
 
   it("replaces a view with what the server stored", async () => {
     const store = await openWith([CHART, TEXT]);
-    server.updateView.mockResolvedValue({ ...CHART, chartType: "pie" });
+    server.updateView.mockResolvedValue(changeWith({ ...CHART, chartType: "pie" }));
     expect(await store.updateView("v1", { chartType: "pie" })).toBe(true);
     expect(store.views).toEqual([{ ...CHART, chartType: "pie" }, TEXT]);
   });
@@ -877,7 +922,9 @@ describe("views", () => {
     let finishSecond!: (view: ViewRecord) => void;
     const firstResponse = new Promise<ViewRecord>((resolve) => (finishFirst = resolve));
     const secondResponse = new Promise<ViewRecord>((resolve) => (finishSecond = resolve));
-    server.updateView.mockReturnValueOnce(firstResponse).mockReturnValueOnce(secondResponse);
+    server.updateView
+      .mockReturnValueOnce(firstResponse.then((value) => changeWith(value)))
+      .mockReturnValueOnce(secondResponse.then((value) => changeWith(value)));
 
     const first = store.updateView("v1", { source: "first" });
     const second = store.updateView("v1", { source: "second" });
@@ -914,26 +961,33 @@ describe("views", () => {
 
   it("applies the view sources the server rewrote, and leaves the others alone", async () => {
     const store = await openWith([CHART, { ...TEXT, source: "plain" }]);
-    server.renamePage.mockResolvedValue({
-      cells: [],
-      views: [{ id: "v1", source: "Data!'Table 1'!A1:B2" }],
-      tables: [],
-    });
+    server.renamePage.mockResolvedValue(
+      changeWith({
+        cells: [],
+        views: [{ id: "v1", source: "Data!'Table 1'!A1:B2" }],
+        tables: [],
+      }),
+    );
     await store.renamePage("p1", "Data");
     expect(store.views.map((view) => view.source)).toEqual(["Data!'Table 1'!A1:B2", "plain"]);
   });
 
   it("drops the views of a deleted page", async () => {
-    server.getSnapshot.mockResolvedValue({
-      ...snapshotWith(),
-      pages: [
-        { id: "p1", name: "Page 1", position: 0 },
-        { id: "p2", name: "Page 2", position: 1 },
-      ],
-      views: [CHART, { ...TEXT, pageId: "p2" }],
-    });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith(),
+        pages: [
+          { id: "p1", name: "Page 1", position: 0 },
+          { id: "p2", name: "Page 2", position: 1 },
+        ],
+        views: [CHART, { ...TEXT, pageId: "p2" }],
+      }),
+    );
     const store = useWorkbookStore();
     await store.load("s1");
+    server.deletePage.mockResolvedValue(
+      changeWith({ pages: [{ id: "p2", page: null }], views: [{ id: "v2", view: null }] }),
+    );
     await store.deletePage("p2");
     expect(store.views).toEqual([CHART]);
   });
@@ -996,7 +1050,9 @@ describe("data tables", () => {
   async function openData(
     inputs: Record<string, string> = { A1: "2", B1: "10", A2: "5", B2: "3" },
   ) {
-    server.getSnapshot.mockResolvedValue({ ...snapshotWith(inputs), tables: [DATA_TABLE] });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({ ...snapshotWith(inputs), tables: [DATA_TABLE] }),
+    );
     const store = useWorkbookStore();
     await store.load("s1");
     return store;
@@ -1014,14 +1070,17 @@ describe("data tables", () => {
   it("makes a formula typed into a formula column the formula of the whole column", async () => {
     const store = await openData();
     const changed = COLUMNS.with(2, { name: "Total", type: "formula", formula: "=[Price] + 1" });
-    server.updateColumn.mockResolvedValue({
-      table: { ...DATA_TABLE, columns: changed },
-      cells: [],
-      views: [],
-      tables: [],
-    });
+    server.updateColumn.mockResolvedValue(
+      changeWith({
+        table: { ...DATA_TABLE, columns: changed },
+        cells: [],
+        views: [],
+        tables: [],
+      }),
+    );
     await store.setCell(at("C2"), "=[Price] + 1");
     expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c3", {
+      revision: expect.any(Number),
       formula: "=[Price] + 1",
     });
     expect(server.setCells).not.toHaveBeenCalled();
@@ -1053,21 +1112,25 @@ describe("data tables", () => {
         { rowId: "r1", colId: "c2", input: "9" },
       ],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
     expect(store.valueOf(at("C1"))).toBe(14);
   });
 
   it("names the columns of a table, and shows the cells the server moved", async () => {
     const store = await open({ A1: "Price", A2: "4" });
-    server.nameColumns.mockResolvedValue({
-      table: { ...TABLE, rowCount: 3, columns: [{ name: "Price", type: "any" }] },
-      cells: [
-        { ...at("A1"), input: "4" },
-        { ...at("A2"), input: "" },
-      ],
-      views: [],
-      tables: [],
-    });
+    server.nameColumns.mockResolvedValue(
+      changeWith({
+        table: { ...TABLE, rowCount: 3, columns: [{ name: "Price", type: "any" }] },
+        cells: [
+          { ...at("A1"), input: "4" },
+          { ...at("A2"), input: "" },
+        ],
+        views: [],
+        tables: [],
+      }),
+    );
     expect(await store.nameColumns("t1", true)).toBe(true);
     expect(server.nameColumns).toHaveBeenCalledExactlyOnceWith("t1", true);
     expect(store.tables[0]?.columns).toEqual([{ name: "Price", type: "any" }]);
@@ -1077,12 +1140,14 @@ describe("data tables", () => {
 
   it("changes a column, and reads its cells as the new type", async () => {
     const store = await openData({ B1: "007" });
-    server.updateColumn.mockResolvedValue({
-      table: { ...DATA_TABLE, columns: COLUMNS.with(1, { name: "Qty", type: "text" }) },
-      cells: [],
-      views: [],
-      tables: [],
-    });
+    server.updateColumn.mockResolvedValue(
+      changeWith({
+        table: { ...DATA_TABLE, columns: COLUMNS.with(1, { name: "Qty", type: "text" }) },
+        cells: [],
+        views: [],
+        tables: [],
+      }),
+    );
     expect(store.valueOf(at("B1"))).toBe(7);
     expect(await store.updateColumn("t1", 1, { type: "text" })).toBe(true);
     expect(store.valueOf(at("B1"))).toBe("007");
@@ -1090,7 +1155,7 @@ describe("data tables", () => {
 
   it("drops the column names, after which the formula column is empty", async () => {
     const store = await openData();
-    server.dropColumns.mockResolvedValue(TABLE);
+    server.dropColumns.mockResolvedValue(changeWith(TABLE));
     expect(await store.dropColumns("t1")).toBe(true);
     expect(store.tables[0]?.columns).toBeNull();
     expect(store.valueOf(at("C1"))).toBeNull();
@@ -1103,11 +1168,13 @@ describe("data tables", () => {
       type: "formula",
       formula: "=[Price] + [Qty]",
     });
-    server.renamePage.mockResolvedValue({
-      cells: [],
-      views: [],
-      tables: [{ ...DATA_TABLE, columns: rewritten }],
-    });
+    server.renamePage.mockResolvedValue(
+      changeWith({
+        cells: [],
+        views: [],
+        tables: [{ ...DATA_TABLE, columns: rewritten }],
+      }),
+    );
     await store.renamePage("p1", "Data");
     expect(store.valueOf(at("C1"))).toBe(12);
   });
@@ -1147,10 +1214,12 @@ describe("the order of a page", () => {
   });
 
   async function openPage() {
-    server.getSnapshot.mockResolvedValue({
-      ...snapshotWith(),
-      views: [view("v2", 2), view("v1", 1), { ...view("far", 0), pageId: "p9" }],
-    });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith(),
+        views: [view("v2", 2), view("v1", 1), { ...view("far", 0), pageId: "p9" }],
+      }),
+    );
     const store = useWorkbookStore();
     await store.load("s1");
     return store;
@@ -1189,7 +1258,7 @@ describe("the order of a page", () => {
     const store = await openPage();
     server.reorderPage
       .mockRejectedValueOnce(new Error("first move failed"))
-      .mockResolvedValueOnce(undefined);
+      .mockResolvedValueOnce(changeWith(undefined));
     const first = store.moveBlock("p1", "t1", 1);
     const second = store.moveBlock("p1", "t1", 1);
     expect(await Promise.all([first, second])).toEqual([false, true]);
@@ -1229,7 +1298,9 @@ describe("the order of the pages, and moving a block between them", () => {
   };
 
   async function openPages(inputs: Record<string, string> = {}) {
-    server.getSnapshot.mockResolvedValue({ ...snapshotWith(inputs), pages: PAGES, views: [TEXT] });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({ ...snapshotWith(inputs), pages: PAGES, views: [TEXT] }),
+    );
     const store = useWorkbookStore();
     await store.load("s1");
     return store;
@@ -1262,7 +1333,7 @@ describe("the order of the pages, and moving a block between them", () => {
     const store = await openPages();
     server.reorderPages
       .mockRejectedValueOnce(new Error("first move failed"))
-      .mockResolvedValueOnce(undefined);
+      .mockResolvedValueOnce(changeWith(undefined));
     const first = store.movePage("p1", 1);
     const second = store.movePage("p1", 1);
     expect(await Promise.all([first, second])).toEqual([false, true]);
@@ -1287,12 +1358,14 @@ describe("the order of the pages, and moving a block between them", () => {
   it("moves a table to another page, with the formulas the server rewrote", async () => {
     const store = await openPages({ A1: "5" });
     store.selection = at("A1");
-    server.moveTable.mockResolvedValue({
-      table: { ...TABLE, pageId: "p2", position: 0 },
-      cells: [],
-      views: [{ id: "v1", source: "{{ 'Page 2'!'Table 1'!A1 }}" }],
-      tables: [],
-    });
+    server.moveTable.mockResolvedValue(
+      changeWith({
+        table: { ...TABLE, pageId: "p2", position: 0 },
+        cells: [],
+        views: [{ id: "v1", source: "{{ 'Page 2'!'Table 1'!A1 }}" }],
+        tables: [],
+      }),
+    );
     expect(await store.moveBlockToPage("t1", "p2")).toBe(true);
     expect(server.moveTable).toHaveBeenCalledExactlyOnceWith("t1", "p2");
     expect(store.blocksOn("p1")).toEqual(["v1"]);
@@ -1306,7 +1379,9 @@ describe("the order of the pages, and moving a block between them", () => {
   it("moves a view to another page, as the server now has it", async () => {
     const store = await openPages();
     const moved = { ...TEXT, pageId: "p3", position: 0, source: "{{ 'Page 1'!'Table 1'!A1 }}" };
-    server.moveView.mockResolvedValue({ view: moved, cells: [], views: [], tables: [] });
+    server.moveView.mockResolvedValue(
+      changeWith({ view: moved, cells: [], views: [], tables: [] }),
+    );
     expect(await store.moveBlockToPage("v1", "p3")).toBe(true);
     expect(server.moveView).toHaveBeenCalledExactlyOnceWith("v1", "p3");
     expect(store.views).toEqual([moved]);
@@ -1344,7 +1419,7 @@ describe("undo and redo", () => {
       outcome: "done",
       label: "Change cells in Table 1",
       error: null,
-      changed: changedCell("1"),
+      change: changeWith(changedCell("1")),
       undoable: false,
       redoable: true,
     });
@@ -1357,7 +1432,7 @@ describe("undo and redo", () => {
       outcome: "done",
       label: "Change cells in Table 1",
       error: null,
-      changed: changedCell("2"),
+      change: changeWith(changedCell("2")),
       undoable: true,
       redoable: false,
     });
@@ -1376,12 +1451,12 @@ describe("undo and redo", () => {
       outcome: "done",
       label: "Delete table Table 1",
       error: null,
-      changed: {
+      change: changeWith({
         pages: [],
         tables: [{ id: "t1", table: TABLE }],
         views: [],
         cells: [{ ...at("A1"), input: "restored" }],
-      },
+      }),
       undoable: false,
       redoable: true,
     });
@@ -1394,7 +1469,7 @@ describe("undo and redo", () => {
   it("waits for pending saves before sending undo", async () => {
     const store = await open({ A1: "1" });
     const saving = deferred();
-    server.setCells.mockReturnValue(saving.promise);
+    server.setCells.mockImplementation((...args) => saving.promise.then(() => savedCells(...args)));
     const save = store.setCell(at("A1"), "2");
     const undo = store.undo();
     await Promise.resolve();
@@ -1419,12 +1494,12 @@ describe("undo and redo", () => {
     const typedAgain = store.setCell(at("A1"), "4");
     expect(server.setCells).not.toHaveBeenCalled();
 
-    server.setCells.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("refused"));
+    server.setCells.mockImplementationOnce(savedCells).mockRejectedValueOnce(new Error("refused"));
     answer({
       outcome: "done",
       label: "Change cells in Table 1",
       error: null,
-      changed: changedCell("1"),
+      change: changeWith(changedCell("1")),
       undoable: false,
       redoable: true,
     });
@@ -1449,12 +1524,14 @@ describe("undo and redo", () => {
     });
 
     const other = { ...TABLE, id: "t2", name: "Theirs" };
-    server.getSnapshot.mockResolvedValue({
-      ...snapshotWith(),
-      id: "s2",
-      tables: [other],
-      undoable: true,
-    });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith(),
+        id: "s2",
+        tables: [other],
+        undoable: true,
+      }),
+    );
     // The other spreadsheet is shown once the undo is answered, so the answer has nothing of it to change.
     const opened = store.load("s2");
     await idle();
@@ -1463,7 +1540,7 @@ describe("undo and redo", () => {
       outcome: "done",
       label: "Delete table Table 1",
       error: null,
-      changed: { pages: [], tables: [{ id: "t1", table: TABLE }], views: [], cells: [] },
+      change: changeWith({ pages: [], tables: [{ id: "t1", table: TABLE }], views: [], cells: [] }),
       undoable: false,
       redoable: true,
     });
@@ -1489,15 +1566,15 @@ describe("undo and redo", () => {
       source: "before",
       chartType: null,
     };
-    server.getSnapshot.mockResolvedValue({ ...snapshotWith(), pages, views: [view] });
+    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(), pages, views: [view] }));
     const store = useWorkbookStore();
     await store.load("s1");
 
     const reordering = deferred();
     let finishView!: (value: ViewRecord) => void;
     const updating = new Promise<ViewRecord>((resolve) => (finishView = resolve));
-    server.reorderPages.mockReturnValue(reordering.promise);
-    server.updateView.mockReturnValue(updating);
+    server.reorderPages.mockReturnValue(reordering.promise.then(() => changeWith()));
+    server.updateView.mockReturnValue(updating.then((value) => changeWith(value)));
     const pageMove = store.movePage("p1", 1);
     const viewUpdate = store.updateView("v1", { source: "after" });
     const history = store.undo();
@@ -1524,7 +1601,7 @@ describe("undo and redo", () => {
       outcome: "refused",
       label: "Insert row 1",
       error: "A later change prevents undoing this structural change",
-      changed: { pages: [], tables: [], views: [], cells: [] },
+      change: changeWith({ pages: [], tables: [], views: [], cells: [] }),
       undoable: false,
       redoable: false,
     });
@@ -1582,21 +1659,23 @@ describe("refreshing after a change made elsewhere", () => {
   it("shows the cells and views the server now has, and keeps the selection", async () => {
     const store = await open({ A1: "1", B1: "=A1*2" });
     store.selection = at("B1");
-    server.getSnapshot.mockResolvedValue({
-      ...snapshotWith({ A1: "5", B1: "=A1*2", C1: "new" }),
-      name: "Renamed elsewhere",
-      views: [
-        {
-          id: "v1",
-          pageId: "p1",
-          kind: "text",
-          name: "Text 1",
-          position: 1,
-          source: "hi",
-          chartType: null,
-        },
-      ],
-    });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith({ A1: "5", B1: "=A1*2", C1: "new" }),
+        name: "Renamed elsewhere",
+        views: [
+          {
+            id: "v1",
+            pageId: "p1",
+            kind: "text",
+            name: "Text 1",
+            position: 1,
+            source: "hi",
+            chartType: null,
+          },
+        ],
+      }),
+    );
     await store.refresh();
     expect(store.valueOf(at("B1"))).toBe(10);
     expect(store.inputOf(at("C1"))).toBe("new");
@@ -1609,20 +1688,24 @@ describe("refreshing after a change made elsewhere", () => {
     const store = await open({ A1: "1" });
     await store.setCell(at("A1"), "2");
     notifyJournaled();
-    server.getSnapshot.mockResolvedValue({
-      ...snapshotWith({ A1: "2", B1: "theirs" }),
-      undoable: true,
-      redoable: false,
-    });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith({ A1: "2", B1: "theirs" }),
+        undoable: true,
+        redoable: false,
+      }),
+    );
     await store.refresh();
     expect(store.canUndo).toBe(true);
 
-    server.getSnapshot.mockResolvedValue({
-      ...snapshotWith({ A1: "2" }),
-      tables: [{ ...TABLE, name: "Renamed" }],
-      undoable: false,
-      redoable: true,
-    });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith({ A1: "2" }),
+        tables: [{ ...TABLE, name: "Renamed" }],
+        undoable: false,
+        redoable: true,
+      }),
+    );
     await store.refresh();
     expect(store.canUndo).toBe(false);
     expect(store.canRedo).toBe(true);
@@ -1631,88 +1714,73 @@ describe("refreshing after a change made elsewhere", () => {
   it("drops a selection in a table or a row that is gone", async () => {
     const store = await open();
     store.selection = at("C4");
-    server.getSnapshot.mockResolvedValue({
-      ...snapshotWith(),
-      tables: [sizedTable({ rowCount: 2 })],
-    });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith(),
+        tables: [sizedTable({ rowCount: 2 })],
+      }),
+    );
     await store.refresh();
     expect(store.selection).toBeNull();
   });
 
   it("follows a change of role", async () => {
     const store = await open();
-    server.getSnapshot.mockResolvedValue(snapshotWith({}, "viewer"));
+    server.getSnapshot.mockResolvedValue(wireSnapshot(snapshotWith({}, "viewer")));
     await store.refresh();
     expect(store.canEdit).toBe(false);
   });
 
-  it("waits for what was typed here to be saved before reading", async () => {
+  it("reads while a save is pending and preserves its optimistic input", async () => {
     const store = await open();
     const saving = deferred();
-    server.setCells.mockReturnValueOnce(saving.promise);
+    server.setCells.mockImplementationOnce((...args) =>
+      saving.promise.then(() => savedCells(...args)),
+    );
     const typed = store.setCell(at("A1"), "mine");
-    server.getSnapshot.mockClear();
-    const refreshed = store.refresh();
-    await Promise.resolve();
-    expect(server.getSnapshot).not.toHaveBeenCalled();
-
-    server.getSnapshot.mockResolvedValue(snapshotWith({ A1: "mine", B1: "theirs" }));
-    saving.resolve();
-    await typed;
-    await refreshed;
+    server.getSnapshot.mockResolvedValue(wireSnapshot(snapshotWith({ B1: "theirs" })));
+    await store.refresh();
     expect(store.inputOf(at("A1"))).toBe("mine");
     expect(store.inputOf(at("B1"))).toBe("theirs");
+    saving.resolve();
+    await typed;
+    expect(store.inputOf(at("A1"))).toBe("mine");
   });
 
-  it("reads again when an undo was answered while the spreadsheet was being read", async () => {
+  it("ignores a snapshot older than an undo applied while the read was pending", async () => {
     const store = await open({ A1: "2" });
     notifyJournaled();
-    const answers: ((snapshot: Snapshot) => void)[] = [];
-    server.getSnapshot.mockImplementation(
-      () => new Promise<Snapshot>((resolve) => answers.push(resolve)),
+    let answer!: (snapshot: Snapshot) => void;
+    server.getSnapshot.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
     );
     const refreshed = store.refresh();
-    await vi.waitFor(() => {
-      expect(answers).toHaveLength(1);
-    });
-
     server.undo.mockResolvedValue({
       outcome: "done",
-      label: "Change cells in Table 1",
+      label: "Edit",
       error: null,
-      changed: { pages: [], tables: [], views: [], cells: [{ ...at("A1"), input: "1" }] },
+      change: changeWith({ cells: [{ ...identifiedAt("A1"), input: "1" }] }),
       undoable: false,
       redoable: true,
     });
     await store.undo();
-    // The first read began before the undo, and still has what it undid.
-    answers[0]?.({ ...snapshotWith({ A1: "2" }), undoable: true });
-    await vi.waitFor(() => {
-      expect(answers).toHaveLength(2);
-    });
-    expect(store.inputOf(at("A1"))).toBe("1");
-    answers[1]?.({ ...snapshotWith({ A1: "1", B1: "theirs" }), redoable: true });
+    answer({ ...snapshotWith({ A1: "2" }), revision: 0, undoable: true });
     await refreshed;
     expect(store.inputOf(at("A1"))).toBe("1");
-    expect(store.inputOf(at("B1"))).toBe("theirs");
-    expect(store.canUndo).toBe(false);
     expect(store.canRedo).toBe(true);
   });
 
-  it("waits for a change to the structure made here before reading", async () => {
+  it("can refresh while a name change waits for its response", async () => {
     const store = await open();
     const renaming = deferred();
     server.renameSpreadsheet.mockReturnValueOnce(renaming.promise);
     const renamed = store.renameSpreadsheet("Mine");
-    server.getSnapshot.mockClear();
-    const refreshed = store.refresh();
-    await Promise.resolve();
-    expect(server.getSnapshot).not.toHaveBeenCalled();
-
-    server.getSnapshot.mockResolvedValue({ ...snapshotWith(), name: "Mine" });
+    await store.refresh();
     renaming.resolve();
-    await Promise.all([renamed, refreshed]);
-    expect(server.getSnapshot).toHaveBeenCalledOnce();
+    await renamed;
+    expect(store.spreadsheet?.name).toBe("Mine");
   });
 
   it("passes on the failure when the spreadsheet can no longer be read", async () => {
@@ -1731,11 +1799,11 @@ it("keeps the selected cell and saves its captured IDs after a remote row insert
   const store = await open({ A2: "original" });
   store.selection = at("A2");
   const identity = store.identityOf(at("A2"))!;
-  const shifted = snapshotWith({ A3: "original" });
+  const shifted = snapshotWith({ A2: "original" });
   shifted.tables = [
-    { ...TABLE, rowCount: 5, rows: [{ id: "inserted", orderKey: "Zz" }, ...TABLE.rows!] },
+    { ...TABLE, rowCount: 5, rows: [{ id: "inserted", orderKey: "Zz" }, ...TABLE.rows] },
   ];
-  server.getSnapshot.mockResolvedValue(shifted);
+  server.getSnapshot.mockResolvedValue(wireSnapshot(shifted));
   await store.refresh();
   expect(store.selection).toEqual(at("A3"));
   await store.setIdentifiedCell(identity, "edited");
@@ -1743,6 +1811,8 @@ it("keeps the selected cell and saves its captured IDs after a remote row insert
     "t1",
     [{ rowId: "r1", colId: "c1", input: "edited" }],
     expect.any(String),
+    expect.any(Number),
+    expect.any(Array),
   );
   expect(store.inputOf(at("A3"))).toBe("edited");
   expect(store.inputOf(at("A2"))).toBe("");
@@ -1751,9 +1821,11 @@ it("keeps the selected cell and saves its captured IDs after a remote row insert
 it("queues formatting and renaming behind an earlier cell save, and continues after failures", async () => {
   const store = await open();
   const saving = deferred();
-  server.setCells.mockReturnValueOnce(saving.promise);
-  server.formatCells.mockResolvedValueOnce(TABLE);
-  server.renamePage.mockResolvedValueOnce({ cells: [], views: [], tables: [] });
+  server.setCells.mockImplementationOnce((...args) =>
+    saving.promise.then(() => savedCells(...args)),
+  );
+  server.formatCells.mockResolvedValueOnce(changeWith(TABLE));
+  server.renamePage.mockResolvedValueOnce(changeWith({ cells: [], views: [], tables: [] }));
   store.selection = at("A1");
   const saved = store.setCell(at("A1"), "first");
   const formatted = store.formatSelection({ bold: true });

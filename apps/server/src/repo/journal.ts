@@ -296,9 +296,7 @@ export class ContentWriter {
    */
   changed(): ChangedContent | null {
     if (this.tooLarge || this.undescribed) return null;
-    const tableAfter = new Map(
-      [...this.tableChanges.values()].map(({ id, after }) => [id, after]),
-    );
+    const tableAfter = new Map([...this.tableChanges.values()].map(({ id, after }) => [id, after]));
     const gone = (tableId: string): boolean => tableAfter.get(tableId) === null;
     const deleted = new Set(
       [...this.rowChanges.values()].filter((row) => row.after === null).map((row) => row.id),
@@ -763,9 +761,12 @@ export class ContentWriter {
       views: [...this.viewChanges.values()],
       cells: [...written].map(([tableId, changes]) => ({
         tableId,
-        changes: changes.map(
-          ({ rowId, colId, before, input }): CellChange => [rowId, colId, before, input],
-        ),
+        changes: changes.map(({ rowId, colId, before, input }): CellChange => [
+          rowId,
+          colId,
+          before,
+          input,
+        ]),
       })),
     };
   }
@@ -783,7 +784,8 @@ export function writesFormulas(data: JournalData, side: "before" | "after"): boo
     changes.some(([, , before, after]) => isFormulaInput(side === "before" ? before : after)),
   );
   const view = data.views.some(
-    (change) => (change[side]?.source ?? "") !== "" && change[side]?.source !== change[other]?.source,
+    (change) =>
+      (change[side]?.source ?? "") !== "" && change[side]?.source !== change[other]?.source,
   );
   const column = data.tables.some((change) => {
     const [written, was] = [change[side], change[other]];
@@ -908,7 +910,9 @@ export async function applyRecorded(
     const removed = changes.filter(([, before, after]) => target(before, after) === null);
     const removedIds = removed.map(([id]) => id);
     for (let start = 0; start < removedIds.length; start += BATCH) {
-      await db.delete(tableRows).where(inArray(tableRows.id, removedIds.slice(start, start + BATCH)));
+      await db
+        .delete(tableRows)
+        .where(inArray(tableRows.id, removedIds.slice(start, start + BATCH)));
     }
     await markDeleted(db, spreadsheetId, removedIds, true);
     for (const id of removedIds) changed.rows.push({ id, tableId, orderKey: null });

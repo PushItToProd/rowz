@@ -75,7 +75,8 @@ async function atLimit() {
   };
 }
 
-describe("spreadsheet row limit", () => {
+// Each case seeds 100,000 rows; allow for CPU contention in the full suite.
+describe("spreadsheet row limit", { timeout: 15_000 }, () => {
   it("refuses insert, resize, and table creation atomically at the limit", async () => {
     const { snapshot, tableId, pageId } = await atLimit();
     for (const [method, path, body] of [

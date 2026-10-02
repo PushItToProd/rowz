@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-  cellKey,
   columnLabel,
   formatAddress,
   type CellAddress,
@@ -41,6 +40,25 @@ const grid = ref<HTMLElement>();
 /** The text being typed into the selected cell, or `null` when not editing. */
 const draft = ref<string | null>(null);
 const editing = shallowRef<IdentifiedCell | null>(null);
+let editRevision = 0;
+let newRowColumn: string | undefined;
+const displayedRows = computed(
+  () =>
+    props.table.rowCount + (props.table.columns && props.table.rowCount < LIMITS.tableRows ? 1 : 0),
+);
+watch(
+  () => store.rejectedDraft,
+  (rejected) => {
+    if (rejected?.id.tableId !== props.table.id) return;
+    const position = store.positionOf(rejected.id);
+    if (!position) return;
+    store.selection = position;
+    editing.value = rejected.id;
+    editRevision = store.revision;
+    draft.value = rejected.input;
+    store.rejectedDraft = null;
+  },
+);
 
 /** The input of the cell being edited, while there is one. */
 const editor = shallowRef<HTMLInputElement>();
@@ -65,7 +83,11 @@ function isSelected(row: number, col: number): boolean {
 function commit(): void {
   const input = draft.value;
   draft.value = null;
-  if (input !== null && editing.value) void store.setIdentifiedCell(editing.value, input);
+  if (input !== null && editing.value)
+    void store.setIdentifiedCell(editing.value, input, editRevision);
+  else if (input !== null && newRowColumn)
+    void store.appendCell(props.table.id, newRowColumn, input, editRevision);
+  newRowColumn = undefined;
   editing.value = null;
 }
 
@@ -131,7 +153,7 @@ function onHeaderMouseenter(axis: Axis, index: number): void {
 /** Selects whole rows or columns: every one from `from` to `to`. */
 function selectLines(axis: Axis, from: number, to: number): void {
   commit();
-  const last = { row: props.table.rowCount - 1, col: props.table.colCount - 1 };
+  const last = { row: Math.max(0, props.table.rowCount - 1), col: props.table.colCount - 1 };
   store.selection = axis === "row" ? cell(from, 0) : cell(0, from);
   store.extendSelection(axis === "row" ? { row: to, col: last.col } : { row: last.row, col: to });
   focusGrid();
@@ -153,7 +175,10 @@ function isLineSelected(axis: Axis, index: number): boolean {
 
 function selectAll(): void {
   store.selection = cell(0, 0);
-  store.extendSelection({ row: props.table.rowCount - 1, col: props.table.colCount - 1 });
+  store.extendSelection({
+    row: Math.max(0, props.table.rowCount - 1),
+    col: props.table.colCount - 1,
+  });
 }
 
 /**
@@ -192,7 +217,7 @@ function openMenuAtSelection(): void {
 /** Keeps a position inside the table. */
 function clamp({ row, col }: CellAddress): CellAddress {
   return {
-    row: Math.min(Math.max(row, 0), props.table.rowCount - 1),
+    row: Math.min(Math.max(row, 0), displayedRows.value - 1),
     col: Math.min(Math.max(col, 0), props.table.colCount - 1),
   };
 }
@@ -334,9 +359,23 @@ onBeforeUnmount(() => {
 
 function edit(initial?: string): void {
   if (!store.canEdit || !selected.value) return;
+  editRevision = store.revision;
+  newRowColumn =
+    selected.value.row === props.table.rowCount && props.table.columns
+      ? props.table.colIds[selected.value.col]
+      : undefined;
   editing.value = store.identityOf(selected.value) ?? null;
   draft.value = initial ?? store.inputOf(selected.value);
 }
+
+watch(
+  () => props.table.rowCount,
+  () => {
+    if (draft.value === null || !newRowColumn) return;
+    const col = props.table.colIds.indexOf(newRowColumn);
+    if (col >= 0) store.selection = cell(props.table.rowCount, col);
+  },
+);
 
 // Focusing must not scroll: the grid can be taller than the window, and
 // scrolling it into view would move the cell being worked on.
@@ -492,7 +531,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="row in table.rowCount" :key="row" role="row">
+        <tr v-for="row in displayedRows" :key="table.rows[row - 1]?.id ?? 'new'" role="row">
           <th
             scope="row"
             :class="{ 'grid__header--selected': isLineSelected('row', row - 1) }"
@@ -500,11 +539,11 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             @mouseenter="onHeaderMouseenter('row', row - 1)"
             @contextmenu="onHeaderContextMenu($event, 'row', row - 1)"
           >
-            {{ row }}
+            {{ row > table.rowCount ? "+" : row }}
           </th>
           <td
             v-for="col in table.colCount"
-            :key="col"
+            :key="table.colIds[col - 1]"
             role="gridcell"
             :data-cell="formatAddress({ row: row - 1, col: col - 1 })"
             :aria-selected="isSelected(row - 1, col - 1)"
@@ -539,7 +578,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             <CellView
               v-else
               :value="store.valueOf(cell(row - 1, col - 1))"
-              :running="store.running.has(cellKey(cell(row - 1, col - 1)))"
+              :running="store.isRunning(cell(row - 1, col - 1))"
               :can-run="store.canEdit"
               :checkbox="columnAt(col - 1)?.type === 'checkbox'"
               :format="store.formatOf(cell(row - 1, col - 1))"

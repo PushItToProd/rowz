@@ -109,7 +109,8 @@ describe("keeping versions", () => {
           `/tables/${table.id}/cells`,
           {
             cells: Array.from({ length: 20 }, (_, row) => ({ row: row % 20, col: 2, input: "x" })),
-          }, 200,
+          },
+          200,
         ),
       "Before changing 20 cells of Table 1",
     ],
@@ -255,12 +256,12 @@ describe("restoring a version", () => {
 
   it("puts back a data table that has no rows", async () => {
     const { table, history, current, restore, age } = await start({ A1: "" });
+    await age();
     await user.json("POST", `/tables/${table.id}/columns`, { headerRow: false });
     expect((await current()).tables[0]).toMatchObject({ rowCount: 0 });
-    // A row is added once the version of the empty table is an hour old, so the change keeps one.
-    await age();
+    // Naming columns keeps the new empty state after the previous version has aged.
+    const [empty] = await history();
     await user.json("PATCH", `/tables/${table.id}`, { rowCount: 3 });
-    const [, empty] = await history();
     await restore(empty!.id);
     const restored = (await current()).tables[0]!;
     expect(restored).toMatchObject({ rowCount: 0, colCount: table.colCount });
@@ -329,8 +330,6 @@ describe("copying a version", () => {
     expect(copy.id).not.toBe(id);
     const copied = await readSnapshot(user, copy.id);
     expect(await storedInputs(user, copy.id, copied.tables[0]!.id)).toMatchObject({ "0:0": "1" });
-    expect((await current()).tables.map((t) => t.rowCount)).toEqual([
-      table.rowCount - 1,
-    ]);
+    expect((await current()).tables.map((t) => t.rowCount)).toEqual([table.rowCount - 1]);
   });
 });

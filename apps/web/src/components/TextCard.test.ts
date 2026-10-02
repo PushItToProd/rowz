@@ -1,3 +1,4 @@
+import { wireSnapshot, changeWith } from "../testing";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,10 +28,12 @@ let wrapper: VueWrapper;
 const confirm = vi.spyOn(window, "confirm");
 
 async function render(source: string, role = "owner"): Promise<void> {
-  server.getSnapshot.mockResolvedValue({
-    ...snapshotWith(CELLS, role),
-    views: [{ ...TEXT, source }],
-  });
+  server.getSnapshot.mockResolvedValue(
+    wireSnapshot({
+      ...snapshotWith(CELLS, role),
+      views: [{ ...TEXT, source }],
+    }),
+  );
   const store = useWorkbookStore();
   await store.load("s1");
   wrapper = mount(
@@ -55,7 +58,9 @@ beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
   confirm.mockReturnValue(true);
-  server.updateView.mockImplementation((_id, changes) => Promise.resolve({ ...TEXT, ...changes }));
+  server.updateView.mockImplementation((_id, changes) =>
+    Promise.resolve(changeWith({ ...TEXT, ...changes })),
+  );
 });
 afterEach(() => {
   wrapper.unmount();
@@ -166,7 +171,10 @@ describe("TextCard", () => {
 
     await button("Done").trigger("click");
     await flushPromises();
-    expect(server.updateView).toHaveBeenCalledWith("v1", { source: "new {{ 1 + 1 }}" });
+    expect(server.updateView).toHaveBeenCalledWith("v1", {
+      revision: expect.any(Number),
+      source: "new {{ 1 + 1 }}",
+    });
     expect(wrapper.find("textarea").exists()).toBe(false);
     expect(shown().text()).toBe("new 2");
   });
@@ -179,7 +187,10 @@ describe("TextCard", () => {
     await editor.setValue("new");
     editor.element.blur();
     await flushPromises();
-    expect(server.updateView).toHaveBeenCalledExactlyOnceWith("v1", { source: "new" });
+    expect(server.updateView).toHaveBeenCalledExactlyOnceWith("v1", {
+      revision: expect.any(Number),
+      source: "new",
+    });
     expect(wrapper.find("textarea").exists()).toBe(false);
     expect(button("Edit").exists()).toBe(true);
   });

@@ -1,5 +1,4 @@
 import {
-  cellKey,
   createWorkbook,
   formatAddress,
   formatDate,
@@ -21,6 +20,7 @@ import {
 } from "@spreadsheet-app/engine";
 import {
   LIMITS,
+  keyBetween,
   TableLayout,
   type IdentifiedCell,
   type IdentityCellInput,
@@ -31,16 +31,16 @@ import {
 } from "@spreadsheet-app/shared";
 import { defineStore } from "pinia";
 import { toSpreadsheetFile } from "../files/spreadsheetFile";
-import { computed, reactive, ref, shallowRef, triggerRef, watch } from "vue";
+import { computed, reactive, ref, shallowRef, watch } from "vue";
 import {
   setJournaledHandler,
   api,
   type ClickResult,
   type PageRecord,
-  type Rewritten,
+  type Change,
+  type ChangedContent,
   type Snapshot,
   type TableRecord,
-  type UndoResult,
   type ViewRecord,
 } from "../api/client";
 import {
@@ -78,12 +78,18 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const spreadsheet = ref<{ id: string; name: string; role: string } | null>(null);
   const pages = ref<PageRecord[]>([]);
   const tables = ref<TableRecord[]>([]);
+  const revision = ref(0);
+  type StoredCell = Snapshot["cells"][number];
+  const inputs = new Map<string, StoredCell>();
+  const rows = new Map<string, Snapshot["rows"][number]>();
+  const pendingRows = new Map<string, { tableId: string; ids: string[] }>();
+  const cellIdentityKey = (id: IdentifiedCell): string => `${id.tableId}:${id.rowId}:${id.colId}`;
+  const rejectedDraft = ref<{ id: IdentifiedCell; input: string; revision: number } | null>(null);
+
   const layouts = computed(
     () =>
       new Map(
-        tables.value.flatMap((table) =>
-          table.rows ? [[table.id, new TableLayout(table.rows, table.colIds)] as const] : [],
-        ),
+        tables.value.map((table) => [table.id, new TableLayout(table.rows, table.colIds)] as const),
       ),
   );
   /** Charts and text views: the things on a page that are not tables. */
@@ -129,6 +135,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const acceptedBlockOrders = new Map<string, string[]>();
   const pendingPageReorders = new Map<string, number>();
   const pendingBlockReorders = new Map<string, number>();
+  const optimisticBlockOrders = new Map<string, string[]>();
+  let optimisticPageOrder: string[] | undefined;
   const viewUpdates = new Map<string, Promise<boolean>>();
 
   /** The changes, undos, and redos the server has not answered yet. */
@@ -209,7 +217,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }
   }
 
-  async function setIdentifiedCell(id: IdentifiedCell, input: string): Promise<void> {
+  async function setIdentifiedCell(
+    id: IdentifiedCell,
+    input: string,
+    writtenAt = revision.value,
+  ): Promise<void> {
     const position = positionOf(id);
     if (!position) {
       notice.value = {
@@ -218,18 +230,84 @@ export const useWorkbookStore = defineStore("workbook", () => {
       };
       return;
     }
-    await setCell(position, input);
+    await setCell(position, input, writtenAt);
   }
 
-  function apply(id: CellId, input: string): void {
-    if (!hasTable(id.tableId)) return;
-    engine.value.setCell(id, input);
-    triggerRef(engine);
-  }
-
+  /** Rebuild positions from identities, then overlay edits whose requests have not settled. */
   function syncStructure(): void {
-    engine.value.setStructure({ pages: pages.value, tables: tables.value });
-    triggerRef(engine);
+    tables.value = tables.value.map((table) => {
+      const ordered = [...rows.values()]
+        .filter((row) => row.tableId === table.id)
+        .sort((a, b) => (a.orderKey < b.orderKey ? -1 : a.orderKey > b.orderKey ? 1 : 0));
+      const present = new Set(ordered.map((row) => row.id));
+      for (const pending of pendingRows.values()) {
+        if (pending.tableId !== table.id) continue;
+        for (const id of pending.ids) {
+          if (!present.has(id)) {
+            ordered.push({
+              id,
+              tableId: table.id,
+              orderKey: keyBetween(ordered.at(-1)?.orderKey ?? null, null),
+            });
+            present.add(id);
+          }
+        }
+      }
+      return {
+        ...table,
+        rows: ordered.map(({ id, orderKey }) => ({ id, orderKey })),
+        rowCount: ordered.length,
+        colCount: table.colIds.length,
+      };
+    });
+    const visible = new Map(inputs);
+    for (const { tableId, changes } of unsavedChanges) {
+      for (const change of changes) {
+        const cell = { tableId, ...change };
+        visible.set(cellIdentityKey(cell), cell);
+      }
+    }
+    const cells = [...visible.values()].flatMap((cell) => {
+      const position = positionOf(cell);
+      return position ? [{ ...position, input: cell.input }] : [];
+    });
+    engine.value = createWorkbook({ pages: pages.value, tables: tables.value, cells });
+  }
+
+  function installSnapshot(snapshot: Snapshot): void {
+    revision.value = snapshot.revision;
+    inputs.clear();
+    for (const cell of snapshot.cells) inputs.set(cellIdentityKey(cell), cell);
+    rows.clear();
+    for (const row of snapshot.rows) rows.set(`${row.tableId}:${row.id}`, row);
+    spreadsheet.value = { id: snapshot.id, name: snapshot.name, role: snapshot.role };
+    pages.value = snapshot.pages;
+    tables.value = snapshot.tables.map((table) => ({
+      ...table,
+      rows: [],
+      rowCount: 0,
+      colCount: table.colIds.length,
+    }));
+    views.value = snapshot.views;
+    undoable.value = snapshot.undoable;
+    redoable.value = snapshot.redoable;
+    syncStructure();
+    rememberOrders();
+    showPendingOrders();
+  }
+
+  /** Responses and events share this path. A missing revision requires a fresh snapshot. */
+  async function receiveChange(change: Change): Promise<void> {
+    if (change.revision <= revision.value) return;
+    if (change.revision !== revision.value + 1 || change.changed === null) {
+      await refresh();
+      return;
+    }
+    const content = change.changed;
+    withStableSelection(() => {
+      applyChanged(content);
+      revision.value = change.revision;
+    });
   }
 
   /** Whether the requesting tab has a step it can undo or redo. */
@@ -279,16 +357,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
       },
     );
     if (!snapshot) return;
-    engine.value = createWorkbook(snapshot);
-    spreadsheet.value = { id: snapshot.id, name: snapshot.name, role: snapshot.role };
-    pages.value = snapshot.pages;
-    tables.value = snapshot.tables;
-    views.value = snapshot.views;
-    undoable.value = snapshot.undoable;
-    redoable.value = snapshot.redoable;
-    acceptedPageOrder = snapshot.pages.map((page) => page.id);
-    acceptedBlockOrders.clear();
-    for (const page of snapshot.pages) acceptedBlockOrders.set(page.id, blocksOn(page.id));
+    installSnapshot(snapshot);
     selection.value = null;
     notice.value = null;
   }
@@ -301,27 +370,21 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const open = spreadsheet.value;
     if (!open) return;
     const [turn, loaded] = [++refreshes, loads];
-    const snapshot = await readSettled(
-      open.id,
-      () => turn === refreshes && loaded === loads && spreadsheet.value?.id === open.id,
-    );
-    if (!snapshot) return;
+    const snapshot = await api.getSnapshot(open.id);
+    if (
+      turn !== refreshes ||
+      loaded !== loads ||
+      spreadsheet.value?.id !== open.id ||
+      snapshot.revision < revision.value
+    )
+      return;
 
     const anchored = selection.value && identityOf(selection.value);
     const end =
       selection.value &&
       selectionEnd.value &&
       identityOf({ tableId: selection.value.tableId, ...selectionEnd.value });
-    engine.value = createWorkbook(snapshot);
-    spreadsheet.value = { id: snapshot.id, name: snapshot.name, role: snapshot.role };
-    pages.value = snapshot.pages;
-    tables.value = snapshot.tables;
-    views.value = snapshot.views;
-    undoable.value = snapshot.undoable;
-    redoable.value = snapshot.redoable;
-    acceptedPageOrder = snapshot.pages.map((page) => page.id);
-    acceptedBlockOrders.clear();
-    for (const page of snapshot.pages) acceptedBlockOrders.set(page.id, blocksOn(page.id));
+    installSnapshot(snapshot);
 
     const selected = anchored && positionOf(anchored);
     selection.value = selected ?? null;
@@ -340,25 +403,12 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return engine.value.evaluateOnPage(pageId, formula, names);
   }
 
-  /** Shows what the server rewrote after a rename or a row or column edit. */
-  function applyRewritten({ cells, views: sources, tables: changed }: Rewritten): void {
-    if (changed.length > 0) {
-      // Other tables' formula columns named what was renamed or moved.
-      const byId = new Map(changed.map((table) => [table.id, table]));
-      tables.value = tables.value.map((table) => byId.get(table.id) ?? table);
-      syncStructure();
-    }
-    for (const cell of cells) apply(cell, cell.input);
-    if (sources.length === 0) return;
-    const rewritten = new Map(sources.map(({ id, source }) => [id, source]));
-    views.value = views.value.map((view) => ({
-      ...view,
-      source: rewritten.get(view.id) ?? view.source,
-    }));
-  }
-
   /** Applies the content the server restored, then keeps or moves the selection. */
-  function applyChanged(changed: UndoResult["changed"]): void {
+  function applyChanged(changed: ChangedContent): void {
+    // Start from confirmed positions before merging an earlier reorder response.
+    if (optimisticPageOrder && acceptedPageOrder) showPageOrder(acceptedPageOrder);
+    for (const pageId of optimisticBlockOrders.keys())
+      showOrder(acceptedBlockOrders.get(pageId) ?? []);
     const pageRecords = new Map(changed.pages.map(({ id, page }) => [id, page]));
     pages.value = [
       ...pages.value.filter((page) => !pageRecords.has(page.id)),
@@ -368,7 +418,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const tableRecords = new Map(changed.tables.map(({ id, table }) => [id, table]));
     tables.value = [
       ...tables.value.filter((table) => !tableRecords.has(table.id)),
-      ...[...tableRecords.values()].filter((table): table is TableRecord => table !== null),
+      ...[...tableRecords.values()].flatMap((table) =>
+        table ? [{ ...table, rows: [], rowCount: 0, colCount: table.colIds.length }] : [],
+      ),
     ].sort(
       (left, right) => left.pageId.localeCompare(right.pageId) || left.position - right.position,
     );
@@ -381,55 +433,23 @@ export const useWorkbookStore = defineStore("workbook", () => {
       (left, right) => left.pageId.localeCompare(right.pageId) || left.position - right.position,
     );
 
-    if (changed.pages.length > 0 || changed.tables.length > 0) syncStructure();
-    for (const cell of changed.cells) apply(cell, cell.input);
+    for (const row of changed.rows) {
+      if (row.orderKey === null) rows.delete(`${row.tableId}:${row.id}`);
+      else rows.set(`${row.tableId}:${row.id}`, { ...row, orderKey: row.orderKey });
+    }
+    for (const cell of changed.cells) {
+      if (cell.input === "") inputs.delete(cellIdentityKey(cell));
+      else inputs.set(cellIdentityKey(cell), cell);
+    }
+    for (const [key, cell] of inputs) {
+      const table = tables.value.find((table) => table.id === cell.tableId);
+      if (!rows.has(`${cell.tableId}:${cell.rowId}`) || !table?.colIds.includes(cell.colId))
+        inputs.delete(key);
+    }
+    syncStructure();
 
-    acceptedPageOrder = pages.value.map((page) => page.id);
-    for (const page of pages.value) acceptedBlockOrders.set(page.id, blocksOn(page.id));
-    for (const pageId of acceptedBlockOrders.keys()) {
-      if (!pages.value.some((page) => page.id === pageId)) acceptedBlockOrders.delete(pageId);
-    }
-
-    const selected = selection.value;
-    const selectedTable = tables.value.find((table) => table.id === selected?.tableId);
-    const selectedInside =
-      selectedTable !== undefined &&
-      selected !== null &&
-      selected.row < selectedTable.rowCount &&
-      selected.col < selectedTable.colCount;
-    if (!selectedInside) {
-      const first = changed.cells.find((cell) => {
-        const table = tables.value.find((candidate) => candidate.id === cell.tableId);
-        return table !== undefined && cell.row < table.rowCount && cell.col < table.colCount;
-      });
-      selection.value = first ? { tableId: first.tableId, row: first.row, col: first.col } : null;
-      selectionEnd.value = null;
-      return;
-    }
-    const end = selectionEnd.value;
-    if (end && (end.row >= selectedTable.rowCount || end.col >= selectedTable.colCount)) {
-      selectionEnd.value = null;
-    }
-  }
-
-  /**
-   * Shows again the cell changes typed while an undo or redo was on its way,
-   * where its result wrote over them. Their saves waited for it and store
-   * them after it, so they are what the server ends up holding.
-   */
-  function showUnsavedOver(restored: readonly CellId[]): void {
-    const written = new Set(restored.map(cellKey));
-    for (const { tableId, changes } of unsavedChanges) {
-      if (!hasTable(tableId)) continue;
-      for (const change of changes) {
-        const id = positionOf({ tableId, ...change });
-        if (!id) continue;
-        if (!written.has(cellKey(id))) continue;
-        // A save that fails puts back what the cell holds on the server.
-        change.previous = engine.value.getInput(id);
-        apply(id, change.input);
-      }
-    }
+    rememberOrders();
+    showPendingOrders();
   }
 
   async function runHistory(direction: "undo" | "redo"): Promise<void> {
@@ -443,14 +463,12 @@ export const useWorkbookStore = defineStore("workbook", () => {
       undoable.value = result.undoable;
       redoable.value = result.redoable;
       if (result.outcome === "done") {
-        withStableSelection(() => {
-          applyChanged(result.changed);
-        });
-        showUnsavedOver(result.changed.cells);
+        if (result.change) await receiveChange(result.change);
         if (
-          result.changed.pages.length > 0 ||
-          result.changed.tables.length > 0 ||
-          result.changed.views.length > 0
+          result.change?.changed &&
+          (result.change.changed.pages.length > 0 ||
+            result.change.changed.tables.length > 0 ||
+            result.change.changed.views.length > 0)
         ) {
           notice.value = {
             kind: "success",
@@ -517,8 +535,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
       endColId: wholeCols ? null : end.colId,
     };
     return attempt(async () => {
-      const updated = await api.formatCells(table.id, range, patch, reset);
-      tables.value = tables.value.map((other) => (other.id === updated.id ? updated : other));
+      await receiveChange(await api.formatCells(table.id, range, patch, reset));
     }, "The format could not be changed");
   }
 
@@ -532,9 +549,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
    * input back. What is typed into a cell of a formula column becomes the
    * formula of the whole column.
    */
-  async function setCell(id: CellId, input: string): Promise<void> {
+  async function setCell(id: CellId, input: string, writtenAt = revision.value): Promise<void> {
     if (columnOf(id)?.type !== "formula") {
-      return setCells(id.tableId, [{ row: id.row, col: id.col, input }]);
+      return writeCells(id, [{ row: id.row, col: id.col, input }], writtenAt);
     }
     if (input.trim() === "" || input === engine.value.getInput(id)) return;
     if (!isFormulaInput(input)) {
@@ -546,100 +563,61 @@ export const useWorkbookStore = defineStore("workbook", () => {
       };
       return;
     }
-    await updateColumn(id.tableId, id.col, { formula: input });
-  }
-
-  /** A cell write that changes what the cell holds, with what it held. */
-  type CellChange = CellInput & IdentityCellInput & { previous: string };
-
-  /** Shows new inputs for cells of one table, and returns the ones that changed a cell. */
-  function showInputs(tableId: string, writes: readonly CellInput[]): CellChange[] {
-    const changes = writes
-      // A fill or paste that crosses a formula column leaves that column to its formula.
-      .filter((write) => columnOf({ tableId, ...write })?.type !== "formula")
-      .map((write) => {
-        const identity = identityOf({ tableId, ...write });
-        if (!identity) throw new Error("The row or column being edited no longer exists");
-        return { ...write, ...identity, previous: engine.value.getInput({ tableId, ...write }) };
-      })
-      .filter((change) => change.previous !== change.input);
-    for (const { row, col, input } of changes) apply({ tableId, row, col }, input);
-    return changes;
-  }
-
-  /** The cell changes shown here that the server has not answered, oldest first. */
-  const unsavedChanges = new Set<{ tableId: string; changes: readonly CellChange[] }>();
-
-  /** Keeps shown changes in `unsavedChanges` until their save settles. */
-  function untilSaved<T>(
-    tableId: string,
-    changes: readonly CellChange[],
-    save: Promise<T>,
-  ): Promise<T> {
-    const unsaved = { tableId, changes };
-    unsavedChanges.add(unsaved);
-    const forget = (): void => {
-      unsavedChanges.delete(unsaved);
-    };
-    void save.then(forget, forget);
-    return save;
-  }
-
-  /** Puts cells back as they were before changes that could not be saved. */
-  function putBack(tableId: string, changes: readonly CellChange[]): void {
-    for (const change of changes) {
-      const { input, previous } = change;
-      const position = positionOf({ tableId, ...change });
-      if (!position) continue;
-      const { row, col } = position;
-      // A later edit to the same cell has its own save. Leave it alone.
-      if (engine.value.getInput({ tableId, row, col }) === input) {
-        apply({ tableId, row, col }, previous);
-      }
+    const identity = identityOf(id);
+    if (!(await updateColumn(id.tableId, id.col, { formula: input }, writtenAt)) && identity) {
+      rejectedDraft.value = { id: identity, input, revision: writtenAt };
     }
   }
 
-  /**
-   * Shows new inputs for cells of one table at once and saves them as one
-   * undo step. Inputs that fail to save are put back as they were.
-   */
-  function setCells(tableId: string, writes: readonly CellInput[]): Promise<void> {
-    const changes = showInputs(tableId, writes);
-    if (changes.length === 0) return Promise.resolve();
-    const stepId = crypto.randomUUID();
-    const previous = saves;
-    saves = untilSaved(
-      tableId,
-      changes,
-      enqueueWrite(async () => {
-        await previous;
-        await saveCellChanges(tableId, changes, stepId);
-      }),
-    );
-    return saves;
+  type CellChange = IdentityCellInput;
+  const unsavedChanges = new Set<{ tableId: string; changes: CellChange[] }>();
+
+  function showInputs(tableId: string, writes: readonly CellInput[]): CellChange[] {
+    return writes
+      .filter((write) => columnOf({ tableId, ...write })?.type !== "formula")
+      .flatMap((write) => {
+        const identity = identityOf({ tableId, ...write });
+        if (!identity) throw new Error("The row or column being edited no longer exists");
+        return engine.value.getInput({ tableId, ...write }) === write.input
+          ? []
+          : [{ rowId: identity.rowId, colId: identity.colId, input: write.input }];
+      });
   }
 
-  /** Saves shown changes under one undo step. A failure is reported here and counted in `failedSaves`. */
+  function setCells(tableId: string, writes: readonly CellInput[]): Promise<void> {
+    return writeCells({ tableId, row: 0, col: 0 }, writes);
+  }
+
   async function saveCellChanges(
-    tableId: string,
-    changes: readonly CellChange[],
+    pending: { tableId: string; changes: CellChange[] },
     stepId: string,
+    writtenAt: number,
+    appendRows: string[],
   ): Promise<void> {
-    let saved = 0;
     try {
-      // The server takes a limited number of cells per request.
-      for (; saved < changes.length; saved += LIMITS.cellsPerRequest) {
-        const batch = changes.slice(saved, saved + LIMITS.cellsPerRequest);
-        await api.setCells(
-          tableId,
-          batch.map(({ rowId, colId, input }) => ({ rowId, colId, input })),
-          stepId,
-        );
-      }
+      do {
+        const batch = pending.changes.slice(0, LIMITS.cellsPerRequest);
+        const change = await api.setCells(pending.tableId, batch, stepId, writtenAt, appendRows);
+        pending.changes.splice(0, batch.length);
+        await receiveChange(change);
+        appendRows = [];
+      } while (pending.changes.length > 0);
     } catch (cause) {
-      putBack(tableId, changes.slice(saved));
       failedSaves += 1;
+      if (cause instanceof Error && "code" in cause && cause.code === "stale_formula") {
+        const cell = pending.changes.find((cell) => isFormulaInput(cell.input));
+        if (cell)
+          rejectedDraft.value = {
+            id: { tableId: pending.tableId, rowId: cell.rowId, colId: cell.colId },
+            input: cell.input,
+            revision: writtenAt,
+          };
+      }
       fail(cause, "The change could not be saved");
+    } finally {
+      unsavedChanges.delete(pending);
+      pendingRows.delete(stepId);
+      withStableSelection(syncStructure);
     }
   }
 
@@ -703,7 +681,12 @@ export const useWorkbookStore = defineStore("workbook", () => {
     if (!at || !canEdit.value) return;
     // Text this app put on the clipboard stands for the cells it was copied from.
     const own = copied?.text === text ? copied : undefined;
-    await writeCells(at, pasteWrites(own?.rows ?? fromClipboardText(text), at, own?.from));
+    await writeCells(
+      at,
+      pasteWrites(own?.rows ?? fromClipboardText(text), at, own?.from),
+      revision.value,
+      true,
+    );
   }
 
   /**
@@ -715,7 +698,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const at = { tableId, row: 0, col: 0 };
     selection.value = at;
     selectionEnd.value = null;
-    await writeCells(at, pasteWrites(rows, at));
+    await writeCells(at, pasteWrites(rows, at), revision.value, true);
   }
 
   /** The values a table shows, row by row, for writing to a file. Rows and columns that are empty at the end are left out. */
@@ -760,60 +743,73 @@ export const useWorkbookStore = defineStore("workbook", () => {
   }
 
   /** Writes cells into a table that grows to fit them, up to its size limit, and selects what was written. */
-  async function writeCells(at: CellId, writes: readonly CellInput[]): Promise<void> {
+  async function writeCells(
+    at: CellId,
+    writes: readonly CellInput[],
+    writtenAt = revision.value,
+    selectWritten = false,
+  ): Promise<void> {
     const table = tables.value.find((candidate) => candidate.id === at.tableId);
-    if (!table) return;
-    if (writes.length === 0) return;
+    if (!table || writes.length === 0) return;
     const rowCount = Math.min(LIMITS.tableRows, Math.max(...writes.map((write) => write.row + 1)));
     const colCount = Math.min(LIMITS.tableCols, Math.max(...writes.map((write) => write.col + 1)));
     const fitting = writes.filter((write) => write.row < rowCount && write.col < colCount);
-    // The growth and the cells are one undo step.
     const stepId = crypto.randomUUID();
-    const changes = showInputs(
-      table.id,
-      fitting.filter((write) => write.row < table.rowCount && write.col < table.colCount),
+    const appendRows = Array.from({ length: Math.max(0, rowCount - table.rowCount) }, () =>
+      crypto.randomUUID(),
     );
-
-    const queuedSaves = saves;
-    const operation = enqueueWrite(async () => {
-      await queuedSaves;
-      const currentTable = tables.value.find((candidate) => candidate.id === table.id);
-      if (!currentTable) {
-        putBack(table.id, changes);
-        return;
-      }
-      if (rowCount > currentTable.rowCount || colCount > currentTable.colCount) {
-        const { table: grown, ...rewritten } = await api.updateTable(
-          table.id,
-          {
-            rowCount: Math.max(rowCount, currentTable.rowCount),
-            colCount: Math.max(colCount, currentTable.colCount),
-          },
-          stepId,
-        );
-        tables.value = tables.value.map((other) => (other.id === grown.id ? grown : other));
+    pendingRows.set(stepId, { tableId: table.id, ids: appendRows });
+    syncStructure();
+    // Capture every existing row before a queued structural edit can move it.
+    const rowIds = [...table.rows.map((row) => row.id), ...appendRows];
+    const colIds = [...table.colIds];
+    const pending = {
+      tableId: table.id,
+      changes: showInputs(
+        table.id,
+        fitting.filter((write) => write.col < table.colCount),
+      ),
+    };
+    if (!pending.changes.length && !appendRows.length && colCount <= table.colCount) {
+      pendingRows.delete(stepId);
+      return;
+    }
+    unsavedChanges.add(pending);
+    syncStructure();
+    if (selectWritten) extendSelection({ row: rowCount - 1, col: colCount - 1 });
+    saves = enqueueWrite(async () => {
+      try {
+        if (colCount > table.colCount) {
+          const current = tables.value.find((candidate) => candidate.id === table.id);
+          if (!current) throw new Error("The table was deleted");
+          const change = await api.updateTable(
+            table.id,
+            { colCount: current.colCount + colCount - table.colCount },
+            stepId,
+          );
+          const grown = change.changed?.tables.find((record) => record.id === table.id)?.table;
+          await receiveChange(change);
+          if (!grown) throw new Error("The resized table was not returned");
+          colIds.push(...grown.colIds.slice(current.colCount));
+          for (const write of fitting.filter((write) => write.col >= table.colCount)) {
+            const rowId = rowIds[write.row];
+            const colId = colIds[write.col];
+            if (!rowId || !colId)
+              throw new Error("The row or column being edited no longer exists");
+            pending.changes.push({ rowId, colId, input: write.input });
+          }
+        }
+        await saveCellChanges(pending, stepId, writtenAt, appendRows);
+        if (fitting.length < writes.length)
+          notice.value = { kind: "error", text: "Some cells did not fit in the table" };
+      } catch (cause) {
+        unsavedChanges.delete(pending);
+        pendingRows.delete(stepId);
         syncStructure();
-        applyRewritten(rewritten);
+        failedSaves += 1;
+        fail(cause, "The change could not be saved");
       }
-      changes.push(
-        ...showInputs(
-          table.id,
-          fitting.filter((write) => write.row >= table.rowCount || write.col >= table.colCount),
-        ),
-      );
-      await saveCellChanges(table.id, changes, stepId);
-      // Leave what was pasted selected.
-      extendSelection({ row: rowCount - 1, col: colCount - 1 });
-      if (fitting.length < writes.length) {
-        notice.value = { kind: "error", text: "Some cells did not fit in the table" };
-      }
-    }).catch((cause: unknown) => {
-      // The table could not grow, so none of the cells were sent.
-      putBack(table.id, changes);
-      failedSaves += 1;
-      fail(cause, "The change could not be saved");
     });
-    saves = untilSaved(table.id, changes, operation);
     await saves;
   }
 
@@ -830,11 +826,17 @@ export const useWorkbookStore = defineStore("workbook", () => {
       return { kind: "error", text: result.error ?? "The action failed" };
     }
     if (result.emailsSent > 0) return { kind: "success", text: "Email sent" };
-    if (result.cells.length === 0) return { kind: "success", text: "Done" };
-    if (result.cells.length > MAX_NAMED_CELLS) {
-      return { kind: "success", text: `Updated ${String(result.cells.length)} cells` };
+    const cells = result.change?.changed?.cells ?? [];
+    if (cells.length === 0) return { kind: "success", text: "Done" };
+    if (cells.length > MAX_NAMED_CELLS) {
+      return { kind: "success", text: `Updated ${String(cells.length)} cells` };
     }
-    const written = result.cells.map((cell) => nameOf(cell, buttonTableId)).join(", ");
+    const written = cells
+      .flatMap((cell) => {
+        const position = positionOf(cell);
+        return position ? [nameOf(position, buttonTableId)] : [];
+      })
+      .join(", ");
     return { kind: "success", text: `Updated ${written}` };
   }
 
@@ -846,7 +848,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     id: CellId,
     request: () => Promise<ClickResult>,
   ): Promise<ClickResult | undefined> {
-    const key = cellKey(id);
+    const identity = identityOf(id);
+    if (!identity) return undefined;
+    const key = cellIdentityKey(identity);
     if (running.has(key) || !canEdit.value) return undefined;
     running.add(key);
     const queuedSaves = saves;
@@ -857,12 +861,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
         // could not be, the action would run on something other than what was typed.
         if (!(await stored(queuedSaves, failedBefore))) return undefined;
         const result = await request();
-        if (result.tables.length > 0) {
-          const resized = new Map(result.tables.map((table) => [table.id, table]));
-          tables.value = tables.value.map((table) => resized.get(table.id) ?? table);
-          syncStructure();
-        }
-        for (const cell of result.cells) apply(cell, cell.input);
+        if (result.change) await receiveChange(result.change);
         return result;
       } catch (cause) {
         fail(cause, "The action could not be run");
@@ -916,11 +915,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     if (!current) return undefined;
     let created: PageRecord | undefined;
     await attempt(async () => {
-      const { page, table } = await api.createPage(current.id);
-      pages.value = [...pages.value, page];
-      tables.value = [...tables.value, table];
-      rememberOrders();
-      syncStructure();
+      const { page, change } = await api.createPage(current.id);
+      await receiveChange(change);
       created = page;
     }, "The page could not be added");
     return created;
@@ -928,11 +924,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   function renamePage(pageId: string, name: string): Promise<boolean> {
     return attempt(async () => {
-      const rewritten = await api.renamePage(pageId, name);
-      pages.value = pages.value.map((page) => (page.id === pageId ? { ...page, name } : page));
-      syncStructure();
-      // The server rewrote the formulas that named the page.
-      applyRewritten(rewritten);
+      await receiveChange(await api.renamePage(pageId, name));
     }, "The page could not be renamed");
   }
 
@@ -950,6 +942,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
     for (const pageId of acceptedBlockOrders.keys()) {
       if (!pages.value.some((page) => page.id === pageId)) acceptedBlockOrders.delete(pageId);
     }
+  }
+
+  function showPendingOrders(): void {
+    if (optimisticPageOrder) showPageOrder(optimisticPageOrder);
+    for (const order of optimisticBlockOrders.values()) showOrder(order);
   }
 
   /** The last request to reorder a page, which the next one waits for. */
@@ -978,17 +975,21 @@ export const useWorkbookStore = defineStore("workbook", () => {
     if (from === -1 || to < 0 || to >= before.length) return Promise.resolve(false);
     const order = before.with(from, before[to] ?? blockId).with(to, blockId);
     showOrder(order);
+    optimisticBlockOrders.set(pageId, order);
     const previous = reorders;
     pendingBlockReorders.set(pageId, (pendingBlockReorders.get(pageId) ?? 0) + 1);
     const sent = attempt(async () => {
       await previous;
-      await api.reorderPage(pageId, order);
-      acceptedBlockOrders.set(pageId, order);
+      const change = await api.reorderPage(pageId, order);
+      await receiveChange(change);
+      if (revision.value === change.revision) acceptedBlockOrders.set(pageId, order);
     }, "The page could not be rearranged").then((succeeded) => {
       const pending = (pendingBlockReorders.get(pageId) ?? 1) - 1;
-      if (pending === 0) pendingBlockReorders.delete(pageId);
-      else pendingBlockReorders.set(pageId, pending);
-      if (!succeeded && pending === 0) showOrder(acceptedBlockOrders.get(pageId) ?? before);
+      if (pending === 0) {
+        pendingBlockReorders.delete(pageId);
+        optimisticBlockOrders.delete(pageId);
+        showOrder(acceptedBlockOrders.get(pageId) ?? before);
+      } else pendingBlockReorders.set(pageId, pending);
       return succeeded;
     });
     // One request at a time, so the server ends on the order of the last click.
@@ -1020,17 +1021,21 @@ export const useWorkbookStore = defineStore("workbook", () => {
     if (!current || from === -1 || to < 0 || to >= before.length) return Promise.resolve(false);
     const order = before.with(from, before[to] ?? pageId).with(to, pageId);
     showPageOrder(order);
+    optimisticPageOrder = order;
     const previous = pageReorders;
     pendingPageReorders.set(current.id, (pendingPageReorders.get(current.id) ?? 0) + 1);
     const sent = attempt(async () => {
       await previous;
-      await api.reorderPages(current.id, order);
-      acceptedPageOrder = order;
+      const change = await api.reorderPages(current.id, order);
+      await receiveChange(change);
+      if (revision.value === change.revision) acceptedPageOrder = order;
     }, "The pages could not be rearranged").then((succeeded) => {
       const pending = (pendingPageReorders.get(current.id) ?? 1) - 1;
-      if (pending === 0) pendingPageReorders.delete(current.id);
-      else pendingPageReorders.set(current.id, pending);
-      if (!succeeded && pending === 0) showPageOrder(acceptedPageOrder ?? before);
+      if (pending === 0) {
+        pendingPageReorders.delete(current.id);
+        optimisticPageOrder = undefined;
+        showPageOrder(acceptedPageOrder ?? before);
+      } else pendingPageReorders.set(current.id, pending);
       return succeeded;
     });
     pageReorders = sent.then(() => undefined);
@@ -1046,21 +1051,12 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return attempt(async () => {
       // The server rewrites stored formulas, so pending edits must be stored first.
       await queuedSaves;
-      let name: string;
-      if (hasTable(blockId)) {
-        const { table, ...rewritten } = await api.moveTable(blockId, pageId);
-        showTable(table, rewritten);
-        rememberOrders();
-        // The selected cell is no longer on the page being shown.
-        if (selection.value?.tableId === blockId) selection.value = null;
-        ({ name } = table);
-      } else {
-        const { view, ...rewritten } = await api.moveView(blockId, pageId);
-        views.value = views.value.map((other) => (other.id === view.id ? view : other));
-        applyRewritten(rewritten);
-        rememberOrders();
-        ({ name } = view);
-      }
+      const name =
+        [...tables.value, ...views.value].find((block) => block.id === blockId)?.name ?? "Block";
+      await receiveChange(
+        await (hasTable(blockId) ? api.moveTable(blockId, pageId) : api.moveView(blockId, pageId)),
+      );
+      if (selection.value?.tableId === blockId) selection.value = null;
       const page = pages.value.find((candidate) => candidate.id === pageId);
       notice.value = { kind: "success", text: `Moved ${name} to ${page?.name ?? "the page"}` };
     }, "The block could not be moved");
@@ -1068,21 +1064,13 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   function deletePage(pageId: string): Promise<boolean> {
     return attempt(async () => {
-      await api.deletePage(pageId);
-      pages.value = pages.value.filter((page) => page.id !== pageId);
-      tables.value = tables.value.filter((table) => table.pageId !== pageId);
-      views.value = views.value.filter((view) => view.pageId !== pageId);
-      rememberOrders();
-      if (selection.value && !hasTable(selection.value.tableId)) selection.value = null;
-      syncStructure();
+      await receiveChange(await api.deletePage(pageId));
     }, "The page could not be deleted");
   }
 
   function addTable(pageId: string): Promise<boolean> {
     return attempt(async () => {
-      tables.value = [...tables.value, await api.createTable(pageId)];
-      rememberOrders();
-      syncStructure();
+      await receiveChange((await api.createTable(pageId)).change);
     }, "The table could not be added");
   }
 
@@ -1094,33 +1082,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return attempt(async () => {
       // A smaller table loses cells, so pending edits must be stored first.
       await queuedSaves;
-      const { table: updated, ...rewritten } = await api.updateTable(tableId, changes);
-      showTable(updated, rewritten);
-      keepSelectionInside(updated);
+      await receiveChange(await api.updateTable(tableId, changes));
     }, "The table could not be changed");
-  }
-
-  /** Leaves the selection where it was in a table that changed size, as far as the table still reaches. */
-  function keepSelectionInside(table: TableRecord): void {
-    const [selected, end] = [selection.value, selectionEnd.value];
-    if (selected?.tableId !== table.id) return;
-    const inside = ({ row, col }: CellAddress): CellAddress => ({
-      row: Math.min(row, table.rowCount - 1),
-      col: Math.min(col, table.colCount - 1),
-    });
-    if (selected.row >= table.rowCount || selected.col >= table.colCount) {
-      selection.value = { tableId: table.id, ...inside(selected) };
-    }
-    if (end) extendSelection(inside(end));
-  }
-
-  /** Shows a table as the server now has it, with what the change rewrote elsewhere. */
-  function showTable(updated: TableRecord, rewritten: Rewritten): void {
-    withStableSelection(() => {
-      tables.value = tables.value.map((table) => (table.id === updated.id ? updated : table));
-      syncStructure();
-      applyRewritten(rewritten);
-    });
   }
 
   /** Names a table's columns, which makes it a data table. With `headerRow`, its first row gives the names. */
@@ -1129,15 +1092,14 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return attempt(async () => {
       // The server may remove the header row, so pending edits must be stored first.
       await queuedSaves;
-      const { table, ...rewritten } = await api.nameColumns(tableId, headerRow);
-      showTable(table, rewritten);
+      await receiveChange(await api.nameColumns(tableId, headerRow));
     }, "The columns could not be named");
   }
 
   /** Makes a data table a plain table again. */
   function dropColumns(tableId: string): Promise<boolean> {
     return attempt(async () => {
-      showTable(await api.dropColumns(tableId), { cells: [], views: [], tables: [] });
+      await receiveChange(await api.dropColumns(tableId));
     }, "The table could not be changed");
   }
 
@@ -1145,14 +1107,16 @@ export const useWorkbookStore = defineStore("workbook", () => {
     tableId: string,
     col: number,
     changes: { name?: string; type?: ColumnType; formula?: string },
+    writtenAt = revision.value,
   ): Promise<boolean> {
     const colId = tables.value.find((table) => table.id === tableId)?.colIds[col];
     if (!colId) return Promise.resolve(false);
     const queuedSaves = saves;
     return attempt(async () => {
       await queuedSaves;
-      const { table, ...rewritten } = await api.updateColumn(tableId, colId, changes);
-      showTable(table, rewritten);
+      await receiveChange(
+        await api.updateColumn(tableId, colId, { ...changes, revision: writtenAt }),
+      );
     }, "The column could not be changed");
   }
 
@@ -1175,29 +1139,25 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return attempt(async () => {
       // The server shifts stored cells, so pending edits must be stored first.
       await queuedSaves;
-      const { table: updated, ...rewritten } = await api.editTable(tableId, request);
-      showTable(updated, rewritten);
-
-      keepSelectionInside(updated);
+      await receiveChange(await api.editTable(tableId, request));
     }, "The table could not be changed");
   }
 
   function addView(pageId: string, kind: ViewRecord["kind"]): Promise<boolean> {
     return attempt(async () => {
-      views.value = [...views.value, await api.createView(pageId, kind)];
-      rememberOrders();
+      await receiveChange((await api.createView(pageId, kind)).change);
     }, "The view could not be added");
   }
 
   function updateView(
     viewId: string,
     changes: { name?: string; source?: string; chartType?: ChartType },
+    writtenAt = revision.value,
   ): Promise<boolean> {
     const previous = viewUpdates.get(viewId) ?? Promise.resolve(true);
     const updated = attempt(async () => {
       await previous;
-      const updated = await api.updateView(viewId, changes);
-      views.value = views.value.map((view) => (view.id === viewId ? updated : view));
+      await receiveChange(await api.updateView(viewId, { ...changes, revision: writtenAt }));
     }, "The view could not be changed");
     viewUpdates.set(viewId, updated);
     void updated.then(() => {
@@ -1208,23 +1168,53 @@ export const useWorkbookStore = defineStore("workbook", () => {
 
   function deleteView(viewId: string): Promise<boolean> {
     return attempt(async () => {
-      await api.deleteView(viewId);
-      views.value = views.value.filter((view) => view.id !== viewId);
-      rememberOrders();
+      await receiveChange(await api.deleteView(viewId));
     }, "The view could not be deleted");
   }
 
   function deleteTable(tableId: string): Promise<boolean> {
     return attempt(async () => {
-      await api.deleteTable(tableId);
-      tables.value = tables.value.filter((table) => table.id !== tableId);
-      rememberOrders();
-      if (selection.value?.tableId === tableId) selection.value = null;
-      syncStructure();
+      await receiveChange(await api.deleteTable(tableId));
     }, "The table could not be deleted");
   }
 
+  function appendCell(
+    tableId: string,
+    colId: string,
+    input: string,
+    writtenAt = revision.value,
+  ): Promise<void> {
+    const table = tables.value.find((table) => table.id === tableId);
+    const col = table?.colIds.indexOf(colId) ?? -1;
+    if (!table || col < 0) {
+      fail(
+        new Error("The column being edited was deleted. Your text was not saved."),
+        "The cell could not be saved",
+      );
+      return Promise.resolve();
+    }
+    if (input === "") return Promise.resolve();
+    return setCell({ tableId, row: table.rowCount, col }, input, writtenAt);
+  }
+
+  function isRunning(id: CellId): boolean {
+    const identity = identityOf(id);
+    return !!identity && running.has(cellIdentityKey(identity));
+  }
+
+  function restoreVersion(spreadsheetId: string, versionId: string): Promise<void> {
+    return enqueueWrite(async () => {
+      await receiveChange(await api.restoreVersion(spreadsheetId, versionId));
+    });
+  }
+
   return {
+    revision,
+    appendCell,
+    rejectedDraft,
+    receiveChange,
+    isRunning,
+    restoreVersion,
     spreadsheet,
     pages,
     tables,

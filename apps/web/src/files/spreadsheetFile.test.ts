@@ -18,6 +18,7 @@ const TABLES: TableRecord[] = [
     colIds: ["c1", "c2"],
     columns: null,
     formats: [],
+    rows: [],
   },
   {
     id: "t1",
@@ -29,6 +30,7 @@ const TABLES: TableRecord[] = [
     colIds: ["c1", "c2", "c3"],
     columns: null,
     formats: [],
+    rows: [],
   },
 ];
 const VIEWS: ViewRecord[] = [

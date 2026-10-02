@@ -372,17 +372,20 @@ describe("moving a block to another page", () => {
     await user.json(
       "PUT",
       `/tables/${table.id}/cells`,
-      cellsBody({ A1: "=Moved!A1 + 1", A2: "5" }), 200,
+      cellsBody({ A1: "=Moved!A1 + 1", A2: "5" }),
+      200,
     );
     await user.json(
       "PUT",
       `/tables/${sibling.id}/cells`,
-      cellsBody({ A1: "='Table 1'!A2 * 2", A2: "=Moved!A1" }), 200,
+      cellsBody({ A1: "='Table 1'!A2 * 2", A2: "=Moved!A1" }),
+      200,
     );
     await user.json(
       "PUT",
       `/tables/${other.table.id}/cells`,
-      cellsBody({ A1: "='Page 1'!Moved!A1" }), 200,
+      cellsBody({ A1: "='Page 1'!Moved!A1" }),
+      200,
     );
 
     const result = await user.json<Change>("PUT", `/tables/${sibling.id}/page`, {

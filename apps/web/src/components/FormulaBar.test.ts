@@ -1,3 +1,4 @@
+import { wireSnapshot } from "../testing";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +18,7 @@ async function render(
   role = "owner",
   attached = false,
 ): Promise<VueWrapper> {
-  server.getSnapshot.mockResolvedValue(snapshotWith(inputs, role));
+  server.getSnapshot.mockResolvedValue(wireSnapshot(snapshotWith(inputs, role)));
   await useWorkbookStore().load("s1");
   return mount(FormulaBar, attached ? { attachTo: document.body } : {});
 }
@@ -65,6 +66,8 @@ describe("FormulaBar", () => {
       "t1",
       [{ rowId: "r0", colId: "c1", input: "=1+1" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
     expect(store.valueOf(at("A1"))).toBe(2);
     expect(store.selection).toEqual(at("A2"));
@@ -114,6 +117,8 @@ describe("FormulaBar", () => {
       "t1",
       [{ rowId: "r0", colId: "c1", input: "typed for A1" }],
       expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
     );
     expect(useWorkbookStore().inputOf(at("B1"))).toBe("5");
     expect(field(wrapper).element.value).toBe("5");
@@ -194,11 +199,11 @@ it("preserves a focused draft and its IDs when a remote row insertion moves the 
   await select(wrapper, "A2");
   await field(wrapper).trigger("focus");
   await field(wrapper).setValue("draft survives");
-  const snapshot = snapshotWith({ A3: "old" });
+  const snapshot = snapshotWith({ A2: "old" });
   snapshot.tables = [
-    { ...TABLE, rowCount: 5, rows: [{ id: "new", orderKey: "Zz" }, ...TABLE.rows!] },
+    { ...TABLE, rowCount: 5, rows: [{ id: "new", orderKey: "Zz" }, ...TABLE.rows] },
   ];
-  server.getSnapshot.mockResolvedValue(snapshot);
+  server.getSnapshot.mockResolvedValue(wireSnapshot(snapshot));
   await store.refresh();
   await wrapper.vm.$nextTick();
   expect(field(wrapper).element.value).toBe("draft survives");
@@ -207,5 +212,7 @@ it("preserves a focused draft and its IDs when a remote row insertion moves the 
     "t1",
     [{ rowId: "r1", colId: "c1", input: "draft survives" }],
     expect.any(String),
+    expect.any(Number),
+    expect.any(Array),
   );
 });

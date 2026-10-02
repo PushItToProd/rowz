@@ -1,3 +1,4 @@
+import { wireSnapshot, changeWith } from "../testing";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,10 +29,12 @@ const confirm = vi.spyOn(window, "confirm");
 
 /** Shows the store's first view, so the card follows changes the store makes to it. */
 async function render(view: Partial<ViewRecord> = {}, role = "owner"): Promise<void> {
-  server.getSnapshot.mockResolvedValue({
-    ...snapshotWith(CELLS, role),
-    views: [{ ...CHART, ...view }],
-  });
+  server.getSnapshot.mockResolvedValue(
+    wireSnapshot({
+      ...snapshotWith(CELLS, role),
+      views: [{ ...CHART, ...view }],
+    }),
+  );
   const store = useWorkbookStore();
   await store.load("s1");
   wrapper = mount(
@@ -48,7 +51,9 @@ beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
   confirm.mockReturnValue(true);
-  server.updateView.mockImplementation((_id, changes) => Promise.resolve({ ...CHART, ...changes }));
+  server.updateView.mockImplementation((_id, changes) =>
+    Promise.resolve(changeWith({ ...CHART, ...changes })),
+  );
 });
 afterEach(() => {
   wrapper.unmount();
@@ -82,7 +87,10 @@ describe("ChartCard", () => {
 
     await wrapper.get("select").setValue("line");
     await flushPromises();
-    expect(server.updateView).toHaveBeenCalledWith("v1", { chartType: "line" });
+    expect(server.updateView).toHaveBeenCalledWith("v1", {
+      revision: expect.any(Number),
+      chartType: "line",
+    });
     expect(wrapper.findAll(".chart__line")).toHaveLength(1);
   });
 
@@ -95,7 +103,10 @@ describe("ChartCard", () => {
     await input.setValue("'Table 1'!A1:B2");
     await input.trigger("keydown", { key: "Enter" });
     await flushPromises();
-    expect(server.updateView).toHaveBeenCalledWith("v1", { source: "'Table 1'!A1:B2" });
+    expect(server.updateView).toHaveBeenCalledWith("v1", {
+      revision: expect.any(Number),
+      source: "'Table 1'!A1:B2",
+    });
     expect(wrapper.findAll(".chart__bar")).toHaveLength(2);
 
     await input.trigger("blur");
@@ -129,12 +140,14 @@ describe("ChartCard", () => {
   it("follows a source the server rewrote", async () => {
     await render();
     const store = useWorkbookStore();
-    server.updateTable.mockResolvedValue({
-      table: { ...store.tables[0]!, name: "Fruit" },
-      cells: [],
-      views: [{ id: "v1", source: "Fruit!A1:B3" }],
-      tables: [],
-    });
+    server.updateTable.mockResolvedValue(
+      changeWith({
+        table: { ...store.tables[0]!, name: "Fruit" },
+        cells: [],
+        views: [{ id: "v1", source: "Fruit!A1:B3" }],
+        tables: [],
+      }),
+    );
     await store.updateTable("t1", { name: "Fruit" });
     await flushPromises();
     expect(wrapper.get<HTMLInputElement>('input[aria-label="Chart data"]').element.value).toBe(

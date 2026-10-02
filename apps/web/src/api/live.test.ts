@@ -37,15 +37,26 @@ describe("watchSpreadsheet", () => {
     const onChange = vi.fn();
     watchSpreadsheet("s1", onChange);
     const source = FakeEventSource.last!;
-    // The server leaves the changes made under this name out of the stream.
+    // The server also sends this tab its own changes, preserving revision order.
     expect(source.url).toBe(`/api/spreadsheets/s1/events?client=${CLIENT_ID}`);
 
     source.emit("ready");
     source.emit("ping");
     expect(onChange).not.toHaveBeenCalled();
-    source.emit("change");
-    source.emit("change");
-    expect(onChange).toHaveBeenCalledTimes(2);
+    const change = {
+      revision: 1,
+      changed: { pages: [], tables: [], views: [], rows: [], cells: [] },
+    };
+    source.emit("change", JSON.stringify(change));
+    source.emit("change", JSON.stringify({ revision: 2, changed: null }));
+    expect(onChange.mock.calls).toEqual([[change], [{ revision: 2, changed: null }]]);
+  });
+
+  it("reports the opening revision so a snapshot read before subscribing can catch up", () => {
+    const onChange = vi.fn();
+    watchSpreadsheet("s1", onChange);
+    FakeEventSource.last!.emit("ready", JSON.stringify({ revision: 7 }));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ revision: 7, changed: null });
   });
 
   it("reports once when the connection comes back, for what was missed", () => {

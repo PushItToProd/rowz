@@ -1,3 +1,5 @@
+import { createPinia, setActivePinia } from "pinia";
+import { changeWith } from "../testing";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type VersionListItem } from "../api/client";
@@ -38,10 +40,11 @@ function button(name: string, index = 0) {
 }
 
 beforeEach(() => {
+  setActivePinia(createPinia());
   vi.clearAllMocks();
   confirm.mockReturnValue(true);
   server.listVersions.mockResolvedValue(VERSIONS);
-  server.restoreVersion.mockResolvedValue(undefined);
+  server.restoreVersion.mockResolvedValue(changeWith(undefined));
 });
 afterEach(() => {
   wrapper.unmount();

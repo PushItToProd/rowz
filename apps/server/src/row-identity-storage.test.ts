@@ -6,7 +6,7 @@ import {
   MAX_ORDER_KEY_LENGTH,
   toSpreadsheetFile,
 } from "@spreadsheet-app/shared";
-import type { SnapshotWithHistory, UndoResult } from "./app";
+import type { UndoResult } from "./app";
 import { journal, tableRows } from "./db/schema";
 import {
   cellsBody,
@@ -141,7 +141,8 @@ it("creates new identities on file import and version restore", async () => {
   await owner.json(
     "POST",
     `/spreadsheets/${snapshot.id}/versions/${versions[0]!.id}/restore`,
-    undefined, 200,
+    undefined,
+    200,
   );
   const restored = await readSnapshot(owner, snapshot.id);
   const newTable = restored.tables[0]!;

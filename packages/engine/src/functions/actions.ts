@@ -273,7 +273,8 @@ export const actionFunctions: Record<string, FunctionDefinition> = {
       const table = context.tableOf(range.tableId);
       const whole =
         table.columns?.every(
-          (column, col) => column.type === "formula" || (col >= range.startCol && col <= range.endCol),
+          (column, col) =>
+            column.type === "formula" || (col >= range.startCol && col <= range.endCol),
         ) ?? false;
       const firstSpare = range.startRow + rows.length;
       const spare = whole ? Math.min(range.endRow, table.rows - 1) - firstSpare + 1 : 0;

@@ -38,7 +38,7 @@ The aim is to do what a traditional spreadsheet does, and do it better. I build 
 - **Charts:** four kinds, with no axis titles, colors, or stacking.
 - **Files:** rowz does not open or save Excel files. It has no layout for printing.
 - **Dates:** there are no time zones, and numbers and dates are written one way whatever the reader's locale.
-- **Working together:** edits made at the same moment are not merged. Open sessions see each other's changes within a second, and the last write to a cell wins. Saves, clicks, and control inputs follow their row and column IDs across insertions; a deleted row or column refuses the request. Formula text typed before a structural change can still hold stale references. There are no comments on cells and no protected ranges. A document can be shared only with someone who already has an account.
+- **Working together:** edits made at the same moment are not merged. Open sessions see each other's changes within a second, and the last write to a cell wins. Saves, clicks, and control inputs follow their row and column IDs across insertions; a deleted row or column refuses the request. A formula typed against an older structure is refused, and its draft is kept for correction. This check currently covers structural changes anywhere in the document. There are no comments on cells and no protected ranges. A document can be shared only with someone who already has an account.
 - **Size:** a document holds at most 100,000 filled cells and 100,000 rows across its tables.
 
 ### Known spreadsheet flaws
@@ -83,7 +83,7 @@ A document holds pages, and a page holds blocks: tables, charts, and text views.
 
 A table is a grid of cells with its own column letters and row numbers.
 
-A table can have named columns, which makes it a data table. `[Price]` is the cell of that column in the formula's own row, and `Sales[Price]` is the whole column of the table Sales. A column can be typed (text, number, date, checkbox) or be a formula column, which computes one formula in every row that holds something.
+A table can have named columns, which makes it a data table. `[Price]` is the cell of that column in the formula's own row, and `Sales[Price]` is the whole column of the table Sales. A column can be typed (text, number, date, checkbox) or be a formula column, which computes one formula in every stored row. A data table holds the rows added to it, including rows whose values were later cleared, and can have no rows. An empty line below its last row adds a row when you type into it. Naming columns removes trailing empty rows.
 
 The toolbar under the formula bar gives the selected cells bold, italic, an alignment, a number format, a text color, or a fill color. Formats are stored per table as rules over ranges, so a whole column is one rule.
 
@@ -155,17 +155,17 @@ An action is a function that describes a side effect. It does nothing until a bu
 
 The first formula shows a button that writes the sum of A1 and A2 into A3. The second shows a button that sends an email built from three cells.
 
-| Function                            | Effect                                                                                                   |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `BUTTON(label, action)`             | Shows a button. Clicking it runs the action.                                                             |
-| `EXECUTE(expression, target)`       | Writes the value of `expression` into the cell `target`.                                                 |
-| `SEND_EMAIL(to, subject, body, cc)` | Sends an email. `cc` is optional. `to` and `cc` take addresses separated by commas or semicolons         |
-| `APPEND_ROW(range, value, ...)`     | Writes the values into the first row of the range below its content, growing the table if needed         |
-| `INSERT(data, range)`               | Adds every row of the data below the content of the range                                                |
-| `UPDATE(data, key_columns, range)`  | Writes each row of the data over the row of the range with the same key, and adds the rows with new keys |
-| `OVERWRITE(data, range)`            | Empties the range and writes the data from its first row                                                 |
-| `CLEAR(range)`                      | Empties the cells of the range.                                                                          |
-| `DO(action, ...)`                   | Runs several actions from one click.                                                                     |
+| Function                            | Effect                                                                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `BUTTON(label, action)`             | Shows a button. Clicking it runs the action.                                                                                         |
+| `EXECUTE(expression, target)`       | Writes the value of `expression` into the cell `target`.                                                                             |
+| `SEND_EMAIL(to, subject, body, cc)` | Sends an email. `cc` is optional. `to` and `cc` take addresses separated by commas or semicolons                                     |
+| `APPEND_ROW(range, value, ...)`     | Appends after the last stored row of a data table for an open-ended range; otherwise writes below the range's content                |
+| `INSERT(data, range)`               | Appends each data row after the last stored row of a data table for an open-ended range; otherwise adds below the range's content    |
+| `UPDATE(data, key_columns, range)`  | Writes each row of the data over the row of the range with the same key, and adds the rows with new keys                             |
+| `OVERWRITE(data, range)`            | Empties the range and writes the data from its first row; deletes surplus data-table rows when the range covers all writable columns |
+| `CLEAR(range)`                      | Empties the cells of the range.                                                                                                      |
+| `DO(action, ...)`                   | Runs several actions from one click.                                                                                                 |
 
 `SEND_EMAIL` delivers through a mail server when `SMTP_URL` is set. Without one it writes the message to the server log and delivers nothing.
 
@@ -191,8 +191,8 @@ It supports `select`, `where`, `group by`, `having`, `pivot`, `order by`, `limit
 
 ## History and files
 
-The server keeps a per-tab undo journal for content changes, including cells, formatting, and structural edits. Ctrl+Z and Ctrl+Y undo and redo changes made since the page was opened while they remain safe to apply. A conflicting later change can make an undo unavailable; **History** restores an earlier whole-spreadsheet version or opens it as a new document. The server also keeps versions before destructive or large changes and every ten minutes while a document is edited.
-**Export** in the editor saves a document as a JSON file holding its pages, their blocks, and cell inputs. **Import** on the document list creates a document from one. A document holds at most 50 pages, 50 blocks on a page, 100,000 filled cells, and 100,000 rows across its tables, which are also the most a file may hold. The format is the `spreadsheetFile` schema in `packages/shared/src/index.ts`. It identifies things by name and order, with no ids.
+The server keeps a per-tab undo journal for content changes, including cells, formatting, and structural edits. Ctrl+Z and Ctrl+Y undo and redo changes made since the page was opened while they remain safe to apply. An undo is refused when it conflicts with later writes to the same content, or when one change alters reference meanings and the other restores or writes formula text. Creating or deleting pages, tables, or views remains more conservative; **History** restores an earlier whole-spreadsheet version or opens it as a new document. The server also keeps versions before destructive or large changes and every ten minutes while a document is edited.
+**Export** in the editor saves a document as a JSON file holding its pages, their blocks, and cell inputs. **Import** on the document list creates a document from one. A document holds at most 50 pages, 50 blocks on a page, 100,000 filled cells, and 100,000 rows across its tables, which are also the most a file may hold. The format is the `spreadsheetFile` schema in `packages/shared/src/index.ts`. It identifies things by name and order, with no ids. A data table may have zero rows.
 
 ## How it works
 
@@ -203,6 +203,8 @@ apps/server       HTTP API (Hono), database (Drizzle on Postgres or PGlite), aut
 apps/web          Vue 3 app.
 e2e               Playwright tests.
 ```
+
+Rows and columns have persistent UUIDs. Cells and undo entries name those IDs; inserting a row writes row records and changed formula text without moving cells. `TableLayout` converts IDs to positions for the engine and grid. The browser keeps confirmed and pending inputs by ID, and applies mutation responses and live events in revision order. A revision gap or an event too large to include its content triggers a snapshot read.
 
 The engine is pure. Evaluating an action formula returns a description of the effect, and `Workbook.planAction` turns that description into a list of effects such as `setCell` or `sendEmail`. The engine never applies them.
 

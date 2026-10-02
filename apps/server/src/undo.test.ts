@@ -163,7 +163,8 @@ const routeCases: Route[] = [
       await owner.json(
         "PUT",
         `/tables/${table.id}/cells`,
-        cellsBody({ A1: "='Page 1'!'Table 1'!A1" }), 200,
+        cellsBody({ A1: "='Page 1'!'Table 1'!A1" }),
+        200,
       );
       const view = await createView(owner, page.id, "chart");
       await owner.json("PATCH", `/views/${view.id}`, { source: "'Page 1'!'Table 1'!A1:B2" });
@@ -261,7 +262,8 @@ const routeCases: Route[] = [
       await owner.json(
         "PUT",
         `/tables/${tableId}/cells`,
-        cellsBody({ A1: "1", A2: "2", A3: "3", B1: "=A2+A3", B4: "=SUM(A1:A3)" }), 200,
+        cellsBody({ A1: "1", A2: "2", A3: "3", B1: "=A2+A3", B4: "=SUM(A1:A3)" }),
+        200,
       );
       await owner.json("POST", `/tables/${tableId}/formats`, {
         range: { startRow: 1, endRow: 2, startCol: 0, endCol: 0 },
@@ -298,7 +300,8 @@ const routeCases: Route[] = [
       await owner.json(
         "PUT",
         `/tables/${tableId}/cells`,
-        cellsBody({ A1: "1", A5: "5", B1: "=SUM(A1:A5)", C3: "c" }), 200,
+        cellsBody({ A1: "1", A5: "5", B1: "=SUM(A1:A5)", C3: "c" }),
+        200,
       );
       return {
         method: "PATCH",
@@ -427,7 +430,8 @@ const routeCases: Route[] = [
       await owner.json(
         "PUT",
         `/tables/${tableId}/cells`,
-        cellsBody({ A1: "Name", B1: "Amount", A2: "x", B2: "=A2" }), 200,
+        cellsBody({ A1: "Name", B1: "Amount", A2: "x", B2: "=A2" }),
+        200,
       );
       return {
         method: "POST",
@@ -698,7 +702,8 @@ describe("journal identity and grouping", () => {
     await owner.json(
       "POST",
       `/spreadsheets/${fixture.id}/versions/${versions[0]!.id}/restore`,
-      undefined, 200,
+      undefined,
+      200,
     );
     expect(await snapshot(client, fixture.id)).toMatchObject({ undoable: false, redoable: false });
   });
@@ -1038,8 +1043,7 @@ describe("undo beside changes to rows and columns", () => {
     await grace.json("POST", edits, insertRow(0));
     expect(await undo(ada)).toMatchObject({
       outcome: "refused",
-      error:
-        "A later change to rows, columns, or names prevents undoing this change to a formula",
+      error: "A later change to rows, columns, or names prevents undoing this change to a formula",
     });
     expect(await stored()).toEqual({ "5:0": "5", "1:1": "7" });
   });
@@ -1222,9 +1226,10 @@ describe("pruning limits", () => {
       expect(
         await client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`),
       ).toMatchObject({ outcome: "nothing" });
-      expect(
-        (await snapshot(client, fixture.id)).cells.map((cell) => cell.input),
-      ).toEqual(["a", "b"]);
+      expect((await snapshot(client, fixture.id)).cells.map((cell) => cell.input)).toEqual([
+        "a",
+        "b",
+      ]);
     } finally {
       await limited.close();
     }

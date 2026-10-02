@@ -742,7 +742,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Actions",
     syntax: "APPEND_ROW(range, value, ...)",
     summary:
-      "Writes the values into the first row of the range after its last row with content. The table grows when it has no row left.",
+      "Writes below the last stored row of a data table when the range has no fixed bottom; otherwise writes below the last row with content. The table grows as needed.",
     example: 'BUTTON("Add", APPEND_ROW(A:B, 4, "date"))',
   },
   {
@@ -1314,7 +1314,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Actions",
     syntax: "INSERT(data, range)",
     summary:
-      "Adds every row of the data after the last row of the range with content. The table grows to hold them.",
+      "Adds each data row after the last stored row of a data table when the range has no fixed bottom; otherwise adds below the last row with content. The table grows as needed.",
     example: 'BUTTON("Copy", INSERT(A1:B3, D:E))',
   },
   {
@@ -1329,7 +1329,8 @@ const ENTRIES: readonly FunctionDoc[] = [
     name: "OVERWRITE",
     category: "Actions",
     syntax: "OVERWRITE(data, range)",
-    summary: "Empties the range and writes the data from its first row.",
+    summary:
+      "Empties the range and writes the data from its first row. Deletes surplus data-table rows when the range covers every writable column.",
     example: 'BUTTON("Replace", OVERWRITE(A1:B3, D:E))',
   },
 ];

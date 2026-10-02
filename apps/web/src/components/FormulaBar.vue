@@ -14,6 +14,8 @@ const store = useWorkbookStore();
  * what was typed belongs to this one.
  */
 const editing = shallowRef<IdentifiedCell | null>(null);
+let editRevision = 0;
+let newCell: { tableId: string; colId: string } | undefined;
 /** The cell the field shows: the one being edited, or else the selected one. */
 const shown = computed(() =>
   editing.value ? (store.positionOf(editing.value) ?? null) : store.selection,
@@ -25,7 +27,7 @@ const draft = ref("");
 watch(
   stored,
   (input) => {
-    if (!editing.value) draft.value = input;
+    if (!editing.value && !newCell) draft.value = input;
   },
   { immediate: true },
 );
@@ -57,11 +59,16 @@ const placeholder = computed(() => {
 
 /** Saves what was typed to the cell being edited. */
 function commit(): void {
+  if (newCell) {
+    void store.appendCell(newCell.tableId, newCell.colId, draft.value, editRevision);
+    newCell = undefined;
+    return;
+  }
   const target = editing.value;
   if (!target || !store.tables.some((table) => table.id === target.tableId)) return;
   const position = store.positionOf(target);
   if (!position || draft.value !== store.inputOf(position))
-    void store.setIdentifiedCell(target, draft.value);
+    void store.setIdentifiedCell(target, draft.value, editRevision);
 }
 
 /** Saves, and moves on to the cell below, as Enter in a cell does. */
@@ -106,7 +113,15 @@ function onKeydown(event: KeyboardEvent): void {
 
 function onFocus(): void {
   focused.value = true;
+  editRevision = store.revision;
   editing.value = store.selection ? (store.identityOf(store.selection) ?? null) : null;
+  const selected = store.selection;
+  const table = store.tables.find((table) => table.id === selected?.tableId);
+  const colId = selected && table?.colIds[selected.col];
+  newCell =
+    selected && table?.columns && selected.row === table.rowCount && colId
+      ? { tableId: table.id, colId }
+      : undefined;
 }
 
 function onBlur(): void {

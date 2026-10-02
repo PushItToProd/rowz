@@ -18,6 +18,7 @@ const TYPES: readonly { value: ChartType; label: string }[] = [
 ];
 
 const editing = ref(false);
+let editRevision = store.revision;
 const draft = ref(props.view.source);
 // Follow changes made elsewhere, such as a table rename rewriting the range.
 watch(
@@ -27,13 +28,16 @@ watch(
   },
 );
 
-function saveSource(): void {
-  if (draft.value !== props.view.source)
-    void store.updateView(props.view.id, { source: draft.value });
+async function saveSource(): Promise<void> {
+  if (draft.value === props.view.source) return;
+  if (!(await store.updateView(props.view.id, { source: draft.value }, editRevision))) {
+    editing.value = true;
+    editRevision = store.revision;
+  }
 }
 
 function finishSource(): void {
-  saveSource();
+  void saveSource();
   editing.value = false;
 }
 
@@ -91,7 +95,10 @@ const data = computed((): { rows: CellValue[][] } | { problem: string } => {
         placeholder="'Table 1'!A1:B10"
         :maxlength="LIMITS.viewSourceLength"
         @keydown.enter="saveSource"
-        @focus="editing = true"
+        @focus="
+          editing = true;
+          editRevision = store.revision;
+        "
         @blur="finishSource"
       />
     </label>

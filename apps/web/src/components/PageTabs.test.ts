@@ -1,3 +1,4 @@
+import { wireSnapshot, changeWith } from "../testing";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,13 +17,15 @@ const server = api as unknown as MockedApi;
 let router: Router;
 
 async function render(role = "owner"): Promise<VueWrapper> {
-  server.getSnapshot.mockResolvedValue({
-    ...snapshotWith({}, role),
-    pages: [
-      { id: "p1", name: "Page 1", position: 0 },
-      { id: "p2", name: "Page 2", position: 1 },
-    ],
-  });
+  server.getSnapshot.mockResolvedValue(
+    wireSnapshot({
+      ...snapshotWith({}, role),
+      pages: [
+        { id: "p1", name: "Page 1", position: 0 },
+        { id: "p2", name: "Page 2", position: 1 },
+      ],
+    }),
+  );
   await useWorkbookStore().load("s1");
   router = createRouter({
     history: createMemoryHistory(),
@@ -64,7 +67,7 @@ describe("PageTabs", () => {
   });
 
   it("renames a page with F2", async () => {
-    server.renamePage.mockResolvedValue({ cells: [], views: [], tables: [] });
+    server.renamePage.mockResolvedValue(changeWith({ cells: [], views: [], tables: [] }));
     const wrapper = await render();
     await wrapper.findAll("a")[1]!.trigger("keydown", { key: "F2" });
     const input = wrapper.get<HTMLInputElement>('input[aria-label="Page name"]');

@@ -101,7 +101,8 @@ describe("importing a spreadsheet file", () => {
     await user.json(
       "PUT",
       `/tables/${sales.id}/cells`,
-      { cells: [{ row: 0, col: 0, input: "changed" }] }, 200,
+      { cells: [{ row: 0, col: 0, input: "changed" }] },
+      200,
     );
     const history = await user.json<{ id: string }[]>(
       "GET",
@@ -111,7 +112,8 @@ describe("importing a spreadsheet file", () => {
     await user.json(
       "POST",
       `/spreadsheets/${snapshot.id}/versions/${history[0]!.id}/restore`,
-      undefined, 200,
+      undefined,
+      200,
     );
     const restored = await readSnapshot(user, snapshot.id);
     expect(restored.cells.find((cell) => cell.row === 0 && cell.col === 0)?.input).toBe("10");

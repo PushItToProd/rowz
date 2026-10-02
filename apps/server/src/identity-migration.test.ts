@@ -20,7 +20,13 @@ async function migrate(db: PGlite, pattern: RegExp): Promise<void> {
 async function positional(): Promise<{ db: PGlite; plain: string; data: string; sheet: string }> {
   const db = new PGlite();
   await migrate(db, /^000\d.*\.sql$/);
-  const [workspace, sheet, page, plain, data] = Array.from({ length: 5 }, () => randomUUID());
+  const [workspace, sheet, page, plain, data] = [
+    randomUUID(),
+    randomUUID(),
+    randomUUID(),
+    randomUUID(),
+    randomUUID(),
+  ] as const;
   await db.query("INSERT INTO users (id, name, email) VALUES ('u', 'User', 'u@example.com')");
   await db.query("INSERT INTO workspaces (id, name) VALUES ($1, 'Workspace')", [workspace]);
   await db.query("INSERT INTO spreadsheets (id, workspace_id, name) VALUES ($1, $2, 'Sheet')", [
@@ -64,7 +70,12 @@ it("stores each cell under the ids of the row and column it was in, and drops th
     );
     await migrate(db, /^0010.*\.sql$/);
 
-    const stored = await db.query<{ table_id: string; position: string; col: string; input: string }>(
+    const stored = await db.query<{
+      table_id: string;
+      position: string;
+      col: string;
+      input: string;
+    }>(
       `SELECT c.table_id, c.input,
               (SELECT count(*) FROM table_rows r
                 WHERE r.table_id = c.table_id
@@ -74,7 +85,12 @@ it("stores each cell under the ids of the row and column it was in, and drops th
          FROM cells c ORDER BY c.input`,
     );
     expect(
-      stored.rows.map((cell) => [cell.table_id, Number(cell.position), Number(cell.col), cell.input]),
+      stored.rows.map((cell) => [
+        cell.table_id,
+        Number(cell.position),
+        Number(cell.col),
+        cell.input,
+      ]),
     ).toEqual([
       [data, 1, 0, "42"],
       [plain, 2, 1, "=A1"],
@@ -114,7 +130,10 @@ it("stores each cell under the ids of the row and column it was in, and drops th
 
 it.each([
   ["outside its table's rows", "(table_id, row_index, col_index, input) VALUES ($1, 3, 0, 'lost')"],
-  ["outside its table's columns", "(table_id, row_index, col_index, input) VALUES ($1, 0, 2, 'lost')"],
+  [
+    "outside its table's columns",
+    "(table_id, row_index, col_index, input) VALUES ($1, 0, 2, 'lost')",
+  ],
 ])("stops, and changes nothing, when a cell is %s", async (_, values) => {
   const { db, plain } = await positional();
   try {

@@ -6,7 +6,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 
 ## Plans
 
-- [ ] **P1** implement [persistent row identity](plans/persistent-row-identity.md)
+- [x] **P1** implement [persistent row identity](plans/persistent-row-identity.md)
 
 ## Bugs
 
@@ -161,9 +161,9 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
     ```
 - [x] (Claude) Rows' data actions: `UPDATE(data, key_columns, range)` (upsert by key), `OVERWRITE(data, range)`, and `INSERT` of several rows
 - [x] (Claude) reorder the tables, charts, and text views on a page (arrows beside each one)
-- [x] **P1** (Claude) give rows and columns persistent identities in storage, snapshots, and editor requests. Steps 1–3 of `plans/persistent-row-identity.md` are implemented
-- [ ] **P1** finish steps 4–11 of `plans/persistent-row-identity.md`: cell storage and journal entries by ID, narrower undo conflicts, data tables that grow without unused rows, revisioned content events, stale-formula refusals, and OVERWRITE row deletion. Paste growth still needs appendRows; until then a separate positional resize can cross a remote structural edit
-- [ ] **P2** data tables: sort and filter in place, dropdown columns, hide the empty rows, and `QUERY(Sales, ...)` over a whole table with its column names as headers
+- [x] **P1** (Claude) give rows and columns persistent identities in storage, snapshots, and editor requests. All implementation steps of `plans/persistent-row-identity.md` are implemented
+- [x] **P1** finish steps 4–11 of `plans/persistent-row-identity.md`: ID-keyed cells and journal entries, narrower undo conflicts, appended rows, revisioned content events, stale-formula refusals, and OVERWRITE row deletion
+- [ ] **P2** data tables: sort and filter in place, dropdown columns, and `QUERY(Sales, ...)` over a whole table with its column names as headers
   - (Claude) after row identity, which sorting and hiding rows depend on
   - [ ] allow referencing an entire data table without naming a specific range -- I would like to be able to write s.t. like `=QUERY('Table name'!, 'select * ...')` (not wedded to that exact syntax tho)
     - [ ] **P2** evaluate syntax options and how painful they'd be to implement
@@ -265,10 +265,10 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] (Claude) Ctrl+Z and Ctrl+Y for single edits within a session
 - [ ] (Claude) store versions compressed or as differences if large spreadsheets make them costly
 - [x] (Claude) live sync between sessions: open sessions re-read the spreadsheet when another changes it
-- [ ] **P3** send the changed cells with a change event, so sessions need not re-read the whole spreadsheet; show who else has it open
+- [ ] **P3** show who else has a spreadsheet open
 - [x] **P1** saves, button clicks, and checkbox/dropdown changes name their row and column by persistent IDs, so intervening inserts cannot redirect them
-- [x] **P2** (Claude) send workbook-store mutations, including undo and redo, through one ordered queue. Requests enter it when the person acts; formatting, renames, and deletes wait for earlier saves. Version restoration through HistoryPanel remains the separate item below
-- [ ] (Claude) show a version restore in the save indicator. `HistoryPanel` calls the server itself, so the header says "Saved" and the leave warning stays off while a restore runs. The request is sent on the click and the server finishes it if the page is closed, so nothing is lost; routing the restore through the workbook store would also order it after edits still being saved
+- [x] **P2** (Claude) send workbook-store mutations, including undo and redo, through one ordered queue. Requests enter it when the person acts; formatting, renames, and deletes wait for earlier saves. Version restoration uses the same queue
+- [x] (Claude) route version restoration through the workbook mutation queue and save indicator
 - [ ] (Claude) comments on cells
 
 ## Accounts and email
@@ -285,7 +285,6 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] (Claude) a compiled server build and a Dockerfile, verified by building and running it
 - [ ] (Claude) several server processes: the change feed is in memory (Postgres LISTEN/NOTIFY would do)
 - [ ] (Claude) trusted proxy configuration for better-auth's rate limiting, as a config variable
-- [ ] (Claude) a large table re-writes every moved cell on a row or column insert/delete; shift in SQL if this gets slow
 - [ ] (Claude) cache a range's values across the formulas that read the same range. Each formula reads every cell of its range again when it is recalculated, so 50,000 formulas that each read a 1,000-row column take about 10 s after one edit in that column: 50 million cell reads. 1,000 such formulas take about 0.2 s, so this matters only at the extreme. The cache needs invalidation inside the evaluator: a cached range is stale once any cell in it changes, including a cell an array result fills or gives up.
 - [ ] (Claude) index the ranges of a column by row in the dependency index. `transitiveDependents` in [graph.ts](packages/engine/src/graph.ts) scans every range that crosses a cell's column for each cell it reaches, so one edit costs the number of cells reached times the number of ranges in their columns. Deferred because the size limits keep it small: a table has at most 1,000 rows, so a chain down one column costs about 12 ms, and the worst case that fits in a spreadsheet (1,000 cells reached in a column that 99,000 ranges cross) is estimated at 1 s. Do it before raising `tableRows`: at 20,000 rows one edit measured 4.7 s, and the time grows with the square of the row count
 - [x] (Claude) code review of 2026-10-01 (`_scratch/2026-10-01-codex-review.md`): all 20 findings addressed, see DECISIONS.md
@@ -337,3 +336,5 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - (Claude) a layout for printing
 - (Claude) export to .xlsx
 - (Claude) numbers and dates shown in the reader's locale
+
+- [ ] **Priority unset** narrow stale-formula refusals to structural changes in the tables a formula references before several people edit one spreadsheet regularly

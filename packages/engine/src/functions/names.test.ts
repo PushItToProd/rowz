@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inputsAfterEdit, inputsAfterRename } from "../rewrite";
+import { formulasAfterEdit, inputsAfterRename } from "../rewrite";
 import { at, evaluateFormula, STRUCTURE, workbookWith } from "../testing";
 import { formatValue, isLambda, type CellValue } from "../values";
 
@@ -174,7 +174,7 @@ describe("a function in a cell", () => {
       { ...at("A1", "t2"), input: "=Lib!A1(4) + 1" },
     ]);
     expect(
-      inputsAfterEdit(data, { tableId: "t1", axis: "row", kind: "insert", index: 0 }),
+      formulasAfterEdit(data, { tableId: "t1", axis: "row", kind: "insert", index: 0 }),
     ).toContainEqual({ ...at("A1", "t2"), input: "=Table1!A2(4) + 1" });
   });
 });

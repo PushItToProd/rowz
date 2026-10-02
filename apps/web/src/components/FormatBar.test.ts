@@ -1,3 +1,4 @@
+import { wireSnapshot, changeWith } from "../testing";
 import { positionalFormatRange } from "../testing";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -17,7 +18,9 @@ const server = api as unknown as MockedApi;
 let wrapper: VueWrapper;
 
 async function render(formats: FormatRule[] = []): Promise<ReturnType<typeof useWorkbookStore>> {
-  server.getSnapshot.mockResolvedValue({ ...snapshotWith(), tables: [{ ...TABLE, formats }] });
+  server.getSnapshot.mockResolvedValue(
+    wireSnapshot({ ...snapshotWith(), tables: [{ ...TABLE, formats }] }),
+  );
   const store = useWorkbookStore();
   await store.load("s1");
   wrapper = mount(FormatBar, { attachTo: document.body });
@@ -31,10 +34,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   // The server answers with the table holding the rule that was asked for.
   server.formatCells.mockImplementation((_id, range, format, reset) =>
-    Promise.resolve({
-      ...TABLE,
-      formats: [{ ...positionalFormatRange(range), format, ...(reset ? { reset } : {}) }],
-    }),
+    Promise.resolve(
+      changeWith({
+        ...TABLE,
+        formats: [{ ...positionalFormatRange(range), format, ...(reset ? { reset } : {}) }],
+      }),
+    ),
   );
 });
 afterEach(() => {
@@ -167,7 +172,7 @@ describe("FormatBar", () => {
       outcome: "done",
       label: "Change cells in Table 1",
       error: null,
-      changed: { pages: [], tables: [], views: [], cells: [{ ...at("A1"), input: "" }] },
+      change: changeWith({ pages: [], tables: [], views: [], cells: [{ ...at("A1"), input: "" }] }),
       undoable: false,
       redoable: true,
     });
@@ -175,7 +180,12 @@ describe("FormatBar", () => {
       outcome: "done",
       label: "Change cells in Table 1",
       error: null,
-      changed: { pages: [], tables: [], views: [], cells: [{ ...at("A1"), input: "typed" }] },
+      change: changeWith({
+        pages: [],
+        tables: [],
+        views: [],
+        cells: [{ ...at("A1"), input: "typed" }],
+      }),
       undoable: true,
       redoable: false,
     });

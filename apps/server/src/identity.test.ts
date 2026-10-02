@@ -38,7 +38,8 @@ for (const axis of ["row", "col"] as const) {
     await owner.json(
       "PUT",
       `/tables/${table.id}/cells`,
-      { cells: [{ rowId, colId: target, input: "4" }] }, 200,
+      { cells: [{ rowId, colId: target, input: "4" }] },
+      200,
     );
     const clicked = await owner.json<ClickResult>(
       "POST",
@@ -182,7 +183,12 @@ it("answers 409 to a column change, a format, and an edit that name something de
   expect(
     await owner.json("PATCH", `/tables/${table.id}/columns/${goneCol}`, { name: "x" }, 409),
   ).toMatchObject({ error: { code: "column_deleted" } });
-  const range = { startRowId: rows[0], endRowId: null, startColId: table.colIds[0], endColId: null };
+  const range = {
+    startRowId: rows[0],
+    endRowId: null,
+    startColId: table.colIds[0],
+    endColId: null,
+  };
   for (const [gone, code] of [
     [{ startRowId: goneRow }, "row_deleted"],
     [{ endRowId: goneRow }, "row_deleted"],
@@ -235,7 +241,7 @@ describe("rows a save adds", () => {
   }
 
   it("adds the row at the end with its cell, as one change", async () => {
-    const { snapshot, table, rows, save } = await start();
+    const { table, rows, save } = await start();
     const before = await rows();
     const rowId = randomUUID();
     const change = await save(rowId, "new");

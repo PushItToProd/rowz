@@ -153,7 +153,12 @@ describe("the stream of changes", () => {
       rows: [{ id: added, tableId: table.id, orderKey: expect.any(String) }],
       // The formula's cell keeps its ids. Only its text changed.
       cells: [
-        { tableId: table.id, rowId: rowIds(snapshot, table.id)[0], colId: table.colIds[1], input: "=A3" },
+        {
+          tableId: table.id,
+          rowId: rowIds(snapshot, table.id)[0],
+          colId: table.colIds[1],
+          input: "=A3",
+        },
       ],
     });
 
@@ -180,7 +185,12 @@ describe("the stream of changes", () => {
       input: String(index),
     }));
     for (const batch of [cells.slice(0, 1000), cells.slice(1000)]) {
-      const response = await tab.request("PUT", `/tables/${table.id}/cells`, { cells: batch }, step);
+      const response = await tab.request(
+        "PUT",
+        `/tables/${table.id}/cells`,
+        { cells: batch },
+        step,
+      );
       expect(response.status).toBe(200);
     }
 
@@ -213,9 +223,14 @@ describe("the stream of changes", () => {
     }
 
     // A rename of the spreadsheet is on the screen of the tab that made it.
-    await user.request("PATCH", `/spreadsheets/${snapshot.id}`, { name: "Renamed" }, {
-      "x-client-id": "tab-1",
-    });
+    await user.request(
+      "PATCH",
+      `/spreadsheets/${snapshot.id}`,
+      { name: "Renamed" },
+      {
+        "x-client-id": "tab-1",
+      },
+    );
     await save("marker", "");
     expect(await theirs.next()).toEqual(READ_AGAIN);
     expect((await theirs.change()).revision).toBe(snapshot.revision + 3);

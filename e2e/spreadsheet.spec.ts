@@ -261,6 +261,15 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
   await rowMenu.getByRole("menuitem", { name: "Insert 2 rows above" }).click();
   await expect(cell(page, "A4")).toHaveText("3");
   await expect(cell(page, "A6")).toHaveText("14");
+  // The selected rows follow their IDs to rows 4–5. Select the newly inserted rows explicitly.
+  await expect(page.locator('[data-table="Table 1"] tbody th.grid__header--selected')).toHaveText([
+    "4",
+    "5",
+  ]);
+  await rowHeaders.nth(1).hover();
+  await page.mouse.down();
+  await rowHeaders.nth(2).hover();
+  await page.mouse.up();
   await rowHeaders.nth(2).click({ button: "right" });
   await page.getByRole("menuitem", { name: "Delete rows 2-3" }).click();
   await expect(cell(page, "A2")).toHaveText("3");
@@ -753,6 +762,7 @@ test("undo reverses a format, a row insertion, and a cell edit", async ({ page }
   await enter(page, "A1", "remove me");
   await cell(page, "A1").click();
   await page.getByRole("button", { name: "Insert row above" }).click();
+  await expect(cell(page, "A2")).toHaveText("remove me");
   await cell(page, "A2").click();
   await page.getByRole("toolbar", { name: "Format" }).getByRole("button", { name: "Bold" }).click();
   await expect(cell(page, "A2").locator(".cell-value")).toHaveCSS("font-weight", "700");
@@ -1015,4 +1025,28 @@ test.describe("on a phone", () => {
     await expect(page.getByRole("heading", { name: "Help" })).toBeVisible();
     expect(await fitsScreen()).toBe(true);
   });
+});
+
+test("an open draft follows its row when another tab inserts above it", async ({
+  page,
+  context,
+}) => {
+  await newSpreadsheet(page);
+  await enter(page, "A2", "before");
+  await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
+  const other = await context.newPage();
+  await other.goto(page.url());
+  await expect(cell(other, "A2")).toHaveText("before");
+
+  await cell(page, "A2").click();
+  await page.keyboard.type("mine");
+  await cell(other, "A1").click();
+  await other.getByRole("button", { name: "Insert row above" }).click();
+  await expect(cell(other, "A3")).toHaveText("before");
+  await expect(cell(page, "A3").getByLabel("Cell content")).toHaveValue("mine");
+  await cell(page, "A3").getByLabel("Cell content").press("Enter");
+  await expect(cell(other, "A3")).toHaveText("mine");
+  await reload(page);
+  await expect(cell(page, "A3")).toHaveText("mine");
+  await other.close();
 });

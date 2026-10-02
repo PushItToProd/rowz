@@ -64,12 +64,7 @@ export function tableRoutes(dependencies: ActionDependencies) {
         async (c) => {
           const { range, format, reset } = c.req.valid("json");
           return c.json(
-            await c.var.repository.formatCells(
-              c.req.valid("param").tableId,
-              range,
-              format,
-              reset,
-            ),
+            await c.var.repository.formatCells(c.req.valid("param").tableId, range, format, reset),
           );
         },
       )

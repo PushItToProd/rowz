@@ -11,12 +11,14 @@ const first = ref<HTMLInputElement>();
 const colCount = ref(props.table.colCount);
 const rowCount = ref(props.table.rowCount);
 
-function fits(count: unknown, most: number): count is number {
-  return Number.isInteger(count) && (count as number) >= 1 && (count as number) <= most;
+function fits(count: unknown, most: number, least = 1): count is number {
+  return Number.isInteger(count) && (count as number) >= least && (count as number) <= most;
 }
 
 const valid = computed(
-  () => fits(colCount.value, LIMITS.tableCols) && fits(rowCount.value, LIMITS.tableRows),
+  () =>
+    fits(colCount.value, LIMITS.tableCols) &&
+    fits(rowCount.value, LIMITS.tableRows, props.table.columns ? 0 : 1),
 );
 
 function submit(): void {
@@ -61,7 +63,13 @@ onBeforeUnmount(() => {
     </label>
     <label>
       Rows
-      <input v-model.number="rowCount" type="number" min="1" :max="LIMITS.tableRows" required />
+      <input
+        v-model.number="rowCount"
+        type="number"
+        :min="table.columns ? 0 : 1"
+        :max="LIMITS.tableRows"
+        required
+      />
     </label>
     <button type="submit" class="primary" :disabled="!valid">Resize</button>
     <button type="button" @click="emit('close')">Cancel</button>

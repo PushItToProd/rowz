@@ -91,27 +91,38 @@ const pageMenuItems = computed((): MenuItem[] => {
     }));
 });
 
-watch(
-  () => props.spreadsheetId,
-  async (spreadsheetId) => {
-    loadError.value = null;
-    try {
-      await store.load(spreadsheetId);
-    } catch (cause) {
-      loadError.value =
-        cause instanceof Error ? cause.message : "The spreadsheet could not be opened";
-    }
-  },
-  { immediate: true },
-);
-
 // Changes made elsewhere arrive here. Several at once are read as one.
 const REFRESH_DELAY_MS = 250;
 let refreshTimer: number | undefined;
 watch(
   () => props.spreadsheetId,
-  (spreadsheetId, _previous, onCleanup) => {
-    const stop = watchSpreadsheet(spreadsheetId, () => {
+  async (spreadsheetId, _previous, onCleanup) => {
+    let active = true;
+    const isActive = (): boolean => active;
+    let stop: (() => void) | undefined;
+    onCleanup(() => {
+      active = false;
+      window.clearTimeout(refreshTimer);
+      stop?.();
+    });
+    loadError.value = null;
+    try {
+      await store.load(spreadsheetId);
+    } catch (cause) {
+      if (isActive())
+        loadError.value =
+          cause instanceof Error ? cause.message : "The spreadsheet could not be opened";
+      return;
+    }
+    if (!isActive()) return;
+    stop = watchSpreadsheet(spreadsheetId, (change) => {
+      if (change) {
+        void store.receiveChange(change).catch((cause: unknown) => {
+          loadError.value =
+            cause instanceof Error ? cause.message : "The spreadsheet could not be read again";
+        });
+        return;
+      }
       window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => {
         store.refresh().catch((cause: unknown) => {
@@ -120,10 +131,6 @@ watch(
             cause instanceof Error ? cause.message : "The spreadsheet could not be read again";
         });
       }, REFRESH_DELAY_MS);
-    });
-    onCleanup(() => {
-      window.clearTimeout(refreshTimer);
-      stop();
     });
   },
   { immediate: true },

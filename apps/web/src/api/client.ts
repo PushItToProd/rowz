@@ -4,10 +4,11 @@ import type {
   ListedSpreadsheet,
   MemberRecord,
   PageRecord,
-  Rewritten,
+  Change,
+  ChangedContent,
   SnapshotWithHistory,
   SpreadsheetSummary,
-  TableRecord,
+  TableRecord as StoredTable,
   UndoResult,
   VersionRecord,
   ViewRecord,
@@ -28,11 +29,18 @@ export type {
   ClickResult,
   MemberRecord,
   PageRecord,
-  Rewritten,
+  Change,
+  ChangedContent,
   SnapshotWithHistory,
-  TableRecord,
   UndoResult,
   ViewRecord,
+};
+
+/** A table projected into the positional grid and engine. Wire records have no counts. */
+export type TableRecord = StoredTable & {
+  rows: { id: string; orderKey: string }[];
+  rowCount: number;
+  colCount: number;
 };
 
 export type Snapshot = SnapshotWithHistory;
@@ -93,7 +101,7 @@ async function done(request: Promise<Response>): Promise<void> {
   await check(await request);
 }
 
-/** Names this tab to the server, so that the tab can tell its own changes from other people's. */
+/** Names this tab to the server, for its undo journal and change notifications. */
 export const CLIENT_ID = crypto.randomUUID();
 
 const { api: routes } = hc<AppType>("/", { headers: { [CLIENT_ID_HEADER]: CLIENT_ID } });
@@ -158,8 +166,8 @@ export const api = {
     body(routes.spreadsheets[":spreadsheetId"].versions.$get({ param: { spreadsheetId } })),
 
   /** Puts a spreadsheet back as a kept version has it. */
-  restoreVersion: (spreadsheetId: string, versionId: string): Promise<void> =>
-    done(
+  restoreVersion: (spreadsheetId: string, versionId: string): Promise<Change> =>
+    body(
       routes.spreadsheets[":spreadsheetId"].versions[":versionId"].restore.$post({
         param: { spreadsheetId, versionId },
       }),
@@ -181,20 +189,22 @@ export const api = {
   deleteSpreadsheet: (spreadsheetId: string): Promise<void> =>
     done(routes.spreadsheets[":spreadsheetId"].$delete({ param: { spreadsheetId } })),
 
-  createPage: (spreadsheetId: string): Promise<{ page: PageRecord; table: TableRecord }> =>
+  createPage: (
+    spreadsheetId: string,
+  ): Promise<{ page: PageRecord; table: StoredTable; change: Change }> =>
     body(routes.spreadsheets[":spreadsheetId"].pages.$post({ param: { spreadsheetId }, json: {} })),
 
   /** Resolves to the cells and views whose formulas named the page and were rewritten. */
-  renamePage: (pageId: string, name: string): Promise<Rewritten> =>
+  renamePage: (pageId: string, name: string): Promise<Change> =>
     body(routes.pages[":pageId"].$patch({ param: { pageId }, json: { name } })),
 
   /** Puts the blocks of a page in the order of their ids. */
-  reorderPage: (pageId: string, blocks: string[]): Promise<void> =>
-    done(routes.pages[":pageId"].order.$put({ param: { pageId }, json: { blocks } })),
+  reorderPage: (pageId: string, blocks: string[]): Promise<Change> =>
+    body(routes.pages[":pageId"].order.$put({ param: { pageId }, json: { blocks } })),
 
   /** Puts the pages of a spreadsheet in the order of their ids. */
-  reorderPages: (spreadsheetId: string, pages: string[]): Promise<void> =>
-    done(
+  reorderPages: (spreadsheetId: string, pages: string[]): Promise<Change> =>
+    body(
       routes.spreadsheets[":spreadsheetId"].pages.order.$put({
         param: { spreadsheetId },
         json: { pages },
@@ -202,24 +212,24 @@ export const api = {
     ),
 
   /** Moves a table to the end of another page. Resolves to the table and the formulas rewritten to keep reading what they read. */
-  moveTable: (tableId: string, pageId: string): Promise<Rewritten & { table: TableRecord }> =>
+  moveTable: (tableId: string, pageId: string): Promise<Change> =>
     body(routes.tables[":tableId"].page.$put({ param: { tableId }, json: { pageId } })),
 
   /** Moves a chart or text view to the end of another page. */
-  moveView: (viewId: string, pageId: string): Promise<Rewritten & { view: ViewRecord }> =>
+  moveView: (viewId: string, pageId: string): Promise<Change> =>
     body(routes.views[":viewId"].page.$put({ param: { viewId }, json: { pageId } })),
 
-  deletePage: (pageId: string): Promise<void> =>
-    done(routes.pages[":pageId"].$delete({ param: { pageId } })),
+  deletePage: (pageId: string): Promise<Change> =>
+    body(routes.pages[":pageId"].$delete({ param: { pageId } })),
 
-  createTable: (pageId: string): Promise<TableRecord> =>
+  createTable: (pageId: string): Promise<{ table: StoredTable; change: Change }> =>
     body(routes.pages[":pageId"].tables.$post({ param: { pageId }, json: {} })),
 
   updateTable: (
     tableId: string,
     changes: { name?: string; rowCount?: number; colCount?: number },
     stepId?: string,
-  ): Promise<Rewritten & { table: TableRecord }> =>
+  ): Promise<Change> =>
     body(
       routes.tables[":tableId"].$patch({
         param: { tableId },
@@ -228,11 +238,8 @@ export const api = {
       }),
     ),
 
-  /** Inserts or deletes a row or column. Resolves to the resized table and every cell that changed. */
-  editTable: (
-    tableId: string,
-    edit: IdentifiedStructuralEditBody,
-  ): Promise<Rewritten & { table: TableRecord }> =>
+  /** Inserts or deletes a row or column. Returns the resulting content change. */
+  editTable: (tableId: string, edit: IdentifiedStructuralEditBody): Promise<Change> =>
     body(routes.tables[":tableId"].edits.$post({ param: { tableId }, json: edit })),
 
   /** Changes how a range of cells is shown. With `reset`, the cells first lose every format they had. */
@@ -241,7 +248,7 @@ export const api = {
     range: IdentityFormatRange,
     format: FormatPatch,
     reset = false,
-  ): Promise<TableRecord> =>
+  ): Promise<Change> =>
     body(
       routes.tables[":tableId"].formats.$post({
         param: { tableId },
@@ -250,19 +257,19 @@ export const api = {
     ),
 
   /** Names a table's columns, which makes it a data table. With `headerRow`, the first row supplies the names. */
-  nameColumns: (tableId: string, headerRow: boolean): Promise<Rewritten & { table: TableRecord }> =>
+  nameColumns: (tableId: string, headerRow: boolean): Promise<Change> =>
     body(routes.tables[":tableId"].columns.$post({ param: { tableId }, json: { headerRow } })),
 
   /** Makes a data table a plain table again. */
-  dropColumns: (tableId: string): Promise<TableRecord> =>
+  dropColumns: (tableId: string): Promise<Change> =>
     body(routes.tables[":tableId"].columns.$delete({ param: { tableId } })),
 
   /** Changes a column's name, type, or formula. Resolves to the table and what a rename rewrote. */
   updateColumn: (
     tableId: string,
     colId: string,
-    changes: { name?: string; type?: ColumnType; formula?: string },
-  ): Promise<Rewritten & { table: TableRecord }> =>
+    changes: { name?: string; type?: ColumnType; formula?: string; revision?: number },
+  ): Promise<Change> =>
     body(
       routes.tables[":tableId"].columns[":colId"].$patch({
         param: { tableId, colId },
@@ -271,26 +278,34 @@ export const api = {
     ),
 
   /** Adds a chart or a text view to the end of a page. */
-  createView: (pageId: string, kind: ViewRecord["kind"]): Promise<ViewRecord> =>
+  createView: (
+    pageId: string,
+    kind: ViewRecord["kind"],
+  ): Promise<{ view: ViewRecord; change: Change }> =>
     body(routes.pages[":pageId"].views.$post({ param: { pageId }, json: { kind } })),
 
   updateView: (
     viewId: string,
-    changes: { name?: string; source?: string; chartType?: ChartType },
-  ): Promise<ViewRecord> =>
-    body(routes.views[":viewId"].$patch({ param: { viewId }, json: changes })),
+    changes: { name?: string; source?: string; chartType?: ChartType; revision?: number },
+  ): Promise<Change> => body(routes.views[":viewId"].$patch({ param: { viewId }, json: changes })),
 
-  deleteView: (viewId: string): Promise<void> =>
-    done(routes.views[":viewId"].$delete({ param: { viewId } })),
+  deleteView: (viewId: string): Promise<Change> =>
+    body(routes.views[":viewId"].$delete({ param: { viewId } })),
 
-  deleteTable: (tableId: string): Promise<void> =>
-    done(routes.tables[":tableId"].$delete({ param: { tableId } })),
+  deleteTable: (tableId: string): Promise<Change> =>
+    body(routes.tables[":tableId"].$delete({ param: { tableId } })),
 
-  setCells: (tableId: string, cells: IdentityCellInput[], stepId?: string): Promise<void> =>
-    done(
+  setCells: (
+    tableId: string,
+    cells: IdentityCellInput[],
+    stepId?: string,
+    revision?: number,
+    appendRows?: string[],
+  ): Promise<Change> =>
+    body(
       routes.tables[":tableId"].cells.$put({
         param: { tableId },
-        json: { cells },
+        json: { cells, revision, appendRows },
         ...(stepId === undefined ? {} : { headers: { [STEP_ID_HEADER]: stepId } }),
       }),
     ),

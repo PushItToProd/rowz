@@ -1,4 +1,3 @@
-import { cellKey } from "./address";
 import { formatReference, isColumnReference, type Reference, type ReferenceCell } from "./ast";
 import { parseFormulaWithReferences, type LocatedReference } from "./parser";
 import { FormulaSyntaxError } from "./tokenizer";
@@ -295,39 +294,4 @@ export function formulasAfterEdit(data: WorkbookData, edit: StructuralEdit): Sto
     (cell) => cell.tableId !== edit.tableId || moveIndex(cell[edit.axis], edit) !== undefined,
   );
   return rewriteInputs({ ...data, cells: surviving }, new TableResolver(data), editDecider(edit));
-}
-
-/**
- * The cell writes that carry out inserting or deleting rows or columns: cells
- * past the edit move, and formulas anywhere in the workbook that read
- * the table are rewritten to keep reading the same cells. A reference to a
- * deleted cell becomes `#REF!`. An empty input in the result clears that cell.
- * `data` is the workbook before the edit.
- */
-export function inputsAfterEdit(data: WorkbookData, edit: StructuralEdit): StoredInput[] {
-  const resolver = new TableResolver(data);
-  const decide = editDecider(edit);
-  const before = new Map(data.cells.map((cell) => [cellKey(cell), cell.input]));
-  const after = new Map<string, StoredInput>();
-
-  for (const cell of data.cells) {
-    const origin = { pageId: resolver.table(cell.tableId)?.pageId, tableId: cell.tableId };
-    const input = rewriteReferences(cell.input, (reference) =>
-      decide(reference, resolver.find(reference, cell.tableId), origin),
-    );
-    if (cell.tableId !== edit.tableId) {
-      after.set(cellKey(cell), { ...cell, input });
-      continue;
-    }
-    const moved = moveIndex(cell[edit.axis], edit);
-    if (moved === undefined) continue;
-    const target = { ...cell, [edit.axis]: moved, input };
-    after.set(cellKey(target), target);
-  }
-
-  const written = [...after.values()].filter((cell) => before.get(cellKey(cell)) !== cell.input);
-  const cleared = data.cells
-    .filter((cell) => !after.has(cellKey(cell)))
-    .map(({ tableId, row, col }) => ({ tableId, row, col, input: "" }));
-  return [...written, ...cleared];
 }

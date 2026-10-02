@@ -4,35 +4,29 @@ This plan gives every row and column of every table an id that stays the same wh
 
 The plan describes the code at commit `4cd8c89`. It was first written at `077d26a` and revised after two reviews, the first of which is in `_scratch/2026-10-01-persistent-row-identity-review.md`. Implementation progress is recorded below.
 
-## Review and implementation progress (2026-10-01)
+## Implementation progress (2026-10-02)
 
-The review found no blocking design concerns in the storage, positional engine, request identity, undo, and revision design. The accepted one-day retry guard and spreadsheet-wide stale-formula refusal remain limitations of the plan. The cells migration should abort with a diagnostic if it finds unmatched cells instead of silently deleting them; the existing invariants should make this count zero.
+Steps 1–11 are implemented. The engine remains positional; storage, the journal, requests, snapshots, and content changes use row and column IDs. The web store translates confirmed and pending ID-keyed inputs into the engine, applies responses and events in revision order, and preserves pending edits through structural updates. All editor mutations, including version restoration, use one ordered queue.
 
-Row and column identities are persisted and used by requests. Cell storage and journal cell entries remain positional:
+The interrupted implementation's server test type errors and zero-row version fixture are corrected. The web API, store, live events, new-row UI, draft revisions, and test fixtures now use the new protocol. `inputsAfterEdit` and its positional movement tests are removed; formula rewrite cases now exercise `formulasAfterEdit` directly. Documentation describes the enabled behavior.
 
-- Step 1, shared foundations: `keyBetween`, `keysAfter`, `rebalanceKeys`, `TableLayout`, generated ordering tests, and a database test of C collation are implemented. The SQL backfill format below now includes the generator's integer-length prefix.
-- Step 3 was implemented ahead of the storage migration because it is independent of identities. Row growth, table creation, import, actions, and undo enforce the 100,000-row limit. Shrinking a legacy spreadsheet above the limit is allowed.
-- Step 4, engine prerequisite: `formulasAfterEdit` returns changed formula text at the cells' original addresses and excludes deleted cells. Tests compare it with the final inputs of the existing positional edit implementation.
-- Step 1, storage preparation: migration `0009_lean_harrier.sql` creates `table_rows` with C collation, backfills row and column IDs, and clears incompatible history. `ContentWriter` records row creation/deletion separately and keeps IDs stable through edits, resizing, imports, and restoration. Undo and redo restore the same IDs. Order keys longer than 64 characters trigger rebalancing and clear all tabs' history; that change is not undoable. Tests cover the migration, collation metadata, large insertion batches, rebalancing, version restoration, and identity invariants across every journaled content route.
-- Steps 1–2, request and client integration: snapshots and returned table records carry ordered rows and `colIds`. Saves, clicks, control inputs, column updates, formats, and structural requests carry IDs captured when the person acts. The server resolves them under the spreadsheet lock and refuses missing IDs with 409. Deletes of separated row IDs run last contiguous group first and preserve intervening rows. Client selections, queued saves, rollback, and cell/formula-bar drafts follow their IDs after a refresh. Regression tests cover both insertion axes, missing IDs, drafts, captured ranges/columns, noncontiguous deletion, and restoration with undo.
-- The ordered mutation queue prerequisite for step 8 is implemented: all workbook-store mutations, including undo/redo, enter one queue. Regression tests cover formatting and renaming behind a save, failure recovery, and undo after queued view/reorder changes. The separate version-restore integration in `todo.md` remains open.
-- Remaining: steps 4–11 apart from the existing engine prerequisite and queue. Existing-cell requests now follow the intended row and column. Formula text typed against a stale structure is not refused yet, and a paste that grows a table still uses a separate positional resize; both need the later steps.
+Implementation decisions carried forward from the snapshot:
 
-### Remaining implementation and validation todos
+- Steps 4, 6, 7, 8, and 10 share migration 0010 because no intermediate version was deployed. It verifies every cell has matching identities before removing positional columns.
+- Mutation routes return `{ revision, changed }`; creates return their records plus `change`. Click effects share one transaction, journal step, and revision.
+- OVERWRITE removes surplus rows when its range covers every writable column of a data table. Formula columns need not be included. This extends the original full-width condition because action destinations cannot write formula columns.
+- Existing data tables retain trailing empty rows during migration. Their formula columns now compute in those rows.
 
-- [x] Complete step 1: expose row layouts in snapshots/responses, accept IDs for saves/clicks/control inputs, resolve them under the lock, and preserve selections and open drafts by ID on refresh.
-- [x] Complete step 2: column updates, formats, and structural requests use IDs; noncontiguous row deletes preserve intervening rows.
-- [ ] Complete steps 4–5: migrate cells and journal entries to IDs, retain only formula rewrites on structural edits, and move client input storage to IDs.
-- [ ] Complete step 6: narrow formula conflicts in undo, check created-row contents, and handle restored-key collisions.
-- [ ] Complete step 7: appendRows, deleted-row tombstones, zero-row data tables, the new-row UI, and data-table action semantics.
-- [x] Complete the ordered mutation queue prerequisite for step 8.
-- [ ] Complete steps 8–9: revisions, response ordering, content events, and per-event authorization.
-- [ ] Complete steps 10–11: stale-formula refusals and OVERWRITE row deletion.
-- [ ] Apply the final documentation and todo updates only when their corresponding behavior is enabled.
-- [ ] Unblock and run `pnpm e2e:remote`. Both attempts on 2026-10-01, including the retry after the author enabled networking in the configuration, failed with `connect EPERM 127.0.0.1:3200`; the sandbox rejected network access before Playwright could start. Enable sandbox networking and make the remote Playwright server available. No sandbox bypass was attempted.
-- [ ] Unblock and run the real-Postgres validation required by the plan. `pnpm test:postgres` failed before starting tests because access to `/var/run/docker.sock` was denied. PGlite migration, collation, and server tests pass locally; real Postgres is not yet verified.
+Regression coverage includes pending typing across structural responses, paste growth behind queued insertions, consecutive failed saves to one cell, repeated Add row clicks, running buttons following IDs, queued version restoration, duplicate and out-of-order content notifications, stale draft revisions, and typing into an empty data table.
 
-The implementation stops at the tested steps 1–3 and queue prerequisite. The next cell-storage migration drops positional columns and changes all cell and undo paths. End-to-end and real-Postgres validation are unavailable in this session, so that migration and its dependent steps are still open. The final local check passed 75 test files: 2,775 tests passed and two PostgreSQL lock tests were skipped.
+### Validation
+
+- `pnpm check` passed: 76 files, 2,848 tests passed and 2 skipped (`/tmp/full-check3.txt`). The final rerun after the selection/reorder fixes stopped at Prettier on the unrelated `todo-pending.nocommit.md`; see `/tmp/persistent-identity-final-check.txt`.
+- The latest web run passed all 554 tests after the selection/reorder fixes (`/tmp/web-run6.txt`).
+- User-run PostgreSQL validation passed all 415 tests in `_scratch/2026-10-02T06-15-pnpm-e2e-test-postgres.log`. The later run hit an unordered deleted-row assertion; that assertion is now order-independent locally.
+- Latest user-run browser validation: 23/25 passed in `_scratch/2026-10-02T06-22-pnpm-e2e-test-postgres.log`, including the new two-tab draft-preservation test. Two failures exposed delayed paste selection and optimistic reorder issues; fixes are in the working tree and need another browser run.
+- Docker socket permissions and Node proxy handling prevent integration runs in this sandbox. The user asked agents to request that they run these tests; do not bypass the restrictions.
+- Work is paused at the user's request due to their session limit. See `plans/persistent-row-identity-handoff.md` for the remaining work.
 
 ## Decisions in brief
 
@@ -52,7 +46,7 @@ The implementation stops at the tested steps 1–3 and queue prerequisite. The n
 | Live updates             | Responses and events carry the change and its revision, and the client applies both in revision order.                             |
 | Limits                   | 1,000 rows per table stays. A new limit caps row records per spreadsheet.                                                          |
 
-## Current behavior
+## Baseline behavior before implementation
 
 Each claim below was checked by reading the file named. The files that changed between `077d26a` and `4cd8c89` were read again through their diffs.
 

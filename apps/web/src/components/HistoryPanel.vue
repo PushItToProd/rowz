@@ -2,6 +2,9 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { api, type VersionListItem } from "../api/client";
 
+import { useWorkbookStore } from "../stores/workbook";
+const store = useWorkbookStore();
+
 const props = defineProps<{ spreadsheetId: string; canRestore: boolean }>();
 const emit = defineEmits<{
   close: [];
@@ -38,7 +41,7 @@ function restore(version: VersionListItem): Promise<void> {
   const asked = `Put the spreadsheet back as it was on ${when(version)}? What it holds now is kept as a version, so this can be undone.`;
   if (!window.confirm(asked)) return Promise.resolve();
   return run(version.id, async () => {
-    await api.restoreVersion(props.spreadsheetId, version.id);
+    await store.restoreVersion(props.spreadsheetId, version.id);
     emit("restored");
     await refresh();
   });

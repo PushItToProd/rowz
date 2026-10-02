@@ -212,8 +212,8 @@ function lineItems(lines: Lines): MenuItem[] {
     {
       label: `Delete ${describeLines(lines)}`,
       danger: true,
-      // A table keeps at least one row and one column.
-      disabled: count >= size,
+      // Plain grids keep one row; every table keeps one column.
+      disabled: count >= size && (!rows || !props.table.columns),
       run: () => {
         removeLines(lines);
       },
@@ -305,7 +305,7 @@ const menuLabel = computed(() => {
         <button
           type="button"
           class="danger"
-          :disabled="table.rowCount <= 1"
+          :disabled="selected.row >= table.rowCount || (!table.columns && table.rowCount <= 1)"
           @click="removeLines({ axis: 'row', first: selected.row, count: 1 })"
         >
           Delete row
@@ -347,7 +347,7 @@ const menuLabel = computed(() => {
           aria-label="Add row"
           title="Add row"
           :disabled="rowsFull"
-          @click="store.updateTable(table.id, { rowCount: table.rowCount + 1 })"
+          @click="store.editTable(table.id, { axis: 'row', kind: 'insert', index: table.rowCount })"
         >
           +
         </button>

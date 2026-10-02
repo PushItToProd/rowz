@@ -443,10 +443,9 @@ const OPERATORS = [
           what is typed as an ordinary cell does.
         </li>
         <li>
-          <strong>A formula</strong> makes a formula column: one formula computed in every row that
-          holds something. Its cells cannot be typed into. Typing a formula into any of them, or
-          into the bar above the tables while one is selected, changes the formula for the whole
-          column.
+          <strong>A formula</strong> makes a formula column: one formula computed in every stored
+          row. Its cells cannot be typed into. Typing a formula into any of them, or into the bar
+          above the tables while one is selected, changes the formula for the whole column.
         </li>
         <li>
           Renaming a column rewrites the formulas that name it. Cell addresses such as
@@ -767,17 +766,20 @@ const OPERATORS = [
           page, written like any other reference.
         </li>
         <li>
-          <code>APPEND_ROW</code> adds a row below the last one with content, which turns a table
-          into a log. <code>CLEAR</code> empties cells. <code>DO</code> runs several actions from
-          one click, so a button can save a form and then reset it:
+          <code>APPEND_ROW</code> appends after the last stored row of a data table when the range
+          has no fixed bottom. In a plain grid it writes below the last row with content.
+          <code>CLEAR</code> empties cells. <code>DO</code> runs several actions from one click, so
+          a button can save a form and then reset it:
           <code>=BUTTON("Save", DO(APPEND_ROW(Log!A:B, A1, A2), CLEAR(A1:A2)))</code>.
         </li>
         <li>
           Three actions move many rows at once. <code>INSERT(data, range)</code> adds every row of
           the data below what the range holds. <code>UPDATE(data, key_columns, range)</code> writes
           each row over the row with the same key and adds the rows with new keys, so running it
-          twice does not add anything twice. <code>OVERWRITE(data, range)</code> empties the range
-          first. The data can be a range or a formula:
+          twice does not add anything twice. In a data table, open-ended INSERT and UPDATE
+          destinations append after the last stored row. <code>OVERWRITE(data, range)</code>
+          empties the range first and deletes surplus rows of a data table when the range covers
+          every writable column. The data can be a range or a formula:
           <code>=BUTTON("Archive", INSERT(FILTER(A2:C99, C2:C99 = "done"), Archive!A:C))</code>.
         </li>
         <li>

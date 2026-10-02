@@ -12,6 +12,7 @@ const props = defineProps<{ view: ViewRecord }>();
 const store = useWorkbookStore();
 
 const editing = ref(false);
+let editRevision = store.revision;
 const draft = ref(props.view.source);
 // Follow changes made elsewhere, such as a table rename rewriting an expression.
 watch(
@@ -21,9 +22,16 @@ watch(
   },
 );
 
-function save(): void {
-  if (draft.value !== props.view.source)
-    void store.updateView(props.view.id, { source: draft.value });
+async function save(): Promise<boolean> {
+  if (draft.value === props.view.source) return true;
+  const saved = await store.updateView(props.view.id, { source: draft.value }, editRevision);
+  if (!saved) {
+    editing.value = true;
+    editRevision = store.revision;
+    await nextTick();
+    editor.value?.focus();
+  }
+  return saved;
 }
 
 const editor = ref<HTMLTextAreaElement>();
@@ -31,19 +39,19 @@ const editor = ref<HTMLTextAreaElement>();
 /** Opens the source for editing, with the keyboard in it. */
 async function edit(): Promise<void> {
   if (!store.canEdit || editing.value) return;
+  editRevision = store.revision;
   editing.value = true;
   await nextTick();
   editor.value?.focus();
 }
 
-function finish(): void {
-  save();
-  editing.value = false;
+async function finish(): Promise<void> {
+  if (await save()) editing.value = false;
 }
 
 /** Leaving the source saves it and ends the edit. */
 function onBlur(): void {
-  save();
+  void save();
   // The source still has the keyboard when it is the window that lost focus, and the edit goes on.
   if (document.activeElement !== editor.value) editing.value = false;
 }
