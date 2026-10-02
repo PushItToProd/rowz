@@ -76,6 +76,13 @@ describe("ScriptCard", () => {
     expect(shown[3]?.[1]).toMatch(/^#/);
   });
 
+  it("says why a name is refused", async () => {
+    await render("Sum = 1");
+    const cell = wrapper.get("td");
+    expect(cell.text()).toMatch(/^#NAME\?/);
+    expect(cell.get(".script__reason").text()).toMatch(/SUM/i);
+  });
+
   it("follows the cells its names read", async () => {
     await render("Total = 'Table 1'!A1 * 2", { A1: "1" });
     expect(rows()).toEqual([["Total", "2"]]);

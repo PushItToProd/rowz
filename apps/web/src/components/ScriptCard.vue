@@ -134,12 +134,11 @@ const statements = computed(() =>
       <tbody>
         <tr v-for="statement in statements" :key="statement.line">
           <th scope="row" class="script__name">{{ statement.label }}</th>
-          <td :class="{ script__error: statement.value.error }" :title="statement.value.error">
-            {{
-              statement.value.error && !statement.value.text
-                ? statement.value.error
-                : statement.value.text
-            }}
+          <td :class="{ script__error: statement.value.error }">
+            {{ statement.value.text }}
+            <span v-if="statement.value.error" class="script__reason">{{
+              statement.value.error
+            }}</span>
           </td>
         </tr>
       </tbody>

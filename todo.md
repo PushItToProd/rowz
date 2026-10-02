@@ -22,6 +22,7 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 ## Inbox - to be categorized
 
 - [ ] "Save as"/"Save a copy" for duplicating an existing document
+- [ ] "Write the one meant" (in `workbook.ts`) reads extremely unnaturally to me but i'm too lazy to think of a better option right now
 
 ## Plans
 
@@ -49,6 +50,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] (Claude) Reproduce, then fix: an undo can erase another person's edit. Ada types `x` in A1. Grace types `y` there and then `x`. Ada's undo finds A1 holding `x`, which is what her step left, and puts back what was there before her, erasing Grace's edit. `assertRecordedMatches` in [spreadsheets.ts](apps/server/src/repo/spreadsheets.ts) compares inputs by value, and `changeHistory` looks at later journal entries only to see whether they rewrote references. Refuse a step when a later entry that is still in effect touched one of its cells. Add the case to `undo.test.ts`.
 
 - [x] (Claude) Reproduce, then fix: a response that arrives after the editor has opened another document is applied to that document. `addPage` in the [workbook store](apps/web/src/stores/workbook.ts) appends the page and table the server made for document A to the lists of document B, and `renameSpreadsheet` puts back A's record. Other store functions that write after an `await` may do the same and need the same check. `runHistory` already compares the open document's id before applying its answer.
+
+- [ ] when editing a script and unfocusing it, if a table cell is already selected that's above or below the fold, the UI will scroll the whole page up/down to show that cell, which is really annoying
 
 ## Formula language and functions
 
