@@ -52,6 +52,17 @@ function readRoutes(): Route[] {
   ];
 }
 
+/**
+ * The routes other than a GET that change no spreadsheet the caller was given.
+ * Each makes a new spreadsheet that belongs to the caller, and the last reads
+ * an existing one to do it. Every other such route must be in `writeRoutes`.
+ */
+const CHANGES_NO_SPREADSHEET = [
+  "POST /spreadsheets",
+  "POST /spreadsheets/import",
+  "POST /spreadsheets/:spreadsheetId/versions/:versionId/copy",
+];
+
 /** Every route that changes the spreadsheet, least destructive first so each still has a target. */
 function writeRoutes(): Route[] {
   const page = snapshot.pages[0]!.id;
@@ -132,6 +143,17 @@ describe("the routes these tests try", () => {
         routeOf(server.routes, method, path) ?? `${method} ${path}: no such route`,
     );
     expect([...new Set(tried)].sort()).toEqual(server.routes);
+  });
+
+  // A route in the wrong list would pass the test above and skip the rule it
+  // should follow: a write among the reads is never tried as a viewer.
+  it("count every route other than a GET as a write, unless it is named as leaving the spreadsheet alone", () => {
+    const writes = writeRoutes().map(([method, path]) => routeOf(server.routes, method, path));
+    const presumed = server.routes.filter(
+      (route) => !route.startsWith("GET ") && !CHANGES_NO_SPREADSHEET.includes(route),
+    );
+    expect([...new Set(writes)].sort()).toEqual(presumed);
+    expect(server.routes).toEqual(expect.arrayContaining(CHANGES_NO_SPREADSHEET));
   });
 });
 
