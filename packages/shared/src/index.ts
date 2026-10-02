@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-export { keyBetween, keysAfter, rebalanceKeys, MAX_ORDER_KEY_LENGTH } from "./order-keys";
+export { keyBetween, keysAfter, rebalanceKeys, MAX_ORDER_KEY_LENGTH } from "./order-keys.ts";
 export {
   TableLayout,
   type RowIdentity,
   type CellIdentity,
   type CellPosition,
-} from "./table-layout";
+} from "./table-layout.ts";
 
 export const LIMITS = {
   nameLength: 100,
