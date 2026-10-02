@@ -1566,6 +1566,9 @@ export class SpreadsheetRepository {
     spreadsheetId: string,
     direction: "undo" | "redo",
   ): Promise<UndoResult> {
+    // Pruning otherwise runs when a change is recorded, so the entries of a
+    // spreadsheet nobody has changed since would stay past the age limit.
+    await this.pruneJournal(tx, spreadsheetId);
     const clientId = requestContext()?.clientId ?? null;
     if (clientId === null) return this.historyResult(tx, spreadsheetId, clientId, "nothing");
     const undone = direction === "redo";

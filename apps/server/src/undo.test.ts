@@ -944,6 +944,24 @@ describe("pruning limits", () => {
     }
   });
 
+  it("does not undo a step older than the age limit in a spreadsheet nobody has changed since", async () => {
+    const fixture = await fresh();
+    const client = withClientId(owner);
+    await client.request("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ A1: "kept" }));
+    await server.db
+      .update(journal)
+      .set({ createdAt: new Date(Date.now() - LIMITS.journalAgeMs - 60_000) })
+      .where(eq(journal.spreadsheetId, fixture.id));
+
+    expect(await client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).toMatchObject(
+      { outcome: "nothing", undoable: false },
+    );
+    expect((await snapshot(client, fixture.id)).cells.map((cell) => cell.input)).toEqual(["kept"]);
+    expect(
+      await server.db.select().from(journal).where(eq(journal.spreadsheetId, fixture.id)),
+    ).toEqual([]);
+  });
+
   it("keeps an oversized change but refuses to undo it", async () => {
     const limited = await limitedServer({ journalEntryBytes: 1 });
     try {

@@ -26,7 +26,7 @@ Choices made by agents while acting autonomously, for the author to review. Each
 
 Two people typing in different cells of one table can each undo their own edits. Rules 1 and 2 refuse some undos that would be safe, such as one person adding a table while another types on a different page. Allowing those needs tracking of which changes touch which tables.
 
-**Limits.** A spreadsheet's journal keeps at most 200 entries, one day, and 64 MB, and one entry at most 8 MB. Pruning deletes oldest first, which keeps rules 1 and 2 sound: no entry outlives a later entry that would have blocked it. Pruning part of a step takes the rest of the step off its stack. A change over 8 MB succeeds and is stored without its state, so the rules still see it.
+**Limits.** A spreadsheet's journal keeps at most 200 entries, one day, and 64 MB, and one entry at most 8 MB. Pruning runs when a change is recorded and before an undo or redo, so a step past the age limit is not undone even in a spreadsheet nobody has changed since. Pruning deletes oldest first, which keeps rules 1 and 2 sound: no entry outlives a later entry that would have blocked it. Pruning part of a step takes the rest of the step off its stack. A change over 8 MB succeeds and is stored without its state, so the rules still see it.
 
 **Risks.**
 
