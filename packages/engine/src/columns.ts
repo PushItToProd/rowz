@@ -3,6 +3,7 @@ import {
   moveDecider,
   renameDecider,
   rewriteReferences,
+  targetOf,
   type Decide,
   type Move,
   type Rename,
@@ -28,8 +29,8 @@ function rewriteColumns(structure: WorkbookStructure, decide: Decide): ColumnFor
     (table.columns ?? []).flatMap((column, col) => {
       if (column.formula === undefined) return [];
       const origin = { pageId: table.pageId, tableId: table.id };
-      const formula = rewriteReferences(column.formula, (reference) =>
-        decide(reference, resolver.find(reference, table.id), origin),
+      const formula = rewriteReferences(column.formula, (reference, qualified) =>
+        decide(reference, targetOf(resolver, reference, qualified, origin), origin),
       );
       return formula === column.formula ? [] : [{ tableId: table.id, col, formula }];
     }),

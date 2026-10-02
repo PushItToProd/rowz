@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parseScript, rewriteScript, scriptNames } from "./script";
 import { STRUCTURE, at } from "./testing";
-import { viewsAfterRename } from "./views";
+import { inputsAfterMove, inputsAfterRename } from "./rewrite";
+import { viewsAfterMove, viewsAfterRename } from "./views";
 import { Workbook } from "./workbook";
 
 describe("parseScript", () => {
@@ -102,5 +103,41 @@ describe("rewriteScript", () => {
     expect(
       viewsAfterRename(STRUCTURE, views, { kind: "table", tableId: "t1", name: "Sales" }),
     ).toEqual([{ id: "s1", source: "X = Sales!A1" }]);
+  });
+});
+
+describe("rewriting qualified names", () => {
+  const data = {
+    ...STRUCTURE,
+    scripts: [{ id: "s1", pageId: "p1", name: "Summary", source: "X = Table1!A1" }],
+    cells: [
+      { tableId: "t1", row: 0, col: 0, input: "=Summary!Total + 1" },
+      { tableId: "t3", row: 0, col: 0, input: "='Page 1'!Summary!Total" },
+    ],
+  };
+  const views = [{ id: "s1", pageId: "p1", kind: "script" as const, source: "X = Table1!A1" }];
+
+  it("writes a script's new name where it is named", () => {
+    expect(inputsAfterRename(data, { kind: "script", scriptId: "s1", name: "Totals" })).toEqual([
+      { tableId: "t1", row: 0, col: 0, input: "=Totals!Total + 1" },
+      { tableId: "t3", row: 0, col: 0, input: "='Page 1'!Totals!Total" },
+    ]);
+  });
+
+  it("writes a page's new name in a qualified name", () => {
+    expect(inputsAfterRename(data, { kind: "page", pageId: "p1", name: "Main" })).toEqual([
+      { tableId: "t3", row: 0, col: 0, input: "=Main!Summary!Total" },
+    ]);
+  });
+
+  it("names the page of a script that moves, and of the tables it reads", () => {
+    const move = { kind: "view", viewId: "s1", pageId: "p2" } as const;
+    expect(inputsAfterMove(data, move)).toEqual([
+      { tableId: "t1", row: 0, col: 0, input: "=Archive!Summary!Total + 1" },
+      { tableId: "t3", row: 0, col: 0, input: "=Summary!Total" },
+    ]);
+    expect(viewsAfterMove(data, views, move)).toEqual([
+      { id: "s1", source: "X = 'Page 1'!Table1!A1" },
+    ]);
   });
 });

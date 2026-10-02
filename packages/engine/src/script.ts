@@ -1,5 +1,4 @@
-import type { Reference } from "./ast";
-import { referenceEdits, type Replacement } from "./rewrite";
+import { referenceEdits, type Replace } from "./rewrite";
 import type { NameDefinition } from "./structure";
 
 /**
@@ -144,10 +143,7 @@ export function scriptNames(scriptId: string, source: string): NameDefinition[] 
  * Rewrites the references in each statement of a script and leaves every
  * other character, comments included, as the user typed it.
  */
-export function rewriteScript(
-  source: string,
-  replace: (reference: Reference) => Replacement | undefined,
-): string {
+export function rewriteScript(source: string, replace: Replace): string {
   const edits = parseScript(source).flatMap((statement) =>
     statement.kind === "error"
       ? []

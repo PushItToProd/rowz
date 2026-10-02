@@ -261,7 +261,7 @@ export const controlInputBody = z.object({
 /** The blocks of a page (its tables, charts, and text views), by id, in the order they are to sit on it. */
 export const reorderBody = z.object({ blocks: z.array(z.uuid()).min(1).max(1000) });
 
-export const createViewBody = z.object({ kind: z.enum(["chart", "text"]) });
+export const createViewBody = z.object({ kind: z.enum(["chart", "text", "script"]) });
 
 export const updateViewBody = z
   .object({
@@ -332,6 +332,12 @@ const fileText = z.object({
   source: z.string().max(LIMITS.viewSourceLength),
 });
 
+const fileScript = z.object({
+  type: z.literal("script"),
+  name,
+  source: z.string().max(LIMITS.viewSourceLength),
+});
+
 /**
  * A whole spreadsheet as a file: what an export writes and an import reads.
  * Things are identified by name and order, as formulas identify them, so a
@@ -345,9 +351,9 @@ export const spreadsheetFile = z.object({
     .array(
       z.object({
         name,
-        /** The page's blocks: its tables, charts, and text views, in their order on the page. */
+        /** The page's blocks: its tables, charts, text views, and scripts, in their order on the page. */
         blocks: z
-          .array(z.discriminatedUnion("type", [fileTable, fileChart, fileText]))
+          .array(z.discriminatedUnion("type", [fileTable, fileChart, fileText, fileScript]))
           .max(FILE_LIMITS.blocksPerPage),
       }),
     )
@@ -372,7 +378,7 @@ interface PlacedTable extends Placed {
   formats: NonNullable<FileTable["formats"]>;
 }
 interface PlacedView extends Placed {
-  kind: "chart" | "text";
+  kind: "chart" | "text" | "script";
   source: string;
   chartType: "bar" | "line" | "pie" | "scatter" | null;
 }
@@ -413,7 +419,7 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
               source: view.source,
               chartType: view.chartType ?? "bar",
             }
-          : { type: "text", name: view.name, source: view.source }) satisfies FileBlock,
+          : { type: view.kind, name: view.name, source: view.source }) satisfies FileBlock,
       })),
     ]
       .filter((entry) => entry.pageId === pageId)

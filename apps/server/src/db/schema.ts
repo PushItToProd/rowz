@@ -201,7 +201,7 @@ export const tableRows = pgTable(
   ],
 );
 
-export type ViewKind = "chart" | "text";
+export type ViewKind = "chart" | "text" | "script";
 
 /**
  * Things on a page that show data without being tables. A chart's source is

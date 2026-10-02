@@ -1,13 +1,13 @@
-import type { Reference } from "./ast";
 import {
   editDecider,
   moveDecider,
   renameDecider,
   rewriteReferences,
+  targetOf,
   type Decide,
   type Move,
   type Rename,
-  type Replacement,
+  type Replace,
   type StructuralEdit,
 } from "./rewrite";
 import { TableResolver, type WorkbookStructure } from "./structure";
@@ -29,10 +29,7 @@ export interface ViewSource {
 }
 
 /** Rewrites the references in a view's source, whichever kind of source it is. */
-function rewriteSource(
-  { kind, source }: ViewSource,
-  replace: (reference: Reference) => Replacement | undefined,
-): string {
+function rewriteSource({ kind, source }: ViewSource, replace: Replace): string {
   if (kind === "text") return rewriteTemplate(source, replace);
   if (kind === "script") return rewriteScript(source, replace);
   // A chart's formula may be written with or without the leading `=`.
@@ -50,8 +47,8 @@ function rewriteViews(
   const resolver = new TableResolver(structure);
   return views.flatMap((view) => {
     const origin = { pageId: view.pageId, viewId: view.id };
-    const source = rewriteSource(view, (reference) =>
-      decide(reference, resolver.findFromPage(reference, view.pageId), origin),
+    const source = rewriteSource(view, (reference, qualified) =>
+      decide(reference, targetOf(resolver, reference, qualified, origin), origin),
     );
     return source === view.source ? [] : [{ id: view.id, source }];
   });

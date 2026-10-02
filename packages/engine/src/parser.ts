@@ -54,6 +54,13 @@ export interface LocatedReference {
   from: number;
   /** Offset one past its last character. */
   to: number;
+  /**
+   * Set for a qualified name such as `Summary!Total`, which is recorded as a
+   * column reference whose table is what holds the name: `{ table: "Summary",
+   * column: "Total" }`. A rename or a move rewrites its page and holder as it
+   * rewrites a reference's page and table.
+   */
+  qualified?: true;
 }
 
 class Parser {
@@ -251,12 +258,14 @@ class Parser {
     const token = this.next();
     const [page, holder = firstName] = names.length === 2 ? names : [undefined, ...names];
     if (this.isName(token)) {
-      return {
-        type: "qualified",
-        ...(page === undefined ? {} : { page }),
-        holder,
-        name: token.value,
-      };
+      const where = page === undefined ? {} : { page };
+      this.references.push({
+        reference: { ...where, table: holder, column: token.value },
+        from: position,
+        to: this.consumedTo,
+        qualified: true,
+      });
+      return { type: "qualified", ...where, holder, name: token.value };
     }
     const start = this.corner(token);
     const qualifier =

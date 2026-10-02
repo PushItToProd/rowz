@@ -185,11 +185,11 @@ export async function addTable(
   return created.table;
 }
 
-/** Adds a chart or text view to a page and returns it. */
+/** Adds a chart, text view, or script to a page and returns it. */
 export async function addView(
   user: TestClient,
   pageId: string,
-  kind: "chart" | "text" = "text",
+  kind: ViewRecord["kind"] = "text",
 ): Promise<ViewRecord> {
   const created = await user.json<Created<{ view: ViewRecord }>>(
     "POST",

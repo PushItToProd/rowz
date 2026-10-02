@@ -1,5 +1,4 @@
-import type { Reference } from "./ast";
-import { rewriteReferences, type Replacement } from "./rewrite";
+import { rewriteReferences, type Replace } from "./rewrite";
 import {
   error,
   formatValue,
@@ -405,10 +404,7 @@ export function renderTemplate(
  * Rewrites the references in every expression of a template and leaves the
  * rest of the text alone. A template that does not parse is returned unchanged.
  */
-export function rewriteTemplate(
-  source: string,
-  replace: (reference: Reference) => Replacement | undefined,
-): string {
+export function rewriteTemplate(source: string, replace: Replace): string {
   let spans: Span[];
   try {
     spans = expressionSpans(source);

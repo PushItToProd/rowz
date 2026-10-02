@@ -226,6 +226,18 @@ const viewColumns = {
   chartType: views.chartType,
 };
 
+const VIEW_LABELS: Record<ViewKind, string> = {
+  chart: "Add chart",
+  text: "Add text view",
+  script: "Add script",
+};
+
+/** What a new script holds: an example of each kind of statement, as comments. */
+const STARTER_SCRIPT = `// Each line names a formula. Formulas anywhere in the document can use the name.
+// Total = SUM(Sales[Amount])
+// WithTax(amount) = amount * 1.2
+`;
+
 const STARTER_TEMPLATE = `## New text view
 
 Write Markdown here. A formula in double braces puts its value into the text: {{ 1 + 1 }}
@@ -275,6 +287,12 @@ function checkFile(file: SpreadsheetFile): void {
     const fileTables = blocks.filter((block) => block.type === "table");
     const table = repeated(fileTables.map(({ name }) => name));
     if (table !== undefined) invalid(`Two tables on ${pageName} are named ${table}`);
+    // A qualified name such as `Summary!Total` must mean one table or script.
+    const holders = blocks.filter((block) => block.type === "table" || block.type === "script");
+    const holder = repeated(holders.map(({ name }) => name));
+    if (holder !== undefined) {
+      invalid(`Two tables or scripts on ${pageName} are named ${holder}`);
+    }
     for (const { name, rowCount, colCount, cells: fileCells, columns } of fileTables) {
       totalRows += rowCount;
       if (rowCount === 0 && !columns) invalid(`The table ${name} has no rows`);
@@ -1098,6 +1116,46 @@ export class SpreadsheetRepository {
     return change;
   }
 
+  /** The names of a page's tables and scripts, which formulas use to qualify a name such as `Summary!Total`. */
+  private async holderNames(tx: Database, pageId: string): Promise<string[]> {
+    const [tableRows, scriptRows] = await Promise.all([
+      tx.select({ name: tables.name }).from(tables).where(eq(tables.pageId, pageId)),
+      tx
+        .select({ name: views.name })
+        .from(views)
+        .where(and(eq(views.pageId, pageId), eq(views.kind, "script"))),
+    ]);
+    return [...tableRows, ...scriptRows].map((row) => row.name);
+  }
+
+  /**
+   * Refuses a name for a table or script that a script on the page has, or,
+   * for a script, that a table has, ignoring case, so that `Summary!Total`
+   * means one of them. The database refuses a table with another table's
+   * name; scripts are views, which no index covers.
+   */
+  private async checkHolderName(
+    tx: Database,
+    pageId: string,
+    name: string,
+    subject: { kind: "table" | "script"; id?: string },
+  ): Promise<void> {
+    const key = name.toLowerCase();
+    const named = (row: { id: string; name: string }): boolean =>
+      row.id !== subject.id && row.name.toLowerCase() === key;
+    const scriptRows = await tx
+      .select({ id: views.id, name: views.name })
+      .from(views)
+      .where(and(eq(views.pageId, pageId), eq(views.kind, "script")));
+    if (scriptRows.some(named)) throw conflict(`A script named ${name} already exists`);
+    if (subject.kind === "table") return;
+    const tableRows = await tx
+      .select({ id: tables.id, name: tables.name })
+      .from(tables)
+      .where(eq(tables.pageId, pageId));
+    if (tableRows.some(named)) throw conflict(`A table named ${name} already exists`);
+  }
+
   /**
    * The page a block is to move to: another page of the block's own
    * spreadsheet. Must run inside `change`.
@@ -1131,6 +1189,7 @@ export class SpreadsheetRepository {
         tableId,
         pageId,
       });
+      await this.checkHolderName(tx, pageId, table.name, { kind: "table", id: tableId });
       await writer.updateTable(tableId, { pageId, position }).catch((cause: unknown) => {
         if (!isUniqueViolation(cause)) throw cause;
         throw conflict(`${page.name} already has a table named ${table.name}`);
@@ -1147,6 +1206,9 @@ export class SpreadsheetRepository {
   async moveView(viewId: string, pageId: string): Promise<Change> {
     const { change } = await this.changeView(viewId, async (view, tx, writer) => {
       await this.destination(tx, view, pageId);
+      if (view.kind === "script") {
+        await this.checkHolderName(tx, pageId, view.name, { kind: "script", id: viewId });
+      }
       const position = await this.within(tx).nextPosition(pageId);
       writer.setLabel(`Move ${view.kind} ${view.name}`);
       await this.rewriteForMove(tx, writer, view.spreadsheetId, {
@@ -1165,18 +1227,10 @@ export class SpreadsheetRepository {
     name: string | undefined,
     writer: ContentWriter,
   ): Promise<TableRecord> {
-    const siblings = await tx
-      .select({ name: tables.name })
-      .from(tables)
-      .where(eq(tables.pageId, pageId));
+    if (name !== undefined) await this.checkHolderName(tx, pageId, name, { kind: "table" });
     const values = {
       pageId,
-      name:
-        name ??
-        nextName(
-          "Table",
-          siblings.map((table) => table.name),
-        ),
+      name: name ?? nextName("Table", await this.holderNames(tx, pageId)),
       position: await this.within(tx).nextPosition(pageId),
     };
     return writer
@@ -1241,6 +1295,7 @@ export class SpreadsheetRepository {
         await this.applyEdit(tx, writer, spreadsheetId, edit);
       }
       if (changes.name !== undefined) {
+        await this.checkHolderName(tx, table.pageId, changes.name, { kind: "table", id: tableId });
         const rename = { kind: "table", tableId, name: changes.name } as const;
         await this.rewriteFormulas(tx, writer, spreadsheetId, rename);
       }
@@ -1443,10 +1498,15 @@ export class SpreadsheetRepository {
     return change;
   }
 
-  /** Adds a chart or a text view to the end of a page. */
+  /** Adds a chart, a text view, or a script to the end of a page. */
   async createView(pageId: string, kind: ViewKind): Promise<Created<{ view: ViewRecord }>> {
     const { result, change } = await this.changePage(pageId, async (_page, tx, writer) => {
-      writer.setLabel(kind === "chart" ? "Add chart" : "Add text view");
+      writer.setLabel(VIEW_LABELS[kind]);
+      const position = await this.within(tx).nextPosition(pageId);
+      if (kind === "script") {
+        const name = nextName("Script", await this.holderNames(tx, pageId));
+        return writer.insertView({ pageId, kind, position, name, source: STARTER_SCRIPT });
+      }
       const siblings = await tx
         .select({ name: views.name })
         .from(views)
@@ -1455,7 +1515,7 @@ export class SpreadsheetRepository {
       return writer.insertView({
         pageId,
         kind,
-        position: await this.within(tx).nextPosition(pageId),
+        position,
         ...(kind === "chart"
           ? { name: nextName("Chart", names), source: "", chartType: "bar" as const }
           : { name: nextName("Text", names), source: STARTER_TEMPLATE }),
@@ -1483,6 +1543,14 @@ export class SpreadsheetRepository {
       }
       if (changes.source !== undefined && changes.source !== view.source) {
         await this.checkWrittenAt(tx, view.spreadsheetId, revision);
+      }
+      if (view.kind === "script" && changes.name !== undefined && changes.name !== view.name) {
+        await this.checkHolderName(tx, view.pageId, changes.name, { kind: "script", id: viewId });
+        await this.rewriteFormulas(tx, writer, view.spreadsheetId, {
+          kind: "script",
+          scriptId: viewId,
+          name: changes.name,
+        });
       }
       await writer.updateView(viewId, changes);
     });

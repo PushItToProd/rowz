@@ -1,4 +1,10 @@
-import { formatReference, isColumnReference, type Reference, type ReferenceCell } from "./ast";
+import {
+  formatReference,
+  isColumnReference,
+  quoteName,
+  type Reference,
+  type ReferenceCell,
+} from "./ast";
 import { parseFormulaWithReferences, type LocatedReference } from "./parser";
 import { FormulaSyntaxError } from "./tokenizer";
 import { isFormulaInput } from "./values";
@@ -6,7 +12,6 @@ import {
   sameColumnName,
   TableResolver,
   type StoredInput,
-  type TableDefinition,
   type WorkbookData,
   type WorkbookStructure,
 } from "./structure";
@@ -15,15 +20,19 @@ import {
 export type Replacement = Reference | "#REF!";
 
 /**
+ * Decides what to write in place of a reference, or `undefined` to keep it.
+ * `qualified` is set for a qualified name such as `Summary!Total`, given as a
+ * column reference whose table is what holds the name.
+ */
+export type Replace = (reference: Reference, qualified: boolean) => Replacement | undefined;
+
+/**
  * Rewrites the references in a cell input and leaves every other character
  * as the user typed it. `replace` returns the new reference, or `undefined`
  * to keep the one written. An input that is not a formula, or that does not
  * parse, is returned unchanged.
  */
-export function rewriteReferences(
-  input: string,
-  replace: (reference: Reference) => Replacement | undefined,
-): string {
+export function rewriteReferences(input: string, replace: Replace): string {
   if (!isFormulaInput(input)) return input;
   let text = input.slice(1);
   // Last to first, so earlier offsets stay valid while later text changes length.
@@ -40,7 +49,7 @@ export function rewriteReferences(
  */
 export function referenceEdits(
   text: string,
-  replace: (reference: Reference) => Replacement | undefined,
+  replace: Replace,
 ): { from: number; to: number; text: string }[] {
   let references: LocatedReference[];
   try {
@@ -49,13 +58,21 @@ export function referenceEdits(
     if (cause instanceof FormulaSyntaxError) return [];
     throw cause;
   }
-  return references.flatMap(({ reference, from, to }) => {
-    const replacement = replace(reference);
+  return references.flatMap(({ reference, from, to, qualified = false }) => {
+    const replacement = replace(reference, qualified);
     if (replacement === undefined) return [];
-    return [
-      { from, to, text: replacement === "#REF!" ? replacement : formatReference(replacement) },
-    ];
+    return [{ from, to, text: written(replacement, qualified) }];
   });
+}
+
+function written(replacement: Replacement, qualified: boolean): string {
+  if (replacement === "#REF!") return replacement;
+  if (!qualified || !isColumnReference(replacement)) return formatReference(replacement);
+  const { page, table, column } = replacement;
+  return [page, table, column]
+    .filter((part) => part !== undefined)
+    .map(quoteName)
+    .join("!");
 }
 
 /**
@@ -84,10 +101,11 @@ export function translateInput(input: string, rows: number, cols: number): strin
 export type Rename =
   | { kind: "page"; pageId: string; name: string }
   | { kind: "table"; tableId: string; name: string }
+  | { kind: "script"; scriptId: string; name: string }
   /** A column of a data table, named `from` before the rename. */
   | { kind: "column"; tableId: string; from: string; name: string };
 
-/** Moving a table, or a chart or text view, to another page. */
+/** Moving a table, or a chart, text view, or script, to another page. */
 export type Move =
   | { kind: "table"; tableId: string; pageId: string }
   | { kind: "view"; viewId: string; pageId: string };
@@ -105,9 +123,30 @@ export interface Origin {
  */
 export type Decide = (
   reference: Reference,
-  target: TableDefinition | undefined,
+  target: Placed | undefined,
   origin: Origin,
 ) => Replacement | undefined;
+
+/** What a reference or a qualified name means: a table, or the table or script that holds a name. */
+export interface Placed {
+  id: string;
+  pageId: string;
+}
+
+/**
+ * What a reference written in a table or on a page means. A qualified name
+ * means what holds the name, which can be a script as well as a table.
+ */
+export function targetOf(
+  resolver: TableResolver,
+  reference: Reference,
+  qualified: boolean,
+  origin: { tableId?: string | undefined; pageId: string | undefined },
+): Placed | undefined {
+  if (qualified) return resolver.findHolder(reference.table ?? "", reference.page, origin.pageId);
+  if (origin.tableId !== undefined) return resolver.find(reference, origin.tableId);
+  return origin.pageId === undefined ? undefined : resolver.findFromPage(reference, origin.pageId);
+}
 
 /** The rewrite a rename asks for: the new name in place of the old, wherever the old one is written. */
 export function renameDecider(resolver: TableResolver, rename: Rename): Decide {
@@ -126,7 +165,8 @@ export function renameDecider(resolver: TableResolver, rename: Rename): Decide {
         : undefined;
     }
     // A reference with no table name follows its formula's table and needs no rewrite.
-    return reference.table !== undefined && target?.id === rename.tableId
+    const renamed = rename.kind === "table" ? rename.tableId : rename.scriptId;
+    return reference.table !== undefined && target?.id === renamed
       ? { ...reference, table: rename.name }
       : undefined;
   };
@@ -147,9 +187,10 @@ export function moveDecider(structure: WorkbookStructure, move: Move): Decide {
   return (reference, target, origin) => {
     // A reference with no table name follows its formula's table, wherever that goes.
     if (reference.table === undefined || !target || to === undefined) return undefined;
-    const moves =
-      move.kind === "table" ? origin.tableId === move.tableId : origin.viewId === move.viewId;
-    if (move.kind === "table" && target.id === move.tableId) {
+    // A script is a view that holds names, so a reference can mean a view that moves.
+    const moved = move.kind === "table" ? move.tableId : move.viewId;
+    const moves = origin.tableId === moved || origin.viewId === moved;
+    if (target.id === moved) {
       // Within the moved table, its name alone still means it.
       if (moves || origin.pageId === move.pageId) {
         return reference.page === undefined ? undefined : withoutPage(reference);
@@ -172,8 +213,8 @@ function withoutPage(reference: Reference): Reference {
 function rewriteInputs(data: WorkbookData, resolver: TableResolver, decide: Decide): StoredInput[] {
   return data.cells.flatMap(({ input, ...cell }) => {
     const origin = { pageId: resolver.table(cell.tableId)?.pageId, tableId: cell.tableId };
-    const rewritten = rewriteReferences(input, (reference) =>
-      decide(reference, resolver.find(reference, cell.tableId), origin),
+    const rewritten = rewriteReferences(input, (reference, qualified) =>
+      decide(reference, targetOf(resolver, reference, qualified, origin), origin),
     );
     return rewritten === input ? [] : [{ ...cell, input: rewritten }];
   });

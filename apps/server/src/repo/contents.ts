@@ -19,7 +19,7 @@ export type SizedTable = TableRecord & { rowCount: number; colCount: number };
  */
 export class Contents {
   private readonly layouts: ReadonlyMap<string, TableLayout>;
-  /** What the engine reads: tables with their sizes, cells by position, and the views. */
+  /** What the engine reads: tables with their sizes, scripts, cells by position, and the views. */
   readonly data: Omit<WorkbookData, "tables"> & { tables: SizedTable[]; views: ViewRecord[] };
 
   constructor(readonly snapshot: Snapshot) {
@@ -32,6 +32,9 @@ export class Contents {
         colCount: table.colIds.length,
       })),
       views: snapshot.views,
+      scripts: snapshot.views
+        .filter((view) => view.kind === "script")
+        .map(({ id, pageId, name, source }) => ({ id, pageId, name, source })),
       cells: snapshot.cells.flatMap(({ tableId, input, ...identity }) => {
         const position = this.layouts.get(tableId)?.position(identity);
         return position ? [{ tableId, ...position, input }] : [];
