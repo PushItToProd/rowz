@@ -1530,6 +1530,57 @@ describe("refreshing after a change made elsewhere", () => {
     expect(store.inputOf(at("B1"))).toBe("theirs");
   });
 
+  it("reads again when an undo was answered while the spreadsheet was being read", async () => {
+    const store = await open({ A1: "2" });
+    notifyJournaled();
+    const answers: ((snapshot: Snapshot) => void)[] = [];
+    server.getSnapshot.mockImplementation(
+      () => new Promise<Snapshot>((resolve) => answers.push(resolve)),
+    );
+    const refreshed = store.refresh();
+    await vi.waitFor(() => {
+      expect(answers).toHaveLength(1);
+    });
+
+    server.undo.mockResolvedValue({
+      outcome: "done",
+      label: "Change cells in Table 1",
+      error: null,
+      changed: { pages: [], tables: [], views: [], cells: [{ ...at("A1"), input: "1" }] },
+      undoable: false,
+      redoable: true,
+    });
+    await store.undo();
+    // The first read began before the undo, and still has what it undid.
+    answers[0]?.({ ...snapshotWith({ A1: "2" }), undoable: true });
+    await vi.waitFor(() => {
+      expect(answers).toHaveLength(2);
+    });
+    expect(store.inputOf(at("A1"))).toBe("1");
+    answers[1]?.({ ...snapshotWith({ A1: "1", B1: "theirs" }), redoable: true });
+    await refreshed;
+    expect(store.inputOf(at("A1"))).toBe("1");
+    expect(store.inputOf(at("B1"))).toBe("theirs");
+    expect(store.canUndo).toBe(false);
+    expect(store.canRedo).toBe(true);
+  });
+
+  it("waits for a change to the structure made here before reading", async () => {
+    const store = await open();
+    const renaming = deferred();
+    server.renameSpreadsheet.mockReturnValueOnce(renaming.promise);
+    const renamed = store.renameSpreadsheet("Mine");
+    server.getSnapshot.mockClear();
+    const refreshed = store.refresh();
+    await Promise.resolve();
+    expect(server.getSnapshot).not.toHaveBeenCalled();
+
+    server.getSnapshot.mockResolvedValue({ ...snapshotWith(), name: "Mine" });
+    renaming.resolve();
+    await Promise.all([renamed, refreshed]);
+    expect(server.getSnapshot).toHaveBeenCalledOnce();
+  });
+
   it("passes on the failure when the spreadsheet can no longer be read", async () => {
     const store = await open();
     server.getSnapshot.mockRejectedValue(new Error("Spreadsheet not found"));

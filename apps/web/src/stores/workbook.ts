@@ -120,16 +120,22 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const pendingBlockReorders = new Map<string, number>();
   const viewUpdates = new Map<string, Promise<boolean>>();
 
-  /** How many changes, undos, and redos the server has not answered yet. */
-  const unanswered = ref(0);
+  /** The changes, undos, and redos the server has not answered yet. */
+  const unanswered = new Set<Promise<unknown>>();
+  const unansweredCount = ref(0);
+  /** How many changes, undos, and redos have begun, which `refresh` compares across its read. */
+  let begun = 0;
   /** Whether a change is still on its way to the server. Leaving the page now would lose it. */
-  const saving = computed(() => unanswered.value > 0);
+  const saving = computed(() => unansweredCount.value > 0);
 
   /** Counts a request toward `saving` until it settles. */
   function countUnanswered<T>(request: Promise<T>): Promise<T> {
-    unanswered.value += 1;
+    begun += 1;
+    unanswered.add(request);
+    unansweredCount.value = unanswered.size;
     const settled = (): void => {
-      unanswered.value -= 1;
+      unanswered.delete(request);
+      unansweredCount.value = unanswered.size;
     };
     void request.then(settled, settled);
     return request;
@@ -222,14 +228,15 @@ export const useWorkbookStore = defineStore("workbook", () => {
   async function refresh(): Promise<void> {
     const open = spreadsheet.value;
     if (!open) return;
-    // What was typed here is saved first, so that what comes back includes it.
+    // What was changed here is answered first, so that what comes back includes it.
     const [turn, loaded] = [++refreshes, loads];
-    const queued = saves;
-    await queued;
+    while (unanswered.size > 0) await Promise.allSettled(unanswered);
+    const before = begun;
     const snapshot = await api.getSnapshot(open.id);
     if (turn !== refreshes || loaded !== loads || spreadsheet.value?.id !== open.id) return;
-    // Something was typed while the spreadsheet was being read: read it again, with that in it.
-    if (saves !== queued) return refresh();
+    // Something was changed, undone, or redone here while the spreadsheet was
+    // being read, and its result may be newer than what was read: read again.
+    if (begun !== before) return refresh();
 
     engine.value = createWorkbook(snapshot);
     spreadsheet.value = { id: snapshot.id, name: snapshot.name, role: snapshot.role };
