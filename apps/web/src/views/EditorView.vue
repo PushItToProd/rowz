@@ -161,7 +161,7 @@ watch(
 </script>
 
 <template>
-  <!-- `data-saving` is what the end-to-end tests wait on before a reload, which would drop a change not yet sent. -->
+  <!-- `data-saving` is what the end-to-end tests wait on before a reload, which the page would otherwise ask about. -->
   <div class="editor" :data-saving="store.saving ? '' : undefined">
     <div class="editor__chrome">
       <header class="editor__header">
@@ -177,6 +177,13 @@ watch(
           />
         </h1>
         <span v-if="loaded && !store.canEdit" class="badge">View only</span>
+        <span
+          v-else-if="loaded"
+          class="editor__saved"
+          :class="{ 'editor__saved--busy': store.saving }"
+        >
+          {{ store.saving ? "Saving…" : "Saved" }}
+        </span>
         <button v-if="loaded" type="button" class="editor__export" @click="shareOpen = true">
           Share
         </button>

@@ -246,6 +246,13 @@ input {
   text-decoration: none;
 }
 
+/* Whether the server has every change. Its two texts are close in width, so the header does not shift. */
+.editor__saved {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
 .editor__export {
   margin-left: auto;
 }
@@ -1112,6 +1119,11 @@ select.cell-control--dropdown {
   .editor__header h1 {
     min-width: 0;
     font-size: 1rem;
+  }
+
+  /* The header has no room to say that all is saved, only that something is not yet. */
+  .editor__saved:not(.editor__saved--busy) {
+    display: none;
   }
 
   /* The arrow alone is enough to go back, and leaves the line to the spreadsheet's name. */

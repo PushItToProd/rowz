@@ -763,6 +763,29 @@ test("undo reverses a format, a row insertion, and a cell edit", async ({ page }
   await expect(cell(page, "A1").locator(".cell-value")).not.toHaveCSS("font-weight", "700");
 });
 
+test("the header says when a change is on its way to the server", async ({ page }) => {
+  await newSpreadsheet(page);
+  const status = page.locator(".editor__saved");
+  await expect(status).toHaveText("Saved");
+
+  // Hold the save, so that the time it takes does not pass unseen.
+  let release = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/tables/*/cells", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await enter(page, "A1", "kept");
+  await expect(status).toHaveText("Saving…");
+  release();
+  await expect(status).toHaveText("Saved");
+
+  await reload(page);
+  await expect(cell(page, "A1")).toHaveText("kept");
+});
+
 test("a deleted row is brought back from the history, and a version opens as a copy", async ({
   page,
 }) => {

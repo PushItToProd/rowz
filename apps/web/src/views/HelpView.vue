@@ -910,6 +910,11 @@ const OPERATORS = [
           happens, the app explains why and moves to the next change. Use History to restore an
           older version of the whole spreadsheet.
         </li>
+        <li>
+          A change is sent to the server as soon as it is made. The top of the editor says
+          <q>Saving…</q> until the server has it, and the browser asks before closing or reloading
+          the page while it does.
+        </li>
       </ul>
     </section>
 
