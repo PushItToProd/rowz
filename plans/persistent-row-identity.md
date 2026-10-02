@@ -26,7 +26,7 @@ Regression coverage includes pending typing across structural responses, paste g
 - User-run PostgreSQL validation passed all 415 tests in `_scratch/2026-10-02T06-15-pnpm-e2e-test-postgres.log`. The later run hit an unordered deleted-row assertion; that assertion is now order-independent locally.
 - Latest user-run browser validation: 23/25 passed in `_scratch/2026-10-02T06-22-pnpm-e2e-test-postgres.log`, including the two-tab draft-preservation test. The two failures exposed delayed paste selection and optimistic reorder issues. Both fixes now have deferred-response regression tests, and the e2e block-order reader now reads atomically and polls expected orders.
 - Docker socket permissions and Node proxy handling prevent integration runs in this sandbox. The user asked agents to request that they run these tests; do not bypass the restrictions.
-- Browser and PostgreSQL validation still need a user-run integration pass. See `plans/persistent-row-identity-handoff.md` for the requested run and follow-up.
+- Final user-run validation passed in `_scratch/2026-10-02T10-31-pnpm-e2e-test-postgres.log`: browser 25/25 and PostgreSQL 417/417 (20 files). No integration validation is outstanding.
 
 ## Decisions in brief
 

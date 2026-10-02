@@ -4,7 +4,7 @@
 
 Finish the remaining work for `plans/persistent-row-identity.md`. Read CLAUDE.md and the plan's updated progress section first. The persistent identity implementation and latest fixes are already committed in this working tree. Preserve subsequent changes. Do not commit, stage, stash, or otherwise mutate Git without permission.
 
-The implementation, regression coverage, and local validation are complete. Do not restart the migration. Browser and PostgreSQL integration validation still needs a user-run pass because this sandbox cannot reach Docker or the remote Playwright container. No background review jobs exist.
+The implementation, regression coverage, and local validation are complete. Do not restart the migration. Integration validation passed (see below). No background review jobs exist.
 
 ## Implemented
 
@@ -35,10 +35,9 @@ The e2e block-order helper now reads attributes in one `locator.evaluateAll` cal
 - `_scratch/2026-10-02T06-15-pnpm-e2e-test-postgres.log`: PostgreSQL 415 passed, browser 22/24. Both browser failures from that run were fixed (identity-following selection expectation and waiting for inserted-row response).
 - `_scratch/2026-10-02T06-22-pnpm-e2e-test-postgres.log`: browser 23/25; the two failures are the latest fixes described above. The new two-tab draft test passed. PostgreSQL 414 passed and one failed on unordered deleted rows; the assertion has since been fixed locally.
 
-## Remaining integration validation
+## Integration validation
 
-1. Ask the user to rerun the browser and PostgreSQL tests with their integration script and save the output in `_scratch`.
-2. Read the new log, fix any failures, rerun local validation, and repeat integration validation if needed. Update the plan with final results. Do not call the work complete while browser validation is outstanding.
+Done. `_scratch/2026-10-02T10-31-pnpm-e2e-test-postgres.log` shows browser 25/25 and PostgreSQL 417/417. Nothing remains for this plan.
 
 ## Sandbox restrictions and user preference
 
