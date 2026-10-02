@@ -9,6 +9,30 @@ CREATE INDEX "deleted_rows_spreadsheet_time" ON "deleted_rows" USING btree ("spr
 ALTER TABLE "journal" ADD COLUMN "formulas" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "spreadsheets" ADD COLUMN "revision" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "spreadsheets" ADD COLUMN "rewrite_revision" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
+-- Development databases may have applied an earlier version of migration 0009
+-- that added these columns but did not backfill them. Repair an entirely
+-- missing backfill, and stop if a partial one would make positional mapping
+-- ambiguous.
+DO $$
+DECLARE incomplete bigint;
+BEGIN
+  SELECT count(*) INTO incomplete
+  FROM tables t
+  WHERE (SELECT count(*) FROM table_rows r WHERE r.table_id = t.id) NOT IN (0, t.row_count)
+     OR jsonb_array_length(t.col_ids) NOT IN (0, t.col_count);
+  IF incomplete > 0 THEN
+    RAISE EXCEPTION '% tables have partial row or column identities. Nothing was migrated.', incomplete;
+  END IF;
+END $$;--> statement-breakpoint
+INSERT INTO table_rows (table_id, order_key)
+SELECT t.id, 'f' || lpad(r::text, 5, '0') || 'V'
+FROM tables t CROSS JOIN LATERAL generate_series(0, t.row_count - 1) r
+WHERE NOT EXISTS (SELECT 1 FROM table_rows existing WHERE existing.table_id = t.id);--> statement-breakpoint
+UPDATE tables t SET col_ids = (
+  SELECT jsonb_agg(gen_random_uuid() ORDER BY c)
+  FROM generate_series(0, t.col_count - 1) c
+)
+WHERE jsonb_array_length(t.col_ids) = 0;--> statement-breakpoint
 ALTER TABLE "cells" ADD COLUMN "row_id" uuid;--> statement-breakpoint
 ALTER TABLE "cells" ADD COLUMN "col_id" uuid;--> statement-breakpoint
 UPDATE "cells" SET "row_id" = placed.id

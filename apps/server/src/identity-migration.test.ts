@@ -128,6 +128,53 @@ it("stores each cell under the ids of the row and column it was in, and drops th
   }
 });
 
+it("repairs a database where migration 0009 was recorded before its backfill was added", async () => {
+  const { db, plain, data } = await positional();
+  try {
+    // This is the state left by an earlier local version of 0009: the schema
+    // changes were recorded, but no row or column identities were created.
+    await db.query("DELETE FROM table_rows");
+    await db.query("UPDATE tables SET col_ids = '[]'::jsonb");
+
+    await migrate(db, /^0010.*\.sql$/);
+
+    const stored = await db.query<{
+      table_id: string;
+      position: string;
+      col: string;
+      input: string;
+    }>(
+      `SELECT c.table_id, c.input,
+              (SELECT count(*) FROM table_rows r
+                WHERE r.table_id = c.table_id
+                  AND r.order_key < (SELECT order_key FROM table_rows WHERE id = c.row_id)) AS position,
+              (SELECT ordinality - 1 FROM tables t, jsonb_array_elements_text(t.col_ids) WITH ORDINALITY
+                WHERE t.id = c.table_id AND value = c.col_id::text) AS col
+         FROM cells c ORDER BY c.input`,
+    );
+    expect(
+      stored.rows.map((cell) => [
+        cell.table_id,
+        Number(cell.position),
+        Number(cell.col),
+        cell.input,
+      ]),
+    ).toEqual([
+      [data, 1, 0, "42"],
+      [plain, 2, 1, "=A1"],
+      [plain, 0, 0, "first"],
+    ]);
+    expect((await db.query("SELECT count(*) FROM table_rows")).rows).toEqual([{ count: 5 }]);
+    const columns = await db.query<{ id: string; col_ids: string[] }>(
+      "SELECT id, col_ids FROM tables",
+    );
+    expect(columns.rows.find((table) => table.id === plain)?.col_ids).toHaveLength(2);
+    expect(columns.rows.find((table) => table.id === data)?.col_ids).toHaveLength(1);
+  } finally {
+    await db.close();
+  }
+});
+
 it.each([
   ["outside its table's rows", "(table_id, row_index, col_index, input) VALUES ($1, 3, 0, 'lost')"],
   [
