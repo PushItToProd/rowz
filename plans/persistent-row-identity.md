@@ -2,25 +2,25 @@
 
 This plan gives every row and column of every table an id that stays the same when rows and columns are inserted, deleted, or reordered. Storage, the wire protocol, and the undo journal name cells by those ids. The formula engine stays positional, and the server and the web app translate between ids and positions where they call it.
 
-The plan was written from the code at commit `077d26a`. Three commits were added while it was written, through `edfbe5e`. Of those, the plan takes into account only that `access.test.ts` and `undo.test.ts` now fail for a route they do not list. It changes no code.
+The plan was written from the code at commit `077d26a`. Three commits were added while it was written, through `edfbe5e`. It was revised after the review in `_scratch/2026-10-01-persistent-row-identity-review.md`, at commit `796b86c`. Of the commits since `077d26a`, the plan takes two into account: `access.test.ts` and `undo.test.ts` now fail for a route they do not list, and `365a37c` made undo refuse a step when a later change wrote the same content. It changes no code.
 
 ## Decisions in brief
 
-| Question                 | Decision                                                                                                       |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| Scope                    | Rows and columns of every table, plain or data. One storage model.                                             |
-| Row storage              | A `table_rows` table: `id`, `table_id`, and an order key. Inserting a row writes one record.                   |
-| Column storage           | An ordered array of column ids on the table record.                                                            |
-| Cell storage             | Keyed by `(row_id, col_id)`. A structural edit moves no cells.                                                 |
-| A1 references            | Stay positional and are still rewritten on structural edits.                                                   |
-| Sort and filter in place | A display setting on the table. The stored order, and so what `A2` reads, does not change.                     |
-| Wire                     | The client names a cell by row id and column id. A deleted row or column answers 409. No table version number. |
-| Engine                   | Does not learn row ids. `CellId` stays `{ tableId, row, col }`.                                                |
-| Undo                     | Entries name cells and rows by id. Refusal rules 1 and 2 narrow to one rule about formula text.                |
-| File format and versions | Unchanged. No ids.                                                                                             |
-| Data tables              | Hold only the rows that were added. The grid offers one new row below the last.                                |
-| Live updates             | A change event carries the changed cells and rows, with a revision number for ordering.                        |
-| Limits                   | 1,000 rows per table stays. A new limit caps row records per spreadsheet.                                      |
+| Question                 | Decision                                                                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Scope                    | Rows and columns of every table, plain or data. One storage model.                                                                 |
+| Row storage              | A `table_rows` table: `id`, `table_id`, and an order key. Inserting a row writes one record.                                       |
+| Column storage           | An ordered array of column ids on the table record.                                                                                |
+| Cell storage             | Keyed by `(row_id, col_id)`. A structural edit moves no cells.                                                                     |
+| A1 references            | Stay positional and are still rewritten on structural edits.                                                                       |
+| Sort and filter in place | A display setting on the table. The stored order, and so what `A2` reads, does not change.                                         |
+| Wire                     | Every request that named a row or column by position names it by id. A deleted row or column answers 409. No table version number. |
+| Engine                   | Does not learn row ids. `CellId` stays `{ tableId, row, col }`.                                                                    |
+| Undo                     | Entries name cells and rows by id. Refusal rules 1 and 2 narrow to one rule about formula text.                                    |
+| File format and versions | No ids. The one change: a data table may have zero rows.                                                                           |
+| Data tables              | Hold only the rows that were added, which can be none. The grid offers one new row below the last.                                 |
+| Live updates             | Responses and events carry the change and its revision, and the client applies both in revision order.                             |
+| Limits                   | 1,000 rows per table stays. A new limit caps row records per spreadsheet.                                                          |
 
 ## Current behavior
 
@@ -65,6 +65,7 @@ table_rows
   table_id   uuid not null references tables(id) on delete cascade
   order_key  text collate "C" not null
   unique (table_id, order_key)
+  unique (table_id, id)
 ```
 
 A row's place in its table is the place of its order key among the table's keys in byte order. A new key is made between two neighboring keys without changing either, so inserting a row writes one record. The `"C"` collation makes Postgres order the keys as JavaScript string comparison does.
@@ -89,13 +90,16 @@ A `table_columns` table like `table_rows` was rejected for now. It would allow t
 ```
 cells
   table_id  uuid not null references tables(id) on delete cascade
-  row_id    uuid not null references table_rows(id) on delete cascade
+  row_id    uuid not null
   col_id    uuid not null
   input     text not null
   updated_by, updated_at
   primary key (row_id, col_id)
+  foreign key (table_id, row_id) references table_rows(table_id, id) on delete cascade
   index (table_id)
 ```
+
+The foreign key on `(table_id, row_id)` makes the database refuse a cell whose row belongs to another table. No foreign key can cover `col_id`, because column ids live in a JSON array. The repository checks that a cell's column id is in its table's `col_ids` wherever cells are written: in `setCells`, in action effects, and when an undo or redo restores cells.
 
 `tables.row_count` and `tables.col_count` are dropped. The row count is the number of `table_rows` records and the column count is the length of `col_ids`. The snapshot gives both to the engine as it does today. `TableRecord`, which the journal stores and compares, holds neither, so one person adding a row does not make another person's recorded table look changed.
 
@@ -116,8 +120,8 @@ Format rules stay positional and are still shifted by `formatRulesAfterEdit`.
 
 The migration runs in two steps, which match implementation steps 1 and 3.
 
-1. Create `table_rows` and add `tables.col_ids`. For each table, insert `row_count` rows and set `col_ids` to `col_count` new UUIDs. The backfill is SQL in the migration file, as `0007_version_blocks.sql` already does for versions. Backfilled keys are a zero-padded row number of fixed width followed by a middle digit, which `generate_series` and `lpad` can produce and which `keyBetween` accepts.
-2. Add `row_id` and `col_id` to `cells`. Fill them by joining each cell to the row whose rank by key equals `row_index` and to the element of `col_ids` at `col_index`. Delete any cell that finds no row or column, after counting them: `checkRestoredState` and `setCells` should have kept that count at zero. Replace the primary key, drop `row_index` and `col_index`, and drop `row_count` and `col_count`. Delete every `journal` record, because its entries name positions. A journal entry lives at most one day and belongs to one open tab.
+1. Create `table_rows` and add `tables.col_ids`. For each table, insert `row_count` rows and set `col_ids` to `col_count` new UUIDs. The backfill is SQL in the migration file, as `0007_version_blocks.sql` already does for versions. Backfilled keys are a zero-padded row number of fixed width followed by a middle digit, which `generate_series` and `lpad` can produce and which `keyBetween` accepts. Delete every `journal` record: an entry made before this migration holds table records without `colIds` and no rows, so undoing a table delete would bring back a table with no row records.
+2. Add `row_id` and `col_id` to `cells`. Fill them by joining each cell to the row whose rank by key equals `row_index` and to the element of `col_ids` at `col_index`. Delete any cell that finds no row or column, after counting them: `checkRestoredState` and `setCells` should have kept that count at zero. Replace the primary key, drop `row_index` and `col_index`, and drop `row_count` and `col_count`. Delete every `journal` record again, because its entries name cells by position. A journal entry lives at most one day and belongs to one open tab.
 
 Kept versions need no migration. They are files without ids.
 
@@ -141,13 +145,21 @@ Row ids are what make the display setting workable: an edit made in the third ro
 
 **A click and a control input.** `POST /tables/:tableId/cells/:rowId/:colId/click` and `.../input`. The paths keep their form and the two parameters become UUIDs.
 
+**Other requests that name a row or column.** Each of these takes a position today and has the same defect as a save. Each takes ids from step 1:
+
+- `PATCH /tables/:tableId/columns/:colId` changes a column's name, type, or formula. Typing a formula into a cell of a formula column goes through this route.
+- `POST /tables/:tableId/formats` takes the ids of the first and last row and column of its range. A `null` end still means "to the edge of the table".
+- `POST /tables/:tableId/edits` names what it acts on: an insert gives the id of the row or column to insert before, or `null` for the end, and a delete gives the ids to delete.
+
+`PATCH /tables/:tableId` keeps `rowCount` and `colCount`, which mean a size counted from the start of the table and name no particular row.
+
 **When the row or column is gone.** The server resolves ids to positions under the spreadsheet's lock. A request that names a row or column that no longer exists is refused as a whole with 409 and the code `row_deleted` or `column_deleted`. The client puts the cells back as `putBack` does now and says that the row was deleted. A silent drop was rejected: the person would not learn that the edit was lost.
 
 **The client translates when the person acts.** The store turns the selected position into ids when the edit, click, or input is made, and the queued request carries ids. The selection and an open cell editor are found again by id after a refresh, and are cleared when their row or column is gone.
 
 **Responses.** From step 4, every cell the server sends is `{ tableId, rowId, colId, input }`, and the snapshot lists each table's rows as `{ id, key }` in order.
 
-**No table version number.** Ids make it unnecessary for addressing. One race remains: a formula typed while another person's row insert has not yet reached the tab holds row numbers from before the insert. The cell is correct and the references in its text are stale. Step 7 adds a revision number to the spreadsheet for live updates, and the server uses it to refuse such a formula.
+**No table version number.** Ids make it unnecessary for addressing. One race remains: a formula typed while another person's row insert has not yet reached the tab holds row numbers from before the insert. The cell is correct and the references in its text are stale. Step 7 adds a revision number to the spreadsheet for live updates, and the server uses it to refuse such a formula. The revision sent is the one the tab had applied when the edit was opened, kept with the draft through the save queue and through the batches of a paste. The revision at the time the request is sent would be newer than the text. The same check covers the formula of a formula column and the source of a chart or text view.
 
 A table version number as the first step was considered, because it is smaller: one column and three checks. It turns a misplaced save into a refused one that the person types again, it refuses every save that crosses any structural edit, and step 1 would then delete it.
 
@@ -161,8 +173,10 @@ The web store keeps the document by id: cell inputs keyed by row id and column i
 
 Changes inside the engine:
 
-- `rewrite.ts` exports a function that returns only the formulas a structural edit rewrites. It is the existing private `rewriteInputs` with `editDecider`. `inputsAfterEdit`, which also moves cells, is removed when its last caller is (step 4).
+- `rewrite.ts` exports a function that returns only the formulas a structural edit rewrites. It is built on the existing private `rewriteInputs` with `editDecider`, and it leaves out formulas in the rows or columns the edit deletes, which `rewriteInputs` alone would return. `inputsAfterEdit`, which also moves cells, is removed when its last caller is (step 4).
 - The engine stops counting typed cells per row, and a formula column computes in every row (step 6).
+- A table can have zero rows (step 6). A range over it is empty.
+- `PlanContext` tells an action whether a table is a data table, so that the append actions can add after the last stored row (step 6).
 
 Putting ids in the engine was rejected. Every range read and every dependency lookup is a loop over row numbers, and an id-keyed cell map would need a translation inside those loops. Relations between tables will need the engine to find a row by id. `TableDefinition` can then carry `rowIds` as plain data, which keeps the engine pure.
 
@@ -174,16 +188,16 @@ An entry for a row insert holds the new rows and the formulas whose text changed
 
 **Refusal rules.** Numbers refer to the rules in the DECISIONS entry "Undo through a server-side journal".
 
-| Rule today                                                                                  | After                                                                                                |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| 1. A step that rewrote references is refused after any later change.                        | Refused only when a later change in effect wrote formula text or rewrote references.                 |
-| 1. A step that created or deleted a page, table, or view is refused after any later change. | Unchanged. Narrowing it is a separate piece of work.                                                 |
-| 2. Any step is refused after a later change that rewrote references.                        | Refused only when the step would restore formula text. A step that restores typed values is allowed. |
-| 3. Each recorded thing must still be as the step left it.                                   | Kept. Two checks are added, below.                                                                   |
-| 4. What the undo writes must still fit.                                                     | Kept. "No cell outside its table" becomes a foreign key.                                             |
-| 5. A change too large to record is refused.                                                 | Kept.                                                                                                |
+| Rule today                                                                                  | After                                                                                                           |
+| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 1. A step that rewrote references is refused after any later change.                        | Refused only when a later change in effect wrote formula text or changed what references mean.                  |
+| 1. A step that created or deleted a page, table, or view is refused after any later change. | Unchanged. Narrowing it is a separate piece of work.                                                            |
+| 2. Any step is refused after a later change that rewrote references.                        | Refused only when the step would restore formula text. A step that restores typed values is allowed.            |
+| 3. Each recorded thing must still be as the step left it.                                   | Kept, with the changes below.                                                                                   |
+| 4. What the undo writes must still fit.                                                     | Kept. "No cell outside its table" becomes a check that each restored cell's row and column belong to its table. |
+| 5. A change too large to record is refused.                                                 | Kept.                                                                                                           |
 
-Rules 1 and 2 become one rule: an undo or redo is refused when it and a later change in effect conflict, and they conflict when one rewrote references and the other wrote formula text or also rewrote references. Formula text is a cell input that starts with `=`, a view source, or a formula column's formula.
+Rules 1 and 2 become one rule: an undo or redo is refused when it and a later change in effect conflict, and they conflict when one changed what references mean and the other wrote formula text or also changed what references mean. Formula text is a cell input that starts with `=`, a view source, or a formula column's formula.
 
 The rule cannot be dropped entirely, because ids fix which cell an entry means but not what a formula's text means. Two cases show it:
 
@@ -192,16 +206,17 @@ The rule cannot be dropped entirely, because ids fix which cell an entry means b
 
 Rewriting restored text through the later edits was rejected for now. The journal would have to record each edit as an operation with the page and table names of that moment, and undo would replay them. It can be added later without a storage change.
 
-The journal gains a `formulas` flag, set by `ContentWriter` when a change writes formula text. `rewrites` is set only when a rewrite changed some text.
+The journal gains a `formulas` flag, set by `ContentWriter` when a change writes formula text. `rewrites` keeps its present meaning and is set by every change that alters what a reference means: a row or column insert or delete, a rename, and a move, whether or not it changed any existing text. The second case above needs this. If Grace's table held no formula when she inserted the row, her insert changed no text, and Ada's `=A6` still depends on it.
 
-Checks added to rule 3:
+Changes to rule 3:
 
-- A row or column that the step created must hold no cell when the step is undone. Otherwise the undo would delete what someone typed into it.
-- A step is refused when a later entry in effect wrote one of its cells. This is the open P1 item in `todo.md` about an undo erasing another person's edit. With cells named by id it is a comparison of ids across at most 200 entries.
+- A row or column that the step created must hold no cell when the step is undone, apart from the cells the step itself wrote. Otherwise the undo would delete what someone typed into it. The exception lets a step that added a row and wrote into it be undone.
+- `changeHistory` already refuses a step when a later change in effect wrote a page, table, view, or cell the step recorded. That check compares cells by id and gains rows.
+- A recorded row is compared with the stored one by whether it exists. Its key is not compared.
 
-A restored row takes its recorded key. When another row has taken that key since, the restored row takes a new key next to it.
+A restored row takes its recorded key. When another row has taken that key since, the restored row takes a new key next to it. Because keys are not compared, a redo after such an undo is not refused.
 
-**Versions and the export file do not change.** The file names rows and columns by position and has no ids, as the Import and export decision chose. `saveVersion` and export write positions through the layout. A restore or an import gives rows and columns new ids as it already gives pages and tables new ids, and a restore already empties the journal.
+**Versions and the export file keep their format, with one loosening.** A table with named columns may have a `rowCount` of 0. A file written before the change still imports, and `version` stays 1. The file names rows and columns by position and has no ids, as the Import and export decision chose. `saveVersion` and export write positions through the layout. A restore or an import gives rows and columns new ids as it already gives pages and tables new ids, and a restore already empties the journal.
 
 ## Auto-growing data tables
 
@@ -209,18 +224,20 @@ A restored row takes its recorded key. When another row has taken that key since
 
 **The grid offers a new row.** Below a data table's last row the grid draws one empty row that is not stored. Typing into it sends the cell with a new row id in `appendRows`, and the row and the cell are one undo step. A paste that runs past the end of any table sends `appendRows` for the extra rows, which replaces the `rowCount` request `writeCells` makes today. The resize dialog keeps working: the server adds or deletes rows at the end.
 
+**A data table can have no rows.** Naming the columns of an empty table leaves none, and so does deleting the last row or an `OVERWRITE` with no data. The grid then shows the column headers and the new-row line. A plain grid keeps at least one row, as now, so removing a table's column names from a table with no rows adds one.
+
 **A row exists until it is deleted.** Clearing every cell of a row leaves an empty row. This keeps a row's id stable for a relation that points at it.
 
 **Naming a table's columns deletes its empty rows at the end**, as any rows are deleted, so formulas that read them are rewritten. `SUM(A1:A20)` over a table with five filled rows becomes `SUM(A1:A5)` and does not grow when a row is added. `A:A`, `A2:A`, and `Sales[Amount]` do grow.
 
 **Actions.** The engine keeps emitting positional effects, and `ensureRows` keeps its meaning. The server's handler adds row records where it now raises `row_count`.
 
-| Action       | Change                                                                                                                              |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `APPEND_ROW` | No change to the function. On a data table the first row below the content is the row after the last, so the scan finds it at once. |
-| `INSERT`     | No change.                                                                                                                          |
-| `UPDATE`     | No change. Rows it matches are written by position and resolved to ids under the lock.                                              |
-| `OVERWRITE`  | No change in step 6: it empties cells, which on a data table leaves empty rows at the end. Step 8 makes it delete them.             |
+| Action       | Change                                                                                                                                                                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APPEND_ROW` | On a data table, with a range that is open at the bottom, the new row goes after the last stored row. A cleared row at the end is not written into, because its id may be what a relation points at. With a range that names its last row, and on a plain grid, the scan for the first row below the content stays. |
+| `INSERT`     | The same rule as `APPEND_ROW`.                                                                                                                                                                                                                                                                                      |
+| `UPDATE`     | Rows it matches are written by position and resolved to ids under the lock. Rows that match none are added by the same rule as `APPEND_ROW`.                                                                                                                                                                        |
+| `OVERWRITE`  | No change in step 6: it empties cells, which on a data table leaves empty rows at the end. Step 8 makes it delete them.                                                                                                                                                                                             |
 
 `APPEND_ROW(Sales, ...)` with a table name in place of a range needs the whole-table reference syntax that `todo.md` lists separately.
 
@@ -229,8 +246,10 @@ A restored row takes its recorded key. When another row has taken that key since
 **A change event carries the change.** `ContentWriter` already holds every page, table, view, cell, and row a change wrote. The state each was left in is the same `ChangedContent` that undo returns and the store's `applyChanged` applies.
 
 - `spreadsheets.revision` counts changes. `touch` raises it. The snapshot returns it and each event carries it.
-- A tab applies an event whose revision is the next one. For any other revision it waits briefly for the missing event and then reads the spreadsheet again.
-- A tab hears its own changes too, marked as its own, and uses them only to advance its revision. Leaving them out, as the stream does now, would look like a gap.
+- The response to every change carries the revision the change produced and the same `ChangedContent` its event carries. This includes a button click and a control input, whose response today lists cells and resized tables only.
+- A tab hears its own changes on the stream too. Leaving them out, as the stream does now, would look like a gap.
+- The store applies responses and events through one function, in revision order. Whatever arrives with the next revision is applied. Anything later waits briefly for the missing revisions, and then the tab reads the spreadsheet again. A tab's own change arrives twice, as a response and as an event, and is applied from whichever comes first. A structural change of the tab's own is therefore in its layout before any later event that depends on it, and a slow response cannot overwrite newer state.
+- `applyChanged` becomes the one way the store takes in a change. `applyRewritten` and the code that applies a click's cells and tables go away.
 - A change of more than 1,000 cells, or one too large to journal, is announced without content, and tabs read the spreadsheet again.
 
 Row ids make this practical. A tab's unsaved edits are keyed by id, so applying someone else's row insert does not move them to other cells.
@@ -258,12 +277,12 @@ Each step ends with `pnpm check` passing. The last section lists the steps that 
 
 ### Step 1: rows and columns get ids, and writes name cells by id
 
-This step fixes problem 1. It cannot be smaller: the fix needs the client to name what it saw, so the ids, the snapshot that carries them, and the three requests that use them go together. Cell storage does not change.
+This step fixes problem 1. It cannot be smaller: the fix needs the client to name what it saw, so the ids, the snapshot that carries them, and the requests that use them go together. The requests are the save, the click, the control input, the column change, the format, and the row or column edit. Cell storage does not change.
 
-1. `packages/shared`: the order key module, `TableLayout`, and the request schemas (`cellInput` with `rowId` and `colId`, `cellParam` with two UUIDs).
-2. Schema and migration part 1.
+1. `packages/shared`: the order key module, `TableLayout`, and the request schemas: `cellInput` with `rowId` and `colId`, `cellParam` with two UUIDs, `columnParam` with `colId`, the format range with ids, and `structuralEditBody` with the ids it acts on.
+2. Schema and migration part 1, which empties the journal.
 3. `ContentWriter`: `insertRows`, `deleteRows`, rows recorded on `insertTable` and `deleteTable`, and `JournalData.rows`. `applyRecorded` restores rows.
-4. `SpreadsheetRepository`: `insertTable`, `insertContents`, `applyEdit`, `updateTable`, `ensureRows`, and `nameColumns` keep `table_rows` and `col_ids` in step with `row_count` and `col_count`. A private method resolves a request's ids to positions inside `changeTable` and throws the 409. `getSnapshot` returns each table's rows and `colIds`.
+4. `SpreadsheetRepository`: `insertTable`, `insertContents`, `applyEdit`, `updateTable`, `ensureRows`, and `nameColumns` keep `table_rows` and `col_ids` in step with `row_count` and `col_count`. A private method resolves a request's ids to positions inside `changeTable` and throws the 409. `setCells`, `updateColumn`, `formatCells`, and `editStructure` use it. `getSnapshot` returns each table's rows and `colIds`.
 5. `run.ts`: `runCell` takes ids and resolves them against the snapshot it reads under the lock.
 6. Web: the store holds a layout for each table, translates when the person acts, updates the layout from the response to each structural edit, and finds the selection and an open editor by id after a refresh.
 
@@ -271,8 +290,10 @@ Tests:
 
 - Shared: key properties with generated input (a key between two keys sorts between them, repeated insertion at one place stays ordered, backfilled keys are accepted), and `TableLayout` both ways.
 - Server, new `identity.test.ts`: Ada reads the snapshot, Grace inserts a row above, and Ada's save, click, and control input each reach the row Ada named. The same for a column insert. Each of the three answers 409 when Grace deleted the row or the column.
+- Server, same file: Grace inserts a column to the left, and Ada's change to a column's formula, name, and type reaches the column Ada named. Ada's format of a range and her insert and delete of a row reach the rows she named after Grace inserts a row above.
+- Server: a tab that had a step to undo before the migration has none after it.
 - Server: after every case in `undo.test.ts`, the number of `table_rows` records equals `row_count` and the length of `col_ids` equals `col_count`. Undoing a row insert, a table delete, and a page delete brings back the same row ids.
-- `access.test.ts`: the cells, click, and input lines send ids. The click and input routes keep their place in `writeRoutes` under their new parameter names, which the test's comparison with the registered routes checks.
+- `access.test.ts`: the cells, click, input, column, format, and edit lines send ids. The click, input, and column routes keep their place in `writeRoutes` under their new parameter names, which the test's comparison with the registered routes checks.
 - Migration: a database built at the previous schema with cells and a data table migrates to the same number of rows and columns for each table.
 - Web: a change made at a position sends that position's ids, and a refresh that moves the selected row keeps the selection on it.
 
@@ -288,14 +309,16 @@ Server only. The wire stays as step 1 left it.
 
 1. Migration part 2.
 2. `readInputs`, `storeCells`, `clearCells`, and the journal's cell entries use ids. `TableRecord` loses `rowCount` and `colCount`, and the snapshot derives them.
-3. `applyEdit` inserts or deletes row records or column ids, clears the cells of deleted rows and columns through `ContentWriter`, and stores only the formulas the engine's new rewrite function returns. For the response it still computes the moved cells with `inputsAfterEdit` and stores none of them. Step 4 removes that.
-4. `checkRestoredState` checks formula columns by column id and drops the check for cells outside a table.
+3. `applyEdit` inserts or deletes row records or column ids, clears the cells of deleted rows and columns through `ContentWriter`, and stores only the formulas the engine's new rewrite function returns, which leaves out formulas in deleted rows and columns. For the response it still computes the moved cells with `inputsAfterEdit` and stores none of them. Step 4 removes that.
+4. `checkRestoredState` checks formula columns by column id. In place of the check for cells outside a table, it checks that every cell's column id is in its table's `col_ids`. The foreign key covers rows.
 5. `action_runs.row_index` and `col_index` keep the position the cell had when it was clicked.
 
 Tests:
 
 - Engine: the rewrite function returns the same formula texts `inputsAfterEdit` returns, for the cases in `rewrite.test.ts`.
 - Server: inserting a row at the top of a table with 5,000 filled cells writes no `cells` record and makes a journal entry of a few hundred bytes. Every case in `undo.test.ts` passes unchanged. Export and a kept version of a table hold the same file as before the step.
+- Server: Ada clears B1, Grace deletes the now empty column B, and Ada's undo is refused. No cell with the deleted column's id is stored.
+- Engine: the rewrite function returns nothing for a formula in a deleted row.
 - Migration: a database at the step 1 schema with cells in several tables migrates to the same snapshot.
 
 ### Step 4: the wire and the web store hold cells by id
@@ -310,8 +333,8 @@ Tests: the store tests for save, rollback, undo, and refresh pass with `mockApi`
 
 This step fixes problem 2.
 
-1. A `formulas` column on `journal`, set by `ContentWriter`. `rewrites` is set only when text changed.
-2. `changeHistory` applies the one conflict rule, and `assertRecordedMatches` gains the two checks.
+1. A `formulas` column on `journal`, set by `ContentWriter`. `rewrites` stays set by every structural edit, rename, and move.
+2. `changeHistory` applies the one conflict rule. Its existing check for a later write to the same content covers rows. `assertRecordedMatches` checks that a created row holds only the step's own cells, and compares a row by whether it exists.
 3. A restored row whose key is taken gets a neighboring key.
 
 Tests in `undo.test.ts`:
@@ -320,23 +343,28 @@ Tests in `undo.test.ts`:
 - Grace inserts a row, Ada types a value elsewhere, and Grace's undo succeeds.
 - Each of the two formula cases above is refused.
 - Undoing a row insert is refused when someone typed into the new row.
-- Ada types `x`, Grace types `y` and then `x`, and Ada's undo is refused.
-- Delete a row, insert a row at the same place, undo the delete: both rows exist.
+- Grace inserts a row into a table that holds no formula, Ada types `=A2`, and Grace's undo is refused.
+- The tests `365a37c` added for a later write to the same content pass with ids.
+- Delete a row, insert a row at the same place, undo the delete, redo it, and undo it again: each succeeds, and after each undo both rows exist.
 
 ### Step 6: data tables hold only their rows
 
 This step fixes problem 3.
 
 1. `setCellsBody` takes `appendRows`, and `setCells` creates the rows in the same change.
-2. `nameColumns` deletes the empty rows at the end.
-3. `GridView` draws the new-row line for a data table, and `writeCells` sends `appendRows`.
-4. In its own commit: formula columns compute in every row, and `typedInRow` and `trackRow` leave the engine.
+2. `nameColumns` deletes the empty rows at the end, which can be all of them. A data table's last row can be deleted. `dropColumns` adds a row to a table that has none.
+3. The file schema and `checkFile` accept `rowCount: 0` for a table with columns. The engine and the grid handle a table with no rows.
+4. `PlanContext` says whether a table is a data table, and `APPEND_ROW`, `INSERT`, and `UPDATE` add after the last stored row of one when their range is open at the bottom.
+5. `GridView` draws the new-row line for a data table, and `writeCells` sends `appendRows`.
+6. In its own commit: formula columns compute in every row, and `typedInRow` and `trackRow` leave the engine.
 
 Tests:
 
 - `undo.test.ts` gains "write a cell into a new row" and "paste past the end of a table". Each undoes to the same rows as before.
 - A retried save with the same `appendRows` id adds one row.
 - `APPEND_ROW`, `INSERT`, `UPDATE`, and `OVERWRITE` on a data table through `click.test.ts`: rows are added at the end and the table has no unused row afterward.
+- A data table whose last row was cleared: each append action adds a new row and leaves the cleared row's id and emptiness as they were. On a plain grid the same action writes into the cleared row.
+- A table with no rows: naming the columns of an empty table, typing into the new-row line, an append action, export, import, a kept version and its restore, and removing the column names. In the engine: `SUM`, `ROWS`, `COUNTA`, `FILTER`, and `QUERY` over `Sales[Amount]` and `A:A`, a formula column, a `for` loop in a text view, and a chart.
 - Engine: `Sales[Amount]` and `A:A` cover the rows that exist.
 - Web: typing in the new-row line adds a row and moves the line down.
 
@@ -345,28 +373,32 @@ Tests:
 1. `spreadsheets.revision`, raised in `touch` and returned by the snapshot.
 2. `ChangeFeed.publish` takes the revision and the `ChangedContent`. `change`, undo, and redo supply them.
 3. The events route checks read access before each event and sends the content.
-4. The web store applies an event in order through `applyChanged` and reads the spreadsheet again on a gap.
-5. The client sends the revision it last applied with each save. `setCells` answers 409 with the code `stale_formula` to an input starting with `=` when a change that rewrote references has a later revision. `spreadsheets.rewrite_revision` holds the revision of the last such change. The client puts the cell back, keeps the typed text in the editor, and says why.
+4. Every response to a change carries its revision and `ChangedContent`, clicks and control inputs included. The web store applies responses and events in revision order through `applyChanged` and reads the spreadsheet again on a gap.
+5. The store records the revision it had applied when an edit was opened, and sends it with the save. `setCells` answers 409 with the code `stale_formula` to an input starting with `=` when a change that altered what references mean has a later revision. `updateColumn` does the same for a formula and `updateView` for a source. `spreadsheets.rewrite_revision` holds the revision of the last such change, including one that changed no text. The client puts the cell back, keeps the typed text in the editor, and says why.
 
 Tests:
 
 - Server: an event holds the cells and rows of a save, a row insert, and an undo. A change over the size limit holds none. A person whose share ended receives no content.
 - `access.test.ts`: the events route is already in `readRoutes`. Add a case that a viewer's open stream sends content and an outsider's does not open.
-- Server: Grace inserts a row, and Ada's save of a formula with the earlier revision is refused while her save of a value is stored. A formula saved with the current revision is stored.
+- Server: Grace inserts a row, and Ada's save of a formula with the earlier revision is refused while her save of a value is stored. A formula saved with the current revision is stored. The same for a row insert into a table with no formulas, for a formula column's formula, and for a view source.
+- Web: a draft opened before a remote row insert and saved after the tab applied the insert sends the earlier revision.
+- Web: a tab's own structural change whose event arrives before its response, followed by a remote event, ends equal to a fresh snapshot. A response that arrives after a later event changes nothing.
+- Web: a click whose action rewrites a view source shows the new source in the tab that clicked.
 - Web: two events applied in order equal a fresh snapshot, an event out of order triggers a read, and an unsaved edit survives a remote row insert in its row.
 
 ### Step 8: `OVERWRITE` deletes the rows it empties
 
 1. A new `Effect`, `deleteRows`, names a table and row positions. The server's handler in `run.ts` resolves the positions to ids under the lock and deletes the rows through `ContentWriter`, with the formula rewrites of any row delete.
-2. `OVERWRITE` emits it for the rows past its data when its range covers every column of a data table. For any other range it empties cells as before.
+2. `OVERWRITE` emits it for the rows past its data when its range covers every column of a data table. For any other range it empties cells as before. With no data it leaves the table with no rows.
+3. The click's response already carries everything the delete rewrote, view sources included, through step 7.
 
-Tests: `click.test.ts` overwrites a data table with fewer rows and finds no empty row. `undo.test.ts` gains the case, and its undo brings back the same row ids and cells. An `OVERWRITE` of part of a table's width deletes no row.
+Tests: `click.test.ts` overwrites a data table with fewer rows and finds no empty row. `undo.test.ts` gains the case, and its undo brings back the same row ids and cells. An `OVERWRITE` of part of a table's width deletes no row. A text view that reads a deleted row shows its rewritten source in the tab that clicked and in another tab.
 
 ## Documentation changes
 
 **`CLAUDE.md`, design rules:**
 
-- "The client names a cell; the server decides the effect" says that the client names a cell by row id and column id, and that the server resolves them under the lock and answers 409 when one is gone.
+- "The client names a cell; the server decides the effect" says that the client names a cell, row, or column by id, and that the server resolves them under the lock and answers 409 when one is gone.
 - A new rule: positions exist only in the engine. Storage, requests, responses, and the journal name rows and columns by id, and `TableLayout` is the one translation.
 - "Anything that holds a formula is rewritten with the cells" says that a structural edit rewrites formula text and format rules and moves no cell.
 - "A formula column's cells are not stored" says the engine gives every row a computed cell.
@@ -377,7 +409,7 @@ Tests: `click.test.ts` overwrites a data table with fewer rows and finds no empt
 - "Working together" under What's missing: a save follows its row and column when someone else inserts or deletes above it.
 - "Tables": a data table holds the rows added to it and offers a new row.
 - The actions table: `APPEND_ROW` and `INSERT` add rows to the end of a data table.
-- "History and files": the undo sentence names the one conflict that refuses an undo. The sentence that the file has no ids stays.
+- "History and files": the undo sentence names the one conflict that refuses an undo. The sentence that the file has no ids stays, and the text says a data table may have no rows.
 - "How it works": one paragraph on row and column ids and where positions are computed.
 - "Size": the row limit.
 
@@ -389,7 +421,7 @@ Tests: `click.test.ts` overwrites a data table with fewer rows and finds no empt
 - Deleting and inserting rows and columns: "Known cost".
 - Live updates: "A change is announced, not described".
 
-**`todo.md`:** check off the P3 items on the stale save and on sending changed cells, the item on hiding empty rows, and the P1 undo item when step 5 is merged. Remove "shift in SQL if this gets slow".
+**`todo.md`:** check off the P3 items on the stale save and on sending changed cells, and the item on hiding empty rows. Remove "shift in SQL if this gets slow".
 
 ## Risks
 
@@ -398,6 +430,8 @@ Tests: `click.test.ts` overwrites a data table with fewer rows and finds no empt
 - **Order keys grow.** Inserting again and again before the same row lengthens the key by about one character for every few inserts. At 1,000 rows per table the keys stay short. Renumbering a table's keys would invalidate journal entries that hold them, so the plan has no renumbering.
 - **Key order must match in Postgres, PGlite, and JavaScript.** It depends on the `"C"` collation, which is unverified for PGlite. A test in step 1 sorts the same keys in all three.
 - **A stale formula can still be saved until step 7.** See the wire protocol section.
+- **A table with no rows is new to the engine.** Every range read, `extent`, and spill check assumed at least one row. The tests in step 6 name the functions to try, and others may assume a first row.
+- **One ordered path for responses and events changes every write in the web store.** Step 7 replaces `applyRewritten` and the click handling. It is the largest change to the store in this plan.
 - **Snapshots grow.** Each row adds about 60 bytes, so 100,000 rows add about 6 MB to a snapshot that already holds up to 100,000 cells.
 - **Events will carry content.** A mistake in the access check of step 7 leaks cells to a person whose share ended. The stream sends none today.
 - **The work passes through `spreadsheets.ts` and the workbook store**, the two largest files, which other sessions edit often. Steps 1, 3, and 4 should each merge quickly.
@@ -414,6 +448,7 @@ The author accepted each of these on 2026-10-01. The sections above already stat
 5. **A spreadsheet holds at most 100,000 rows.** The limit is raised together with `tableRows`, once the grid draws only the rows in view.
 6. **Columns do not get their own table now.** Decide again when relations or per-column settings such as number formats are designed.
 7. **Narrowing the undo rule for creating or deleting a page, table, or view is a separate change** after step 5. It does not depend on row ids.
+8. **A data table may have zero rows** (step 6). A table that had to keep one row would hold an empty record that formula columns compute in and `ROWS` counts.
 
 Decision 1 covers empty rows at the end of a table, and only when its columns are named. A row whose cells are all cleared later stays as an empty row, so that its id remains valid for a relation that points at it. Whether a data table should delete such rows is left for later and is listed in `todo.md`.
 
