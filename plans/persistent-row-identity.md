@@ -2,7 +2,18 @@
 
 This plan gives every row and column of every table an id that stays the same when rows and columns are inserted, deleted, or reordered. Storage, the wire protocol, and the undo journal name cells by those ids. The formula engine stays positional, and the server and the web app translate between ids and positions where they call it.
 
-The plan describes the code at commit `4cd8c89`. It was first written at `077d26a` and revised after two reviews, the first of which is in `_scratch/2026-10-01-persistent-row-identity-review.md`. It changes no code.
+The plan describes the code at commit `4cd8c89`. It was first written at `077d26a` and revised after two reviews, the first of which is in `_scratch/2026-10-01-persistent-row-identity-review.md`. Implementation progress is recorded below.
+
+## Review and implementation progress (2026-10-01)
+
+The review found no blocking design concerns in the storage, positional engine, request identity, undo, and revision design. The accepted one-day retry guard and spreadsheet-wide stale-formula refusal remain limitations of the plan. The cells migration should abort with a diagnostic if it finds unmatched cells instead of silently deleting them; the existing invariants should make this count zero.
+
+Implementation has begun, but persistent identity is not yet enabled:
+
+- Step 1, shared foundations: `keyBetween`, `keysAfter`, `rebalanceKeys`, `TableLayout`, generated ordering tests, and a database test of C collation are implemented. The SQL backfill format below now includes the generator's integer-length prefix.
+- Step 3 was implemented ahead of the storage migration because it is independent of identities. Row growth, table creation, import, actions, and undo enforce the 100,000-row limit. Shrinking a legacy spreadsheet above the limit is allowed.
+- Step 4, engine prerequisite: `formulasAfterEdit` returns changed formula text at the cells' original addresses and excludes deleted cells. Tests compare it with the final inputs of the existing positional edit implementation.
+- Remaining: step 1 schema, migration, journal, request, and client integration; step 2; and the remaining work in steps 4–11. Storage and requests still use positions. The concurrency defect remains until that integration is complete.
 
 ## Decisions in brief
 
@@ -73,7 +84,7 @@ table_rows
 
 A row's place in its table is the place of its order key among the table's keys in byte order. A new key is made between two neighboring keys without changing either, so inserting a row writes one record. The `"C"` collation makes Postgres order the keys as JavaScript string comparison does.
 
-A pure module in `packages/shared` makes keys: `keyBetween(before, after)` and `keysAfter(last, count)`. Adding at the start or the end of a table must lengthen keys only with the logarithm of the number of rows added, as counting up or down does. Only repeated inserts between the same two neighbors lengthen a key steadily, by about one character for every six inserts with 62 symbols, which is my estimate and not a measurement. The server alone assigns keys, under the spreadsheet's lock. How long a key gets depends on the table's history of inserts and deletes, not on how many rows it has now. When a new key would pass 64 characters, the server gives every row of the table a fresh, evenly spaced key in the same change, and deletes the spreadsheet's journal entries, because they hold the old keys. Restoring a version empties the journal for the same kind of reason.
+A pure module in `packages/shared` makes keys: `keyBetween(before, after)` and `keysAfter(last, count)`. Adding at the start or the end of a table must lengthen keys only with the logarithm of the number of rows added, as counting up or down does. Only repeated inserts between the same two neighbors lengthen a key steadily, by about one character for every five inserts in the implemented midpoint generator. In the tested gap between `a0` and `a1`, the 311th insert produces a 65-character key. The server alone assigns keys, under the spreadsheet's lock. How long a key gets depends on the table's history of inserts and deletes, not on how many rows it has now. When a new key would pass 64 characters, the server gives every row of the table a fresh, evenly spaced key in the same change, and deletes the spreadsheet's journal entries, because they hold the old keys. Restoring a version empties the journal for the same kind of reason.
 
 A row id is a UUID. The client makes the id of a row it creates, so it can name the row before the server answers and a repeated request does not add the row twice. A row id from a client is checked like any other input. An id that exists in another table is refused with 409, whichever spreadsheet that table is in, and the answer does not say where the id exists. A counter per table was rejected: undoing a row insert would put the counter back, the next insert would reuse the id, and a save still on its way to the undone row would be applied to the new one.
 
@@ -123,8 +134,8 @@ Format rules stay positional and are still shifted by `formatRulesAfterEdit`.
 
 The migration runs in two parts, in implementation steps 1 and 4.
 
-1. Create `table_rows` and add `tables.col_ids`. For each table, insert `row_count` rows and set `col_ids` to `col_count` new UUIDs. The backfill is SQL in the migration file, as `0007_version_blocks.sql` already does for versions. Backfilled keys are a zero-padded row number of fixed width followed by a middle digit, which `generate_series` and `lpad` can produce and which `keyBetween` accepts. Delete every `journal` record: an entry made before this migration holds table records without `colIds` and no rows, so undoing a table delete would bring back a table with no row records.
-2. Add `row_id` and `col_id` to `cells`. Fill them by joining each cell to the row whose rank by key equals `row_index` and to the element of `col_ids` at `col_index`. Delete any cell that finds no row or column, after counting them: `checkRestoredState` and `setCells` should have kept that count at zero. Replace the primary key, drop `row_index` and `col_index`, and drop `row_count` and `col_count`. Delete every `journal` record again, because its entries name cells by position. A journal entry lives at most one day and belongs to one open tab.
+1. Create `table_rows` and add `tables.col_ids`. For each table, insert `row_count` rows and set `col_ids` to `col_count` new UUIDs. The backfill is SQL in the migration file, as `0007_version_blocks.sql` already does for versions. Backfilled keys are `f` followed by a five-digit zero-padded row index and `V`, for example `f00000V`. The `f` prefix declares a six-digit integer part; the shared generator requires that prefix for logarithmic growth at either end. `generate_series` and `lpad` can produce these keys, and a shared test checks all 1,000 backfilled row indexes. Delete every `journal` record: an entry made before this migration holds table records without `colIds` and no rows, so undoing a table delete would bring back a table with no row records.
+2. Add `row_id` and `col_id` to `cells`. Fill them by joining each cell to the row whose rank by key equals `row_index` and to the element of `col_ids` at `col_index`. Count cells that find no row or column and abort the migration with a diagnostic if the count is nonzero: `checkRestoredState` and `setCells` should have kept that count at zero. Do not silently delete unmatched cells. Replace the primary key, drop `row_index` and `col_index`, and drop `row_count` and `col_count`. Delete every `journal` record again, because its entries name cells by position. A journal entry lives at most one day and belongs to one open tab.
 
 Kept versions need no migration. They are files without ids.
 
@@ -337,7 +348,7 @@ Tests:
 
 ### Step 3: limit the rows of a spreadsheet
 
-`LIMITS.spreadsheetRows` and one check where rows are added, next to `checkCellCount`. Import and `checkRestoredState` apply it too.
+`LIMITS.spreadsheetRows` and a check in `ContentWriter` whenever a table is inserted or its row count grows. Import and `checkRestoredState` apply it too. Undo may reduce the row count of a legacy spreadsheet that is already over the limit.
 
 Tests: an insert, a resize, an import, and an undo past the limit are refused.
 
@@ -493,7 +504,7 @@ Tests: `click.test.ts` overwrites a data table with fewer rows and finds no empt
 
 ## Risks
 
-- **The cells migration is the one step that can lose data.** It runs at startup on every instance. Mitigation: the migration test in step 4, a count of unmatched cells before any delete, and a database backup before deploying it.
+- **The cells migration is the one step that can lose data.** It runs at startup on every instance. Mitigation: the migration test in step 4, an abort on unmatched cells before dropping the positional columns, and a database backup before deploying it.
 - **Row count and row records can disagree from step 1 until step 4.** Two things hold one fact until then. The invariant test in step 1 covers every content route in `undo.test.ts`.
 - **Order keys grow with a table's edit history.** Inserting again and again at one place lengthens the keys there, and deleting rows does not shorten them. A table that passes 64 characters is renumbered, which empties every tab's undo stack for the spreadsheet. How often that happens in practice is unknown. The key test in step 1 should report how many inserts at one place it takes.
 - **Key order must match in Postgres, PGlite, and JavaScript.** It depends on the `"C"` collation. A probe showed PGlite and JavaScript agree on ten keys. Postgres is untested, and `schema.ts` may not be able to state the collation. Two tests in step 1 cover both.
@@ -525,7 +536,7 @@ The author asked for these to be recorded here. Each goes into the `DECISIONS.md
 
 - **`deleted_rows` entries are kept for one day,** the journal's age limit (step 7). A request repeated more than a day after its row was deleted can bring the row back. Keeping entries forever closes that and grows the table without bound.
 - **Renumbering a table's order keys empties the undo stacks of every tab on the spreadsheet** (step 1), because journal entries hold the old keys. How often a table is renumbered in practice is unknown.
-- **A key may be 64 characters long before its table is renumbered** (step 1). The number is a guess. By the estimate under Storage it allows about 380 inserts between the same two rows.
+- **A key may be 64 characters long before its table is renumbered** (step 1). The number is a guess. The shared test reaches a 65-character key after 311 inserts into the gap between `a0` and `a1`. Other gaps may start with longer keys.
 - **`PlanContext` tells an action whether a table is a data table** (step 7), so that the append actions can tell a data table from a plain grid.
 - **A delete of several rows by id is applied as one positional edit for each run of neighbors** (step 2), last run first.
 

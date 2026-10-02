@@ -39,7 +39,7 @@ The aim is to do what a traditional spreadsheet does, and do it better. I build 
 - **Files:** rowz does not open or save Excel files. It has no layout for printing.
 - **Dates:** there are no time zones, and numbers and dates are written one way whatever the reader's locale.
 - **Working together:** edits made at the same moment are not merged. Open sessions see each other's changes within a second, and the last write to a cell wins. There are no comments on cells and no protected ranges. A document can be shared only with someone who already has an account.
-- **Size:** a document holds at most 100,000 filled cells.
+- **Size:** a document holds at most 100,000 filled cells and 100,000 rows across its tables.
 
 ### Known spreadsheet flaws
 
@@ -192,7 +192,7 @@ It supports `select`, `where`, `group by`, `having`, `pivot`, `order by`, `limit
 ## History and files
 
 The server keeps a per-tab undo journal for content changes, including cells, formatting, and structural edits. Ctrl+Z and Ctrl+Y undo and redo changes made since the page was opened while they remain safe to apply. A conflicting later change can make an undo unavailable; **History** restores an earlier whole-spreadsheet version or opens it as a new document. The server also keeps versions before destructive or large changes and every ten minutes while a document is edited.
-**Export** in the editor saves a document as a JSON file holding its pages, their blocks, and cell inputs. **Import** on the document list creates a document from one. A document holds at most 50 pages, 50 blocks on a page, and 100,000 filled cells, which are also the most a file may hold. The format is the `spreadsheetFile` schema in `packages/shared/src/index.ts`. It identifies things by name and order, with no ids.
+**Export** in the editor saves a document as a JSON file holding its pages, their blocks, and cell inputs. **Import** on the document list creates a document from one. A document holds at most 50 pages, 50 blocks on a page, 100,000 filled cells, and 100,000 rows across its tables, which are also the most a file may hold. The format is the `spreadsheetFile` schema in `packages/shared/src/index.ts`. It identifies things by name and order, with no ids.
 
 ## How it works
 

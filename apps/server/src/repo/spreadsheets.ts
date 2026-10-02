@@ -250,11 +250,13 @@ function checkFile(file: SpreadsheetFile): void {
   if (page !== undefined) invalid(`Two pages are named ${page}`);
 
   let total = 0;
+  let totalRows = 0;
   for (const { name: pageName, blocks } of file.pages) {
     const fileTables = blocks.filter((block) => block.type === "table");
     const table = repeated(fileTables.map(({ name }) => name));
     if (table !== undefined) invalid(`Two tables on ${pageName} are named ${table}`);
     for (const { name, rowCount, colCount, cells: fileCells, columns } of fileTables) {
+      totalRows += rowCount;
       if (columns) {
         if (columns.length !== colCount) {
           invalid(
@@ -280,6 +282,9 @@ function checkFile(file: SpreadsheetFile): void {
   }
   if (total > FILE_LIMITS.cells) {
     invalid(`The file has more than ${String(FILE_LIMITS.cells)} cells`);
+  }
+  if (totalRows > LIMITS.spreadsheetRows) {
+    invalid(`The file has more than ${String(LIMITS.spreadsheetRows)} rows`);
   }
 }
 
@@ -1661,6 +1666,11 @@ export class SpreadsheetRepository {
         }
       }
 
+      const [countedRows] = await tx
+        .select({ rows: sql<number>`coalesce(sum(${tables.rowCount}), 0)`.mapWith(Number) })
+        .from(tables)
+        .innerJoin(pages, eq(pages.id, tables.pageId))
+        .where(eq(pages.spreadsheetId, spreadsheetId));
       const changed = await tx.transaction(async (writes) => {
         let accumulated = emptyChangedContent();
         for (const entry of entries) {
@@ -1675,7 +1685,7 @@ export class SpreadsheetRepository {
             await applyRecorded(writes, spreadsheetId, this.userId, entry.data, direction),
           );
         }
-        await this.checkRestoredState(writes, spreadsheetId);
+        await this.checkRestoredState(writes, spreadsheetId, countedRows?.rows ?? 0);
         return accumulated;
       });
       await tx.update(journal).set({ undone: !undone }).where(group);
@@ -1788,7 +1798,11 @@ export class SpreadsheetRepository {
     }
   }
 
-  private async checkRestoredState(db: Database, spreadsheetId: string): Promise<void> {
+  private async checkRestoredState(
+    db: Database,
+    spreadsheetId: string,
+    previousRowCount: number,
+  ): Promise<void> {
     const pageRows = await db
       .select({ id: pages.id })
       .from(pages)
@@ -1808,6 +1822,10 @@ export class SpreadsheetRepository {
       .from(tables)
       .innerJoin(pages, eq(pages.id, tables.pageId))
       .where(eq(pages.spreadsheetId, spreadsheetId));
+    const totalRows = tableRows.reduce((total, table) => total + table.rowCount, 0);
+    if (totalRows > LIMITS.spreadsheetRows && totalRows >= previousRowCount) {
+      throw new UndoRefusal("This change would exceed the spreadsheet row limit");
+    }
     if (
       tableRows.some(
         (table) =>

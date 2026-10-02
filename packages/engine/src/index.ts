@@ -46,6 +46,7 @@ export type {
 } from "./functions/registry";
 export { parseFormula, parseFormulaWithReferences, type LocatedReference } from "./parser";
 export {
+  formulasAfterEdit,
   inputsAfterEdit,
   inputsAfterMove,
   inputsAfterRename,

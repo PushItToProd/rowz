@@ -1,11 +1,21 @@
 import { z } from "zod";
 
+export { keyBetween, keysAfter, rebalanceKeys, MAX_ORDER_KEY_LENGTH } from "./order-keys";
+export {
+  TableLayout,
+  type RowIdentity,
+  type CellIdentity,
+  type CellPosition,
+} from "./table-layout";
+
 export const LIMITS = {
   nameLength: 100,
   /** Characters in one cell's input. */
   inputLength: 8192,
   cellsPerRequest: 1000,
   tableRows: 1000,
+  /** Stored rows across every table of one spreadsheet. */
+  spreadsheetRows: 100_000,
   tableCols: 100,
   /** Characters in a chart's formula or a text view's template. */
   viewSourceLength: 50_000,

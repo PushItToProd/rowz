@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Reference } from "./ast";
 import { cellKey, formatAddress } from "./address";
 import {
+  formulasAfterEdit,
   inputsAfterEdit,
   inputsAfterMove,
   inputsAfterRename,
@@ -338,6 +339,7 @@ describe("inputsAfterEdit", () => {
 
   /** The writes for an edit, as `table address input` lines sorted for comparison. */
   function writes(cells: Record<string, Record<string, string>>, edit: StructuralEdit): string[] {
+    checkFormulaWrites(data(cells), edit);
     return inputsAfterEdit(data(cells), edit)
       .map((cell) => `${cell.tableId} ${formatAddress(cell)} ${cell.input || "(cleared)"}`)
       .sort();
@@ -345,6 +347,7 @@ describe("inputsAfterEdit", () => {
 
   /** How a formula in another table, reading Table1, is written after an edit to Table1. */
   function rewritten(formula: string, edit: StructuralEdit): string {
+    checkFormulaWrites(data({ t2: { A1: formula } }), edit);
     const result = inputsAfterEdit(data({ t2: { A1: formula } }), edit);
     return result[0]?.input ?? formula;
   }
@@ -547,5 +550,56 @@ describe("inputsAfterEdit", () => {
 
     const three = apply(original, { ...insertRow(1), count: 3 });
     expect(inputs(apply(three, { ...deleteRow(1), count: 3 }))).toEqual(inputs(original));
+  });
+});
+
+/** Compare formula-only writes with the final inputs produced by the existing positional edit. */
+function checkFormulaWrites(data: WorkbookData, edit: StructuralEdit): void {
+  const after = new Map(data.cells.map((cell) => [cellKey(cell), cell.input]));
+  for (const write of inputsAfterEdit(data, edit)) after.set(cellKey(write), write.input);
+  const expected = data.cells.flatMap((cell) => {
+    let position = cell[edit.axis];
+    if (cell.tableId === edit.tableId && position >= edit.index) {
+      const count = edit.count ?? 1;
+      if (edit.kind === "delete" && position < edit.index + count) return [];
+      position += edit.kind === "insert" ? count : -count;
+    }
+    const input = after.get(cellKey({ ...cell, [edit.axis]: position }));
+    return input === cell.input ? [] : [{ ...cell, input }];
+  });
+  expect(formulasAfterEdit(data, edit)).toEqual(expected);
+}
+
+describe("formulasAfterEdit", () => {
+  it("leaves unchanged formulas and moved literals out of the writes", () => {
+    const data = {
+      ...STRUCTURE,
+      cells: [
+        { ...at("A3", "t1"), input: "literal" },
+        { ...at("B3", "t1"), input: "=A1" },
+        { ...at("C3", "t1"), input: "=A3" },
+      ],
+    };
+    const edit = { tableId: "t1", axis: "row", kind: "insert", index: 1 } as const;
+    expect(formulasAfterEdit(data, edit)).toEqual([{ ...at("C3", "t1"), input: "=A4" }]);
+    checkFormulaWrites(data, edit);
+  });
+
+  it.each(["row", "col"] as const)("omits a rewritten formula in a deleted %s", (axis) => {
+    const data = {
+      ...STRUCTURE,
+      cells: [
+        { ...at("A1", "t1"), input: "=A2" },
+        { ...at("B2", "t1"), input: "=A2" },
+        { ...at("A1", "t2"), input: "=Table1!A2" },
+      ],
+    };
+    const edit = { tableId: "t1", axis, kind: "delete", index: 0 } as const;
+    expect(
+      formulasAfterEdit(data, edit).some(
+        (cell) => cell.tableId === "t1" && cell.row === 0 && cell.col === 0,
+      ),
+    ).toBe(false);
+    checkFormulaWrites(data, edit);
   });
 });

@@ -286,6 +286,18 @@ export function editDecider(edit: StructuralEdit): Decide {
 }
 
 /**
+ * Rewrites formula text without moving cells. Addresses name the cells in
+ * the workbook before the edit, so an id-based caller can resolve them with
+ * its original layout. Formulas in deleted rows or columns are omitted.
+ */
+export function formulasAfterEdit(data: WorkbookData, edit: StructuralEdit): StoredInput[] {
+  const surviving = data.cells.filter(
+    (cell) => cell.tableId !== edit.tableId || moveIndex(cell[edit.axis], edit) !== undefined,
+  );
+  return rewriteInputs({ ...data, cells: surviving }, new TableResolver(data), editDecider(edit));
+}
+
+/**
  * The cell writes that carry out inserting or deleting rows or columns: cells
  * past the edit move, and formulas anywhere in the workbook that read
  * the table are rewritten to keep reading the same cells. A reference to a

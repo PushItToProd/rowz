@@ -238,6 +238,7 @@ export class ContentWriter {
     this.checkColumns(values.columns);
     const [inserted] = await this.db.insert(tables).values(values).returning(tableColumns);
     if (!inserted) throw new Error("Insert returned no table");
+    await this.checkRowCount(inserted.pageId);
     this.recordItem(this.tableChanges, inserted.id, null, inserted);
     return inserted;
   }
@@ -254,6 +255,7 @@ export class ContentWriter {
       .where(eq(tables.id, tableId))
       .returning(tableColumns);
     if (!updated) throw notFound("Table");
+    if (updated.rowCount > before.rowCount) await this.checkRowCount(updated.pageId);
     this.recordItem(this.tableChanges, tableId, before, updated);
     return updated;
   }
@@ -341,6 +343,26 @@ export class ContentWriter {
       .limit(1);
     if (!found) throw notFound("Page");
     return found;
+  }
+
+  /** Runs after a row addition, inside the caller's spreadsheet transaction. */
+  private async checkRowCount(pageId: string): Promise<void> {
+    const [page] = await this.db
+      .select({ spreadsheetId: pages.spreadsheetId })
+      .from(pages)
+      .where(eq(pages.id, pageId));
+    if (!page) throw notFound("Page");
+    const [counted] = await this.db
+      .select({ rows: sql<number>`coalesce(sum(${tables.rowCount}), 0)`.mapWith(Number) })
+      .from(tables)
+      .innerJoin(pages, eq(pages.id, tables.pageId))
+      .where(eq(pages.spreadsheetId, page.spreadsheetId));
+    if ((counted?.rows ?? 0) > LIMITS.spreadsheetRows) {
+      throw unprocessable(
+        "too_many_rows",
+        `A spreadsheet can have at most ${String(LIMITS.spreadsheetRows)} rows`,
+      );
+    }
   }
 
   private async findTable(tableId: string): Promise<TableRecord> {
