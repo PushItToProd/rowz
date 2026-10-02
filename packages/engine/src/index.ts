@@ -11,6 +11,7 @@ export {
 export {
   formatReference,
   isColumnReference,
+  quoteName,
   isSingleCell,
   printNode,
   type CellReference,

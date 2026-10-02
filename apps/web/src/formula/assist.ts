@@ -1,4 +1,4 @@
-import { functionDocs, isFormulaInput, type FunctionDoc } from "@spreadsheet-app/engine";
+import { functionDocs, isFormulaInput, quoteName, type FunctionDoc } from "@spreadsheet-app/engine";
 
 export interface Suggestion {
   kind: "function" | "table" | "page" | "name" | "column";
@@ -29,10 +29,11 @@ export interface NamingContext {
   pageId: string | undefined;
   /** The named columns of the table that holds the formula, which `[Name]` reads. */
   columns?: readonly { name: string }[] | null;
+  /** The names the document defines, each with the name and page of the script that holds it. */
+  names?: readonly { name: string; holder: string; pageId: string }[];
 }
 
 const MAX_SUGGESTIONS = 8;
-const BARE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const WORD_AT_END = /[A-Za-z_][A-Za-z0-9_.]*$/;
 const QUALIFIER_AT_END = /(?:'((?:[^']|'')*)'|([A-Za-z_][A-Za-z0-9_]*))!$/;
 // An open `[` with a table name before it, or none: `Sales[Pr`, `'Table 1'[`, `[Pr`.
@@ -71,10 +72,6 @@ function scan(text: string, caret: number): Scan {
     }
   }
   return { quote, quoteStart, calls };
-}
-
-function quoteName(name: string): string {
-  return BARE_NAME.test(name) ? name : `'${name.replaceAll("'", "''")}'`;
 }
 
 function startsWith(name: string, typed: string): boolean {
@@ -174,8 +171,23 @@ export function suggestionsAt(text: string, caret: number, context: NamingContex
 
   const qualified = QUALIFIER_AT_END.exec(before.slice(0, from));
   if (qualified) {
-    const page = pageNamed(context, qualified[1]?.replaceAll("''", "'") ?? qualified[2] ?? "");
-    const items = page ? tablesOn(page.id).filter((item) => startsWith(item.label, typed)) : [];
+    const word = qualified[1]?.replaceAll("''", "'") ?? qualified[2] ?? "";
+    const page = pageNamed(context, word);
+    // `Summary!` names a script on the formula's page, whose names can follow.
+    const held = (context.names ?? [])
+      .filter(
+        (named) =>
+          named.pageId === context.pageId && named.holder.toLowerCase() === word.toLowerCase(),
+      )
+      .map((named): Suggestion => ({
+        kind: "name",
+        label: named.name,
+        insert: quoteName(named.name),
+        detail: `name in ${named.holder}`,
+      }));
+    const items = [...held, ...(page ? tablesOn(page.id) : [])].filter((item) =>
+      startsWith(item.label, typed),
+    );
     return { from, items: items.slice(0, MAX_SUGGESTIONS) };
   }
 
@@ -188,9 +200,26 @@ export function suggestionsAt(text: string, caret: number, context: NamingContex
       detail: doc.syntax,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
-  const names = namesIn(text, from)
-    .filter((name) => startsWith(name, typed) && !functionNames.has(name.toUpperCase()))
-    .map((name): Suggestion => ({ kind: "name", label: name, insert: name, detail: "name" }));
+  const defined = (context.names ?? [])
+    .filter((named) => startsWith(named.name, typed))
+    .map((named): Suggestion => ({
+      kind: "name",
+      label: named.name,
+      insert: quoteName(named.name),
+      detail: `name in ${named.holder}`,
+    }));
+  const known = new Set(defined.map((item) => item.label.toLowerCase()));
+  const names = [
+    ...defined,
+    ...namesIn(text, from)
+      .filter(
+        (name) =>
+          startsWith(name, typed) &&
+          !functionNames.has(name.toUpperCase()) &&
+          !known.has(name.toLowerCase()),
+      )
+      .map((name): Suggestion => ({ kind: "name", label: name, insert: name, detail: "name" })),
+  ];
   const places = [
     ...tablesOn(context.pageId),
     ...context.pages.map((page) => qualifier(page.name, "page", "page")),

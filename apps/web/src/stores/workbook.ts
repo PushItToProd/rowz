@@ -6,6 +6,7 @@ import {
   formatValue,
   isFormulaInput,
   isDate,
+  scriptNames,
   Workbook,
   type CellAddress,
   type CellId,
@@ -271,7 +272,12 @@ export const useWorkbookStore = defineStore("workbook", () => {
       const position = positionOf(cell);
       return position ? [{ ...position, input: cell.input }] : [];
     });
-    engine.value = createWorkbook({ pages: pages.value, tables: tables.value, cells });
+    engine.value = createWorkbook({
+      pages: pages.value,
+      tables: tables.value,
+      scripts: views.value.filter((view) => view.kind === "script"),
+      cells,
+    });
   }
 
   function installSnapshot(snapshot: Snapshot): void {
@@ -402,6 +408,27 @@ export const useWorkbookStore = defineStore("workbook", () => {
   ): Evaluated {
     return engine.value.evaluateOnPage(pageId, formula, names);
   }
+
+  /**
+   * The value of a name a table or script holds, or `undefined` when it holds
+   * none of that spelling.
+   */
+  function nameValue(holderId: string, name: string): Evaluated | undefined {
+    return engine.value.getName(holderId, name);
+  }
+
+  /** The names the document's scripts define, with the script that holds each, for completion. */
+  const documentNames = computed(() =>
+    views.value
+      .filter((view) => view.kind === "script")
+      .flatMap((script) =>
+        scriptNames(script.id, script.source).map(({ name }) => ({
+          name,
+          holder: script.name,
+          pageId: script.pageId,
+        })),
+      ),
+  );
 
   /** Applies the content the server restored, then keeps or moves the selection. */
   function applyChanged(changed: ChangedContent): void {
@@ -1234,6 +1261,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     shownRows,
     toFile,
     evaluateOnPage,
+    nameValue,
+    documentNames,
     addView,
     updateView,
     deleteView,

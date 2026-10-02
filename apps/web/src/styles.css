@@ -1483,3 +1483,28 @@ select.cell-control--dropdown {
 .share__email {
   overflow-wrap: anywhere;
 }
+
+.script {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.92rem;
+}
+
+.script th,
+.script td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.script__name {
+  width: 40%;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.script__error {
+  color: var(--danger);
+}

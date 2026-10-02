@@ -223,4 +223,23 @@ describe("column names", () => {
     expect(complete("=[in|] * 2")).toBe("=[In stock] * 2");
     expect(complete("=SUM(Sales[pa|)")).toBe("=SUM(Sales[Paid on])");
   });
+
+  it("offers the names the document defines, and the names a script on this page holds after its name", () => {
+    const named: NamingContext = {
+      ...context,
+      names: [
+        { name: "TaxRate", holder: "Rates", pageId: "p1" },
+        { name: "Total", holder: "Other", pageId: "p2" },
+      ],
+    };
+    expect(suggestionsAt("=Tax", 4, named).items[0]).toEqual({
+      kind: "name",
+      label: "TaxRate",
+      insert: "TaxRate",
+      detail: "name in Rates",
+    });
+    expect(suggestionsAt("=Rates!T", 8, named).items.map((item) => item.label)).toEqual([
+      "TaxRate",
+    ]);
+  });
 });

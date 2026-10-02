@@ -17,6 +17,7 @@ import { download, fileName } from "../files/download";
 import { fitsImport } from "../files/spreadsheetFile";
 import { usePageTitle } from "../pageTitle";
 import TableCard from "../components/TableCard.vue";
+import ScriptCard from "../components/ScriptCard.vue";
 import TextCard from "../components/TextCard.vue";
 import { useWorkbookStore } from "../stores/workbook";
 
@@ -212,6 +213,7 @@ watch(
       <div v-for="(block, index) in blocks" :key="block.record.id" class="editor__block">
         <TableCard v-if="block.table" :table="block.table" />
         <ChartCard v-else-if="block.view.kind === 'chart'" :view="block.view" />
+        <ScriptCard v-else-if="block.view.kind === 'script'" :view="block.view" />
         <TextCard v-else :view="block.view" />
         <div
           v-if="store.canEdit && (blocks.length > 1 || store.pages.length > 1)"
@@ -254,6 +256,7 @@ watch(
         <button type="button" @click="store.addTable(page.id)">Add table</button>
         <button type="button" @click="store.addView(page.id, 'chart')">Add chart</button>
         <button type="button" @click="store.addView(page.id, 'text')">Add text</button>
+        <button type="button" @click="store.addView(page.id, 'script')">Add script</button>
       </div>
     </main>
 
