@@ -197,6 +197,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [x] update the page title to show the name of the spreadsheet being edited or, for the help page, "Help". include the app name `rowz` at the end - e.g. `Help | rowz` or `My budget | rowz`
 - [ ] (Claude) say "document" instead of "spreadsheet" in the UI and help page, as the README does
 - [x] mobile friendly UI (layout, touch targets, tap twice to edit)
+- [ ] **P10** revamp the phone-width UI so it is less cramped. The editor header is the tightest part: it holds the back arrow, the spreadsheet's name, the saving indicator, Share, History, Export, and Help on one line.
 - [ ] more controls:
   - [ ] **P2** a text or number input bound to a cell (esp. useful in Markdown)
   - [ ] **P3** a date picker
@@ -248,6 +249,7 @@ Items prefixed "P0", "P1", "P2", "P3", etc. are the author's prioritized actions
 - [ ] (Claude) several server processes: the change feed is in memory (Postgres LISTEN/NOTIFY would do)
 - [ ] (Claude) trusted proxy configuration for better-auth's rate limiting, as a config variable
 - [ ] (Claude) a large table re-writes every moved cell on a row or column insert/delete; shift in SQL if this gets slow
+- [ ] (Claude) cache a range's values across the formulas that read the same range. Each formula reads every cell of its range again when it is recalculated, so 50,000 formulas that each read a 1,000-row column take about 10 s after one edit in that column: 50 million cell reads. 1,000 such formulas take about 0.2 s, so this matters only at the extreme. The cache needs invalidation inside the evaluator: a cached range is stale once any cell in it changes, including a cell an array result fills or gives up.
 - [x] (Claude) code review of 2026-10-01 (`_scratch/2026-10-01-codex-review.md`): all 20 findings addressed, see DECISIONS.md
 - [x] (Claude) run `pnpm e2e` and the server tests against Postgres (`TEST_DATABASE_URL`) after the review fixes: neither runs in the sandbox
   - (author) e2e run and full CI run are passing as of `87b20ea`
