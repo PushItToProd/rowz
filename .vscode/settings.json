@@ -7,5 +7,7 @@
     "**/.data": true,
     "coverage": true,
     "**/dist": true
-  }
+  },
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true
 }
