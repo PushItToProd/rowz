@@ -43,7 +43,7 @@ Formulas can be stored in cell inputs, chart and text view sources, and formula-
 
 Route handlers live in `apps/server/src/routes/`; request schemas and shared limits live in [`packages/shared/src/index.ts`](../packages/shared/src/index.ts). Route handlers access spreadsheet data through `SpreadsheetRepository`, which enforces read, write, and owner access.
 
-Changes to spreadsheet content go through the repository's `change`, `changePage`, `changeTable`, or `changeView` helpers. They lock the spreadsheet, check write access under the lock, then perform the change and update history/live notifications. Read data inside the change callback when it may have changed before the lock was acquired. Add each new route to [`access.test.ts`](../apps/server/src/access.test.ts).
+Changes to spreadsheet content go through the repository's `change`, `changePage`, `changeTable`, or `changeView` helpers. They lock the spreadsheet, check write access under the lock, then perform the change and update history/live notifications. Read data inside the change callback when it may have changed before the lock was acquired. Add each new route to one of the lists in [`access.test.ts`](../apps/server/src/access.test.ts). A route that changes something also needs a round-trip case in [`undo.test.ts`](../apps/server/src/undo.test.ts), or a line in its `NOT_JOURNALED` list when Ctrl+Z should not undo it. Both tests compare what they cover with the routes the app registers and fail for one that is left out.
 
 For a database schema change, edit [`db/schema.ts`](../apps/server/src/db/schema.ts), run `pnpm --filter @spreadsheet-app/server db:generate`, and commit the generated migration under `apps/server/drizzle/`.
 

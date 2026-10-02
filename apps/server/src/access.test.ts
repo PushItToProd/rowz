@@ -5,6 +5,7 @@ import { spreadsheets, workspaceMembers, type Role } from "./db/schema";
 import {
   cellsBody,
   createSpreadsheet,
+  routeOf,
   startTestServer,
   type TestClient,
   type TestServer,
@@ -33,10 +34,18 @@ afterAll(() => server.close());
 
 type Route = [method: string, path: string, body?: unknown];
 
+/** Every route that is not about one spreadsheet. Each needs a session and nothing more. */
+const accountRoutes: Route[] = [
+  ["GET", "/spreadsheets"],
+  ["POST", "/spreadsheets", { name: "x" }],
+  ["POST", "/spreadsheets/import", {}],
+];
+
 /** Every route that reads the spreadsheet. */
 function readRoutes(): Route[] {
   return [
     ["GET", `/spreadsheets/${snapshot.id}`],
+    ["GET", `/spreadsheets/${snapshot.id}/events`],
     ["GET", `/spreadsheets/${snapshot.id}/versions`],
     ["GET", `/spreadsheets/${snapshot.id}/members`],
     ["POST", `/spreadsheets/${snapshot.id}/versions/${UNKNOWN_ID}/copy`],
@@ -113,15 +122,22 @@ async function addMember(user: TestUser, role: Role): Promise<void> {
     .values({ workspaceId: row!.workspaceId, userId: user.userId, role });
 }
 
+describe("the routes these tests try", () => {
+  // The tests below prove a rule for the routes in the three lists. This one
+  // proves the lists leave no route out, so a new route fails here until it
+  // is added to the list whose rule it should follow.
+  it("are every route the app registers", () => {
+    const tried = [...accountRoutes, ...readRoutes(), ...writeRoutes()].map(
+      ([method, path]) =>
+        routeOf(server.routes, method, path) ?? `${method} ${path}: no such route`,
+    );
+    expect([...new Set(tried)].sort()).toEqual(server.routes);
+  });
+});
+
 describe("without a session", () => {
   it("answers 401 on every route and changes nothing", async () => {
-    const routes: Route[] = [
-      ["GET", "/spreadsheets"],
-      ["POST", "/spreadsheets", { name: "x" }],
-      ["POST", "/spreadsheets/import", {}],
-      ...readRoutes(),
-      ...writeRoutes(),
-    ];
+    const routes = [...accountRoutes, ...readRoutes(), ...writeRoutes()];
     const result = await statuses(server.anonymous, routes);
     expect(result).toEqual(routes.map(() => 401));
     await expectUnchanged();

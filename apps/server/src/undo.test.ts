@@ -12,6 +12,7 @@ import { journal, spreadsheets } from "./db/schema";
 import {
   cellsBody,
   createSpreadsheet,
+  routeOf,
   startTestServer,
   withClientId,
   type TestClient,
@@ -444,12 +445,38 @@ function content(snapshot: SnapshotWithHistory) {
   };
 }
 
+/**
+ * The routes that change something and are not undone with Ctrl+Z: they
+ * change the spreadsheet as a whole or who may open it, or they are undo and
+ * redo themselves. Every other route that changes something needs a case in
+ * `routeCases`.
+ */
+const NOT_JOURNALED = [
+  "POST /spreadsheets",
+  "POST /spreadsheets/import",
+  "PATCH /spreadsheets/:spreadsheetId",
+  "DELETE /spreadsheets/:spreadsheetId",
+  "PUT /spreadsheets/:spreadsheetId/members",
+  "DELETE /spreadsheets/:spreadsheetId/members/:userId",
+  "POST /spreadsheets/:spreadsheetId/versions/:versionId/restore",
+  "POST /spreadsheets/:spreadsheetId/versions/:versionId/copy",
+  "POST /spreadsheets/:spreadsheetId/undo",
+  "POST /spreadsheets/:spreadsheetId/redo",
+];
+
 describe("undo round trips", () => {
+  /** The routes the cases sent their requests to. */
+  const roundTripped = new Set<string>();
+
   for (const route of routeCases) {
     it(`restores and reapplies ${route.name}`, async () => {
       const fixture = await fresh();
       const client = withClientId(owner);
       const request = await route.prepare(fixture);
+      roundTripped.add(
+        routeOf(server.routes, request.method, request.path) ??
+          `${request.method} ${request.path}: no such route`,
+      );
       const before = await snapshot(client, fixture.id);
       const response = await client.request(request.method, request.path, request.body);
       expect(response.status, await response.clone().text()).toBe(request.status);
@@ -468,6 +495,14 @@ describe("undo round trips", () => {
       expect(content(await snapshot(client, fixture.id))).toEqual(content(after));
     });
   }
+
+  // Runs after the cases, which is the order tests in a file run in. A new
+  // route that changes something fails here until it has a case above or a
+  // line in NOT_JOURNALED.
+  it("cover every route that changes content", () => {
+    const changing = server.routes.filter((route) => !route.startsWith("GET "));
+    expect([...roundTripped, ...NOT_JOURNALED].sort()).toEqual(changing);
+  });
 });
 
 describe("journal identity and grouping", () => {

@@ -13,6 +13,12 @@ const BASE_URL = "http://localhost:5173";
 
 export interface TestServer {
   db: Database;
+  /**
+   * Every route the app registers behind a session, written as
+   * `METHOD /path/:param` without the `/api` prefix. A test that must cover
+   * every route compares what it covers with this list.
+   */
+  routes: readonly string[];
   /** Opens another connection to the test database when it uses PostgreSQL. */
   openConnection?: () => Promise<DatabaseHandle>;
   /** Messages the app asked to send, oldest first. */
@@ -92,6 +98,47 @@ async function openTestDatabase(): Promise<TestDatabaseHandle> {
       await admin.end();
     },
   };
+}
+
+const API_PREFIX = "/api";
+
+/** The routes of the app that need a session. Middleware and the routes of the sign-in library are left out. */
+function sessionRoutes(app: ReturnType<typeof createApp>): string[] {
+  const routes = app.routes
+    .filter(({ method, path }) => method !== "ALL" && !path.startsWith(`${API_PREFIX}/auth/`))
+    .map(({ method, path }) => `${method} ${path.slice(API_PREFIX.length)}`);
+  // A route is registered once for each validator in front of its handler.
+  return [...new Set(routes)].sort();
+}
+
+/**
+ * The registered route a request goes to, as `routes` writes it, or
+ * `undefined` when no route takes the request.
+ */
+export function routeOf(
+  routes: readonly string[],
+  method: string,
+  path: string,
+): string | undefined {
+  const segments = (path.split("?")[0] ?? "").split("/");
+  const literals = (route: string): number =>
+    route.split("/").filter((segment) => !segment.startsWith(":")).length;
+  return (
+    routes
+      .filter((route) => {
+        const [routeMethod = "", pattern = ""] = route.split(" ");
+        const parts = pattern.split("/");
+        return (
+          routeMethod === method &&
+          parts.length === segments.length &&
+          parts.every((part, index) =>
+            part.startsWith(":") ? segments[index] !== "" : part === segments[index],
+          )
+        );
+      })
+      // `/spreadsheets/import` is the import route and not a spreadsheet named "import".
+      .sort((left, right) => literals(right) - literals(left))[0]
+  );
 }
 
 /** Creates a spreadsheet and returns its snapshot: one page holding one empty table. */
@@ -188,6 +235,7 @@ export async function startTestServer(
 
   return {
     db: database.db,
+    routes: sessionRoutes(app),
     openConnection: database.openConnection,
     sent,
     failSending(fail) {
