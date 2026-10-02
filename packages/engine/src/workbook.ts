@@ -706,15 +706,22 @@ export class Workbook {
     const records = this.cells.get(range.tableId);
     if (!records) return [];
 
+    // A range with an open side stops where the table does, as it does when it
+    // is read. Without that a whole column counts as larger than any table, and
+    // every formula that reads one would walk all of the table's cells.
+    const table = this.tables.table(range.tableId);
+    const endRow = Math.min(range.endRow, (table?.rowCount ?? Infinity) - 1);
+    const endCol = Math.min(range.endCol, (table?.colCount ?? Infinity) - 1);
+
     // A range such as A1:Z10000 is mostly empty, so walk whichever is smaller:
     // the range's coordinates or the table's stored cells.
-    const area = (range.endRow - range.startRow + 1) * (range.endCol - range.startCol + 1);
+    const area = (endRow - range.startRow + 1) * (endCol - range.startCol + 1);
     if (area > records.size) {
       return [...records.values()].filter((record) => rangeContains(range, record.id));
     }
     const found: CellRecord[] = [];
-    for (let row = range.startRow; row <= range.endRow; row += 1) {
-      for (let col = range.startCol; col <= range.endCol; col += 1) {
+    for (let row = range.startRow; row <= endRow; row += 1) {
+      for (let col = range.startCol; col <= endCol; col += 1) {
         const record = records.get(cellKey({ tableId: range.tableId, row, col }));
         if (record) found.push(record);
       }
