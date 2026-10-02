@@ -764,7 +764,6 @@ export const useWorkbookStore = defineStore("workbook", () => {
     syncStructure();
     // Capture every existing row before a queued structural edit can move it.
     const rowIds = [...table.rows.map((row) => row.id), ...appendRows];
-    const colIds = [...table.colIds];
     const pending = {
       tableId: table.id,
       changes: showInputs(
@@ -781,14 +780,10 @@ export const useWorkbookStore = defineStore("workbook", () => {
     if (selectWritten) extendSelection({ row: rowCount - 1, col: colCount - 1 });
     saves = enqueueWrite(async () => {
       try {
-        if (colCount > table.colCount) {
-          const current = tables.value.find((candidate) => candidate.id === table.id);
-          if (!current) throw new Error("The table was deleted");
-          const change = await api.updateTable(
-            table.id,
-            { colCount: current.colCount + colCount - table.colCount },
-            stepId,
-          );
+        const current = tables.value.find((candidate) => candidate.id === table.id);
+        if (!current) throw new Error("The table was deleted");
+        if (colCount > current.colCount) {
+          const change = await api.updateTable(table.id, { colCount }, stepId);
           const grown = change.changed?.tables.find((record) => record.id === table.id)?.table;
           await receiveChange(change);
           if (!grown) throw new Error("The resized table was not returned");
@@ -803,14 +798,17 @@ export const useWorkbookStore = defineStore("workbook", () => {
           ) {
             extendSelection({ row: rowCount - 1, col: colCount - 1 });
           }
-          colIds.push(...grown.colIds.slice(current.colCount));
-          for (const write of fitting.filter((write) => write.col >= table.colCount)) {
-            const rowId = rowIds[write.row];
-            const colId = colIds[write.col];
-            if (!rowId || !colId)
-              throw new Error("The row or column being edited no longer exists");
-            pending.changes.push({ rowId, colId, input: write.input });
-          }
+        }
+        // A queued paste may have grown the table before this one ran. Use
+        // the current identities for columns that had no id when this paste
+        // was queued, including columns the earlier paste just created.
+        const currentColumns = tables.value.find((candidate) => candidate.id === table.id)?.colIds;
+        if (!currentColumns) throw new Error("The table was deleted");
+        for (const write of fitting.filter((write) => write.col >= table.colCount)) {
+          const rowId = rowIds[write.row];
+          const colId = currentColumns[write.col];
+          if (!rowId || !colId) throw new Error("The row or column being edited no longer exists");
+          pending.changes.push({ rowId, colId, input: write.input });
         }
         await saveCellChanges(pending, stepId, writtenAt, appendRows);
         if (fitting.length < writes.length)

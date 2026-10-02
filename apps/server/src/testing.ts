@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { parseAddress } from "@spreadsheet-app/engine";
+import { isFormulaInput, parseAddress } from "@spreadsheet-app/engine";
 import { CLIENT_ID_HEADER } from "@spreadsheet-app/shared";
 import type { RepositoryOptions } from "./repo/spreadsheets";
 import pg from "pg";
 import { asc, eq } from "drizzle-orm";
-import { tables, tableRows } from "./db/schema";
+import { pages, spreadsheets, tables, tableRows, views } from "./db/schema";
 import { expect } from "vitest";
 import type { CellInput } from "@spreadsheet-app/shared";
 import {
@@ -401,6 +401,53 @@ export async function startTestServer(
               return cell;
             }),
           };
+        }
+      }
+      // These helpers model a client that has the current spreadsheet open.
+      // Preserve an explicit `revision: undefined` so tests can exercise the
+      // request schema's missing-revision rejection.
+      if (
+        body &&
+        typeof body === "object" &&
+        !Object.hasOwn(body, "revision") &&
+        ((method === "PUT" &&
+          /\/tables\/[0-9a-f-]{36}\/cells$/.test(path) &&
+          "cells" in body &&
+          Array.isArray(body.cells) &&
+          body.cells.some(
+            (cell: unknown) =>
+              cell &&
+              typeof cell === "object" &&
+              "input" in cell &&
+              typeof cell.input === "string" &&
+              isFormulaInput(cell.input),
+          )) ||
+          (method === "PATCH" &&
+            /\/tables\/[0-9a-f-]{36}\/columns\//.test(path) &&
+            "formula" in body) ||
+          (method === "PATCH" && /\/views\/[0-9a-f-]{36}$/.test(path) && "source" in body))
+      ) {
+        const tableId = /^\/tables\/([0-9a-f-]{36})\//.exec(path)?.[1];
+        const viewId = /^\/views\/([0-9a-f-]{36})$/.exec(path)?.[1];
+        const [target] = tableId
+          ? await database.db
+              .select({ spreadsheetId: pages.spreadsheetId })
+              .from(tables)
+              .innerJoin(pages, eq(pages.id, tables.pageId))
+              .where(eq(tables.id, tableId))
+          : viewId
+            ? await database.db
+                .select({ spreadsheetId: pages.spreadsheetId })
+                .from(views)
+                .innerJoin(pages, eq(pages.id, views.pageId))
+                .where(eq(views.id, viewId))
+            : [];
+        if (target) {
+          const [current] = await database.db
+            .select({ revision: spreadsheets.revision })
+            .from(spreadsheets)
+            .where(eq(spreadsheets.id, target.spreadsheetId));
+          if (current) body = { ...body, revision: current.revision };
         }
       }
       return app.request(`/api${path}`, {

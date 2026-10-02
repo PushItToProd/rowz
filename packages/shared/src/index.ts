@@ -160,6 +160,15 @@ export const updateColumnBody = z
   })
   .refine((body) => [body.name, body.type, body.formula].some((given) => given !== undefined), {
     message: "Give at least one of name, type, formula",
+  })
+  .superRefine((body, context) => {
+    if (body.formula !== undefined && body.revision === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["revision"],
+        message: "A revision is required when writing a formula",
+      });
+    }
   });
 
 /**
@@ -231,6 +240,17 @@ export const setCellsBody = z
   })
   .refine((body) => body.cells.length + (body.appendRows?.length ?? 0) > 0, {
     message: "Give at least one cell or row",
+  })
+  .superRefine((body, context) => {
+    // Keep the shared request schema independent of the formula engine.
+    const writesFormula = body.cells.some(({ input }) => input.startsWith("=") && input.length > 1);
+    if (writesFormula && body.revision === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["revision"],
+        message: "A revision is required when writing a formula",
+      });
+    }
   });
 
 /** A value chosen through a checkbox or dropdown. */
@@ -252,6 +272,15 @@ export const updateViewBody = z
   })
   .refine((body) => [body.name, body.source, body.chartType].some((given) => given !== undefined), {
     message: "Give at least one of name, source, chartType",
+  })
+  .superRefine((body, context) => {
+    if (body.source !== undefined && body.revision === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["revision"],
+        message: "A revision is required when changing a view source",
+      });
+    }
   });
 
 export const viewParam = z.object({ viewId: z.uuid() });

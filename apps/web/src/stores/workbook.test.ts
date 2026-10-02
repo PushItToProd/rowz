@@ -473,6 +473,57 @@ describe("selection", () => {
     });
   });
 
+  it("uses the current column IDs when queued pastes share a new column", async () => {
+    const initial = sizedTable({ colCount: 8 });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith(),
+        tables: [initial],
+        rows: initial.rows.map((row) => ({ ...row, tableId: initial.id })),
+      }),
+    );
+    const store = useWorkbookStore();
+    await store.load("s1");
+
+    let finishResize!: (change: ReturnType<typeof changeWith>) => void;
+    server.updateTable.mockReturnValue(
+      new Promise((resolve) => {
+        finishResize = resolve;
+      }),
+    );
+    server.setCells.mockImplementation(savedCells);
+    store.selection = at("H1");
+    void store.paste("first\tfirst new column");
+    void store.paste("second\tsecond new column");
+
+    await vi.waitFor(() => {
+      expect(server.updateTable).toHaveBeenCalledOnce();
+    });
+    expect(server.updateTable).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      { colCount: 9 },
+      expect.any(String),
+    );
+    finishResize(
+      changeWith({ table: sizedTable({ colCount: 9 }), cells: [], views: [], tables: [] }),
+    );
+    await vi.waitFor(() => {
+      expect(store.saving).toBe(false);
+    });
+
+    expect(server.updateTable).toHaveBeenCalledOnce();
+    expect(server.setCells.mock.calls.map(([, cells]) => cells)).toEqual([
+      [
+        { rowId: "r0", colId: "c8", input: "first" },
+        { rowId: "r0", colId: "c9", input: "first new column" },
+      ],
+      [
+        { rowId: "r0", colId: "c8", input: "second" },
+        { rowId: "r0", colId: "c9", input: "second new column" },
+      ],
+    ]);
+  });
+
   it("does not paste when the table could not be grown", async () => {
     const store = await open();
     server.setCells.mockRejectedValue(new Error("no"));

@@ -331,7 +331,7 @@ describe("a formula written before rows or columns changed", () => {
       owner.json<Change>(
         "PUT",
         `/tables/${table.id}/cells`,
-        { cells: [{ rowId, colId: col, input }], ...(revision === undefined ? {} : { revision }) },
+        { cells: [{ rowId, colId: col, input }], revision },
         status,
       );
     const insertRow = () =>
@@ -358,11 +358,14 @@ describe("a formula written before rows or columns changed", () => {
     expect(await storedInputs(owner, snapshot.id, table.id)).toMatchObject({ "1:1": "=A6" });
   });
 
-  it("is stored when only values changed since, and when no revision is given", async () => {
-    const { snapshot, save } = await start();
+  it("allows formulas after value changes, but requires a known revision", async () => {
+    const { snapshot, save, stale } = await start();
     await save("typed", undefined);
     await save("=A6", snapshot.revision);
-    await save("=A7", undefined);
+    expect(await save("=A7", undefined, 400)).toMatchObject({
+      error: { code: "invalid_request" },
+    });
+    expect(await save("=A8", snapshot.revision + 100, 409)).toMatchObject(stale);
   });
 
   it("is refused after a rename and a move too", async () => {

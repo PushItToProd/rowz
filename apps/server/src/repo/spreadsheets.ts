@@ -451,7 +451,7 @@ export class SpreadsheetRepository {
   /**
    * Refuses formula text that was written before the last change to what
    * references mean. `revision` is the one the writer's session had applied
-   * when the text was begun. A request that gives none is not checked. Must
+   * when the text was begun. A missing or future revision is refused. Must
    * run inside `change`.
    */
   private async checkWrittenAt(
@@ -459,12 +459,15 @@ export class SpreadsheetRepository {
     spreadsheetId: string,
     revision: number | undefined,
   ): Promise<void> {
-    if (revision === undefined) return;
+    if (revision === undefined) {
+      throw unprocessable("revision_required", "A revision is required when writing a formula");
+    }
     const [current] = await tx
-      .select({ rewriteRevision: spreadsheets.rewriteRevision })
+      .select({ revision: spreadsheets.revision, rewriteRevision: spreadsheets.rewriteRevision })
       .from(spreadsheets)
       .where(eq(spreadsheets.id, spreadsheetId));
-    if (current && revision < current.rewriteRevision) throw staleFormula();
+    if (!current) throw notFound("Spreadsheet");
+    if (revision > current.revision || revision < current.rewriteRevision) throw staleFormula();
   }
 
   private async pruneJournal(tx: Database, spreadsheetId: string): Promise<void> {
@@ -1658,18 +1661,23 @@ export class SpreadsheetRepository {
         }
         return { tableId, ...identity, input };
       });
-      // The rows to delete are named now, before anything else moves.
-      const doomed = removed.map(({ tableId, startRow, count }) => ({
-        tableId,
-        ids: contents.layout(tableId).rowIds.slice(startRow, startRow + count),
-      }));
-      if (inputs.length >= BULK_WRITE_CELLS || doomed.some(({ ids }) => ids.length > 0)) {
+      // Resolve all ranges against the same starting layout and delete each
+      // row id once. DO plans every action against that layout, so OVERWRITE
+      // ranges can overlap.
+      const doomed = new Map<string, Set<string>>();
+      for (const { tableId, startRow, count } of removed) {
+        const ids = contents.layout(tableId).rowIds.slice(startRow, startRow + count);
+        const held = doomed.get(tableId) ?? new Set<string>();
+        for (const id of ids) held.add(id);
+        doomed.set(tableId, held);
+      }
+      if (inputs.length >= BULK_WRITE_CELLS || [...doomed.values()].some((ids) => ids.size > 0)) {
         await this.keepVersion(tx, spreadsheetId, "Before running an action");
       }
       await writer.setCells(inputs);
       if (inputs.some((cell) => cell.input !== "")) await this.checkCellCount(tx, spreadsheetId);
-      for (const { tableId, ids } of doomed) {
-        await this.deleteLines(tx, writer, spreadsheetId, tableId, "row", ids);
+      for (const [tableId, ids] of doomed) {
+        await this.deleteLines(tx, writer, spreadsheetId, tableId, "row", [...ids]);
       }
     });
     return change;

@@ -728,6 +728,22 @@ describe("actions on a data table", () => {
     expect(result.cells).toHaveLength(2);
   });
 
+  it("deletes overlapping surplus rows once when DO runs multiple OVERWRITE actions", async () => {
+    const three: [string, string][] = [...TWO, ["cy", "3"]];
+    const action = "DO(OVERWRITE(C1:D1, Data!A:B), OVERWRITE(C2:D2, Data!A:B))";
+    const { sheet, data } = await dataTable(three, action);
+    const before = await data();
+
+    const result = await click(sheet, 0, 0);
+
+    expect(result).toMatchObject({ status: "succeeded" });
+    expect(await data()).toEqual({
+      rows: [before.rows[0]],
+      size: 1,
+      cells: { "0:0": "ann", "0:1": "7" },
+    });
+  });
+
   it("OVERWRITE with no data leaves a data table with no rows", async () => {
     const { sheet, data } = await dataTable(TWO, "OVERWRITE(C5:D9, Data!A:B)");
     expect(await click(sheet, 0, 0)).toMatchObject({ status: "succeeded" });
