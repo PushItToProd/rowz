@@ -257,6 +257,10 @@ input {
   margin-left: auto;
 }
 
+.editor__assertions + .editor__export {
+  margin-left: 0;
+}
+
 .editor__loading,
 .editor__empty {
   padding: 16px;
@@ -1515,7 +1519,9 @@ select.cell-control--dropdown {
   font-size: 0.85rem;
 }
 
+/* Centered between the name on the left and the buttons on the right. */
 .editor__assertions {
+  margin: 0 auto;
   color: var(--danger);
   border-color: var(--danger);
 }

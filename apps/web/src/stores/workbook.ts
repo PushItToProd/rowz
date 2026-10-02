@@ -425,7 +425,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
   /** The `ASSERT`s that are false, each with where it is and the page to open to see it. */
   const assertions = computed(() =>
     engine.value.failedAssertions().flatMap((failure) => {
-      const where = ((): { pageId: string; label: string; cell?: CellId } | undefined => {
+      const where = (():
+        { pageId: string; label: string; cell?: CellId; scriptId?: string } | undefined => {
         if (failure.kind === "cell") {
           const table = tables.value.find((candidate) => candidate.id === failure.cell.tableId);
           return (
@@ -441,7 +442,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
           failure.kind === "name"
             ? `${script?.name ?? ""}!${failure.name}`
             : `${script?.name ?? ""} line ${String(failure.line)}`;
-        return script && { pageId: script.pageId, label };
+        return script && { pageId: script.pageId, label, scriptId: script.id };
       })();
       return where ? [{ ...where, message: failure.message }] : [];
     }),

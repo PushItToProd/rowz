@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { FILE_LIMITS } from "@spreadsheet-app/shared";
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import EditableName from "../components/EditableName.vue";
 import FormulaBar from "../components/FormulaBar.vue";
@@ -53,6 +53,12 @@ async function goToAssertion(target: (typeof store.assertions)[number]): Promise
     params: { spreadsheetId: props.spreadsheetId, pageId: target.pageId },
   });
   if (target.cell) store.selection = target.cell;
+  if (target.scriptId) {
+    await nextTick();
+    document
+      .getElementById(`script-${target.scriptId}`)
+      ?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
 }
 const session = useSessionStore();
 

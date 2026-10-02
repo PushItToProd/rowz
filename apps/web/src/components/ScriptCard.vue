@@ -100,7 +100,7 @@ const statements = computed(() =>
 </script>
 
 <template>
-  <section class="view-card" :data-view="view.name">
+  <section :id="`script-${view.id}`" class="view-card" :data-view="view.name">
     <header class="view-card__header">
       <h2>
         <EditableName
