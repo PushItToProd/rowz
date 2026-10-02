@@ -147,7 +147,7 @@ Row ids are what make the display setting workable: an edit made in the third ro
 
 **Responses.** From step 4, every cell the server sends is `{ tableId, rowId, colId, input }`, and the snapshot lists each table's rows as `{ id, key }` in order.
 
-**No table version number.** Ids make it unnecessary for addressing. One race remains: a formula typed while another person's row insert has not yet reached the tab holds row numbers from before the insert. The cell is correct and the references in its text are stale. Step 7 adds a revision number to the spreadsheet for live updates, and open question 4 asks whether to use it to refuse such a formula.
+**No table version number.** Ids make it unnecessary for addressing. One race remains: a formula typed while another person's row insert has not yet reached the tab holds row numbers from before the insert. The cell is correct and the references in its text are stale. Step 7 adds a revision number to the spreadsheet for live updates, and the server uses it to refuse such a formula.
 
 A table version number as the first step was considered, because it is smaller: one column and three checks. It turns a misplaced save into a refused one that the person types again, it refuses every save that crosses any structural edit, and step 1 would then delete it.
 
@@ -162,7 +162,7 @@ The web store keeps the document by id: cell inputs keyed by row id and column i
 Changes inside the engine:
 
 - `rewrite.ts` exports a function that returns only the formulas a structural edit rewrites. It is the existing private `rewriteInputs` with `editDecider`. `inputsAfterEdit`, which also moves cells, is removed when its last caller is (step 4).
-- The engine stops counting typed cells per row (step 6, open question 2).
+- The engine stops counting typed cells per row, and a formula column computes in every row (step 6).
 
 Putting ids in the engine was rejected. Every range read and every dependency lookup is a loop over row numbers, and an id-keyed cell map would need a translation inside those loops. Relations between tables will need the engine to find a row by id. `TableDefinition` can then carry `rowIds` as plain data, which keeps the engine pure.
 
@@ -211,7 +211,7 @@ A restored row takes its recorded key. When another row has taken that key since
 
 **A row exists until it is deleted.** Clearing every cell of a row leaves an empty row. This keeps a row's id stable for a relation that points at it.
 
-**Naming a table's columns deletes its empty rows at the end**, as any rows are deleted, so formulas that read them are rewritten. Open question 1 covers the formulas this affects.
+**Naming a table's columns deletes its empty rows at the end**, as any rows are deleted, so formulas that read them are rewritten. `SUM(A1:A20)` over a table with five filled rows becomes `SUM(A1:A5)` and does not grow when a row is added. `A:A`, `A2:A`, and `Sales[Amount]` do grow.
 
 **Actions.** The engine keeps emitting positional effects, and `ensureRows` keeps its meaning. The server's handler adds row records where it now raises `row_count`.
 
@@ -220,7 +220,7 @@ A restored row takes its recorded key. When another row has taken that key since
 | `APPEND_ROW` | No change to the function. On a data table the first row below the content is the row after the last, so the scan finds it at once. |
 | `INSERT` | No change. |
 | `UPDATE` | No change. Rows it matches are written by position and resolved to ids under the lock. |
-| `OVERWRITE` | No change in step 6: it empties cells, which on a data table leaves empty rows at the end. Open question 3 proposes an effect that deletes them. |
+| `OVERWRITE` | No change in step 6: it empties cells, which on a data table leaves empty rows at the end. Step 8 makes it delete them. |
 
 `APPEND_ROW(Sales, ...)` with a table name in place of a range needs the whole-table reference syntax that `todo.md` lists separately.
 
@@ -330,7 +330,7 @@ This step fixes problem 3.
 1. `setCellsBody` takes `appendRows`, and `setCells` creates the rows in the same change.
 2. `nameColumns` deletes the empty rows at the end.
 3. `GridView` draws the new-row line for a data table, and `writeCells` sends `appendRows`.
-4. In its own commit, if open question 2 is accepted: formula columns compute in every row, and `typedInRow` and `trackRow` leave the engine.
+4. In its own commit: formula columns compute in every row, and `typedInRow` and `trackRow` leave the engine.
 
 Tests:
 
@@ -346,12 +346,21 @@ Tests:
 2. `ChangeFeed.publish` takes the revision and the `ChangedContent`. `change`, undo, and redo supply them.
 3. The events route checks read access before each event and sends the content.
 4. The web store applies an event in order through `applyChanged` and reads the spreadsheet again on a gap.
+5. The client sends the revision it last applied with each save. `setCells` answers 409 with the code `stale_formula` to an input starting with `=` when a change that rewrote references has a later revision. `spreadsheets.rewrite_revision` holds the revision of the last such change. The client puts the cell back, keeps the typed text in the editor, and says why.
 
 Tests:
 
 - Server: an event holds the cells and rows of a save, a row insert, and an undo. A change over the size limit holds none. A person whose share ended receives no content.
 - `access.test.ts`: the events route is already in `readRoutes`. Add a case that a viewer's open stream sends content and an outsider's does not open.
+- Server: Grace inserts a row, and Ada's save of a formula with the earlier revision is refused while her save of a value is stored. A formula saved with the current revision is stored.
 - Web: two events applied in order equal a fresh snapshot, an event out of order triggers a read, and an unsaved edit survives a remote row insert in its row.
+
+### Step 8: `OVERWRITE` deletes the rows it empties
+
+1. A new `Effect`, `deleteRows`, names a table and row positions. The server's handler in `run.ts` resolves the positions to ids under the lock and deletes the rows through `ContentWriter`, with the formula rewrites of any row delete.
+2. `OVERWRITE` emits it for the rows past its data when its range covers every column of a data table. For any other range it empties cells as before.
+
+Tests: `click.test.ts` overwrites a data table with fewer rows and finds no empty row. `undo.test.ts` gains the case, and its undo brings back the same row ids and cells. An `OVERWRITE` of part of a table's width deletes no row.
 
 ## Documentation changes
 
@@ -360,7 +369,7 @@ Tests:
 - "The client names a cell; the server decides the effect" says that the client names a cell by row id and column id, and that the server resolves them under the lock and answers 409 when one is gone.
 - A new rule: positions exist only in the engine. Storage, requests, responses, and the journal name rows and columns by id, and `TableLayout` is the one translation.
 - "Anything that holds a formula is rewritten with the cells" says that a structural edit rewrites formula text and format rules and moves no cell.
-- "A formula column's cells are not stored" drops "each row that holds something" if open question 2 is accepted.
+- "A formula column's cells are not stored" says the engine gives every row a computed cell.
 - The rule on `change` adds that row records are written through `ContentWriter`.
 
 **`README.md`:**
@@ -388,31 +397,29 @@ Tests:
 - **Row count and row records can disagree between steps 1 and 3.** Two things hold one fact for those two steps. The invariant test in step 1 covers every content route in `undo.test.ts`.
 - **Order keys grow.** Inserting again and again before the same row lengthens the key by about one character for every few inserts. At 1,000 rows per table the keys stay short. Renumbering a table's keys would invalidate journal entries that hold them, so the plan has no renumbering.
 - **Key order must match in Postgres, PGlite, and JavaScript.** It depends on the `"C"` collation, which is unverified for PGlite. A test in step 1 sorts the same keys in all three.
-- **A stale formula can still be saved.** See the wire protocol section and open question 4.
+- **A stale formula can still be saved until step 7.** See the wire protocol section.
 - **Snapshots grow.** Each row adds about 60 bytes, so 100,000 rows add about 6 MB to a snapshot that already holds up to 100,000 cells.
 - **Events will carry content.** A mistake in the access check of step 7 leaks cells to a person whose share ended. The stream sends none today.
 - **The work passes through `spreadsheets.ts` and the workbook store**, the two largest files, which other sessions edit often. Steps 1, 3, and 4 should each merge quickly.
-- **Empty rows change what formula columns show** if open question 2 is accepted: a row with nothing typed computes its formulas.
+- **Empty rows change what formula columns show.** A row with nothing typed computes its formulas, so a data table that had empty rows between filled ones shows results in them after step 6.
 
-## Open questions
+## Decisions the author accepted
 
-1. **Should naming a table's columns delete its empty rows at the end?** A formula such as `SUM(A1:A20)` over a table with five filled rows becomes `SUM(A1:A5)` and does not grow when a row is added. `A:A`, `A2:A`, and `Sales[Amount]` do grow. Recommendation: yes, delete them. Keeping them leaves data tables with unused rows, which is problem 3. The change is one undo step.
+The author accepted each of these on 2026-10-01. The sections above already state them as decided.
 
-2. **Should a formula column compute in every row of a data table?** Today it computes only in rows that hold something typed, because tables have unused rows. Recommendation: yes, once step 6 has removed the unused rows. A row then means a record, and the engine loses the per-row counting.
+1. **Naming a table's columns deletes its empty rows at the end.** `SUM(A1:A20)` over five filled rows becomes `SUM(A1:A5)`. Keeping the rows would leave data tables with unused rows, which is problem 3.
+2. **A formula column computes in every row of a data table** (step 6). A row means a record, and the engine loses the per-row counting.
+3. **`OVERWRITE` removes the rows it empties in a data table** (step 8), when its range covers every column. The planned action "delete a row that matches a condition" can use the same effect.
+4. **The server refuses a formula typed against a stale structure** (step 7). Only a formula saved in the moment after another person's structural edit is refused.
+5. **A spreadsheet holds at most 100,000 rows.** The limit is raised together with `tableRows`, once the grid draws only the rows in view.
+6. **Columns do not get their own table now.** Decide again when relations or per-column settings such as number formats are designed.
+7. **Narrowing the undo rule for creating or deleting a page, table, or view is a separate change** after step 5. It does not depend on row ids.
 
-3. **Should `OVERWRITE` remove the rows it empties in a data table?** It needs a new `Effect` that deletes rows by position, resolved to ids under the lock. The planned action "delete a row that matches a condition" needs the same effect. Recommendation: yes, as its own change after step 6, limited to a range that covers every column of the table.
-
-4. **Should the server refuse a formula typed against a stale structure?** With the revision from step 7, the client can send the revision it saw, and the server can answer 409 to a cell input starting with `=` when a reference rewrite happened after that revision. Recommendation: yes, in step 7. It closes the last case of problem 1 with one comparison, and only formulas typed in the second before another person's structural edit are refused.
-
-5. **Is 100,000 the right limit for rows in a spreadsheet?** It equals the cell limit. A spreadsheet of 100 full-height tables reaches it. Recommendation: 100,000, raised together with `tableRows` when the grid draws only the rows in view.
-
-6. **Should columns get their own table later?** It would let two people's column edits undo independently and would move column names and types out of the table record. Recommendation: not now. Decide when relations or per-column settings such as number formats are designed.
-
-7. **Should creating or deleting a page, table, or view also stop blocking undo of unrelated changes?** The same conflict rule would apply, with a check that a created table is still empty. Recommendation: a separate change after step 5, since it does not depend on row ids.
+Decision 1 covers empty rows at the end of a table, and only when its columns are named. A row whose cells are all cleared later stays as an empty row, so that its id remains valid for a relation that points at it. Whether a data table should delete such rows is left for later and is listed in `todo.md`.
 
 ## Verification of this plan's implementation
 
 - `pnpm check` after every step.
-- `pnpm test:postgres` after steps 1, 3, 5, and 7. The lock tests and the collation test need real Postgres.
+- `pnpm test:postgres` after steps 1, 3, 5, 7, and 8. The lock tests and the collation test need real Postgres.
 - `pnpm e2e` after steps 1, 4, 6, and 7, outside the sandbox.
 - By hand after step 1, with two browser sessions on one spreadsheet: start an edit in one, insert a row above it in the other, commit the edit, and find the text in the row it was typed in.

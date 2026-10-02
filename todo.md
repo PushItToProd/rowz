@@ -163,6 +163,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] allow referencing an entire data table without naming a specific range -- I would like to be able to write s.t. like `=QUERY('Table name'!, 'select * ...')` (not wedded to that exact syntax tho)
     - [ ] **P2** evaluate syntax options and how painful they'd be to implement
   - [ ] **P3** `QUERY` doesn't show col names in its output - if `Table1` is a table with named columns and we write `=QUERY(Table1!A:A, "select *")`, the output should show the column names by default
+- [ ] (Claude) consider deleting a data table's row when its last cell is cleared. `plans/persistent-row-identity.md` keeps such a row, so that its id stays valid for a relation that points at it, and deletes empty rows only at the end of a table when its columns are named
 - [ ] **P4** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable
 - [ ] **P3** when updating a formula column's formula, use an in-page editor with proper formula support (modal or popover or maybe just hijack the formula bar), not a browser `input` popup
 - [ ] (Claude) pivot tables as a block or table feature (`QUERY` already has a `pivot` clause)
