@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createWorkbook } from "@spreadsheet-app/engine";
+import { createWorkbook, renderTemplate } from "@spreadsheet-app/engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ClickResult, SnapshotWithHistory, SpreadsheetSummary } from "./app";
 import { Contents } from "./repo/contents";
@@ -34,6 +34,8 @@ interface Sample {
   table: (name: string) => TestSnapshot["tables"][number];
   /** The values of a table's first `rows` rows and `cols` columns. */
   values: (name: string, rows: number, cols: number) => unknown[][];
+  /** The Markdown a text view shows. */
+  text: (name: string) => string;
 }
 
 async function readSample(id: string): Promise<Sample> {
@@ -51,6 +53,15 @@ async function readSample(id: string): Promise<Sample> {
           workbook.getValue({ tableId: table(name).id, row, col }),
         ),
       ),
+    text: (name) => {
+      const view = wire.views.find((candidate) => candidate.name === name)!;
+      const page = wire.pages.find((candidate) => candidate.id === view.pageId)!;
+      return renderTemplate(view.source, (expression, names) =>
+        workbook.evaluateOnPage(page.id, expression, names),
+      )
+        .map((block) => (block.type === "markdown" ? block.text : `[${block.type}]`))
+        .join("");
+    },
   };
 }
 
@@ -161,5 +172,48 @@ describe("the Gran Turismo 7 grind comparison", () => {
       72_750_000,
       null,
     ]);
+  });
+
+  it("shows Spa in the comparison when its checkbox is ticked", async () => {
+    const sample = await importSample("gt7-grind-comparison.json");
+    // The checkbox writes to the one cell of a table on the Config page.
+    const setting = sample.table("Show Spa?");
+    expect(sample.values("Options", 1, 1)).toMatchObject([
+      [{ control: "checkbox", label: "Show Spa", value: false, target: { tableId: setting.id } }],
+    ]);
+    expect(sample.values("Payout (8*5 hours)", 12, 22)[11]?.[0]).toBeNull();
+
+    await user.json(
+      "PUT",
+      `/tables/${setting.id}/cells`,
+      { cells: [{ row: 0, col: 0, input: "TRUE" }] },
+      200,
+    );
+    const pivot = (await readSample(sample.id)).values("Payout (8*5 hours)", 12, 22);
+    expect(pivot[0]?.slice(15)).toEqual(["60", "61", "62", "63", "64", "65", "66"]);
+    expect(pivot[3]?.[0]).toBe("Spa");
+    expect(pivot[3]?.slice(15, 17)).toEqual([60_000_000, 52_500_000]);
+  });
+
+  it("works out from the runs when Tokyo beats Sardegna", async () => {
+    const sample = await importSample("gt7-grind-comparison.json");
+    const lines = sample
+      .text("Conclusions")
+      .split("\n")
+      .filter((line) => line.startsWith("- "));
+    // Sardegna at 24 minutes pays 72,750,000, which Tokyo at 30% and 40% never reaches.
+    expect(lines).toEqual(
+      [
+        [21, 50],
+        [22, 60],
+        [24, 70],
+        [25, 80],
+        [25, 90],
+        [26, 100],
+      ].map(
+        ([minutes, share]) =>
+          `- You can finish in ${String(minutes)} minutes or less with the clean race bonus at least ${String(share)}% of the time.`,
+      ),
+    );
   });
 });
