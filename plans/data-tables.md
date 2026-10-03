@@ -6,12 +6,12 @@ The P1 theme (names and testable logic) is done. `todo.md` lists four open P2 it
 
 The author decided four questions on 2026-10-02:
 
-| Question | Decision |
-| --- | --- |
-| Filter | One filter formula per table, such as `=[Payout] > 60000`. |
+| Question                        | Decision                                                                                              |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Filter                          | One filter formula per table, such as `=[Payout] > 60000`.                                            |
 | Ranges while sorted or filtered | A selection is a rectangle of the rows shown. Copy, clear, fill, paste, and delete act on those rows. |
-| Dropdown choices | A list on the column, or a column of another data table. |
-| Conditional format condition | A `COUNTIF`-style criterion on the cell's own value, or a two-color scale. |
+| Dropdown choices                | A list on the column, or a column of another data table.                                              |
+| Conditional format condition    | A `COUNTIF`-style criterion on the cell's own value, or a two-color scale.                            |
 
 Earlier decisions that still hold: sort and filter are display settings stored on the table, and the stored row order does not change, so `A2` and `SUM(Sales[Amount])` read the same cells under any sort or filter (`plans/persistent-row-identity.md`, "Formula semantics").
 
@@ -96,7 +96,7 @@ Tests: `conditional.test.ts`, a server test for the route and for rules followin
 
 ## Stage 4: the Gran Turismo reference document
 
-`samples/gt7-grind-comparison.json`, after the author's sheet "GT7 grind comparison v2" (read through the Drive connector):
+Create `samples/gt7-grind-comparison.json`, after the author's sheet "GT7 grind comparison v2" (try reading through the Google Drive connector; fall back on `_scratch/google-sheets-exported-to-xlsx/GT7 grind comparison v2.xlsx` if the connector doesn't work):
 
 - A data table `Races`: name, payout with bonus, minimum and maximum duration.
 - A data table `Runs`: `Race` as a choice column from `Races[Race Name]`, `Duration`, and formula columns for payout per minute, races per hour, races in 8 hours, races in five 8-hour days, and payout over 40 hours. It is sorted by payout, descending, with a color scale on that column.
@@ -117,5 +117,3 @@ The sample is imported in a server test, as a check that the file format carries
 After each stage: `pnpm check`. After the migration: `pnpm --filter @spreadsheet-app/server db:generate`, add its checksum, then `pnpm check:migrations`.
 
 At the end: `pnpm e2e:remote`, with new cases in `e2e/spreadsheet.spec.ts` that sort a data table and edit a cell in the first row shown, filter and fill down across shown rows, pick a dropdown value, and see a conditional fill. This needs the `playwright` container and access to `127.0.0.1:3200`. If the sandbox blocks it, I will ask the author to run it and not claim it passed.
-
-I will make no commits unless asked.
