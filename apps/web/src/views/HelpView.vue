@@ -1073,7 +1073,7 @@ const OPERATORS = [
           shows it as a table, and a chart function such as <code>BAR_CHART</code> shows the chart.
         </li>
         <li>
-          A formula that fails shows its error, such as <code>#DIV/0!</code>, where its value would
+          A formula that fails shows an error chip with its code and message where its value would
           have been. A tag that is written wrong replaces the view with a message naming the line.
         </li>
         <li>

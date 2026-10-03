@@ -59,7 +59,17 @@ async function readSample(id: string): Promise<Sample> {
       return renderTemplate(view.source, (expression, names) =>
         workbook.evaluateOnPage(page.id, expression, names),
       )
-        .map((block) => (block.type === "markdown" ? block.text : `[${block.type}]`))
+        .map((block) =>
+          block.type === "markdown"
+            ? block.parts
+                .map((part) =>
+                  part.type === "text"
+                    ? part.text
+                    : `${part.error.code} ${part.error.message ?? part.error.code}`,
+                )
+                .join("")
+            : `[${block.type}]`,
+        )
         .join("");
     },
   };

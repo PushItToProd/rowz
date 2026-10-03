@@ -144,6 +144,7 @@ export {
   rewriteTemplate,
   TemplateSyntaxError,
   type TemplateBlock,
+  type TemplateInline,
   type TemplateNode,
 } from "./template";
 export {

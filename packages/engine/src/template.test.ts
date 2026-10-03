@@ -35,7 +35,17 @@ function markdown(source: string): string {
   const blocks = render(source);
   expect(blocks.map((block) => block.type)).toEqual(blocks.length === 0 ? [] : ["markdown"]);
   const [block] = blocks;
-  return block?.type === "markdown" ? block.text : "";
+  return block?.type === "markdown"
+    ? block.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("")
+    : "";
+}
+
+function inlineParts(source: string) {
+  return render(source).flatMap((block) => (block.type === "markdown" ? block.parts : []));
+}
+
+function inlineErrors(source: string) {
+  return inlineParts(source).flatMap((part) => (part.type === "error" ? [part.error] : []));
 }
 
 describe("output", () => {
@@ -57,11 +67,28 @@ describe("output", () => {
     expect(markdown('{{ 1.5 }} {{ -2 }} {{ "a_b #1" }}')).toBe("1\\.5 \\-2 a\\_b \\#1");
   });
 
-  it("shows an error by its code", () => {
-    expect(markdown("{{ 1/0 }} and {{ Missing!A1 }} and {{ A1 }}")).toBe(
-      "\\#DIV\\/0\\! and \\#REF\\! and \\#REF\\!",
-    );
-    expect(markdown("{{ 1 + }}")).toBe("\\#ERROR\\!");
+  it("preserves error values and messages for inline rendering", () => {
+    expect(render("{{ 1/0 }} and {{ nonexistentvar }}")).toMatchObject([
+      {
+        type: "markdown",
+        parts: [
+          {
+            type: "error",
+            error: { kind: "error", code: "#DIV/0!", message: "Division by zero" },
+          },
+          { type: "text", text: " and " },
+          {
+            type: "error",
+            error: { kind: "error", code: "#NAME?", message: "Unknown name 'nonexistentvar'" },
+          },
+        ],
+      },
+    ]);
+    expect(inlineErrors("{{ Missing!A1 }} and {{ A1 }}").map((value) => value.code)).toEqual([
+      "#REF!",
+      "#REF!",
+    ]);
+    expect(inlineErrors("{{ 1 + }}").map((value) => value.code)).toEqual(["#ERROR!"]);
   });
 
   it("allows the closing characters inside quoted text", () => {
@@ -70,7 +97,7 @@ describe("output", () => {
 
   it("shows a range as a table, which splits the Markdown around it", () => {
     expect(render("Before\n\n{{ Table1!A1:B2 }}\n\nAfter")).toEqual([
-      { type: "markdown", text: "Before\n\n" },
+      { type: "markdown", parts: [{ type: "text", text: "Before\n\n" }] },
       {
         type: "table",
         rows: [
@@ -78,7 +105,7 @@ describe("output", () => {
           ["apple", 12],
         ],
       },
-      { type: "markdown", text: "\n\nAfter" },
+      { type: "markdown", parts: [{ type: "text", text: "\n\nAfter" }] },
     ]);
   });
 
@@ -161,7 +188,7 @@ describe("for", () => {
       "{% for name in Table1[Name] %}{{ name }},{% end %}{{ ROWS(Table1!A:B) }} rows",
       (expression, names) => empty.evaluateOnPage(PAGE, expression, names),
     );
-    expect(blocks).toEqual([{ type: "markdown", text: "0 rows" }]);
+    expect(blocks).toEqual([{ type: "markdown", parts: [{ type: "text", text: "0 rows" }] }]);
   });
 
   it("works on the result of a formula, such as a sorted and shortened range", () => {
@@ -196,7 +223,9 @@ describe("for", () => {
   });
 
   it("shows the error when what it loops over is one", () => {
-    expect(markdown("{% for a in Missing!A1:A2 %}never{% end %}")).toBe("\\#REF\\!");
+    expect(
+      inlineErrors("{% for a in Missing!A1:A2 %}never{% end %}").map((value) => value.code),
+    ).toEqual(["#REF!"]);
   });
 
   it("stops a view that repeats too many times", () => {
@@ -227,9 +256,26 @@ describe("if", () => {
   });
 
   it("shows the error when the condition cannot be decided", () => {
-    expect(markdown("{% if 1/0 %}a{% else %}b{% end %}")).toBe("\\#DIV\\/0\\!");
-    expect(markdown('{% if "maybe" %}a{% end %}')).toBe("\\#VALUE\\!");
-    expect(markdown("{% if Table1!A1:B2 %}a{% end %}")).toBe("\\#VALUE\\!");
+    expect(inlineParts("before{% if 1/0 %}a{% else %}b{% end %}after")).toEqual([
+      { type: "text", text: "before" },
+      {
+        type: "error",
+        error: { kind: "error", code: "#DIV/0!", message: "Division by zero" },
+      },
+      { type: "text", text: "after" },
+    ]);
+    expect(inlineParts('{% if "maybe" %}a{% end %}')).toEqual([
+      {
+        type: "error",
+        error: { kind: "error", code: "#VALUE!", message: '"maybe" is not TRUE or FALSE' },
+      },
+    ]);
+    expect(inlineParts("{% if Table1!A1:B2 %}a{% end %}")).toEqual([
+      {
+        type: "error",
+        error: { kind: "error", code: "#VALUE!", message: "Expected a single value" },
+      },
+    ]);
   });
 });
 
@@ -331,7 +377,12 @@ describe("the example from the project notes", () => {
     expect(blocks.map((block) => block.type)).toEqual(["markdown", "chart", "markdown", "table"]);
     expect(blocks[0]).toEqual({
       type: "markdown",
-      text: "Total sales were $25.\n\n## Top sellers\n\n\n- **apple:** $12\n- **fig:** $8\n\n",
+      parts: [
+        {
+          type: "text",
+          text: "Total sales were $25.\n\n## Top sellers\n\n\n- **apple:** $12\n- **fig:** $8\n\n",
+        },
+      ],
     });
     expect(blocks[3]).toMatchObject({
       rows: [

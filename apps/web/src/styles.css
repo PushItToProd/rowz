@@ -1125,6 +1125,24 @@ select.cell-control--dropdown {
   line-height: 1.55;
 }
 
+.md-error {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  padding: 0 0.35em;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  border-radius: 999px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.88em;
+  line-height: 1.4;
+  vertical-align: baseline;
+}
+
+.md-error__message {
+  font-weight: 400;
+}
+
 .text-view__markdown > :first-child {
   margin-top: 0;
 }

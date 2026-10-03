@@ -120,7 +120,7 @@ We sold **{{ total }}** in all.
 
 <img src="docs/screenshots/text-view.png" alt="A text view being edited, with its source above the result" width="407">
 
-`{{ }}` shows one value in the sentence, a range as a table, and the result of `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, or `SCATTER_CHART` as a chart. A formula in a chart or text view is written on a page and not in a table, so it names the table of every cell it reads.
+`{{ }}` shows one value in the sentence, a range as a table, and the result of `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, or `SCATTER_CHART` as a chart. A failed formula appears as an error chip with its code and message. A formula in a chart or text view is written on a page and not in a table, so it names the table of every cell it reads.
 
 ### Names and scripts
 

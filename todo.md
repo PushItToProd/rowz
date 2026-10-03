@@ -22,7 +22,7 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 ## Inbox - to be categorized
 
 - [ ] "Save as"/"Save a copy" for duplicating an existing document
-- [ ] when errors appear in a rendered markdown block, show the errors as a chip with the error message. e.g. writing `{{ A+nonexistentvar }}` currently just renders `#NAME?` verbatim, but not even what name is invalid
+- [x] when errors appear in a rendered markdown block, show the errors as a chip with the error message. e.g. writing `{{ A+nonexistentvar }}` currently just renders `#NAME?` verbatim, but not even what name is invalid
 
 ## Plans
 

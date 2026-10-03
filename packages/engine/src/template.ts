@@ -45,8 +45,10 @@ export class TemplateSyntaxError extends Error {
 }
 
 /** One part of what a text view shows. Markdown runs until a table or chart interrupts it. */
+export type TemplateInline = { type: "text"; text: string } | { type: "error"; error: ErrorValue };
+
 export type TemplateBlock =
-  | { type: "markdown"; text: string }
+  | { type: "markdown"; parts: TemplateInline[] }
   | { type: "table"; rows: CellValue[][] }
   | { type: "chart"; chart: ChartValue }
   | { type: "error"; message: string };
@@ -340,11 +342,19 @@ export function renderNodes(
   onError?: (error: ErrorValue) => void,
 ): TemplateBlock[] {
   const blocks: TemplateBlock[] = [];
-  let markdown = "";
+  let markdown: TemplateInline[] = [];
   let iterations = 0;
+  const appendMarkdown = (text: string): void => {
+    if (text === "") return;
+    const last = markdown.at(-1);
+    if (last?.type === "text") last.text += text;
+    else markdown.push({ type: "text", text });
+  };
   const flush = (): void => {
-    if (markdown.trim() !== "") blocks.push({ type: "markdown", text: markdown });
-    markdown = "";
+    if (markdown.some((part) => part.type === "error" || part.text.trim() !== "")) {
+      blocks.push({ type: "markdown", parts: markdown });
+    }
+    markdown = [];
   };
 
   const output = (value: Evaluated): void => {
@@ -352,8 +362,9 @@ export function renderNodes(
     const [[single = null] = []] = rows;
     if (rows.length <= 1 && (rows[0]?.length ?? 0) <= 1) {
       // Markdown made by a formula is meant to be formatted, so it goes in as written.
-      if (isMarkdown(single)) markdown += single.text;
-      else if (!isChart(single)) markdown += escapeMarkdown(formatValue(single));
+      if (isMarkdown(single)) appendMarkdown(single.text);
+      else if (isError(single)) markdown.push({ type: "error", error: single });
+      else if (!isChart(single)) appendMarkdown(escapeMarkdown(formatValue(single)));
       else {
         flush();
         blocks.push({ type: "chart", chart: single });
@@ -368,7 +379,7 @@ export function renderNodes(
     for (const node of body) {
       switch (node.type) {
         case "text":
-          markdown += node.text;
+          appendMarkdown(node.text);
           break;
         case "output":
           output(evaluate(node.expression, names));

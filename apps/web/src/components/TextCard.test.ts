@@ -103,6 +103,15 @@ describe("TextCard", () => {
     ]);
   });
 
+  it("shows errors in a range table as chips with their message", async () => {
+    await render("{{ 'Table 1'!A1:B2 }}");
+    await useWorkbookStore().setCell(at("A2"), "=nonexistentvar");
+    await flushPromises();
+    const chip = shown().get(".text-view__table .md-error");
+    expect(chip.text()).toContain("#NAME? Unknown name 'nonexistentvar'");
+    expect(chip.attributes("title")).toBe("Unknown name 'nonexistentvar'");
+  });
+
   it("draws a chart a formula gives", async () => {
     await render(`{{ PIE_CHART('Table 1'!A1:B2, "Fruit") }}`);
     expect(shown().get(".chart").attributes("data-chart")).toBe("pie");
@@ -137,6 +146,65 @@ describe("TextCard", () => {
         .map((found) => found.text()),
     ).toEqual(["apples"]);
     expect(shown().text()).toBe("apples and **plain**");
+  });
+
+  it("shows formula errors as accessible chips with their message", async () => {
+    await render("Before {{ nonexistentvar }} after");
+    const chip = shown().get(".md-error");
+    expect(chip.text()).toBe("#NAME? Unknown name 'nonexistentvar'");
+    expect(chip.attributes("title")).toBe("Unknown name 'nonexistentvar'");
+    expect(chip.attributes("aria-label")).toBe("#NAME? Unknown name 'nonexistentvar'");
+  });
+
+  it("escapes HTML in an unknown name before inserting the error chip", async () => {
+    await render("{{ '<img src=x onerror=alert(1)>' }}");
+    const chip = shown().get(".md-error");
+    expect(shown().find("img").exists()).toBe(false);
+    expect(chip.text()).toBe("#NAME? Unknown name '<img src=x onerror=alert(1)>'");
+    expect(chip.attributes("title")).toBe("Unknown name '<img src=x onerror=alert(1)>'");
+    expect(chip.get(".md-error__message").element.innerHTML).toContain("&lt;img");
+    expect(chip.find("img").exists()).toBe(false);
+  });
+
+  it("shows Markdown punctuation in an error message as plain text", async () => {
+    const name = "name_*# [label](https://example.com)";
+    await render(`{{ '${name}' }}`);
+    const chip = shown().get(".md-error");
+    expect(chip.text()).toBe(`#NAME? Unknown name '${name}'`);
+    expect(chip.find("strong").exists()).toBe(false);
+    expect(chip.find("a").exists()).toBe(false);
+  });
+
+  it("does not put error markers into Markdown link attributes", async () => {
+    await render("[missing]({{ nonexistentvar }})");
+    expect(shown().find("a").exists()).toBe(false);
+    expect(shown().get(".md-error").text()).toBe("#NAME? Unknown name 'nonexistentvar'");
+  });
+
+  it("preserves formatting and label chips when a link destination errors", async () => {
+    await render("[**{{ missingLabel }}**]({{ missingHref }})");
+    expect(shown().find("a").exists()).toBe(false);
+    expect(shown().get("strong").get(".md-error").text()).toBe(
+      "#NAME? Unknown name 'missingLabel'",
+    );
+    expect(
+      shown()
+        .findAll(".md-error")
+        .map((chip) => chip.text()),
+    ).toEqual(["#NAME? Unknown name 'missingLabel'", "#NAME? Unknown name 'missingHref'"]);
+  });
+
+  it("replaces an image whose URL errors with an error chip", async () => {
+    await render("![diagram]({{ Missing!A1 }})");
+    expect(shown().find("img").exists()).toBe(false);
+    expect(shown().get(".md-error").text()).toContain("#REF!");
+  });
+
+  it("does not confuse an encoded marker in the source with an error chip", async () => {
+    await render("{{ 1/0 }} ROWZERROR&#48;END");
+    expect(shown().findAll(".md-error")).toHaveLength(1);
+    expect(shown().text()).toContain("ROWZERROR0END");
+    expect(shown().get(".md-error").text()).toBe("#DIV/0! Division by zero");
   });
 
   it("does not let a cell's text become Markdown", async () => {

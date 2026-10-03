@@ -27,8 +27,8 @@ describe("LET", () => {
 
   it.each([
     ["=LET(x, 1/0, x + 1)", "#DIV/0!", "Division by zero"],
-    ["=LET(x, 5, y)", "#NAME?", "Unknown name y"],
-    ["=LET(x, y, y, 1, x)", "#NAME?", "Unknown name y"],
+    ["=LET(x, 5, y)", "#NAME?", "Unknown name 'y'"],
+    ["=LET(x, y, y, 1, x)", "#NAME?", "Unknown name 'y'"],
     ["=LET(x, 5)", "#ERROR!", "LET takes at least 3 arguments"],
     ["=LET(x, 5, y, 6)", "#ERROR!", "LET takes names and values in pairs, then a result"],
     ["=LET(x1, 5, x1)", "#ERROR!", "X1 is a cell address and cannot be used as a name"],
@@ -39,8 +39,17 @@ describe("LET", () => {
   });
 
   it("reports a name used outside any LET as unknown", () => {
-    expectError("=total * 2", "#NAME?", "Unknown name total");
-    expectError("=A", "#NAME?", "Unknown name A");
+    expectError("=total * 2", "#NAME?", "Unknown name 'total'");
+    expectError("=A", "#NAME?", "Unknown name 'A'");
+  });
+
+  it("keeps the unknown name in a cell error message", () => {
+    const workbook = workbookWith({ t1: { A1: "=nonexistentvar" } });
+    expect(workbook.getValue(at("A1"))).toMatchObject({
+      kind: "error",
+      code: "#NAME?",
+      message: "Unknown name 'nonexistentvar'",
+    });
   });
 });
 

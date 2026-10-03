@@ -336,11 +336,11 @@ function compute(node: Node, context: EvaluationContext): Evaluated {
       const key = node.name.toLowerCase();
       if (context.names?.has(key)) return context.names.get(key) ?? null;
       const named = context.document?.bare(node.name);
-      if (named === undefined) fail("#NAME?", `Unknown name ${node.name}`);
+      if (named === undefined) fail("#NAME?", `Unknown name '${node.name}'`);
       return named;
     }
     case "qualified":
-      if (!context.document) fail("#NAME?", `Unknown name ${node.name}`);
+      if (!context.document) fail("#NAME?", `Unknown name '${node.name}'`);
       return context.document.qualified(node);
     case "call":
       return call(node.name, node.args, context);
