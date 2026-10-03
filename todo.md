@@ -203,7 +203,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] allow editing markdown views by just double clicking on the text (instead of clicking "Edit"). save and exit edit mode when the user unfocuses the input (instead of requiring user to hit "Done") (keep the "Edit" and "Done" buttons for user convenience)
 - [ ] **P6** duplicate the "Add table", "Add chart", "Add text" buttons at the top and between each item so you can insert them anywhere
 - [ ] **P3** add a new type of block (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side
-- [ ] **P1** add an `assert` function that can be used for testing. if a sheet has any failing assertions, show a visible warning in the menu bar with a link the user can click to see the failing assertions
+- [x] **P1** add an `assert` function that can be used for testing. if a sheet has any failing assertions, show a visible warning in the menu bar with a link the user can click to see the failing assertions
 - [x] **P2** update user-facing docs to use "Block" nomenclature for tables/charts/text/etc.
 - [ ] **P10** support nested pages
 - [ ] support reordering things by dragging and dropping
@@ -256,12 +256,12 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] **P8** a numeric value input roughly like (don't use this as a literal template; make it nicer) "<button>-</button> <input value="100"> <button>+</button>" where you can increment and decrement the value using the -/+ buttons (but also still support editing the number directly)
 - [ ] **P6** cell validation - require the value to match a pattern, regex, or custom formula
 - [ ] **P6** touch: select a range, fill by dragging, and a long-press menu on Android+iOS
-- [ ] **P1** build reference documents in rowz as far as its features allow, at the end of each theme
-  - [x] a [monthly budget example](docs/reference/monthly-budget.json): a data table of inflows and outflows, each with a category and an account, and reports of the month's amounts grouped by category and by account
+- build reference documents in rowz as far as its features allow, at the end of each theme
+  - [x] **P1** a [monthly budget example](docs/reference/monthly-budget.json): a data table of inflows and outflows, each with a category and an account, and reports of the month's amounts grouped by category and by account
     - (Codex) `_scratch/google-sheets` was absent from this checkout, so the example uses representative October transactions instead of source-sheet data.
-  - [ ] a comparison of high-payout races in Gran Turismo 7, after https://docs.google.com/spreadsheets/d/1rZxgfay0Gjq7MuSmOkioZC4srW5yerPfiYR0XAXcE3c
-  - [ ] a video game quest tracker, after https://docs.google.com/spreadsheets/d/1cwsRONdpXMJAvjpamauZ391NrTXX1gEdeTrx1Rf324o
-  - [ ] a few standard templates in the style of Sheets and Excel (invoice, contacts list, to-do list), and one or two in the style of Access and FileMaker
+  - [ ] **P2** a comparison of high-payout races in Gran Turismo 7, after https://docs.google.com/spreadsheets/d/1rZxgfay0Gjq7MuSmOkioZC4srW5yerPfiYR0XAXcE3c
+  - [ ] **P3** a video game quest tracker, after https://docs.google.com/spreadsheets/d/1cwsRONdpXMJAvjpamauZ391NrTXX1gEdeTrx1Rf324o
+  - [ ] **P4** a few standard templates in the style of Sheets and Excel (invoice, contacts list, to-do list), and one or two in the style of Access and FileMaker
   - [ ] **P10** revise/augment the samples after we've added formatting, conditional formatting, etc.
 - [x] add screenshots to the README
 - [ ] use icons to make the toolbar denser
