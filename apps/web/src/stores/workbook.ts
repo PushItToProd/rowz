@@ -854,6 +854,17 @@ export const useWorkbookStore = defineStore("workbook", () => {
     );
   }
 
+  /** Moves one conditional format of a table `by` places in the list. Later rules win, so a positive `by` raises its precedence. */
+  function moveConditionalFormat(tableId: string, index: number, by: number): Promise<boolean> {
+    const rules = identityRules(tableId);
+    const target = index + by;
+    const rule = rules[index];
+    if (!rule || target < 0 || target >= rules.length) return Promise.resolve(false);
+    rules.splice(index, 1);
+    rules.splice(target, 0, rule);
+    return setConditionalFormats(tableId, rules);
+  }
+
   /** Removes one conditional format of a table, by its place in the list. */
   function removeConditionalFormat(tableId: string, index: number): Promise<boolean> {
     return setConditionalFormats(
@@ -1737,6 +1748,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     conditionalFormatsOf,
     addConditionalFormat,
     editConditionalFormat,
+    moveConditionalFormat,
     removeConditionalFormat,
     nameColumns,
     dropColumns,

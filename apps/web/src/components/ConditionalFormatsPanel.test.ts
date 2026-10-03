@@ -56,10 +56,11 @@ describe("ConditionalFormatsPanel", () => {
   it("lists the rules with the cells each covers and what it does", async () => {
     await render(RULES);
     const items = wrapper.findAll(".conditional-panel__rules li").map((item) => item.text());
-    expect(items[0]).toContain("B1:B");
-    expect(items[0]).toContain("cells matching >100: fill red, bold");
-    expect(items[1]).toContain("A1:A4");
-    expect(items[1]).toContain("color scale, no color to green");
+    // The rule that wins, the last one stored, is listed first.
+    expect(items[0]).toContain("A1:A4");
+    expect(items[0]).toContain("color scale, no color to green");
+    expect(items[1]).toContain("B1:B");
+    expect(items[1]).toContain("cells matching >100: fill red, bold");
   });
 
   it("says so when there are none, and asks for a selection before a rule can be added", async () => {
@@ -186,5 +187,38 @@ describe("ConditionalFormatsPanel", () => {
     await cancel!.trigger("click");
     expect(wrapper.text()).not.toContain("Changing the rule");
     expect(server.setConditionalFormats).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves a rule up or down the list, and cannot move the first up or the last down", async () => {
+    await render(RULES);
+    const button = (label: string) =>
+      wrapper.get<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    expect(button("Move the rule for A1:A4 up").element.disabled).toBe(true);
+    expect(button("Move the rule for B1:B down").element.disabled).toBe(true);
+    await button("Move the rule for B1:B up").trigger("click");
+    await flushPromises();
+    expect(server.setConditionalFormats.mock.calls[0]?.[1]).toMatchObject([
+      { kind: "scale" },
+      { kind: "criterion" },
+    ]);
+    await button("Move the rule for A1:A4 down").trigger("click");
+    await flushPromises();
+    expect(server.setConditionalFormats.mock.calls[1]?.[1]).toMatchObject([
+      { kind: "scale" },
+      { kind: "criterion" },
+    ]);
+  });
+
+  it("keeps the form on the rule being changed when that rule moves", async () => {
+    await render(RULES);
+    await wrapper.get('button[aria-label="Edit the rule for B1:B"]').trigger("click");
+    await wrapper.get('button[aria-label="Move the rule for B1:B up"]').trigger("click");
+    await flushPromises();
+    // The mocked server returns no change, so the table is reordered here as the store would.
+    await wrapper.setProps({
+      table: { ...TABLE, conditionalFormats: [RULES[1]!, RULES[0]!] },
+    });
+    expect(wrapper.text()).toContain("Changing the rule for B1:B");
+    expect(wrapper.get<HTMLInputElement>('[aria-label="Criterion"]').element.value).toBe(">100");
   });
 });

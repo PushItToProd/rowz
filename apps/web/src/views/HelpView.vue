@@ -914,7 +914,9 @@ const OPERATORS = [
         </li>
         <li>
           Rules follow their cells when rows and columns are inserted or deleted, and are laid over
-          the formats from the toolbar. Later rules win over earlier ones.
+          the formats from the toolbar. The list shows the rule that wins first. The
+          <strong>↑</strong> and <strong>↓</strong>
+          buttons move a rule up or down it, so a rule higher in the list wins over the ones below.
         </li>
         <li>
           <strong>Edit</strong> beside a rule changes its criterion or colors and keeps the cells it

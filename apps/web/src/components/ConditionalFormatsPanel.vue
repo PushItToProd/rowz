@@ -17,6 +17,8 @@ const emit = defineEmits<{ close: [] }>();
 const store = useWorkbookStore();
 
 const rules = computed(() => props.table.conditionalFormats);
+/** The rules as the panel lists them: the one that wins comes first, which is the last one stored. */
+const listed = computed(() => rules.value.map((rule, index) => ({ rule, index })).reverse());
 
 /** The cells a rule covers, written as a range. A side with no end runs to the table's edge. */
 function areaOf(rule: ConditionalRule): string {
@@ -91,6 +93,14 @@ function edit(index: number): void {
   }
 }
 
+/** Moves a rule one place in the stored order, and keeps the form on the rule it was changing. */
+async function move(index: number, by: -1 | 1): Promise<void> {
+  const moved = await store.moveConditionalFormat(props.table.id, index, by);
+  if (!moved) return;
+  if (editing.value === index) editing.value = index + by;
+  else if (editing.value === index + by) editing.value = index;
+}
+
 function remove(index: number, rule: ConditionalRule): void {
   if (!window.confirm(`Remove the conditional format for ${areaOf(rule)}?`)) return;
   if (editing.value === index) editing.value = null;
@@ -136,9 +146,27 @@ async function save(): Promise<void> {
 <template>
   <section class="conditional-panel" :aria-label="`Conditional formats of ${table.name}`">
     <ul v-if="rules.length > 0" class="conditional-panel__rules">
-      <li v-for="(rule, index) in rules" :key="index">
+      <li v-for="{ rule, index } in listed" :key="index">
         <span class="conditional-panel__area">{{ areaOf(rule) }}</span>
         <span>{{ describe(rule) }}</span>
+        <template v-if="store.canEdit">
+          <button
+            type="button"
+            :disabled="index === rules.length - 1"
+            :aria-label="`Move the rule for ${areaOf(rule)} up`"
+            @click="move(index, 1)"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            :disabled="index === 0"
+            :aria-label="`Move the rule for ${areaOf(rule)} down`"
+            @click="move(index, -1)"
+          >
+            ↓
+          </button>
+        </template>
         <button
           v-if="store.canEdit"
           type="button"
@@ -158,7 +186,10 @@ async function save(): Promise<void> {
         </button>
       </li>
     </ul>
-    <p v-else class="conditional-panel__empty">
+    <p v-if="rules.length > 1" class="conditional-panel__empty">
+      A rule higher in the list wins over the ones below it.
+    </p>
+    <p v-else-if="rules.length === 0" class="conditional-panel__empty">
       This table has no conditional formats. Select cells and add one below.
     </p>
 
