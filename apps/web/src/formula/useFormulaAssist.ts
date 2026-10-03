@@ -69,7 +69,9 @@ export function useFormulaAssist(
     if (input()?.selectionStart === undefined) caret.value = value?.length ?? 0;
     else track();
   });
-  watch(suggestions, () => {
+  // Saving another cell can refresh the naming context without changing the
+  // completions. Keep the arrow-key choice unless the text, caret, or list changes.
+  watch([text, caret, () => JSON.stringify(suggestions.value)], () => {
     active.value = 0;
     navigated.value = false;
   });

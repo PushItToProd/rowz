@@ -1200,3 +1200,42 @@ test("an open draft follows its row when another tab inserts above it", async ({
   await expect(cell(page, "A3")).toHaveText("mine");
   await other.close();
 });
+
+test("Tab traversal works across the grid and formula bar", async ({ page }) => {
+  await newSpreadsheet(page);
+  await cell(page, "C3").click();
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("12");
+  await page.keyboard.press("Tab");
+  const formula = page.getByLabel("Formula");
+  await formula.fill("13");
+  await formula.press("Tab");
+  await expect(cell(page, "F3")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await expect(cell(page, "C4")).toHaveAttribute("aria-selected", "true");
+  await expect(cell(page, "D3")).toHaveText("12");
+  await expect(cell(page, "E3")).toHaveText("13");
+  await formula.fill("14");
+  await formula.press("Shift+Tab");
+  await expect(cell(page, "B4")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
+});
+
+test("saving a script does not scroll to the selected cell", async ({ page }) => {
+  await newSpreadsheet(page);
+  await cell(page, "A1").click();
+  await page.getByRole("button", { name: "Add script", exact: true }).click();
+  const script = page.locator('[data-view="Script 1"]');
+  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  const source = script.getByLabel("Script source");
+  await source.fill("Total = 42");
+  await source.scrollIntoViewIfNeeded();
+  await expect(cell(page, "A1")).not.toBeInViewport();
+  await source.evaluate((element) => {
+    element.blur();
+  });
+  await expect(script.locator(".script")).toContainText("42");
+  await expect(cell(page, "A1")).not.toBeInViewport();
+});

@@ -216,3 +216,20 @@ it("preserves a focused draft and its IDs when a remote row insertion moves the 
     expect.any(Array),
   );
 });
+
+it.each([false, true])("saves on Tab and navigates with Shift=%s", async (shiftKey) => {
+  const wrapper = await render();
+  await select(wrapper, "B2");
+  await field(wrapper).trigger("focus");
+  await field(wrapper).setValue("42");
+  await field(wrapper).trigger("keydown", { key: "Tab", shiftKey });
+  expect(useWorkbookStore().selection).toEqual(at(shiftKey ? "A2" : "C2"));
+  expect(useWorkbookStore().inputOf(at("B2"))).toBe("42");
+  expect(useWorkbookStore().gridFocusRequests).toBe(1);
+  await field(wrapper).trigger("blur");
+  expect(server.setCells).toHaveBeenCalledTimes(1);
+  await field(wrapper).trigger("focus");
+  await field(wrapper).trigger("keydown", { key: "Enter" });
+  expect(useWorkbookStore().selection).toEqual(at("B3"));
+  wrapper.unmount();
+});

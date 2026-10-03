@@ -53,7 +53,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 
 - [x] (Claude) Reproduce, then fix: a response that arrives after the editor has opened another document is applied to that document. `addPage` in the [workbook store](apps/web/src/stores/workbook.ts) appends the page and table the server made for document A to the lists of document B, and `renameSpreadsheet` puts back A's record. Other store functions that write after an `await` may do the same and need the same check. `runHistory` already compares the open document's id before applying its answer.
 
-- [ ] when editing a script and unfocusing it, if a table cell is already selected that's above or below the fold, the UI will scroll the whole page up/down to show that cell, which is really annoying
+- [x] when editing a script and unfocusing it, if a table cell is already selected that's above or below the fold, the UI will scroll the whole page up/down to show that cell, which is really annoying
 
 ## Formula language and functions
 
@@ -127,14 +127,14 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] plan shared editing support across single-formula inputs, multiline scripts, and formulas embedded in Markdown; evaluate CodeMirror or a similar editor before choosing an implementation
   - [ ] syntax highlighting for formulas in scripts and Markdown
   - Coordinate completion, reference picking, reference colors, and keyboard behavior across these editors. The formula-column prompt replacement below is part of this work.
-- [ ] **P4** hitting tab with the formula bar focused should have the same effect as hitting tab with the cell itself selected
+- [x] hitting tab with the formula bar focused should have the same effect as hitting tab with the cell itself selected
 - [ ] **P4** show cell errors in a popover on hover instead of using a native browser tooltip
 - [ ] **P4** (Claude) clicking a cell or dragging over a range while a formula is being typed writes its reference at the caret, as Excel and Sheets do. A formula's references are typed by hand today
 - [ ] **P4** (Claude) color each reference in the formula being edited, and outline the cells it names in the same color
 - [ ] **P7** when a spill error is caused by table dimensions, show a “Resize table to fit” button in its popover
 - [ ] **P6** Clearly explain why an array result cannot spill: when the table is too small, say e.g. “The result needs 12 rows and 26 columns, but the table is only 11 rows and 15 columns”; when existing values block it, say e.g. “but one or more cells in A1:P26 already have values.” Do not name a target cell when the table dimensions are the reason it cannot fit.
 
-- [ ] **P4** implement the handy tab+enter workflow from Excel and Sheets -- if you select a certain cell with the mouse or arrow keys, use tab to traverse multiple cells (optionally entering values into any or none of them), then input a value into a cell and submit that value by hitting enter, it'll drop to the next row in the column where you started
+- [x] implement the handy tab+enter workflow from Excel and Sheets -- if you select a certain cell with the mouse or arrow keys, use tab to traverse multiple cells (optionally entering values into any or none of them), then input a value into a cell and submit that value by hitting enter, it'll drop to the next row in the column where you started
   - example: in a table, select C3. hit tab 3 times (optionally entering values in any cells in C3:E3 along the way) - now you're in F3. hit enter to focus the cell input (or just start typing), type anything (or nothing), and hit enter to submit. the selection should move to C4.
 
 - [x] add a long thin "+" button along the full width/height of the bottom/right side of each table for adding rows/cols. this way I can just click anywhere along the range

@@ -644,6 +644,18 @@ describe("formula suggestions", () => {
     expect(server.setCells).not.toHaveBeenCalled();
   });
 
+  it("keeps the highlighted completion when a save refreshes the naming context", async () => {
+    await mountGrid();
+    await type("=cou");
+    await press("ArrowDown");
+    const store = useWorkbookStore();
+    store.tables = store.tables.map((table) => ({ ...table }));
+    await wrapper.vm.$nextTick();
+    await press("Enter");
+    expect(editor().element.value).toBe("=COUNTA(");
+    expect(server.setCells).not.toHaveBeenCalled();
+  });
+
   it("wraps the highlight around the ends of the list", async () => {
     await mountGrid();
     await type("=rou");
@@ -744,6 +756,7 @@ describe("buttons", () => {
   it("scrolls the selected cell into view when the selection moves", async () => {
     await mountGrid();
     await select("B2");
+    wrapper.get<HTMLElement>(".grid").element.focus();
     await press("ArrowDown");
     await wrapper.vm.$nextTick();
     const scrolled = vi.mocked(Element.prototype.scrollIntoView).mock.contexts;
@@ -1436,6 +1449,26 @@ describe("a sorted and filtered data table", () => {
     expect(shownAddresses().slice(0, 4)).toEqual(["A1", "A4", "A2", "A3"]);
   });
 
+  it("returns to the starting column while skipping filtered rows", async () => {
+    await mountShown({ sort: [], filter: "=[Qty] > 2" });
+    await select("A3");
+    await press("Tab");
+    await press("Tab");
+    await press("Enter");
+    await press("Enter");
+    expect(selectedAddress()).toBe("A4");
+  });
+
+  it("returns to the starting column on the next displayed row", async () => {
+    await mountShown(SORTED);
+    await select("A3");
+    await press("Tab");
+    await press("Tab");
+    await press("Enter");
+    await press("Enter");
+    expect(selectedAddress()).toBe("A1");
+  });
+
   it("copies the cells in the order shown", async () => {
     await mountShown(SORTED);
     await select("A3");
@@ -1508,5 +1541,44 @@ describe("a dropdown column", () => {
     expect(server.setCells.mock.calls[1]?.[1]).toEqual([
       { rowId: "r0", colId: "c1", input: "'=1+1" },
     ]);
+  });
+});
+
+describe("Tab and Enter traversal", () => {
+  it("returns to the starting column after editing across a row", async () => {
+    await mountGrid();
+    await select("A2");
+    await press("Tab");
+    await press("x");
+    await press("Tab");
+    await press("Enter");
+    await press("Enter");
+    expect(selectedAddress()).toBe("A3");
+  });
+
+  it.each(["ArrowLeft", "mouse"])("resets traversal after %s navigation", async (navigation) => {
+    await mountGrid();
+    await select("A2");
+    await press("Tab");
+    await press("Tab");
+    if (navigation === "mouse") await select("C2");
+    else await press(navigation);
+    await press("x");
+    await press("Enter");
+    expect(selectedAddress()).toBe(navigation === "mouse" ? "C3" : "B3");
+  });
+
+  it("does not scroll a refreshed selection while another editor has focus", async () => {
+    await mountGrid();
+    await select("B2");
+    const textarea = document.createElement("textarea");
+    document.body.append(textarea);
+    textarea.focus();
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    useWorkbookStore().selection = { ...at("B2") };
+    await flushPromises();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(textarea);
+    textarea.remove();
   });
 });

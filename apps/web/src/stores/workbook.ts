@@ -167,6 +167,70 @@ export const useWorkbookStore = defineStore("workbook", () => {
       { row: view.place(end.row) ?? end.row, col: end.col },
     );
   });
+  let tabStart: { tableId: string; col: number } | undefined;
+  function resetTabTraversal(): void {
+    tabStart = undefined;
+  }
+  watch(
+    selection,
+    (current, previous) => {
+      if (
+        current?.tableId !== previous?.tableId ||
+        current?.row !== previous?.row ||
+        current?.col !== previous?.col
+      )
+        resetTabTraversal();
+    },
+    { flush: "sync" },
+  );
+
+  /** Pick the destination before saving, since an edit can sort or hide its row. */
+  function prepareCellMove(
+    key: "Tab" | "Enter" | "ArrowUp" | "ArrowDown",
+    backwards = false,
+  ): () => void {
+    const from = selection.value;
+    const table = tables.value.find((candidate) => candidate.id === from?.tableId);
+    if (!from || !table)
+      return () => {
+        // There is no selected cell to move.
+      };
+    const view = rowView(table.id);
+    const count = view.rows.length + (table.columns && table.rowCount < LIMITS.tableRows ? 1 : 0);
+    const place = view.place(from.row) ?? from.row;
+    const start = key === "Tab" ? (tabStart ?? { tableId: table.id, col: from.col }) : undefined;
+    const nextPlace = Math.max(
+      0,
+      Math.min(place + (key === "Tab" ? 0 : key === "ArrowUp" ? -1 : 1), count - 1),
+    );
+    const row = view.storedRow(nextPlace);
+    const col = Math.max(
+      0,
+      Math.min(
+        key === "Tab"
+          ? from.col + (backwards ? -1 : 1)
+          : key === "Enter"
+            ? tabStart?.tableId === table.id
+              ? tabStart.col
+              : from.col
+            : from.col,
+        table.colCount - 1,
+      ),
+    );
+    return () => {
+      const current = rowView(table.id);
+      const destination = current.place(row);
+      if (destination === undefined && key === "Tab") selection.value = null;
+      else
+        selection.value = {
+          tableId: table.id,
+          row: current.storedRow(destination ?? Math.min(nextPlace, current.rows.length)),
+          col,
+        };
+      tabStart = selection.value ? start : undefined;
+    };
+  }
+
   /** Counts the requests to put the keyboard in the grid of the selected cell. */
   const gridFocusRequests = ref(0);
   /**
@@ -1709,6 +1773,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     extendSelection,
     gridFocusRequests,
     focusGrid,
+    prepareCellMove,
+    resetTabTraversal,
     setCells,
     fill,
     clearSelection,

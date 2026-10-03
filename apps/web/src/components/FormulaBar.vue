@@ -71,24 +71,13 @@ function commit(): void {
     void store.setIdentifiedCell(target, draft.value, editRevision);
 }
 
-/** Saves, and moves on to the cell below, as Enter in a cell does. */
-function finish(): void {
-  // The next row is the one below before the edit, which can move the row it is in.
-  const before = editing.value && store.positionOf(editing.value);
-  const view = before ? store.rowView(before.tableId) : undefined;
-  const below =
-    before && view
-      ? view.rows[Math.min((view.place(before.row) ?? before.row) + 1, view.rows.length - 1)]
-      : undefined;
+/** Save and navigate using the same displayed rows as the grid. */
+function finish(key: "Enter" | "Tab", backwards = false): void {
+  const move = store.prepareCellMove(key, backwards);
   commit();
-  const target = editing.value && store.positionOf(editing.value);
-  const table = store.tables.find((candidate) => candidate.id === target?.tableId);
-  if (target && table) {
-    store.selection = { ...target, row: below ?? target.row };
-    // Until the grid takes the keyboard, the field edits the cell now selected.
-    editing.value = store.identityOf(store.selection) ?? null;
-    draft.value = stored.value;
-  }
+  move();
+  editing.value = store.selection ? (store.identityOf(store.selection) ?? null) : null;
+  draft.value = stored.value;
   store.focusGrid();
 }
 
@@ -112,7 +101,8 @@ const assist = useFormulaAssist(
 
 function onKeydown(event: KeyboardEvent): void {
   if (assist.onKeydown(event)) return;
-  if (event.key === "Enter") finish();
+  if (event.key === "Enter") finish("Enter");
+  else if (event.key === "Tab") finish("Tab", event.shiftKey);
   else if (event.key === "Escape") cancel();
   else return;
   event.preventDefault();

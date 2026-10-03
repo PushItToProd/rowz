@@ -3,8 +3,9 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, changeWith, snapshotWith, wireSnapshot, type MockedApi } from "../testing";
+import { at, changeWith, snapshotWith, wireSnapshot, TABLE, type MockedApi } from "../testing";
 import ScriptCard from "./ScriptCard.vue";
+import GridView from "./GridView.vue";
 
 vi.mock("../api/client", async () => {
   const testing = await import("../testing");
@@ -129,4 +130,25 @@ describe("ScriptCard", () => {
       ["Summary line 1", "A1 must be positive"],
     ]);
   });
+});
+
+it("saving on blur preserves the selected cell without scrolling to it", async () => {
+  await render("Total = 1");
+  const store = useWorkbookStore();
+  const grid = mount(GridView, { props: { table: TABLE }, attachTo: document.body });
+  try {
+    store.selection = at("A1");
+    await wrapper.vm.$nextTick();
+    await wrapper.get("table").trigger("dblclick");
+    await wrapper.get("textarea").setValue("Total = 2");
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    wrapper.get<HTMLTextAreaElement>("textarea").element.blur();
+    await flushPromises();
+    expect(rows()).toEqual([["Total", "2"]]);
+    expect(store.selection).toEqual(at("A1"));
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(grid.get(".grid").element);
+  } finally {
+    grid.unmount();
+  }
 });

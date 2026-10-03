@@ -142,6 +142,7 @@ function inRange(place: number, col: number): boolean {
 }
 
 function select(place: number, col: number): void {
+  store.resetTabTraversal();
   // Clicking the cell being edited keeps the edit. Clicking it as part of a range selects it alone.
   if (isSelected(place, col) && store.selectionEnd === null) return;
   // Committing can re-sort the rows, and the cell clicked is the one that was under the pointer.
@@ -184,6 +185,7 @@ function onHeaderMouseenter(axis: Axis, index: number): void {
 
 /** Selects whole rows or columns: every one from `from` to `to`. */
 function selectLines(axis: Axis, from: number, to: number): void {
+  store.resetTabTraversal();
   const last = { row: Math.max(0, shownRows.value - 1), col: props.table.colCount - 1 };
   const anchor = axis === "row" ? cellAt(from, 0) : cellAt(0, from);
   const end = stored(axis === "row" ? { row: to, col: last.col } : { row: last.row, col: to });
@@ -209,6 +211,7 @@ function isLineSelected(axis: Axis, index: number): boolean {
 }
 
 function selectAll(): void {
+  store.resetTabTraversal();
   store.selection = cellAt(0, 0);
   store.extendSelection(
     stored({ row: Math.max(0, shownRows.value - 1), col: props.table.colCount - 1 }),
@@ -257,6 +260,7 @@ function clamp({ row, col }: CellAddress): CellAddress {
 }
 
 function move(rows: number, cols: number): void {
+  store.resetTabTraversal();
   const from = selectedPlace.value;
   if (!from) return;
   const next = clamp({ row: from.row + rows, col: from.col + cols });
@@ -265,6 +269,7 @@ function move(rows: number, cols: number): void {
 
 /** Grows or shrinks the selected range by moving its far corner. */
 function extend(rows: number, cols: number): void {
+  store.resetTabTraversal();
   const end = store.selectionEnd;
   const corner = end ? { row: placeOf(end.row), col: end.col } : selectedPlace.value;
   if (corner) {
@@ -311,6 +316,7 @@ function onCellClick(): void {
 
 function onCellMousedown(event: MouseEvent, place: number, col: number): void {
   if (event.button !== 0) return;
+  store.resetTabTraversal();
   if (event.shiftKey && selected.value) {
     const end = stored({ row: place, col });
     commit();
@@ -425,12 +431,15 @@ function focusGrid(): void {
 watch(
   () => store.gridFocusRequests,
   () => {
-    if (selected.value) focusGrid();
+    if (selected.value) {
+      focusGrid();
+      scrollSelection();
+    }
   },
 );
 
 // Keep the selected cell in view when the keyboard moves it past the visible part of the table.
-watch(selected, async (current) => {
+watch(selected, async (current, previous) => {
   if (!current) {
     if (editing.value) {
       editing.value = null;
@@ -442,11 +451,23 @@ watch(selected, async (current) => {
     }
     return;
   }
+  if (
+    current.tableId === previous?.tableId &&
+    current.row === previous.row &&
+    current.col === previous.col
+  )
+    return;
   await nextTick();
-  grid.value
-    ?.querySelector(`[data-cell="${formatAddress(current)}"]`)
-    ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  if (selected.value !== current || !hasGridFocus()) return;
+  scrollSelection();
 });
+
+function scrollSelection(): void {
+  if (!selected.value) return;
+  grid.value
+    ?.querySelector(`[data-cell="${formatAddress(selected.value)}"]`)
+    ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
 
 /**
  * Runs the button in a cell. A running button is disabled, and a disabled
@@ -462,26 +483,16 @@ function run(place: number, col: number): void {
  * committed, because committing can move the row: Enter goes down from where
  * the row was, to the row that was below it.
  */
-async function finish(rows: number, cols: number): Promise<void> {
-  const from = selectedPlace.value;
-  const wanted = from && {
-    row: storedRow(Math.max(0, from.row + rows)),
-    col: from.col + cols,
-    place: Math.max(0, from.row + rows),
-  };
+async function finish(
+  key: "Enter" | "Tab" | "ArrowUp" | "ArrowDown",
+  backwards = false,
+): Promise<void> {
+  const move = store.prepareCellMove(key, backwards);
   commit();
-  if (wanted) {
-    const place = view.value.place(wanted.row);
-    if (place === undefined && rows === 0) {
-      // The edit moved the row the cell is in out of what the filter shows.
-      store.selection = null;
-    } else {
-      const next = clamp({ row: place ?? wanted.place, col: wanted.col });
-      store.selection = cellAt(next.row, next.col);
-    }
-  }
+  move();
   await nextTick();
   focusGrid();
+  scrollSelection();
 }
 
 async function cancel(): Promise<void> {
@@ -508,7 +519,7 @@ function onGridKeydown(event: KeyboardEvent): void {
   const command = event.ctrlKey || event.metaKey;
   if (step && event.shiftKey) extend(...step);
   else if (step) move(...step);
-  else if (key === "Tab") move(0, event.shiftKey ? -1 : 1);
+  else if (key === "Tab") store.prepareCellMove("Tab", event.shiftKey)();
   else if (key === "Enter" || key === "F2") edit();
   else if (key === "Delete" || key === "Backspace") void store.clearSelection();
   else if (key === "ContextMenu" || (key === "F10" && event.shiftKey)) openMenuAtSelection();
@@ -529,9 +540,10 @@ function onEditorKeydown(event: KeyboardEvent): void {
   if (assist.onKeydown(event)) return;
   // Up and down save and move, as Enter does. Left and right stay with the
   // editor, where they move the caret through the text.
-  if (event.key === "Enter" || event.key === "ArrowDown") void finish(1, 0);
-  else if (event.key === "ArrowUp") void finish(-1, 0);
-  else if (event.key === "Tab") void finish(0, event.shiftKey ? -1 : 1);
+  if (event.key === "Enter" || event.key === "ArrowDown")
+    void finish(event.key === "Enter" ? "Enter" : "ArrowDown");
+  else if (event.key === "ArrowUp") void finish("ArrowUp");
+  else if (event.key === "Tab") void finish("Tab", event.shiftKey);
   else if (event.key === "Escape") void cancel();
   else return;
   event.preventDefault();
