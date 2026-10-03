@@ -1474,3 +1474,39 @@ describe("a sorted and filtered data table", () => {
     expect(selectedAddress()).toBe("A1");
   });
 });
+
+describe("a dropdown column", () => {
+  const CHOICE_TABLE = {
+    ...TABLE,
+    columns: [
+      { name: "Race", type: "choice" as const, choices: ["Trial", "007", "=1+1"] },
+      { name: "Other", type: "any" as const },
+      { name: "More", type: "any" as const },
+    ],
+  };
+
+  it("stores a picked choice as the text it is, even when it reads as a number or a formula", async () => {
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({ ...snapshotWith(), tables: [CHOICE_TABLE] }),
+    );
+    await useWorkbookStore().load("s1");
+    wrapper = mount(GridView, { props: { table: CHOICE_TABLE }, attachTo: document.body });
+    const pick = async (text: string): Promise<void> => {
+      await cellAt("A1").get("select").setValue(text);
+    };
+    await pick("007");
+    await vi.waitFor(() => {
+      expect(server.setCells).toHaveBeenCalledTimes(1);
+    });
+    expect(server.setCells.mock.calls[0]?.[1]).toEqual([
+      { rowId: "r0", colId: "c1", input: "'007" },
+    ]);
+    await pick("=1+1");
+    await vi.waitFor(() => {
+      expect(server.setCells).toHaveBeenCalledTimes(2);
+    });
+    expect(server.setCells.mock.calls[1]?.[1]).toEqual([
+      { rowId: "r0", colId: "c1", input: "'=1+1" },
+    ]);
+  });
+});

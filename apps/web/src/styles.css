@@ -771,6 +771,45 @@ select.cell-control--dropdown {
   padding: 2px 8px;
 }
 
+/* The choices of a dropdown column. */
+.choices-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.choices-panel fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choices-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 24rem;
+}
+
+.choices-panel__source,
+.choices-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.cell-control--outside {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 /* The sort and filter of a data table. */
 .table-display {
   display: flex;

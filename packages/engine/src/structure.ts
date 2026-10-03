@@ -7,7 +7,7 @@ export interface PageDefinition {
 }
 
 /** What a column of a data table accepts. `any` reads what is typed as an ordinary cell does. */
-export type ColumnType = "any" | "text" | "number" | "date" | "checkbox" | "formula";
+export type ColumnType = "any" | "text" | "number" | "date" | "checkbox" | "choice" | "formula";
 
 export const COLUMN_TYPES: readonly ColumnType[] = [
   "any",
@@ -15,6 +15,7 @@ export const COLUMN_TYPES: readonly ColumnType[] = [
   "number",
   "date",
   "checkbox",
+  "choice",
   "formula",
 ];
 
@@ -23,6 +24,14 @@ export interface ColumnDefinition {
   type: ColumnType;
   /** For a formula column: the formula every row computes, with its leading `=`. */
   formula?: string;
+  /**
+   * For a choice column: the values its dropdown offers. The engine reads a
+   * choice cell as it reads an `any` cell, because checking a cell against
+   * another column would make every choice cell depend on that column.
+   */
+  choices?: string[];
+  /** For a choice column: a column of a data table whose distinct values the dropdown offers. */
+  choicesFrom?: { tableId: string; colId: string };
 }
 
 /** Column names are matched without regard to letter case or to spaces around them. */

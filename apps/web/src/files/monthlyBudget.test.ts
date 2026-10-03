@@ -35,7 +35,16 @@ describe("monthly budget reference file", () => {
             name: block.name,
             rowCount: block.rowCount,
             colCount: block.colCount,
-            ...(block.columns ? { columns: block.columns } : {}),
+            // The engine reads a dropdown column's cells as it reads any cell, so its choices are left out.
+            ...(block.columns
+              ? {
+                  columns: block.columns.map(({ name, type, formula }) => ({
+                    name,
+                    type,
+                    ...(formula === undefined ? {} : { formula }),
+                  })),
+                }
+              : {}),
           });
           names.push(...(block.names ?? []).map((name) => ({ holderId: id, ...name })));
           cells.push(...block.cells.map((cell) => ({ tableId: id, ...cell })));

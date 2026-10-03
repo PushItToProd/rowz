@@ -441,8 +441,11 @@ const OPERATORS = [
           Right-click a column to choose what it holds. <strong>Text</strong> keeps what is typed as
           it is, so <code>007</code> stays <code>007</code>. <strong>Number</strong> and
           <strong>Date</strong> show <code>#VALUE!</code> for anything else.
-          <strong>Checkbox</strong> shows a checkbox in every row. <strong>Anything</strong> reads
-          what is typed as an ordinary cell does.
+          <strong>Checkbox</strong> shows a checkbox in every row. <strong>A choice</strong> shows a
+          dropdown in every row. Its choices are a list you write, one on each line, or the values
+          of a column of a data table, which follow that column. A value that is not among the
+          choices stays and is marked. <strong>Anything</strong> reads what is typed as an ordinary
+          cell does.
         </li>
         <li>
           <strong>A formula</strong> makes a formula column: one formula computed in every stored

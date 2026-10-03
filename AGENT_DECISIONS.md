@@ -569,3 +569,19 @@ Together they make a form: inputs, a Save button that appends to a log table and
 **Why.** Each keeps the display settings from changing stored data. An error that hides every row would make a typo in a filter look like data loss.
 
 **To change.** `displayRows` in `packages/engine/src/display.ts`, `Workbook.filterRows`, `rowViews` in the workbook store, and `setTableDisplay` in `apps/server/src/repo/spreadsheets.ts`.
+
+## 2026-10-02: Dropdown columns
+
+**Decision.**
+
+- The engine reads a choice cell as it reads an `any` cell. A value outside the choices is stored and shown with a warning, and is not an error.
+- A choice column takes either a list or a source column, never both. Giving one replaces the other. A column of another data table in the same spreadsheet is the only source.
+- A source that has since been deleted leaves the dropdown with no choices. The stored reference stays, so undoing the deletion brings the choices back. A file writes such a column with an empty list.
+- A source is a column of a different data table. The dropdown offers at most 200 of its values, the limit of a list, so that one choice column cannot put a thousand options in every cell.
+- A picked choice is stored as text, with the apostrophe prefix when the text would otherwise read as a number or a formula.
+- A rename or type change of a column whose stored source was deleted is not refused. Only a source given in the request is checked.
+- The dropdown offers the values the source column shows, in stored order and without repeats. A value that is a formula result is offered as its text.
+
+**Why.** Checking a cell against another column would make every choice cell depend on that column, and a fixed list should behave the same way. A stale value should not become an error that hides what the person typed.
+
+**To change.** `choicesOf` in the workbook store and `updateColumn` in `apps/server/src/repo/spreadsheets.ts`.

@@ -294,7 +294,14 @@ export const api = {
   updateColumn: (
     tableId: string,
     colId: string,
-    changes: { name?: string; type?: ColumnType; formula?: string; revision?: number },
+    changes: {
+      name?: string;
+      type?: ColumnType;
+      formula?: string;
+      choices?: string[];
+      choicesFrom?: { tableId: string; colId: string };
+      revision?: number;
+    },
   ): Promise<Change> =>
     body(
       routes.tables[":tableId"].columns[":colId"].$patch({

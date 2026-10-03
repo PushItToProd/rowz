@@ -758,6 +758,43 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }, "The names could not be saved");
   }
 
+  /**
+   * The choices a choice column offers: its list, or the distinct non-empty
+   * values of the column it takes them from, in stored order. `undefined` for
+   * a column that is not a choice column.
+   */
+  function choicesOf(tableId: string, col: number): readonly string[] | undefined {
+    return choiceLists.value.get(`${tableId}:${String(col)}`);
+  }
+
+  /** The choices of every choice column, read once for each state of the engine rather than once for each cell. */
+  const choiceLists = computed(() => {
+    const lists = new Map<string, readonly string[]>();
+    for (const table of tables.value) {
+      for (const [col, column] of (table.columns ?? []).entries()) {
+        if (column.type !== "choice") continue;
+        lists.set(
+          `${table.id}:${String(col)}`,
+          column.choices ?? sourceChoices(column.choicesFrom),
+        );
+      }
+    }
+    return lists;
+  });
+
+  /** The distinct non-empty values of a source column, up to as many as a list may hold. */
+  function sourceChoices(from: ColumnDefinition["choicesFrom"]): readonly string[] {
+    const source = from && tables.value.find((candidate) => candidate.id === from.tableId);
+    const col = from && source ? source.colIds.indexOf(from.colId) : -1;
+    if (!source || col < 0) return [];
+    const seen = new Set<string>();
+    for (let row = 0; row < source.rowCount && seen.size < LIMITS.choices; row += 1) {
+      const text = formatValue(engine.value.getValue({ tableId: source.id, row, col }));
+      if (text !== "") seen.add(text);
+    }
+    return [...seen];
+  }
+
   /** The column a cell is in, when its table has named columns. */
   function columnOf(id: CellId): ColumnDefinition | undefined {
     return engine.value.columnOf(id);
@@ -1363,7 +1400,13 @@ export const useWorkbookStore = defineStore("workbook", () => {
   function updateColumn(
     tableId: string,
     col: number,
-    changes: { name?: string; type?: ColumnType; formula?: string },
+    changes: {
+      name?: string;
+      type?: ColumnType;
+      formula?: string;
+      choices?: string[];
+      choicesFrom?: { tableId: string; colId: string };
+    },
     writtenAt = revision.value,
   ): Promise<boolean> {
     const colId = tables.value.find((table) => table.id === tableId)?.colIds[col];
@@ -1554,6 +1597,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     undo,
     redo,
     columnOf,
+    choicesOf,
     formatOf,
     formatSelection,
     setTableDisplay,

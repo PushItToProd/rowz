@@ -512,3 +512,208 @@ describe("columns in a spreadsheet file", () => {
     });
   });
 });
+
+describe("dropdown columns", () => {
+  /** A data table of Item and Qty, and a second data table whose Name column can supply choices. */
+  async function withSource() {
+    const fixture = await sales();
+    const source = await addTable(user, fixture.page.id);
+    await user.json(
+      "PUT",
+      `/tables/${source.id}/cells`,
+      cellsBody({ A1: "Name", A2: "x", A3: "y" }),
+    );
+    await user.json("POST", `/tables/${source.id}/columns`, { headerRow: true });
+    const snapshot = await readSnapshot(user, fixture.id);
+    const sourceTable = snapshot.tables.find((candidate) => candidate.id === source.id)!;
+    return { ...fixture, source: sourceTable, nameColId: sourceTable.colIds[0]! };
+  }
+
+  it("takes a list of choices, dropping repeats, and keeps nothing for other types", async () => {
+    const { patchColumn } = await withSource();
+    const { table } = await patchColumn(0, { type: "choice", choices: ["red", "green", "red"] });
+    expect(table.columns?.[0]).toEqual({ name: "Item", type: "choice", choices: ["red", "green"] });
+    const text = await patchColumn(0, { type: "text" });
+    expect(text.table.columns?.[0]).toEqual({ name: "Item", type: "text" });
+  });
+
+  it("needs a list or a source", async () => {
+    const { patchColumn } = await withSource();
+    const refused = await patchColumn(0, { type: "choice" }, 422);
+    expect(refused).toMatchObject({ error: { code: "choices_required" } });
+    await patchColumn(0, { type: "choice", choices: [] }, 422);
+  });
+
+  it("takes the values of a column of another data table", async () => {
+    const { patchColumn, source, nameColId } = await withSource();
+    const { table } = await patchColumn(0, {
+      type: "choice",
+      choicesFrom: { tableId: source.id, colId: nameColId },
+    });
+    expect(table.columns?.[0]).toEqual({
+      name: "Item",
+      type: "choice",
+      choicesFrom: { tableId: source.id, colId: nameColId },
+    });
+  });
+
+  it("replaces a source with a list and a list with a source", async () => {
+    const { patchColumn, source, nameColId } = await withSource();
+    await patchColumn(0, { type: "choice", choices: ["a"] });
+    const fromSource = await patchColumn(0, {
+      choicesFrom: { tableId: source.id, colId: nameColId },
+    });
+    expect(fromSource.table.columns?.[0]).not.toHaveProperty("choices");
+    const listed = await patchColumn(0, { choices: ["b"] });
+    expect(listed.table.columns?.[0]).toEqual({ name: "Item", type: "choice", choices: ["b"] });
+  });
+
+  it("refuses both a list and a source in one request", async () => {
+    const { patchColumn, source, nameColId } = await withSource();
+    await patchColumn(
+      0,
+      { type: "choice", choices: ["a"], choicesFrom: { tableId: source.id, colId: nameColId } },
+      400,
+    );
+  });
+
+  it("refuses a source that is a plain table, another spreadsheet's column, or a missing column", async () => {
+    const { patchColumn, source, page, nameColId } = await withSource();
+    const plain = await addTable(user, page.id);
+    const refused = await patchColumn(
+      0,
+      { type: "choice", choicesFrom: { tableId: plain.id, colId: plain.colIds[0] } },
+      422,
+    );
+    expect(refused).toMatchObject({ error: { code: "invalid_choice_source" } });
+    const other = await createSpreadsheet(user);
+    await patchColumn(
+      0,
+      {
+        type: "choice",
+        choicesFrom: { tableId: other.tables[0]!.id, colId: other.tables[0]!.colIds[0] },
+      },
+      422,
+    );
+    await patchColumn(
+      0,
+      { type: "choice", choicesFrom: { tableId: source.id, colId: crypto.randomUUID() } },
+      409,
+    );
+    expect(nameColId).toBeDefined();
+  });
+
+  it("refuses a column of the same table as the source", async () => {
+    const { patchColumn, table } = await withSource();
+    const refused = await patchColumn(
+      0,
+      { type: "choice", choicesFrom: { tableId: table.id, colId: table.colIds[1] } },
+      422,
+    );
+    expect(refused).toMatchObject({ error: { code: "invalid_choice_source" } });
+  });
+
+  it("lets a column whose source was deleted be renamed, and a file of it be imported", async () => {
+    const { patchColumn, source, nameColId, id } = await withSource();
+    await patchColumn(0, { type: "choice", choicesFrom: { tableId: source.id, colId: nameColId } });
+    await user.json("DELETE", `/tables/${source.id}`);
+    const renamed = await patchColumn(0, { name: "Kind" });
+    expect(renamed.table.columns?.[0]).toMatchObject({ name: "Kind", type: "choice" });
+    // A file writes the dropdown with no choices, and reads it back.
+    const body = {
+      format: "spreadsheet-app",
+      version: 1,
+      name: "Gone",
+      pages: [
+        {
+          name: "Data",
+          blocks: [
+            {
+              type: "table",
+              name: "Runs",
+              rowCount: 1,
+              colCount: 1,
+              columns: [{ name: "Race", type: "choice", choices: [] }],
+              cells: [],
+            },
+          ],
+        },
+      ],
+    };
+    await user.json("POST", "/spreadsheets/import", body, 201);
+    expect(id).toBeDefined();
+  });
+
+  it("keeps the source as it was across a rename of the source column or table", async () => {
+    const { patchColumn, source, nameColId, current } = await withSource();
+    await patchColumn(0, { type: "choice", choicesFrom: { tableId: source.id, colId: nameColId } });
+    await user.json("PATCH", `/tables/${source.id}`, { name: "Renamed" });
+    await user.json("PATCH", `/tables/${source.id}/columns/${nameColId}`, { name: "Label" });
+    expect((await current()).columns?.[0]?.choicesFrom).toEqual({
+      tableId: source.id,
+      colId: nameColId,
+    });
+  });
+
+  describe("in a file", () => {
+    const fileWith = (choicesFrom: object | undefined, choices?: string[]) => ({
+      format: "spreadsheet-app",
+      version: 1,
+      name: "Races",
+      pages: [
+        {
+          name: "Data",
+          blocks: [
+            {
+              type: "table",
+              name: "Runs",
+              rowCount: 1,
+              colCount: 1,
+              columns: [
+                {
+                  name: "Race",
+                  type: "choice",
+                  ...(choicesFrom ? { choicesFrom } : {}),
+                  ...(choices ? { choices } : {}),
+                },
+              ],
+              cells: [],
+            },
+            {
+              type: "table",
+              name: "Races",
+              rowCount: 1,
+              colCount: 1,
+              columns: [{ name: "Race Name", type: "text" }],
+              cells: [{ row: 0, col: 0, input: "Trial" }],
+            },
+          ],
+        },
+      ],
+    });
+
+    it("is imported with the source resolved to the new ids, wherever the table sits in the file", async () => {
+      const summary = await user.json<SpreadsheetSummary>(
+        "POST",
+        "/spreadsheets/import",
+        fileWith({ page: "data", table: "races", column: "race name" }),
+        201,
+      );
+      const { tables } = await readSnapshot(user, summary.id);
+      const [runs, races] = [tables[0]!, tables[1]!];
+      expect(runs.columns?.[0]).toEqual({
+        name: "Race",
+        type: "choice",
+        choicesFrom: { tableId: races.id, colId: races.colIds[0] },
+      });
+    });
+
+    it("is refused without choices, with both kinds, or with a source that is not a column", async () => {
+      const post = (body: object) => user.json("POST", "/spreadsheets/import", body, 422);
+      await post(fileWith(undefined));
+      await post(fileWith({ page: "Data", table: "Races", column: "Race Name" }, ["a"]));
+      await post(fileWith({ page: "Data", table: "Races", column: "Nothing" }));
+      await post(fileWith({ page: "Data", table: "Missing", column: "Race Name" }));
+    });
+  });
+});

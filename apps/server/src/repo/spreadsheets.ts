@@ -320,7 +320,8 @@ function checkFile(file: SpreadsheetFile): void {
     if (holder !== undefined) {
       invalid(`Two tables or scripts on ${pageName} are named ${holder}`);
     }
-    for (const { name, rowCount, colCount, cells: fileCells, columns, display } of fileTables) {
+    for (const fileTable of fileTables) {
+      const { name, rowCount, colCount, cells: fileCells, columns, display } = fileTable;
       totalRows += rowCount;
       if (rowCount === 0 && !columns) invalid(`The table ${name} has no rows`);
       if (columns) {
@@ -331,6 +332,33 @@ function checkFile(file: SpreadsheetFile): void {
         }
         const column = repeated(columns.map((definition) => definition.name.trim()));
         if (column !== undefined) invalid(`Two columns of ${name} are named ${column}`);
+        for (const column of columns) {
+          if (column.type !== "choice") continue;
+          if (column.choices && column.choicesFrom) {
+            invalid(`The column ${column.name} of ${name} has choices and a source for them`);
+          }
+          // An empty list is a dropdown whose source was deleted, as an export writes it.
+          if (column.choices === undefined && !column.choicesFrom) {
+            invalid(`The dropdown column ${column.name} of ${name} has no choices`);
+          }
+          const from = column.choicesFrom;
+          if (!from) continue;
+          const source = file.pages
+            .find((candidate) => candidate.name.toLowerCase() === from.page.toLowerCase())
+            ?.blocks.find(
+              (block) =>
+                block.type === "table" && block.name.toLowerCase() === from.table.toLowerCase(),
+            );
+          const sourceColumns = source?.type === "table" ? source.columns : undefined;
+          if (source === fileTable) {
+            invalid(`The choices of ${column.name} in ${name} cannot come from ${name} itself`);
+          }
+          if (!sourceColumns?.some((candidate) => sameColumnName(candidate.name, from.column))) {
+            invalid(
+              `The choices of ${column.name} in ${name} come from ${from.column} of ${from.table}, which is not a column of a data table`,
+            );
+          }
+        }
         const empty = columns.find(
           ({ type, formula = "" }) => type === "formula" && ["", "="].includes(formula.trim()),
         );
@@ -763,6 +791,7 @@ export class SpreadsheetRepository {
         `A spreadsheet can have at most ${String(LIMITS.spreadsheetRows)} rows`,
       );
     }
+    const inserted: InsertedTable[] = [];
     for (const [pagePosition, page] of file.pages.entries()) {
       const [created] = await tx
         .insert(pages)
@@ -780,7 +809,16 @@ export class SpreadsheetRepository {
           });
           continue;
         }
-        const columns = block.columns?.map(normalized) ?? null;
+        // A choice column's source is resolved below, once every table has its ids.
+        const columns =
+          block.columns?.map(({ name, type, formula, choices }) =>
+            normalized({
+              name,
+              type,
+              ...(formula === undefined ? {} : { formula }),
+              ...(choices === undefined ? {} : { choices }),
+            }),
+          ) ?? null;
         const colIds = Array.from({ length: block.colCount }, () => randomUUID());
         const [table] = await tx
           .insert(tables)
@@ -794,6 +832,7 @@ export class SpreadsheetRepository {
           })
           .returning({ id: tables.id });
         if (!table) throw new Error("Insert returned no table");
+        inserted.push({ id: table.id, colIds, page: page.name, block, columns });
         const rows = keysAfter(null, block.rowCount).map((orderKey) => ({
           id: randomUUID(),
           tableId: table.id,
@@ -815,6 +854,41 @@ export class SpreadsheetRepository {
           await tx.insert(cells).values(filled.slice(from, from + INSERT_BATCH));
         }
       }
+    }
+    await this.resolveChoiceSources(tx, inserted);
+  }
+
+  /**
+   * Gives the choice columns of inserted tables the ids of the columns they
+   * take their choices from. A file names a source by page, table, and column.
+   */
+  private async resolveChoiceSources(
+    tx: Database,
+    inserted: readonly InsertedTable[],
+  ): Promise<void> {
+    const find = (page: string, table: string): InsertedTable | undefined =>
+      inserted.find(
+        (candidate) =>
+          candidate.page.toLowerCase() === page.toLowerCase() &&
+          candidate.block.name.toLowerCase() === table.toLowerCase(),
+      );
+    for (const { id, block, columns } of inserted) {
+      if (!columns || !block.columns?.some((column) => column.choicesFrom)) continue;
+      const resolved = columns.map((column, col) => {
+        const from = block.columns?.[col]?.choicesFrom;
+        const source = from && find(from.page, from.table);
+        const index =
+          from && source
+            ? (source.block.columns ?? []).findIndex((candidate) =>
+                sameColumnName(candidate.name, from.column),
+              )
+            : -1;
+        const colId = source?.colIds[index];
+        return source && colId
+          ? { name: column.name, type: column.type, choicesFrom: { tableId: source.id, colId } }
+          : column;
+      });
+      await tx.update(tables).set({ columns: resolved }).where(eq(tables.id, id));
     }
   }
 
@@ -1550,6 +1624,8 @@ export class SpreadsheetRepository {
       name?: string | undefined;
       type?: ColumnType | undefined;
       formula?: string | undefined;
+      choices?: string[] | undefined;
+      choicesFrom?: { tableId: string; colId: string } | undefined;
       revision?: number | undefined;
     },
   ): Promise<Change> {
@@ -1580,7 +1656,28 @@ export class SpreadsheetRepository {
       if (type === "formula" && (given === "" || given === "=")) {
         throw unprocessable("formula_required", "A formula column needs a formula");
       }
-      const column = normalized({ name, type, formula: given });
+      // Giving a list replaces a source column and the other way round. Neither is kept by other types.
+      const choices =
+        changes.choicesFrom === undefined ? (changes.choices ?? before.choices) : undefined;
+      const choicesFrom =
+        changes.choices === undefined ? (changes.choicesFrom ?? before.choicesFrom) : undefined;
+      if (type === "choice") {
+        if ((choices?.length ?? 0) === 0 && !choicesFrom) {
+          throw unprocessable(
+            "choices_required",
+            "A dropdown column needs a list of choices or a column to take them from",
+          );
+        }
+        // A source that is already stored may since have been deleted, which must not stop a rename.
+        if (changes.choicesFrom) await this.checkChoiceSource(tx, found, changes.choicesFrom);
+      }
+      const column = normalized({
+        name,
+        type,
+        formula: given,
+        ...(choices ? { choices } : {}),
+        ...(choicesFrom ? { choicesFrom } : {}),
+      });
 
       if (type === "formula" && before.type !== "formula") {
         await this.keepVersion(
@@ -1611,6 +1708,27 @@ export class SpreadsheetRepository {
       if (type === "formula") await writer.clearCells(tableId, eq(cells.colId, colId));
     });
     return change;
+  }
+
+  /**
+   * Refuses a column to take a dropdown's choices from unless it is a column
+   * of a data table in the same spreadsheet.
+   */
+  private async checkChoiceSource(
+    tx: Database,
+    table: Found<TableRecord>,
+    source: { tableId: string; colId: string },
+  ): Promise<void> {
+    const found = await this.within(tx)
+      .findTable(source.tableId, "read")
+      .catch(() => undefined);
+    if (found?.spreadsheetId !== table.spreadsheetId || !found.columns || found.id === table.id) {
+      throw unprocessable(
+        "invalid_choice_source",
+        "Choices can come from a column of another data table in this spreadsheet",
+      );
+    }
+    if (!found.colIds.includes(source.colId)) throw columnDeleted();
   }
 
   /** Adds a chart, a text view, or a script to the end of a page. */
@@ -2801,6 +2919,15 @@ async function lockSpreadsheet(db: Database, spreadsheetId: string): Promise<voi
     .for("update");
 }
 
+/** A table just created from a file, with what resolving its choice columns needs. */
+interface InsertedTable {
+  id: string;
+  colIds: readonly string[];
+  page: string;
+  block: Extract<SpreadsheetFile["pages"][number]["blocks"][number], { type: "table" }>;
+  columns: ColumnDefinition[] | null;
+}
+
 /** A file's sort and filter as they are stored: sort keys name column ids, which are new. */
 function displayFromFile(
   display: NonNullable<
@@ -2822,8 +2949,20 @@ function filterFormula(text: string): string {
   return isFormulaInput(text) ? text : `=${text}`;
 }
 
-/** A column definition as it is stored: a formula only on a formula column, and starting with `=`. */
-function normalized({ name, type, formula = "" }: ColumnDefinition): ColumnDefinition {
+/** A column definition as it is stored: a formula only on a formula column, and starting with `=`; choices only on a choice column. */
+function normalized({
+  name,
+  type,
+  formula = "",
+  choices,
+  choicesFrom,
+}: ColumnDefinition): ColumnDefinition {
+  if (type === "choice") {
+    // The list repeats nothing: a choice appears once, in the order first given.
+    return choicesFrom
+      ? { name, type, choicesFrom }
+      : { name, type, choices: [...new Set(choices ?? [])] };
+  }
   if (type !== "formula") return { name, type };
   const trimmed = formula.trim();
   return { name, type, formula: isFormulaInput(trimmed) ? trimmed : `=${trimmed}` };

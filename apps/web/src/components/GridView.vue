@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   columnLabel,
+  literalInput,
   formatAddress,
   type CellAddress,
   type CellId,
@@ -642,8 +643,10 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               :running="store.isRunning(cellAt(row - 1, col - 1))"
               :can-run="store.canEdit"
               :checkbox="columnAt(col - 1)?.type === 'checkbox'"
+              :choices="store.choicesOf(props.table.id, col - 1)"
               :format="store.formatOf(cellAt(row - 1, col - 1))"
               @toggle="store.setCell(cellAt(row - 1, col - 1), $event ? 'TRUE' : 'FALSE')"
+              @pick="store.setCell(cellAt(row - 1, col - 1), literalInput($event))"
               @run="run(row - 1, col - 1)"
               @choose="store.input(cellAt(row - 1, col - 1), $event)"
             />

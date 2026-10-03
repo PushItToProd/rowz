@@ -93,6 +93,59 @@ describe("toSpreadsheetFile", () => {
   });
 });
 
+describe("toSpreadsheetFile for sort, filter, and dropdown columns", () => {
+  const races: TableRecord = {
+    ...TABLES[1]!,
+    id: "races",
+    name: "Races",
+    colIds: ["r1", "r2"],
+    columns: [
+      { name: "Race Name", type: "text" },
+      { name: "Payout", type: "number" },
+    ],
+    display: { sort: [{ colId: "r2", descending: true }], filter: "=[Payout] > 1" },
+  };
+  const runs = (choicesFrom: { tableId: string; colId: string }): TableRecord => ({
+    ...TABLES[0]!,
+    id: "runs",
+    name: "Runs",
+    colIds: ["u1", "u2"],
+    columns: [
+      { name: "Race", type: "choice", choicesFrom },
+      { name: "Kind", type: "choice", choices: ["a", "b"] },
+    ],
+  });
+  const write = (tables: TableRecord[]) =>
+    toSpreadsheetFile("Budget", PAGES, tables, [], () => []).pages[0]?.blocks;
+
+  it("writes a sort key as a column position and a source as page, table, and column names", () => {
+    const table = (name: string) =>
+      write([races, runs({ tableId: "races", colId: "r1" })])!.find(
+        (block) => block.type === "table" && block.name === name,
+      );
+    expect(table("Races")).toMatchObject({
+      display: { sort: [{ column: 1, descending: true }], filter: "=[Payout] > 1" },
+    });
+    expect(table("Runs")).toMatchObject({
+      columns: [
+        {
+          name: "Race",
+          type: "choice",
+          choicesFrom: { page: "Data", table: "Races", column: "Race Name" },
+        },
+        { name: "Kind", type: "choice", choices: ["a", "b"] },
+      ],
+    });
+  });
+
+  it("writes a dropdown whose source is gone as one with no choices", () => {
+    const blocks = write([runs({ tableId: "gone", colId: "r1" })])!;
+    expect(blocks.find((block) => block.type === "table" && block.name === "Runs")).toMatchObject({
+      columns: [{ name: "Race", type: "choice", choices: [] }, { name: "Kind" }],
+    });
+  });
+});
+
 describe("readSpreadsheetFile", () => {
   it("reads back a file that was written", () => {
     expect(readSpreadsheetFile(JSON.stringify(file()))).toEqual(file());

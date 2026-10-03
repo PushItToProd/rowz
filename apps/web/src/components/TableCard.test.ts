@@ -554,6 +554,7 @@ describe("column names", () => {
       "✓ Column holds: Number",
       "Column holds: Date",
       "Column holds: Checkbox",
+      "Column holds: A choice…",
       "Column holds: A formula…",
     ]);
     await item("Column holds: Date").trigger("click");
@@ -784,5 +785,80 @@ describe("sorting and filtering a data table", () => {
       },
       expect.any(Number),
     );
+  });
+});
+
+describe("dropdown columns", () => {
+  const SOURCE = {
+    ...TABLE,
+    id: "t2",
+    name: "Races",
+    colIds: ["d1", "d2", "d3"],
+    columns: [
+      { name: "Race Name", type: "text" as const },
+      { name: "Payout", type: "number" as const },
+      { name: "Note", type: "any" as const },
+    ],
+  };
+  const DATA = {
+    ...TABLE,
+    columns: [
+      { name: "Race", type: "any" as const },
+      { name: "Kind", type: "any" as const },
+      { name: "Other", type: "any" as const },
+    ],
+  };
+
+  async function renderChoices(): Promise<void> {
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({ ...snapshotWith(), tables: [DATA, SOURCE] }),
+    );
+    await useWorkbookStore().load("s1");
+    wrapper = mount(TableCard, { props: { table: DATA }, attachTo: document.body });
+    server.updateColumn.mockResolvedValue(changeWith());
+    await wrapper.get('[data-cell="A1"]').trigger("contextmenu");
+    await wrapper
+      .findAll('[role="menuitem"]')
+      .find((found) => found.text() === "Column holds: A choice…")!
+      .trigger("click");
+  }
+
+  it("opens a panel from the column menu and saves a list, one choice on each line", async () => {
+    await renderChoices();
+    const panel = wrapper.get('form[aria-label="Choices for Race"]');
+    await panel.get("textarea").setValue(" Trial \n\nSprint\n");
+    await panel.trigger("submit");
+    await flushPromises();
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", {
+      type: "choice",
+      choices: ["Trial", "Sprint"],
+      revision: expect.any(Number),
+    });
+    expect(wrapper.find("form.choices-panel").exists()).toBe(false);
+  });
+
+  it("saves a column of a data table as the source", async () => {
+    await renderChoices();
+    const panel = wrapper.get("form.choices-panel");
+    await panel.get('input[value="column"]').setValue(true);
+    await panel.get('select[aria-label="Table to take choices from"]').setValue("t2");
+    await panel.get('select[aria-label="Column to take choices from"]').setValue("d1");
+    await panel.trigger("submit");
+    await flushPromises();
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", {
+      type: "choice",
+      choicesFrom: { tableId: "t2", colId: "d1" },
+      revision: expect.any(Number),
+    });
+  });
+
+  it("saves nothing for an empty list, and closes on Cancel", async () => {
+    await renderChoices();
+    const save = wrapper.get<HTMLButtonElement>('form.choices-panel button[type="submit"]');
+    expect(save.element.disabled).toBe(true);
+    await wrapper.get("form.choices-panel").trigger("submit");
+    expect(server.updateColumn).not.toHaveBeenCalled();
+    await button("Cancel").trigger("click");
+    expect(wrapper.find("form.choices-panel").exists()).toBe(false);
   });
 });

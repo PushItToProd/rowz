@@ -2134,3 +2134,82 @@ describe("a sorted and filtered data table", () => {
     );
   });
 });
+
+describe("dropdown columns", () => {
+  const SOURCE = {
+    ...TABLE,
+    id: "t2",
+    name: "Races",
+    colIds: ["d1", "d2", "d3"],
+    columns: [{ name: "Race Name", type: "text" as const }],
+  };
+  const withColumn = (column: ColumnDefinition) => ({
+    ...TABLE,
+    columns: [column, { name: "Other", type: "any" as const }],
+  });
+  async function openChoices(column: ColumnDefinition) {
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith(),
+        tables: [withColumn(column), SOURCE],
+        cells: [
+          { tableId: "t2", rowId: "r0", colId: "d1", input: "Trial" },
+          { tableId: "t2", rowId: "r1", colId: "d1", input: "Sprint" },
+          { tableId: "t2", rowId: "r2", colId: "d1", input: "Trial" },
+          { tableId: "t2", rowId: "r3", colId: "d1", input: "=1+1" },
+        ],
+      }),
+    );
+    const store = useWorkbookStore();
+    await store.load("s1");
+    return store;
+  }
+
+  it("offers the list of a column that has one, and nothing for other columns", async () => {
+    const store = await openChoices({ name: "Race", type: "choice", choices: ["a", "b"] });
+    expect(store.choicesOf("t1", 0)).toEqual(["a", "b"]);
+    expect(store.choicesOf("t1", 1)).toBeUndefined();
+  });
+
+  it("offers the distinct non-empty values of the source column in stored order", async () => {
+    const store = await openChoices({
+      name: "Race",
+      type: "choice",
+      choicesFrom: { tableId: "t2", colId: "d1" },
+    });
+    expect(store.choicesOf("t1", 0)).toEqual(["Trial", "Sprint", "=1+1"]);
+  });
+
+  it("follows a change to the source column", async () => {
+    const store = await openChoices({
+      name: "Race",
+      type: "choice",
+      choicesFrom: { tableId: "t2", colId: "d1" },
+    });
+    await store.setCell({ tableId: "t2", row: 1, col: 0 }, "Rally");
+    expect(store.choicesOf("t1", 0)).toEqual(["Trial", "Rally", "=1+1"]);
+  });
+
+  it("offers at most as many choices as a list may hold", async () => {
+    const many = Array.from({ length: 250 }, (_, index) => `v${String(index)}`);
+    const store = await openChoices({
+      name: "Race",
+      type: "choice",
+      choicesFrom: { tableId: "t2", colId: "d1" },
+    });
+    await store.setCells(
+      "t2",
+      many.map((input, row) => ({ row, col: 0, input })),
+    );
+    expect(store.choicesOf("t1", 0)).toHaveLength(200);
+  });
+
+  it("offers nothing when the source is gone", async () => {
+    const store = await openChoices({
+      name: "Race",
+      type: "choice",
+      choicesFrom: { tableId: "gone", colId: "d1" },
+    });
+    expect(store.choicesOf("t1", 0)).toEqual([]);
+  });
+});

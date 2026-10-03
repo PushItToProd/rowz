@@ -7,6 +7,7 @@ import { download, fileName } from "../files/download";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import ContextMenu from "./ContextMenu.vue";
+import ChoicesPanel from "./ChoicesPanel.vue";
 import EditableName from "./EditableName.vue";
 import GridView from "./GridView.vue";
 import NamesPanel from "./NamesPanel.vue";
@@ -189,6 +190,9 @@ const COLUMN_TYPES: readonly { type: ColumnType; label: string }[] = [
   { type: "checkbox", label: "Checkbox" },
 ];
 
+/** The column whose choices are being edited, while the panel for them is open. */
+const choosingFor = ref<number | null>(null);
+
 /** The menu items that set what a named column holds. */
 function columnItems(col: number): MenuItem[] {
   const column = props.table.columns?.[col];
@@ -236,6 +240,12 @@ function columnItems(col: number): MenuItem[] {
         void store.updateColumn(id, col, { type });
       },
     })),
+    {
+      label: `${column.type === "choice" ? "✓ " : ""}Column holds: A choice…`,
+      run: () => {
+        choosingFor.value = col;
+      },
+    },
     {
       label: `${column.type === "formula" ? "✓ " : ""}Column holds: A formula…`,
       run: () => {
@@ -420,6 +430,14 @@ const menuLabel = computed(() => {
         </button>
       </span>
     </div>
+
+    <ChoicesPanel
+      v-if="choosingFor !== null && table.columns?.[choosingFor]"
+      :key="choosingFor"
+      :table="table"
+      :col="choosingFor"
+      @close="choosingFor = null"
+    />
 
     <TableDisplayBar v-if="table.columns" :table="table" />
 

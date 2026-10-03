@@ -82,7 +82,7 @@ A document holds pages, and a page holds blocks: tables, charts, and text views.
 
 A table is a grid of cells with its own column letters and row numbers.
 
-A table can have named columns, which makes it a data table. `[Price]` is the cell of that column in the formula's own row, and `Sales[Price]` is the whole column of the table Sales. A column can be typed (text, number, date, checkbox) or be a formula column, which computes one formula in every stored row. A data table holds the rows added to it, including rows whose values were later cleared, and can have no rows. An empty line below its last row adds a row when you type into it. Naming columns removes trailing empty rows.
+A table can have named columns, which makes it a data table. `[Price]` is the cell of that column in the formula's own row, and `Sales[Price]` is the whole column of the table Sales. A column can be typed (text, number, date, checkbox), be a dropdown whose choices are a list or the values of a column of another data table, or be a formula column, which computes one formula in every stored row. A data table holds the rows added to it, including rows whose values were later cleared, and can have no rows. An empty line below its last row adds a row when you type into it. Naming columns removes trailing empty rows.
 
 A data table can be sorted by several columns and filtered by one formula such as `=[Payout] > 60000`. Both are display settings stored on the table. The stored row order does not change, so `A2` and `SUM(Sales[Amount])` read the same cells under any sort or filter. While a table is sorted or filtered, a selection is a rectangle of the rows shown, and copy, clear, fill, paste, and delete act on those rows.
 

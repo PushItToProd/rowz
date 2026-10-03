@@ -146,4 +146,59 @@ describe("CellView", () => {
     expect(button.attributes("disabled")).toBeDefined();
     expect(button.text()).toBe("Send");
   });
+
+  describe("in a dropdown column", () => {
+    const choices = ["Trial", "Sprint"];
+
+    it("shows a dropdown of the choices with the cell's value selected, and emits the pick", async () => {
+      const wrapper = mount(CellView, {
+        props: { value: "Sprint", running: false, canRun: true, choices },
+      });
+      const select = wrapper.get<HTMLSelectElement>("select");
+      expect(select.element.value).toBe("Sprint");
+      expect([...select.element.options].map((option) => option.text)).toEqual([
+        "",
+        "Trial",
+        "Sprint",
+      ]);
+      await select.setValue("Trial");
+      expect(wrapper.emitted("pick")).toEqual([["Trial"]]);
+      await select.setValue("");
+      expect(wrapper.emitted("pick")?.[1]).toEqual([""]);
+    });
+
+    it("keeps a value outside the list as an extra option, marked with a warning", () => {
+      const wrapper = mount(CellView, {
+        props: { value: "Rally", running: false, canRun: true, choices },
+      });
+      const select = wrapper.get<HTMLSelectElement>("select");
+      expect(select.element.value).toBe("Rally");
+      expect(select.classes()).toContain("cell-control--outside");
+      expect(select.attributes("title")).toContain("not one of the choices");
+    });
+
+    it("selects nothing for an empty cell, and does not warn", () => {
+      const wrapper = mount(CellView, {
+        props: { value: null, running: false, canRun: true, choices },
+      });
+      expect(wrapper.get<HTMLSelectElement>("select").element.value).toBe("");
+      expect(wrapper.get("select").classes()).not.toContain("cell-control--outside");
+    });
+
+    it("shows an error as an error, and a viewer's dropdown is disabled", () => {
+      const error = mount(CellView, {
+        props: {
+          value: { kind: "error", code: "#VALUE!", message: "bad" },
+          running: false,
+          canRun: true,
+          choices,
+        },
+      });
+      expect(error.find("select").exists()).toBe(false);
+      const viewer = mount(CellView, {
+        props: { value: "Trial", running: false, canRun: false, choices },
+      });
+      expect(viewer.get("select").attributes("disabled")).toBeDefined();
+    });
+  });
 });

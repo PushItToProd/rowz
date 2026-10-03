@@ -11,6 +11,9 @@ export {
 
 export const LIMITS = {
   nameLength: 100,
+  /** Choices a dropdown column lists, and the characters in one of them. */
+  choices: 200,
+  choiceLength: 200,
   /** Characters in one cell's input. */
   inputLength: 8192,
   cellsPerRequest: 1000,
@@ -84,13 +87,29 @@ const columnName = name.refine((value) => !/[[\]]/.test(value), {
   message: "A column name cannot contain [ or ]",
 });
 
-export const COLUMN_TYPES = ["any", "text", "number", "date", "checkbox", "formula"] as const;
+export const COLUMN_TYPES = [
+  "any",
+  "text",
+  "number",
+  "date",
+  "checkbox",
+  "choice",
+  "formula",
+] as const;
 
-/** A named column of a data table. A formula column has the formula every row computes. */
-export const columnDefinition = z.object({
+const choiceList = z.array(z.string().trim().min(1).max(LIMITS.choiceLength)).max(LIMITS.choices);
+
+/**
+ * A named column of a data table in a file. A formula column has the formula
+ * every row computes. A choice column has its choices, or the column of a
+ * data table they come from, named as formulas name it.
+ */
+export const fileColumn = z.object({
   name: columnName,
   type: z.enum(COLUMN_TYPES),
   formula: z.string().max(LIMITS.inputLength).optional(),
+  choices: choiceList.optional(),
+  choicesFrom: z.object({ page: name, table: name, column: columnName }).optional(),
 });
 
 export const FORMAT_COLORS = [
@@ -169,10 +188,21 @@ export const updateColumnBody = z
     name: columnName.optional(),
     type: z.enum(COLUMN_TYPES).optional(),
     formula: z.string().max(LIMITS.inputLength).optional(),
+    /** The values a choice column offers. Giving them replaces a column to take them from. */
+    choices: choiceList.optional(),
+    /** A column of a data table that a choice column takes its values from. */
+    choicesFrom: z.object({ tableId: z.uuid(), colId: z.uuid() }).optional(),
     revision: writtenAt,
   })
-  .refine((body) => [body.name, body.type, body.formula].some((given) => given !== undefined), {
-    message: "Give at least one of name, type, formula",
+  .refine(
+    (body) =>
+      [body.name, body.type, body.formula, body.choices, body.choicesFrom].some(
+        (given) => given !== undefined,
+      ),
+    { message: "Give at least one of name, type, formula, choices, choicesFrom" },
+  )
+  .refine((body) => body.choices === undefined || body.choicesFrom === undefined, {
+    message: "Give choices or choicesFrom, not both",
   })
   .superRefine((body, context) => {
     if (body.formula !== undefined && body.revision === undefined) {
@@ -362,7 +392,7 @@ const fileTable = z.object({
   rowCount: z.int().min(0).max(LIMITS.tableRows),
   colCount: z.int().min(1).max(LIMITS.tableCols),
   /** The named columns of a data table, one for each column. Left out for a plain table. */
-  columns: z.array(columnDefinition).max(LIMITS.tableCols).optional(),
+  columns: z.array(fileColumn).max(LIMITS.tableCols).optional(),
   /** How cells are shown: rules applied in order. Left out when nothing is formatted. */
   formats: z.array(formatRule).max(MAX_FORMAT_RULES).optional(),
   /** The names a plain table holds. Left out when it holds none. */
@@ -425,13 +455,22 @@ interface Placed {
   name: string;
   position: number;
 }
+/** A column as storage holds it: a choice column's source is named by ids. */
+interface StoredColumn {
+  name: string;
+  type: (typeof COLUMN_TYPES)[number];
+  formula?: string | undefined;
+  choices?: string[] | undefined;
+  choicesFrom?: { tableId: string; colId: string } | undefined;
+}
 interface PlacedTable extends Placed {
+  id: string;
   rowCount: number;
   colCount: number;
   /** The ids of the table's columns, which a sort key names. */
   colIds: readonly string[];
   display: { sort: readonly { colId: string; descending: boolean }[]; filter?: string | undefined };
-  columns: FileTable["columns"] | null;
+  columns: readonly StoredColumn[] | null;
   formats: NonNullable<FileTable["formats"]>;
   names: NonNullable<FileTable["names"]>;
 }
@@ -463,6 +502,26 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
   views: readonly PlacedView[],
   cellsOf: (table: Table) => CellInput[],
 ): SpreadsheetFile {
+  /** The file's form of a column, which names the source of a choice column as formulas name a column. */
+  function fileColumnOf({ choicesFrom, ...column }: StoredColumn): z.infer<typeof fileColumn> {
+    const plain = {
+      name: column.name,
+      type: column.type,
+      ...(column.formula === undefined ? {} : { formula: column.formula }),
+      ...(column.choices === undefined ? {} : { choices: column.choices }),
+    };
+    if (!choicesFrom) return plain;
+    const source = tables.find((candidate) => candidate.id === choicesFrom.tableId);
+    const page = pages.find((candidate) => candidate.id === source?.pageId);
+    const sourceColumn = source?.columns?.[source.colIds.indexOf(choicesFrom.colId)];
+    // A source that is gone leaves a dropdown with no choices.
+    if (!source || !page || !sourceColumn) return { ...plain, choices: [] };
+    return {
+      ...plain,
+      choicesFrom: { page: page.name, table: source.name, column: sourceColumn.name },
+    };
+  }
+
   const blocksOf = (pageId: string): FileBlock[] =>
     [
       ...tables.map((table) => ({
@@ -473,7 +532,7 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
           name: table.name,
           rowCount: table.rowCount,
           colCount: table.colCount,
-          ...(table.columns ? { columns: table.columns } : {}),
+          ...(table.columns ? { columns: table.columns.map(fileColumnOf) } : {}),
           ...(table.formats.length > 0 ? { formats: table.formats } : {}),
           ...(table.names.length > 0 ? { names: table.names } : {}),
           ...fileDisplayOf(table),

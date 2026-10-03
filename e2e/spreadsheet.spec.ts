@@ -773,6 +773,29 @@ test("a data table is sorted and filtered in place, and edits and fills act on t
   await expect(page.getByLabel("Sort column 1")).toBeVisible();
 });
 
+test("a dropdown column offers a list of choices, and a choice is picked", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "Race");
+  await enter(page, "A2", "one");
+  await page.getByRole("button", { name: "Name columns" }).click();
+  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+
+  await page
+    .locator('[data-table="Table 1"] thead th[data-column="Race"]')
+    .click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Column holds: A choice…" }).click();
+  await page.getByLabel("Choices", { exact: true }).fill("Trial\nSprint");
+  await page.getByRole("button", { name: "Save choices" }).click();
+
+  // The value typed before is outside the list, and stays.
+  const dropdown = cell(page, "A1").getByRole("combobox");
+  await expect(dropdown).toHaveValue("one");
+  await dropdown.selectOption("Sprint");
+  await expect(dropdown).toHaveValue("Sprint");
+  await reload(page);
+  await expect(cell(page, "A1").getByRole("combobox")).toHaveValue("Sprint");
+});
+
 test("cells are formatted from the toolbar, and the formats follow their cells", async ({
   page,
 }) => {

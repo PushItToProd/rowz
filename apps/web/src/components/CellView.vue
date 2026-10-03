@@ -27,8 +27,27 @@ const props = defineProps<{
   checkbox?: boolean;
   /** How the cell is shown: bold, color, a number format, and so on. */
   format?: CellFormat;
+  /** The choices of a dropdown column. A cell in one shows a dropdown. */
+  choices?: readonly string[];
 }>();
-const emit = defineEmits<{ run: []; choose: [value: Scalar]; toggle: [checked: boolean] }>();
+const emit = defineEmits<{
+  run: [];
+  choose: [value: Scalar];
+  toggle: [checked: boolean];
+  pick: [text: string];
+}>();
+
+/** Whether the cell shows a dropdown column's choices: it holds a plain value, not an error or a control. */
+const picking = computed(
+  () =>
+    props.choices !== undefined &&
+    ["text", "number", "boolean", "date"].includes(kind.value) &&
+    !isButton(props.value),
+);
+/** What the cell holds, which a dropdown column shows as the selected choice. */
+const held = computed(() => formatValue(props.value));
+/** A value that is not one of the choices stays, and is marked. */
+const outside = computed(() => held.value !== "" && !props.choices?.includes(held.value));
 
 const text = computed(
   () => formattedText(props.value, props.format ?? {}) ?? formatValue(props.value),
@@ -81,6 +100,20 @@ function onChoice(event: Event): void {
   >
     {{ running ? "Running…" : text }}
   </button>
+  <select
+    v-else-if="picking"
+    class="cell-control cell-control--dropdown"
+    :class="{ 'cell-control--outside': outside }"
+    aria-label="Choose a value"
+    :value="held"
+    :disabled="!canRun"
+    :title="outside ? `${held} is not one of the choices` : undefined"
+    @change="emit('pick', ($event.target as HTMLSelectElement).value)"
+  >
+    <option value=""></option>
+    <option v-if="outside" :value="held">{{ held }}</option>
+    <option v-for="choice in choices" :key="choice" :value="choice">{{ choice }}</option>
+  </select>
   <label
     v-else-if="checkbox && (value === null || typeof value === 'boolean')"
     class="cell-control cell-control--column"

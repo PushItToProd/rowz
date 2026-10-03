@@ -479,6 +479,18 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "give a column choices",
+    async prepare({ tableId }) {
+      await owner.json("POST", `/tables/${tableId}/columns`, { headerRow: false });
+      return {
+        method: "PATCH",
+        path: `/tables/${tableId}/columns/0`,
+        body: { type: "choice", choices: ["Trial", "Sprint"] },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "drop named columns",
     async prepare({ tableId }) {
       await owner.json("POST", `/tables/${tableId}/columns`, { headerRow: false });
