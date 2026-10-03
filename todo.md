@@ -13,7 +13,7 @@ Feature work is grouped into four themes, and the priority prefixes follow them:
 - **P1, names and testable logic:** document-level names for values, functions, and ranges, formula scripts, and `ASSERT`.
 - **P2, data tables:** a reference to a whole table, `QUERY` output with column names, sorting and filtering in place, dropdown columns, and conditional formats.
 - **P3, documents as small apps:** input controls bound to cells, buttons that run in text views, a log of button runs, and blocks laid out side by side.
-- **P4, formula editing:** picking references by clicking, colored references, one formula editor for every place a formula is typed, and smaller editing fixes. These items are small, and can be done between larger pieces of the other themes.
+- **P4, formula editing:** picking references by clicking, colored references, one formula editor for every place a formula is typed, and smaller editing fixes. Smaller editing fixes can be done between larger pieces of the other themes; the shared editor needs broader planning.
 
 P5 to P9 are other features in rough order of value. The items under [Before sharing with others](#before-sharing-with-others) are parked at P10.
 
@@ -22,7 +22,6 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 ## Inbox - to be categorized
 
 - [ ] "Save as"/"Save a copy" for duplicating an existing document
-- [ ] "Write the one meant" (in `workbook.ts`) reads extremely unnaturally to me but i'm too lazy to think of a better option right now
 
 ## Plans
 
@@ -99,6 +98,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 
 ### Additional formula functions
 
+- [ ] add `CLAMP(val, min, max)`, equivalent to `IFS(val < min, min, val > max, max, default=val)` once the default case exists
+
 - [/] (Claude) for the author: review the smaller candidates left in docs/rows-functions.md and determine which to include
 - [ ] **P6** the reference functions `OFFSET`, `INDIRECT`, `ADDRESS`, `ISFORMULA`, `ISREF`
 - [ ] **P7** random numbers
@@ -122,6 +123,10 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 
 - [x] bug: the formula bar doesn't save changes when it loses focus
 - [x] hitting enter with the formula bar focused should return focus to the cell -- you can type input and try to hit enter and it'll just stay focused instead of acting like you hit enter in the cell input (I suspect possibly b/c of a conflict with the suggestion behavior)
+- [ ] **P4** one formula editor for every place a formula is typed: cells, the formula bar, formula columns, names, filters, chart sources, scripts, and Markdown templates
+  - [ ] plan shared editing support across single-formula inputs, multiline scripts, and formulas embedded in Markdown; evaluate CodeMirror or a similar editor before choosing an implementation
+  - [ ] syntax highlighting for formulas in scripts and Markdown
+  - Coordinate completion, reference picking, reference colors, and keyboard behavior across these editors. The formula-column prompt replacement below is part of this work.
 - [ ] **P4** hitting tab with the formula bar focused should have the same effect as hitting tab with the cell itself selected
 - [ ] **P4** show cell errors in a popover on hover instead of using a native browser tooltip
 - [ ] **P4** (Claude) clicking a cell or dragging over a range while a formula is being typed writes its reference at the caret, as Excel and Sheets do. A formula's references are typed by hand today
@@ -133,6 +138,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - example: in a table, select C3. hit tab 3 times (optionally entering values in any cells in C3:E3 along the way) - now you're in F3. hit enter to focus the cell input (or just start typing), type anything (or nothing), and hit enter to submit. the selection should move to C4.
 
 - [x] add a long thin "+" button along the full width/height of the bottom/right side of each table for adding rows/cols. this way I can just click anywhere along the range
+- [ ] right-clicking the row and column "+" strips opens a context menu to add 5, 10, or 15 rows or columns, or enter a custom count
 - [x] support resizing a whole table by just setting its width and height in cols/rows (warn the user and show a confirmation prompt if resizing will delete data)
 - [x] dragging over col/row headers should select multiple full columns/rows
 - [x] when multiple rows/columns are selected (either via row/col selection or by selecting specific cells), the context menu's "insert [row/column]" actions should become "insert N [rows/columns]", where `N` is the number of selected rows and cols as appropriate
@@ -192,6 +198,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [x] `QUERY` shows named columns in its output, including for ranges such as `Sales!A:C`
   - [x] sort and filter a data table in place (`plans/data-tables.md`, stage 1)
   - [x] dropdown columns (`plans/data-tables.md`, stage 2)
+- [ ] export variables declared in Markdown templates as named values, like script declarations and named ranges in tables
 - [ ] add a way to save multiple sort and filter view presets for each data table
 - [ ] explore adding a generated, dynamically sized data table block type defined by the output of a formula, so changing the result's row or column count does not require manually managing table dimensions; the implementation approach is open and needs to consider conditional formatting and other proprrties as well (may also be addressed by the proposal to support conditional formatting and sorting when rendering data tables in markdown)
 - [ ] (Claude) consider deleting a data table's row when its last cell is cleared. `plans/persistent-row-identity.md` keeps such a row, so that its id stays valid for a relation that points at it, and deletes empty rows only at the end of a table when its columns are named
@@ -269,9 +276,19 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 
 - [x] rebrand the app as "rowz" instead of "Spreadsheet". don't change package names but just update the UI. make the name configurable via an env var as well so it's easy to update in the future.
 - [x] update the page title to show the name of the spreadsheet being edited or, for the help page, "Help". include the app name `rowz` at the end - e.g. `Help | rowz` or `My budget | rowz`
+- [ ] remove awkward or unnecessary agent-written wording from the UI and help text
+  - [ ] remove "Select a cell to insert or delete its row or column." from the table view - that functionality is obvious
+  - [ ] replace Claudeslop phrasing like "what it holds"
+  - [ ] revise "row of this column" help text in autocomplete
+  - [ ] revise "Write the one meant" in `workbook.ts`
+- [ ] **P5** make errors highly visible throughout the document
+  - [ ] show a button in the editor header whenever the document has errors, like the failing-assertions indicator; open a popup listing all errors with links to their locations
+  - [ ] show a warning triangle on blocks and pages that contain errors
+  - [ ] show a warning triangle on documents that contain errors in the document list
 - [ ] (Claude) say "document" instead of "spreadsheet" in the UI and help page, as the README does
 - [x] mobile friendly UI (layout, touch targets, tap twice to edit)
 - [ ] **P10** revamp the phone-width UI so it is less cramped. The editor header is the tightest part: it holds the back arrow, the spreadsheet's name, the saving indicator, Share, History, Export, and Help on one line.
+- [ ] allow checkboxes, inputs, and other controls to target a named range; require the target to contain exactly one cell
 - [ ] more controls:
   - [ ] **P3** a text or number input bound to a cell (esp. useful in Markdown)
   - [ ] **P8** a date picker
@@ -281,6 +298,9 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] **P8** a numeric value input roughly like (don't use this as a literal template; make it nicer) "<button>-</button> <input value="100"> <button>+</button>" where you can increment and decrement the value using the -/+ buttons (but also still support editing the number directly)
 - [ ] **P6** cell validation - require the value to match a pattern, regex, or custom formula
 - [ ] **P6** touch: select a range, fill by dragging, and a long-press menu on Android+iOS
+- [ ] add an in-app samples and templates gallery; selecting an example copies it into the user's account
+- [ ] allow users to create and reuse their own document templates
+- [ ] generate example documents with multiple pages
 - build reference documents in rowz as far as its features allow, at the end of each theme
   - [x] **P1** a [monthly budget example](docs/reference/monthly-budget.json): a data table of inflows and outflows, each with a category and an account, and reports of the month's amounts grouped by category and by account
     - (Codex) `_scratch/google-sheets` was absent from this checkout, so the example uses representative October transactions instead of source-sheet data.
@@ -328,7 +348,16 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P10** (Claude) invitations for people without an account, password reset, and resending a confirmation link
 - [ ] **P6** allow users to create folders to organize their sheets
 
+## API and agent tools
+
+- [ ] provide a documented API for creating, reading, and editing documents, with an API explorer
+- [ ] create a CLI tool and a skill for AI agents to create and work with rowz documents; document key features and when they are useful so agents use them effectively
+
 ## Server, performance, and reliability
+
+- [ ] investigate whether the previously flaky Postgres test still fails; identify the test and reproduce the failure before deciding on a fix
+- [ ] replace UUIDs in document URLs with shorter unique IDs, targeting 14 characters from a URL-safe alphabet such as `[A-Za-z0-9._-]`
+  - That alphabet has 65 characters, so 14 characters allow about 24 septillion values. Example: `2WRhRE4C3O.EaQ` instead of `277690de-bc98-4310-9a84-ab5f27a02086`.
 
 - [x] (Claude) production build of the web app, served by the server
 - [ ] (Claude) cache a range's values across the formulas that read the same range. Each formula reads every cell of its range again when it is recalculated, so 50,000 formulas that each read a 1,000-row column take about 10 s after one edit in that column: 50 million cell reads. 1,000 such formulas take about 0.2 s, so this matters only at the extreme. The cache needs invalidation inside the evaluator: a cached range is stale once any cell in it changes, including a cell an array result fills or gives up.
@@ -392,7 +421,6 @@ These items harden rowz for several users, hostile input, or a deployed server. 
     - create new actions to support editing other documents programmatically (by default require the user's approval for access before the first time. after that the document gains permission to edit the other doc whenever)
     - create new actions that allow creating new docs programmatically (in this case, by default, the doc that executed the creation action gets permission to edit the other doc)
     - -> then it'd be possible to have a `DO` block that makes a copy of a document and edits it
-- expose a user-facing API to create, edit, read, etc. documents
 
 - **P999** user-defined macros so you could create your own syntax -- hypothetical use case with made-up syntax (so I'm not wedded to it looking like this): `SWITCHON(x, [A]*[B]/[C])(x > 1000, "foo", x > 100, "bar", x > 0, "baz", default="nope!")` which could possibly be defined something like, uh... idk what the macro definition syntax should actually be but somehow that would get munged into `LET(x, [A]*[B]/[C], IFS(x > 1000, "foo", x > 100, "bar", x > 0, "baz", default="nope!"))`
 
