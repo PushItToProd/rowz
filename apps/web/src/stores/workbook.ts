@@ -771,9 +771,13 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const wholeRows = selected.startRow === 0 && selected.endRow >= shown - 1 && view.hidden === 0;
     const wholeCols = selected.startCol === 0 && selected.endCol >= table.colCount - 1;
     if (view.reordered && !wholeRows && selected.startRow !== selected.endRow) {
+      const hasFilter = table.display.filter !== undefined && table.display.filter !== "";
+      const hasSort = table.display.sort.length > 0;
+      const clear =
+        hasFilter && hasSort ? "the filter and the sort" : hasFilter ? "the filter" : "the sort";
       notice.value = {
         kind: "error",
-        text: `${action} one row or whole columns while the table is sorted or filtered`,
+        text: `You can only ${action.toLowerCase()} one row or whole columns while the table is sorted or filtered. Clear ${clear} first.`,
       };
       return undefined;
     }
