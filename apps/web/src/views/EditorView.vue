@@ -11,7 +11,7 @@ import type { MenuItem } from "../components/menu";
 import FormatBar from "../components/FormatBar.vue";
 import ErrorsPanel from "../components/ErrorsPanel.vue";
 import ErrorWarning from "../components/ErrorWarning.vue";
-import type { DocumentError } from "@spreadsheet-app/engine";
+import { formatAddress, type DocumentError } from "@spreadsheet-app/engine";
 import AssertionsPanel from "../components/AssertionsPanel.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
 import SharePanel from "../components/SharePanel.vue";
@@ -54,13 +54,16 @@ async function goToError(target: DocumentError): Promise<void> {
     name: "editor",
     params: { spreadsheetId: props.spreadsheetId, pageId: target.pageId },
   });
-  errorsOpen.value = false;
   await nextTick();
   const block = document.getElementById(`block-${target.blockId}`);
   if (target.cell && store.rowView(target.cell.tableId).place(target.cell.row) !== undefined) {
     store.selection = target.cell;
     await nextTick();
     store.focusGrid();
+    await nextTick();
+    block
+      ?.querySelector(`[data-cell="${formatAddress(target.cell)}"]`)
+      ?.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
   } else {
     if (target.name && target.line === undefined) {
       const toggle = block?.querySelector<HTMLButtonElement>("[data-open-names]");

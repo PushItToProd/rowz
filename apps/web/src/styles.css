@@ -1747,3 +1747,7 @@ select.cell-control--dropdown {
 .cell-error-popover p {
   margin: 0.35rem 0 0;
 }
+
+.errors .assertions__list li + li {
+  margin-top: 0.5rem;
+}

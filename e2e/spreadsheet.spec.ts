@@ -1259,6 +1259,7 @@ test("errors stay visible across pages and in the document list", async ({ page 
   const errors = page.getByRole("dialog", { name: "Document errors" });
   await expect(errors).toContainText("Page 1");
   await errors.getByRole("button", { name: /Table 1!A1/ }).click();
+  await expect(errors).toBeVisible();
   await expect(cell(page, "A1")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
   await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
