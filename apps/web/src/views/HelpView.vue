@@ -671,9 +671,9 @@ const OPERATORS = [
           that a formula in D1 filled.
         </li>
         <li>
-          The cells to fill must be empty and inside the table. Otherwise the formula shows
-          <code>#SPILL!</code>. Typing into a filled cell causes the same error until that cell is
-          cleared.
+          The error message says whether the table has too few rows or columns, or cells in the
+          result range already have values. Typing into a filled cell causes the same error until
+          that cell is cleared.
         </li>
         <li>
           Arithmetic and comparisons work cell by cell on a range: <code>=A1:A3 * 2</code> gives

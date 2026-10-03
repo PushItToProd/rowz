@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { at, STRUCTURE, workbookWith } from "./testing";
 import type { CellValue } from "./values";
-import { Workbook } from "./workbook";
+import type { Workbook } from "./workbook";
 
 function values(workbook: Workbook, addresses: string[], tableId = "t1"): CellValue[] {
   return addresses.map((address) => workbook.getValue(at(address, tableId)));
@@ -99,12 +99,12 @@ describe("a formula whose result is an array", () => {
 });
 
 describe("#SPILL!", () => {
-  it("shows when a cell the array needs holds something, and names that cell", () => {
+  it("shows when cells in the result range already have values", () => {
     const workbook = workbookWith({ t1: { A1: "=SEQUENCE(3)", A3: "in the way" } });
     expectError(
       workbook.getValue(at("A1")),
       "#SPILL!",
-      "The result needs 3 rows and 1 columns, and A3 is not free",
+      "The result needs 3 rows and 1 column, but one or more cells in A1:A3 already have values.",
     );
     expect(values(workbook, ["A2", "A3"])).toEqual([null, "in the way"]);
     expect(workbook.spillAnchor(at("A2"))).toBeUndefined();
@@ -139,20 +139,32 @@ describe("#SPILL!", () => {
     expect(values(workbook, ["A2", "B2", "C2"])).toEqual([10, 11, 12]);
   });
 
-  it("shows when the array does not fit inside the table's size", () => {
-    const workbook = new Workbook();
+  it("reports total table dimensions before occupied cells when both block the result", () => {
+    const workbook = workbookWith({ t1: { A1: "=SEQUENCE(12, 26)", A2: "in the way" } });
     workbook.setStructure({
+      ...STRUCTURE,
+      tables: STRUCTURE.tables.map((table) =>
+        table.id === "t1" ? { ...table, rowCount: 11, colCount: 15 } : table,
+      ),
+    });
+    expectError(
+      workbook.getValue(at("A1")),
+      "#SPILL!",
+      "The result needs 12 rows and 26 columns, but the table is only 11 rows and 15 columns.",
+    );
+
+    const small = workbookWith({ t1: { A2: "=SEQUENCE(3)" } });
+    small.setStructure({
       ...STRUCTURE,
       tables: STRUCTURE.tables.map((table) => ({ ...table, rowCount: 3, colCount: 2 })),
     });
-    workbook.setCell(at("A2"), "=SEQUENCE(3)");
     expectError(
-      workbook.getValue(at("A2")),
+      small.getValue(at("A2")),
       "#SPILL!",
-      "The result needs 3 rows and 1 columns, and A4 is not free",
+      "The result needs 3 rows and 1 column, but the table is only 3 rows and 2 columns.",
     );
-    workbook.setCell(at("A2"), "=SEQUENCE(2, 2)");
-    expect(workbook.getArray(at("A2"))).toEqual([
+    small.setCell(at("A2"), "=SEQUENCE(2, 2)");
+    expect(small.getArray(at("A2"))).toEqual([
       [1, 2],
       [3, 4],
     ]);

@@ -457,7 +457,7 @@ Together they make a form: inputs, a Save button that appends to a log table and
 **Choices.**
 
 - **Operators work cell by cell on arrays; functions do not.** `=A1:A3 * 2` and `=B1:B9 > 5` give arrays, which is what `FILTER` conditions need. A function that expects one value, such as `IF` or `UPPER`, still fails on a range. `MAP` covers that case. Lifting every function over arrays is possible later.
-- **A blocked result is `#SPILL!`.** The cells to fill must be empty and inside the table. The message names the first cell in the way.
+- **A blocked result is `#SPILL!`.** The error message explains whether the result exceeds the table's total dimensions or cells in the result range already have values. A table-size error takes precedence when both apply.
 - **A formula that reads a cell its own result fills is `#CYCLE!`.** Two array formulas that keep undoing each other's inputs are stopped after 20 rounds and marked `#CYCLE!`.
 - **`FILTER` with no matching rows is `#N/A`.** Excel uses `#CALC!` and Sheets uses `#N/A`.
 - **`SORT` puts empty cells last in both directions** and orders numbers before text.

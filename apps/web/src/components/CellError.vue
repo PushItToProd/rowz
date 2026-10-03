@@ -12,7 +12,8 @@ const explanation = computed(
       "#REF!": "The formula refers to a cell, column, or block that cannot be found.",
       "#NAME?": "The formula uses an unknown or ambiguous name.",
       "#N/A": "No matching value was found.",
-      "#SPILL!": "The result cannot fit in the available cells.",
+      "#SPILL!":
+        "The result is too large for the table or cells in its result range already have values.",
       "#CYCLE!": "The formula depends on itself through a cycle of references.",
       "#ASSERT!": "An assertion failed.",
       "#ERROR!": "The formula could not be parsed or has invalid arguments.",

@@ -1360,7 +1360,7 @@ export const errorDocs: Record<ErrorCode, string> = {
   "#NAME?": "The formula uses a function or a word that is not known.",
   "#N/A": "A lookup found no match, or no case of IFS or SWITCH applied.",
   "#SPILL!":
-    "The result is several values, and a cell they would fill is not empty or is outside the table.",
+    "The result is several values, but the table may not have enough room or cells in the result range may already have values.",
   "#CYCLE!": "The formula depends on its own cell, directly or through other cells.",
   "#ASSERT!": "An ASSERT in the document is false. Its message says what should have held.",
   "#ERROR!": "The formula could not be read, or a function was given the wrong number of values.",

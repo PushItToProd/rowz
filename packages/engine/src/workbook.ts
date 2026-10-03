@@ -174,6 +174,10 @@ function localClock(): number {
 // another forever, and this is what stops them.
 const MAX_ATTEMPTS = 20;
 
+function countWithUnit(count: number, unit: string): string {
+  return `${String(count)} ${unit}${count === 1 ? "" : "s"}`;
+}
+
 /**
  * The cells of one spreadsheet and their computed values.
  *
@@ -1145,6 +1149,8 @@ export class Workbook {
    * or `#SPILL!` when a cell the array needs is taken or outside the table.
    */
   private place(anchor: CellId, rows: readonly CellValue[][]): CellValue {
+    const rowCount = rows.length;
+    const colCount = rows[0]?.length ?? 0;
     const targets = rows.flatMap((cells, rowOffset) =>
       cells.flatMap((value, colOffset) =>
         rowOffset === 0 && colOffset === 0
@@ -1158,19 +1164,39 @@ export class Workbook {
       ),
     );
     const table = this.tables.table(anchor.tableId);
-    const taken = targets.find(
+    const size = `${countWithUnit(rowCount, "row")} and ${countWithUnit(colCount, "column")}`;
+    const outside = targets.some(
       ({ id }) =>
-        this.record(id) !== undefined ||
-        this.spilled.has(cellKey(id)) ||
-        id.row >= (table?.rowCount ?? Infinity) ||
-        id.col >= (table?.colCount ?? Infinity),
+        id.row >= (table?.rowCount ?? Infinity) || id.col >= (table?.colCount ?? Infinity),
+    );
+    if (outside) {
+      this.blocked.set(cellKey(anchor), anchor);
+      const rows =
+        table?.rowCount === undefined
+          ? "an unknown number of rows"
+          : countWithUnit(table.rowCount, "row");
+      const cols =
+        table?.colCount === undefined
+          ? "an unknown number of columns"
+          : countWithUnit(table.colCount, "column");
+      return error(
+        "#SPILL!",
+        `The result needs ${size}, but the table is only ${rows} and ${cols}.`,
+      );
+    }
+
+    const taken = targets.find(
+      ({ id }) => this.record(id) !== undefined || this.spilled.has(cellKey(id)),
     );
     if (taken) {
       this.blocked.set(cellKey(anchor), anchor);
-      const size = `${String(rows.length)} rows and ${String(rows[0]?.length ?? 0)} columns`;
+      const range = `${formatAddress(anchor)}:${formatAddress({
+        row: anchor.row + rowCount - 1,
+        col: anchor.col + colCount - 1,
+      })}`;
       return error(
         "#SPILL!",
-        `The result needs ${size}, and ${formatAddress(taken.id)} is not free`,
+        `The result needs ${size}, but one or more cells in ${range} already have values.`,
       );
     }
 
