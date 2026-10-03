@@ -97,6 +97,46 @@ describe("document errors", () => {
     ]);
   });
 
+  it("reports button plan failures in cells, script names, and Markdown without applying effects", () => {
+    const source = 'BUTTON("Send", SEND_EMAIL("bad", "subject", "body"))';
+    const tables = [{ ...data.tables[0]!, columns: null }];
+    const script = view("Script", "script", `Send = ${source}`);
+    const workbook = createWorkbook({
+      ...data,
+      tables,
+      scripts: [script],
+      cells: [{ tableId: "t", row: 0, col: 0, input: `=${source}` }],
+    });
+    expect(
+      documentErrors(workbook, tables, [script, view("Text", "text", `{{ ${source} }}`)]),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Data!A1", code: "#VALUE!" }),
+        expect.objectContaining({ label: "Script!Send", code: "#VALUE!" }),
+        expect.objectContaining({ blockId: "Text", code: "#VALUE!" }),
+      ]),
+    );
+    expect(workbook.getValue({ tableId: "t", row: 0, col: 0 })).toMatchObject({ kind: "button" });
+  });
+
+  it("reports invalid formula-column syntax without inventing a row to evaluate", () => {
+    const tables = [
+      {
+        ...data.tables[0]!,
+        rowCount: 0,
+        columns: [
+          { name: "Invalid", type: "formula" as const, formula: "=1+" },
+          { name: "Valid", type: "formula" as const, formula: "=1/0" },
+        ],
+      },
+    ];
+    expect(
+      documentErrors(createWorkbook({ ...data, tables, cells: [], scripts: [] }), tables, []),
+    ).toEqual([
+      expect.objectContaining({ label: "Data[Invalid] formula", column: 0, code: "#ERROR!" }),
+    ]);
+  });
+
   it("removes cell errors after correction and does not execute actions", () => {
     const workbook = createWorkbook({
       ...data,

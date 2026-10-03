@@ -1301,3 +1301,19 @@ test("errors stay visible across pages and in the document list", async ({ page 
     0,
   );
 });
+
+test("invalid button plans appear in document errors before clicking the button", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", '=BUTTON("Send", SEND_EMAIL("bad", "subject", "body"))');
+  await expect(cell(page, "A1").getByRole("button", { name: "Send", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "1 error", exact: true }).click();
+  const errors = page.getByRole("dialog", { name: "Document errors" });
+  await expect(errors).toContainText('"bad" is not an email address');
+  await errors.getByRole("button", { name: /Table 1!A1/ }).click();
+  await expect(errors).toBeVisible();
+  await enter(page, "A1", '=BUTTON("Send", SEND_EMAIL("valid@example.com", "subject", "body"))');
+  await expect(errors).not.toContainText("not an email address");
+  await expect(page.getByRole("button", { name: "1 error", exact: true })).toHaveCount(0);
+});

@@ -1,8 +1,10 @@
 import { formatAddress, type CellId } from "./address";
+import { parseFormula } from "./parser";
+import { FormulaSyntaxError } from "./tokenizer";
 import { parseScript } from "./script";
 import type { TableDefinition } from "./structure";
 import { renderTemplate } from "./template";
-import { isChart, isError, isRange, type Evaluated } from "./values";
+import { isButton, isFormulaInput, isChart, isError, isRange, type Evaluated } from "./values";
 import type { ViewSource } from "./views";
 import type { Workbook } from "./workbook";
 
@@ -16,6 +18,7 @@ export interface DocumentError {
   line?: number;
   name?: string;
   filter?: boolean;
+  column?: number;
 }
 
 /** Collect errors across the entire document, independent of the displayed page or rows. */
@@ -62,6 +65,28 @@ export function documentErrors(
     });
   }
   for (const table of tables) {
+    if (table.rowCount === 0)
+      for (const [column, definition] of (table.columns ?? []).entries()) {
+        if (
+          definition.type !== "formula" ||
+          !definition.formula ||
+          !isFormulaInput(definition.formula)
+        )
+          continue;
+        try {
+          parseFormula(definition.formula.slice(1));
+        } catch (cause) {
+          if (!(cause instanceof FormulaSyntaxError)) throw cause;
+          errors.push({
+            pageId: table.pageId,
+            blockId: table.id,
+            label: `${table.name}[${definition.name}] formula`,
+            code: cause.code,
+            message: cause.message,
+            column,
+          });
+        }
+      }
     if (!table.filter) continue;
     const failure = workbook.filterRows(table.id, table.filter).error;
     if (failure)
@@ -96,7 +121,10 @@ export function documentErrors(
     };
     const inspect = (value: Evaluated, expression?: string): void => {
       if (isError(value)) report(value.code, value.message ?? value.code, undefined, expression);
-      else if (isRange(value) || isChart(value))
+      else if (isButton(value)) {
+        const plan = workbook.planAction(value.action);
+        if (!plan.ok) inspect(plan.error, expression);
+      } else if (isRange(value) || isChart(value))
         for (const row of value.rows) for (const cell of row) inspect(cell, expression);
     };
     if (view.kind === "script") {

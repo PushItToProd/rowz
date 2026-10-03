@@ -75,7 +75,9 @@ async function goToError(target: DocumentError): Promise<void> {
         ? block?.querySelector(`[data-script-line="${String(target.line)}"]`)
         : target.name
           ? block?.querySelector(`[data-name="${CSS.escape(target.name)}"]`)
-          : undefined;
+          : target.column !== undefined
+            ? block?.querySelector(`thead th:nth-child(${String(target.column + 2)})`)
+            : undefined;
     block?.focus({ preventScroll: true });
     (location ?? block)?.scrollIntoView({ block: "center", behavior: "smooth" });
     if (target.cell)

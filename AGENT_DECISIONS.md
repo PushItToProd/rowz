@@ -4,7 +4,9 @@ Choices made by agents while acting autonomously, for the author to review. Each
 
 ## 2026-10-03: Collect document errors without storing computed state
 
-The editor and document list use the same pure engine collector for evaluated errors in cells, formula columns, names, script statements, filters, charts, and Markdown templates. The document-list request reads and evaluates each accessible document to return `hasErrors`. Computed results remain unpersisted. This adds work proportional to the contents of the listed documents; a revision-keyed cache can reduce it if the list becomes slow.
+The editor and document list use the same pure engine collector for evaluated errors in cells, formula columns, names, script statements, filters, charts, and Markdown templates. The document-list request caches `hasErrors` by content revision in memory, shared across request repositories for each database, with at most 256 entries. Access is checked on every list request. Documents mentioning `NOW` or `TODAY` bypass the cache because their results can change without an edit. Cold or evicted entries still require reading and evaluating the document. Computed results remain unpersisted.
+
+Diagnostics plan button actions to report invalid arguments without applying effects. Empty data tables validate formula-column syntax without evaluating a fabricated row; runtime failures that require row values are reported when rows exist.
 
 Repeated identical errors from one template expression are grouped so a loop does not produce hundreds of identical entries. Errors in distinct expressions remain separate. A link to a filtered-out cell opens its page and table and explains which filter hides it; navigation does not clear a saved filter.
 

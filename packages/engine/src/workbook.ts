@@ -38,6 +38,7 @@ import {
   toText,
   type ControlValue,
   isError,
+  isButton,
   isRange,
   isScalar,
   parseLiteralInput,
@@ -498,9 +499,14 @@ export class Workbook {
   errors(): WorkbookError[] {
     this.settle();
     const failures: WorkbookError[] = [];
+    const failureOf = (value: Evaluated): Evaluated => {
+      if (!isButton(value)) return value;
+      const plan = this.planAction(value.action);
+      return plan.ok ? value : plan.error;
+    };
     for (const records of this.cells.values()) {
       for (const { id } of records.values()) {
-        const value = this.current(id);
+        const value = failureOf(this.current(id));
         if (isError(value)) {
           failures.push({
             kind: "cell",
@@ -513,7 +519,7 @@ export class Workbook {
     }
     for (const cells of this.spillAreas.values()) {
       for (const cell of cells) {
-        const value = this.current(cell);
+        const value = failureOf(this.current(cell));
         if (isError(value))
           failures.push({
             kind: "cell",
@@ -524,7 +530,7 @@ export class Workbook {
       }
     }
     for (const record of [...this.names.values()].flat()) {
-      const value = this.valueOfName(record);
+      const value = failureOf(this.valueOfName(record));
       if (!isError(value)) continue;
       failures.push({
         kind: "name",
@@ -535,7 +541,7 @@ export class Workbook {
       });
     }
     for (const record of this.statements) {
-      const value = this.valueOfName(record);
+      const value = failureOf(this.valueOfName(record));
       if (!isError(value) || record.line === undefined) continue;
       failures.push({
         kind: "statement",

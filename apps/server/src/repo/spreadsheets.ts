@@ -201,6 +201,13 @@ export interface VersionRecord {
 
 /** A version is kept when a change is made this long after the last one was. */
 const VERSION_INTERVAL_MS = 10 * 60_000;
+/** Shared across request repositories; access is still checked by the list query. */
+const diagnosticCaches = new WeakMap<
+  Database,
+  Map<string, { revision: number; hasErrors: boolean }>
+>();
+const MAX_DIAGNOSTIC_CACHE_ENTRIES = 256;
+
 /** A request that writes this many cells, as a paste or an import does, keeps a version first. */
 const BULK_WRITE_CELLS = 20;
 
@@ -666,19 +673,38 @@ export class SpreadsheetRepository {
       .select({
         id: spreadsheets.id,
         name: spreadsheets.name,
+        revision: spreadsheets.revision,
         updatedAt: spreadsheets.updatedAt,
         role: this.access.role,
       })
       .from(spreadsheets)
       .innerJoin(this.access, this.granted())
       .orderBy(desc(spreadsheets.updatedAt));
+    let cache = diagnosticCaches.get(this.db);
+    if (!cache) {
+      cache = new Map();
+      diagnosticCaches.set(this.db, cache);
+    }
     const result: ListedSpreadsheet[] = [];
-    for (const item of listed) {
-      const { data } = await this.read(item.id);
-      result.push({
-        ...item,
-        hasErrors: documentErrors(createWorkbook(data), data.tables, data.views).length > 0,
-      });
+    for (const { revision, ...item } of listed) {
+      const cached = cache.get(item.id);
+      if (cached?.revision === revision) {
+        result.push({ ...item, hasErrors: cached.hasErrors });
+        continue;
+      }
+      const { data, snapshot } = await this.read(item.id);
+      const hasErrors = documentErrors(createWorkbook(data), data.tables, data.views).length > 0;
+      cache.delete(item.id);
+      // A conservative scan also catches calls in scripts and Markdown templates.
+      // Clock-dependent results can change without a content revision.
+      if (!/\b(?:NOW|TODAY)\b/i.test(JSON.stringify(data))) {
+        if (cache.size >= MAX_DIAGNOSTIC_CACHE_ENTRIES) {
+          const oldest = cache.keys().next().value;
+          if (oldest !== undefined) cache.delete(oldest);
+        }
+        cache.set(item.id, { revision: snapshot.revision, hasErrors });
+      }
+      result.push({ ...item, hasErrors });
     }
     return result;
   }

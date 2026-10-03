@@ -1,7 +1,8 @@
 import { DEFAULT_TABLE_SIZE, LIMITS } from "@spreadsheet-app/shared";
 import { inArray } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Change, PageRecord, SpreadsheetSummary, TableRecord } from "./app";
+import { SpreadsheetRepository } from "./repo/spreadsheets";
 import { spreadsheets, workspaceMembers } from "./db/schema";
 import {
   addTable,
@@ -91,6 +92,33 @@ describe("spreadsheets", () => {
     expect(await listed()).toMatchObject({ hasErrors: true });
     await caller.json("PATCH", `/views/${text.id}`, { source: "{{ 1 }}" });
     expect(await listed()).toMatchObject({ hasErrors: false });
+  });
+
+  it("reuses document diagnostics until an edit, but recalculates clock-dependent documents", async () => {
+    const caller = await server.signUp();
+    const snapshot = await createSpreadsheet(caller, "Cached diagnostics");
+    const { table } = first(snapshot);
+    const read = vi.spyOn(SpreadsheetRepository.prototype, "read");
+    const list = () => caller.json<{ hasErrors: boolean }[]>("GET", "/spreadsheets");
+    try {
+      await list();
+      expect(read).toHaveBeenCalledTimes(1);
+      await list();
+      expect(read).toHaveBeenCalledTimes(1);
+      await caller.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "=1/0" }));
+      read.mockClear();
+      expect(await list()).toEqual([expect.objectContaining({ hasErrors: true })]);
+      expect(read).toHaveBeenCalledTimes(1);
+      await list();
+      expect(read).toHaveBeenCalledTimes(1);
+      await caller.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "=NOW()" }));
+      read.mockClear();
+      expect(await list()).toEqual([expect.objectContaining({ hasErrors: false })]);
+      await list();
+      expect(read).toHaveBeenCalledTimes(2);
+    } finally {
+      read.mockRestore();
+    }
   });
 
   it("puts all of a user's spreadsheets in one workspace, even when created at once", async () => {
