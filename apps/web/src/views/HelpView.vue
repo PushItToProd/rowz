@@ -460,8 +460,18 @@ const OPERATORS = [
           <code>HSTACK(Sales[Item], Sales[Total])</code>.
         </li>
         <li>
+          Under a data table, <strong>Filter</strong> takes a formula that is true for the rows to
+          show, such as <code>=[Payout] &gt; 60000</code>, and <strong>Add sort</strong> orders the
+          rows by one or more columns. Right-click a column to sort by it. Sorting and filtering
+          change only what is shown: the stored rows keep their order, so <code>A2</code> and
+          <code>SUM(Sales[Amount])</code> read the same cells. A row for which the filter gives an
+          error stays shown. The row numbers are the stored ones. While a table is sorted or
+          filtered, a selection covers the rows shown, you cannot insert a row above or below, and
+          formatting needs one row or whole columns.
+        </li>
+        <li>
           <strong>Remove column names</strong> makes the table a plain table again. Its formula
-          columns become empty.
+          columns become empty, and its sort and filter are cleared.
         </li>
       </ul>
     </section>

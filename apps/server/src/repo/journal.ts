@@ -89,6 +89,8 @@ const tableColumns = {
   colIds: tables.colIds,
   columns: tables.columns,
   formats: tables.formats,
+  display: tables.display,
+  conditionalFormats: tables.conditionalFormats,
   names: tables.names,
 };
 const viewColumns = {
@@ -796,7 +798,12 @@ export function writesFormulas(data: JournalData, side: "before" | "after"): boo
       return was?.columns?.[place]?.formula !== formula;
     });
   });
-  return cell || view || column;
+  const filter = data.tables.some(
+    (change) =>
+      (change[side]?.display.filter ?? "") !== "" &&
+      change[side]?.display.filter !== change[other]?.display.filter,
+  );
+  return cell || view || column || filter;
 }
 
 /**
@@ -887,6 +894,8 @@ export async function applyRecorded(
           colIds: table.colIds,
           columns: table.columns,
           formats: table.formats,
+          display: table.display,
+          conditionalFormats: table.conditionalFormats,
           names: table.names,
         },
       });

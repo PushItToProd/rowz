@@ -55,6 +55,12 @@ export interface TableDefinition {
    */
   rowCount?: number;
   colCount?: number;
+  /**
+   * A data table's filter: a formula, true for the rows the table shows. It is
+   * written in the table, so `[Payout]` means the row's own cell, as in a
+   * formula column.
+   */
+  filter?: string;
 }
 
 /** A block that holds names and has no cells. Its source is parsed by `parseScript`. */

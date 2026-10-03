@@ -48,6 +48,10 @@
     {
       "tag": "0011_table_names",
       "sha256": "4c633d57c80a148845cbab0efd5df4f08a4f315058c2a70c27b17287fb1a944e"
+    },
+    {
+      "tag": "0012_table_display",
+      "sha256": "a2054c803686af2f8f3cc11b2809d1e8172e8b300dfa01f5a06e2c17a1bde609"
     }
   ]
 }

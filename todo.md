@@ -186,6 +186,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - (author) sorting and filtering are display settings of a table. They leave the stored row order alone, so `A2` keeps its meaning
   - [x] reference an entire data table by its unique name; `QUERY(Sales, ...)` uses the table's column names as headers
   - [x] `QUERY` shows named columns in its output, including for ranges such as `Sales!A:C`
+  - [x] sort and filter a data table in place (`plans/data-tables.md`, stage 1)
+  - [ ] dropdown columns (`plans/data-tables.md`, stage 2)
 - [ ] (Claude) consider deleting a data table's row when its last cell is cleared. `plans/persistent-row-identity.md` keeps such a row, so that its id stays valid for a relation that points at it, and deletes empty rows only at the end of a table when its columns are named
 - [ ] **P6** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable
 - [ ] **P4** when updating a formula column's formula, use an in-page editor with proper formula support (modal or popover or maybe just hijack the formula bar), not a browser `input` popup

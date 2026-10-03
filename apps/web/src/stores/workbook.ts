@@ -1,5 +1,6 @@
 import {
   createWorkbook,
+  displayRows,
   formatAddress,
   formatDate,
   formatAt,
@@ -18,6 +19,7 @@ import {
   type Evaluated,
   type FormatPatch,
   type Scalar,
+  type SortKey,
   type TableName,
 } from "@spreadsheet-app/engine";
 import {
@@ -54,6 +56,7 @@ import {
   pasteWrites,
   toClipboardText,
   type GridRange,
+  type StoredRow,
 } from "../formula/fill";
 
 export interface Notice {
@@ -68,6 +71,45 @@ const NO_FORMAT: CellFormat = Object.freeze({});
 
 function messageOf(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message !== "" ? cause.message : fallback;
+}
+
+/**
+ * The rows of a table as it shows them. A sorted or filtered table shows its
+ * stored rows in an order of its own, and leaves some out. The stored row
+ * order, which cells and formulas name rows by, does not change.
+ *
+ * A place is a row's position in what is shown. The selection is a stored
+ * position, as every reader of it expects, and a range is a rectangle of
+ * places.
+ */
+export interface RowView {
+  /** The stored row at each place, filtered rows left out. */
+  rows: readonly number[];
+  /** Whether the rows are shown in another order or some are hidden. */
+  reordered: boolean;
+  /** How many stored rows the filter hides. */
+  hidden: number;
+  /** The first error the filter's formula gave, which the filter bar shows. */
+  filterError: string | undefined;
+  /** The place a stored row is shown at, or `undefined` when a filter hides it. */
+  place: (row: number) => number | undefined;
+  /**
+   * The stored row at a place. Places past the last row shown are rows the
+   * table does not have yet, as a paste that appends writes them, and name the
+   * stored rows after the last.
+   */
+  storedRow: StoredRow;
+}
+
+function identityView(rowCount: number): RowView {
+  return {
+    rows: Array.from({ length: rowCount }, (_, row) => row),
+    reordered: false,
+    hidden: 0,
+    filterError: undefined,
+    place: (row) => row,
+    storedRow: (place) => place,
+  };
 }
 
 /**
@@ -102,10 +144,17 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const selectionEnd = ref<CellAddress | null>(null);
   // Selecting another cell selects just that cell.
   watch(selection, () => (selectionEnd.value = null), { flush: "sync" });
-  /** The selected cells as a rectangle within the selected cell's table. */
-  const selectedRange = computed<GridRange | null>(() =>
-    selection.value ? rangeOf(selection.value, selectionEnd.value ?? selection.value) : null,
-  );
+  /** The selected cells as a rectangle of places within the selected cell's table. */
+  const selectedRange = computed<GridRange | null>(() => {
+    const anchor = selection.value;
+    if (!anchor) return null;
+    const view = rowView(anchor.tableId);
+    const end = selectionEnd.value ?? anchor;
+    return rangeOf(
+      { row: view.place(anchor.row) ?? anchor.row, col: anchor.col },
+      { row: view.place(end.row) ?? end.row, col: end.col },
+    );
+  });
   /** Counts the requests to put the keyboard in the grid of the selected cell. */
   const gridFocusRequests = ref(0);
   /**
@@ -116,7 +165,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     gridFocusRequests.value += 1;
   }
   /** What was last copied here, to recognize it when it is pasted back. */
-  let copied: { text: string; rows: string[][]; from: CellAddress } | undefined;
+  let copied:
+    | { text: string; rows: string[][]; from: CellAddress; sourceRows: readonly number[] }
+    | undefined;
   const notice = ref<Notice | null>(null);
   /** Keys of the button cells whose click is in flight. */
   const running = reactive(new Set<string>());
@@ -125,6 +176,63 @@ export const useWorkbookStore = defineStore("workbook", () => {
   // shallow ref that is triggered by hand after every change, so anything
   // that read a value through `engine.value` is recomputed.
   const engine = shallowRef(new Workbook());
+
+  /** The tables that show their rows in an order or with some left out, which are the ones worth computing. */
+  const rowViews = computed(() => {
+    const computedViews = new Map<string, RowView>();
+    const current = engine.value;
+    for (const table of tables.value) {
+      const { sort, filter } = table.display;
+      const filtering = table.columns && filter !== undefined && filter !== "";
+      const keys = table.columns ? sort : [];
+      if (!filtering && keys.length === 0) continue;
+      const filtered = filtering ? current.filterRows(table.id, filter) : undefined;
+      const sortColumns = keys.flatMap(({ colId, descending }) => {
+        const col = table.colIds.indexOf(colId);
+        return col < 0 ? [] : [{ col, descending }];
+      });
+      const rows = displayRows(
+        table.rowCount,
+        (row, col) => current.getValue({ tableId: table.id, row, col }),
+        sortColumns,
+        (row) => filtered?.shown[row] ?? true,
+      );
+      const places = new Map(rows.map((row, place) => [row, place]));
+      computedViews.set(table.id, {
+        rows,
+        reordered: true,
+        hidden: table.rowCount - rows.length,
+        filterError: filtered?.error?.message,
+        place: (row) =>
+          row >= table.rowCount ? rows.length + row - table.rowCount : places.get(row),
+        storedRow: (place) => rows[place] ?? table.rowCount + place - rows.length,
+      });
+    }
+    return computedViews;
+  });
+
+  /** The rows a table shows, and the order it shows them in. */
+  function rowView(tableId: string): RowView {
+    const view = rowViews.value.get(tableId);
+    if (view) return view;
+    const table = tables.value.find((candidate) => candidate.id === tableId);
+    return identityView(table?.rowCount ?? 0);
+  }
+
+  // A filter can hide the row a cell is in, as editing the cell can. The selection goes with it.
+  watch(
+    rowViews,
+    () => {
+      const anchor = selection.value;
+      if (!anchor) return;
+      const view = rowView(anchor.tableId);
+      if (view.place(anchor.row) === undefined) selection.value = null;
+      else if (selectionEnd.value && view.place(selectionEnd.value.row) === undefined) {
+        selectionEnd.value = null;
+      }
+    },
+    { flush: "sync" },
+  );
 
   // Saves run one at a time so the server applies edits in the order typed.
   let saves: Promise<void> = Promise.resolve();
@@ -596,10 +704,25 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const selected = selectedRange.value;
     const table = tables.value.find((candidate) => candidate.id === selection.value?.tableId);
     if (!selected || !table || !canEdit.value) return Promise.resolve(false);
-    const wholeRows = selected.startRow === 0 && selected.endRow >= table.rowCount - 1;
+    const view = rowView(table.id);
+    const shown = view.rows.length;
+    // With rows hidden, every row shown is not every row of the column.
+    const wholeRows = selected.startRow === 0 && selected.endRow >= shown - 1 && view.hidden === 0;
     const wholeCols = selected.startCol === 0 && selected.endCol >= table.colCount - 1;
-    const start = identityOf({ tableId: table.id, row: selected.startRow, col: selected.startCol });
-    const end = identityOf({ tableId: table.id, row: selected.endRow, col: selected.endCol });
+    // A format rule covers a run of stored rows. The rows of a sorted or filtered
+    // table are not a run, unless the rule is one row or the whole column.
+    if (view.reordered && !wholeRows && selected.startRow !== selected.endRow) {
+      notice.value = {
+        kind: "error",
+        text: "Format one row or whole columns while the table is sorted or filtered",
+      };
+      return Promise.resolve(false);
+    }
+    // Whole columns are every stored row, whatever order they are shown in.
+    const startRow = wholeRows ? 0 : view.storedRow(selected.startRow);
+    const endRow = view.storedRow(selected.endRow);
+    const start = identityOf({ tableId: table.id, row: startRow, col: selected.startCol });
+    const end = identityOf({ tableId: table.id, row: endRow, col: selected.endCol });
     if (!start || !end) return Promise.resolve(false);
     const range = {
       startRowId: start.rowId,
@@ -610,6 +733,21 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return attempt(async () => {
       await receiveChange(await api.formatCells(table.id, range, patch, reset));
     }, "The format could not be changed");
+  }
+
+  /**
+   * Replaces how a data table's rows are shown. The sort and filter are
+   * display settings, and the stored rows stay as they are.
+   */
+  function setTableDisplay(
+    tableId: string,
+    display: { sort: SortKey[]; filter?: string },
+    writtenAt = revision.value,
+  ): Promise<boolean> {
+    if (!canEdit.value) return Promise.resolve(false);
+    return attempt(async () => {
+      await receiveChange(await api.setTableDisplay(tableId, display, writtenAt));
+    }, "The sort and filter could not be saved");
   }
 
   /** Replaces the names a plain table holds. */
@@ -710,15 +848,20 @@ export const useWorkbookStore = defineStore("workbook", () => {
     selectionEnd.value = single ? null : { row: address.row, col: address.col };
   }
 
-  /** Fills `target` with the pattern of the cells in `source`, moving formula references. */
+  /**
+   * Fills `target` with the pattern of the cells in `source`, moving formula
+   * references. Both ranges are rectangles of the rows the table shows.
+   */
   function fill(
     tableId: string,
     source: GridRange,
     target: GridRange,
     series = false,
   ): Promise<void> {
-    const inputAt = (cell: CellAddress): string => engine.value.getInput({ tableId, ...cell });
-    return setCells(tableId, fillWrites(source, target, inputAt, series));
+    const view = rowView(tableId);
+    const inputAt = (cell: CellAddress): string =>
+      engine.value.getInput({ tableId, row: view.storedRow(cell.row), col: cell.col });
+    return setCells(tableId, fillWrites(source, target, inputAt, series, view.storedRow));
   }
 
   /** Empties the selected cells. */
@@ -726,9 +869,14 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const selected = selectedRange.value;
     const tableId = selection.value?.tableId;
     if (!selected || tableId === undefined || !canEdit.value) return Promise.resolve();
+    const view = rowView(tableId);
     return setCells(
       tableId,
-      clearWrites(selected, (cell) => engine.value.getInput({ tableId, ...cell })),
+      clearWrites(
+        selected,
+        (cell) => engine.value.getInput({ tableId, row: view.storedRow(cell.row), col: cell.col }),
+        view.storedRow,
+      ),
     );
   }
 
@@ -741,14 +889,19 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const selected = selectedRange.value;
     const tableId = selection.value?.tableId;
     if (!selected || tableId === undefined) return "";
-    const shown = inputsOf(selected, (cell) =>
-      formatValue(engine.value.getValue({ tableId, ...cell })),
-    );
+    const view = rowView(tableId);
+    const at = (cell: CellAddress): CellId => ({
+      tableId,
+      row: view.storedRow(cell.row),
+      col: cell.col,
+    });
+    const shown = inputsOf(selected, (cell) => formatValue(engine.value.getValue(at(cell))));
     const text = toClipboardText(shown);
     copied = {
       text,
-      rows: inputsOf(selected, (cell) => engine.value.getInput({ tableId, ...cell })),
+      rows: inputsOf(selected, (cell) => engine.value.getInput(at(cell))),
       from: { row: selected.startRow, col: selected.startCol },
+      sourceRows: shown.map((_, offset) => view.storedRow(selected.startRow + offset)),
     };
     return text;
   }
@@ -760,14 +913,20 @@ export const useWorkbookStore = defineStore("workbook", () => {
   async function paste(text: string): Promise<void> {
     const at = selection.value;
     if (!at || !canEdit.value) return;
+    const view = rowView(at.tableId);
+    const place = { row: view.place(at.row) ?? at.row, col: at.col };
     // Text this app put on the clipboard stands for the cells it was copied from.
     const own = copied?.text === text ? copied : undefined;
-    await writeCells(
-      at,
-      pasteWrites(own?.rows ?? fromClipboardText(text), at, own?.from),
-      revision.value,
-      true,
-    );
+    const rows = own?.rows ?? fromClipboardText(text);
+    const writes = pasteWrites(rows, place, own?.from, {
+      storedRow: view.storedRow,
+      sourceRows: own?.sourceRows ?? [],
+    });
+    const width = Math.max(0, ...rows.map((cells) => cells.length));
+    const selectTo = view.reordered
+      ? { row: view.storedRow(place.row + rows.length - 1), col: place.col + width - 1 }
+      : undefined;
+    await writeCells(at, writes, revision.value, true, selectTo);
   }
 
   /**
@@ -823,12 +982,17 @@ export const useWorkbookStore = defineStore("workbook", () => {
     );
   }
 
-  /** Writes cells into a table that grows to fit them, up to its size limit, and selects what was written. */
+  /**
+   * Writes cells into a table that grows to fit them, up to its size limit,
+   * and selects what was written, up to the stored cell `selectTo` when it is
+   * given and otherwise the last row and column written.
+   */
   async function writeCells(
     at: CellId,
     writes: readonly CellInput[],
     writtenAt = revision.value,
     selectWritten = false,
+    selectTo?: CellAddress,
   ): Promise<void> {
     const table = tables.value.find((candidate) => candidate.id === at.tableId);
     if (!table || writes.length === 0) return;
@@ -858,7 +1022,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }
     unsavedChanges.add(pending);
     syncStructure();
-    if (selectWritten) extendSelection({ row: rowCount - 1, col: colCount - 1 });
+    const selectEnd = selectTo ?? { row: rowCount - 1, col: colCount - 1 };
+    if (selectWritten) extendSelection(selectEnd);
     saves = enqueueWrite(async () => {
       try {
         const current = tables.value.find((candidate) => candidate.id === table.id);
@@ -877,7 +1042,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
             currentAnchor &&
             cellIdentityKey(selectionAnchor) === cellIdentityKey(currentAnchor)
           ) {
-            extendSelection({ row: rowCount - 1, col: colCount - 1 });
+            extendSelection(selectEnd);
           }
         }
         // A queued paste may have grown the table before this one ran. Use
@@ -1235,6 +1400,28 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }, "The table could not be changed");
   }
 
+  /**
+   * Deletes rows or columns by their stored positions, which need not sit next
+   * to each other. The selection of a sorted or filtered table is such a set.
+   */
+  function deleteLines(
+    tableId: string,
+    axis: "row" | "col",
+    indexes: readonly number[],
+  ): Promise<boolean> {
+    const layout = layouts.value.get(tableId);
+    if (!layout) return Promise.resolve(false);
+    const all = axis === "row" ? layout.rowIds : layout.colIds;
+    const ids = [...new Set(indexes)].flatMap((index) => all[index] ?? []);
+    if (ids.length === 0) return Promise.resolve(false);
+    const queuedSaves = saves;
+    return attempt(async () => {
+      // The server shifts stored cells, so pending edits must be stored first.
+      await queuedSaves;
+      await receiveChange(await api.editTable(tableId, { axis, kind: "delete", ids }));
+    }, "The table could not be changed");
+  }
+
   function addView(pageId: string, kind: ViewRecord["kind"]): Promise<boolean> {
     return attempt(async () => {
       await receiveChange((await api.createView(pageId, kind)).change);
@@ -1354,6 +1541,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     addTable,
     updateTable,
     editTable,
+    deleteLines,
     deleteTable,
     refresh,
     blocksOn,
@@ -1368,6 +1556,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     columnOf,
     formatOf,
     formatSelection,
+    setTableDisplay,
+    rowView,
     nameColumns,
     dropColumns,
     updateColumn,

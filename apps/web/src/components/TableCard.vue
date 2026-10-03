@@ -11,6 +11,7 @@ import EditableName from "./EditableName.vue";
 import GridView from "./GridView.vue";
 import NamesPanel from "./NamesPanel.vue";
 import ResizeTable from "./ResizeTable.vue";
+import TableDisplayBar from "./TableDisplayBar.vue";
 import type { MenuItem, MenuScope } from "./menu";
 
 const props = defineProps<{ table: TableRecord }>();
@@ -20,6 +21,8 @@ const store = useWorkbookStore();
 const selected = computed(() =>
   store.selection?.tableId === props.table.id ? store.selection : null,
 );
+/** The rows the table shows, which are what a selection of rows names. */
+const view = computed(() => store.rowView(props.table.id));
 const rowsFull = computed(() => props.table.rowCount >= LIMITS.tableRows);
 const colsFull = computed(() => props.table.colCount >= LIMITS.tableCols);
 
@@ -50,30 +53,46 @@ async function importCsv(event: Event): Promise<void> {
 
 type Axis = "row" | "col";
 
-/** Rows or columns that sit next to each other: `count` of them from `first`. */
+/**
+ * Rows or columns that sit next to each other: `count` of them from `first`.
+ * Rows are places in what the table shows, which are its stored rows unless
+ * the table is sorted or filtered.
+ */
 interface Lines {
   axis: Axis;
   first: number;
   count: number;
 }
 
-/** "row 3", "rows 3-6", "column C", or "columns C-E". */
-function describeLines({ axis, first, count }: Lines): string {
+/** The stored rows or columns the lines name. Places past the last row are rows the table does not have. */
+function indexesOf({ axis, first, count }: Lines): number[] {
+  return Array.from({ length: count }, (_, offset) =>
+    axis === "row" ? view.value.storedRow(first + offset) : first + offset,
+  ).filter((index) => index < (axis === "row" ? props.table.rowCount : props.table.colCount));
+}
+
+/** "row 3", "rows 3-6", "3 rows", "column C", or "columns C-E". */
+function describeLines(lines: Lines): string {
+  const { axis } = lines;
+  const indexes = indexesOf(lines).toSorted((a, b) => a - b);
   const label = (index: number): string =>
     axis === "row" ? String(index + 1) : columnLabel(index);
   const noun = axis === "row" ? "row" : "column";
-  return count === 1
-    ? `${noun} ${label(first)}`
-    : `${noun}s ${label(first)}-${label(first + count - 1)}`;
+  const [first = 0] = indexes;
+  const last = indexes.at(-1) ?? first;
+  if (indexes.length === 1) return `${noun} ${label(first)}`;
+  // Rows of a sorted table need not sit next to each other.
+  if (last - first + 1 !== indexes.length) return `${String(indexes.length)} ${noun}s`;
+  return `${noun}s ${label(first)}-${label(last)}`;
 }
 
 /** Whether any cell of the rows or columns holds something. */
-function holdContent({ axis, first, count }: Lines): boolean {
+function holdContent(lines: Lines): boolean {
   const { id, rowCount, colCount } = props.table;
-  const across = axis === "row" ? colCount : rowCount;
-  for (let index = first; index < first + count; index += 1) {
+  const across = lines.axis === "row" ? colCount : rowCount;
+  for (const index of indexesOf(lines)) {
     for (let other = 0; other < across; other += 1) {
-      const cell = axis === "row" ? { row: index, col: other } : { row: other, col: index };
+      const cell = lines.axis === "row" ? { row: index, col: other } : { row: other, col: index };
       if (store.inputOf({ tableId: id, ...cell }) !== "") return true;
     }
   }
@@ -89,8 +108,7 @@ function insert(axis: Axis, index: number, count = 1): void {
 function removeLines(lines: Lines): void {
   const held = lines.count === 1 ? "what it holds" : "what they hold";
   if (holdContent(lines) && !window.confirm(`Delete ${describeLines(lines)} and ${held}?`)) return;
-  const { axis, first: index, count } = lines;
-  void store.editTable(props.table.id, { axis, kind: "delete", index, count });
+  void store.deleteLines(props.table.id, lines.axis, indexesOf(lines));
 }
 
 /** Whether the form that sets the table's size is open. */
@@ -176,7 +194,42 @@ function columnItems(col: number): MenuItem[] {
   const column = props.table.columns?.[col];
   if (!column) return [];
   const { id } = props.table;
+  const colId = props.table.colIds[col];
+  const sortBy = (descending: boolean): void => {
+    if (!colId) return;
+    const { filter } = props.table.display;
+    void store.setTableDisplay(
+      id,
+      { sort: [{ colId, descending }], ...(filter === undefined ? {} : { filter }) },
+      store.revision,
+    );
+  };
+  const sorted = props.table.display.sort.some((key) => key.colId === colId);
   return [
+    {
+      label: "Sort ascending",
+      run: () => {
+        sortBy(false);
+      },
+    },
+    {
+      label: "Sort descending",
+      run: () => {
+        sortBy(true);
+      },
+    },
+    {
+      label: "Clear sort",
+      disabled: props.table.display.sort.length === 0 && !sorted,
+      run: () => {
+        const { filter } = props.table.display;
+        void store.setTableDisplay(
+          id,
+          { sort: [], ...(filter === undefined ? {} : { filter }) },
+          store.revision,
+        );
+      },
+    },
     ...COLUMN_TYPES.map(({ type, label }) => ({
       label: `${column.type === type ? "✓ " : ""}Column holds: ${label}`,
       run: () => {
@@ -209,17 +262,19 @@ function lineItems(lines: Lines): MenuItem[] {
   const full = size + count > (rows ? LIMITS.tableRows : LIMITS.tableCols);
   const noun = rows ? "row" : "column";
   const counted = count === 1 ? noun : `${String(count)} ${noun}s`;
+  // Above and below mean places in the order shown, and a row is inserted at a stored place.
+  const unplaced = rows && view.value.reordered;
   return [
     {
       label: `Insert ${counted} ${rows ? "above" : "left"}`,
-      disabled: full,
+      disabled: full || unplaced,
       run: () => {
         insert(axis, first, count);
       },
     },
     {
       label: `Insert ${counted} ${rows ? "below" : "right"}`,
-      disabled: full,
+      disabled: full || unplaced,
       run: () => {
         insert(axis, first + count, count);
       },
@@ -274,8 +329,9 @@ const menuItems = computed((): MenuItem[] => {
 const menuLabel = computed(() => {
   const range = selected.value ? store.selectedRange : null;
   if (!range) return "";
-  const start = formatAddress({ row: range.startRow, col: range.startCol });
-  const end = formatAddress({ row: range.endRow, col: range.endCol });
+  const row = view.value.storedRow;
+  const start = formatAddress({ row: row(range.startRow), col: range.startCol });
+  const end = formatAddress({ row: row(range.endRow), col: range.endCol });
   return `Actions for ${start === end ? start : `${start}:${end}`}`;
 });
 </script>
@@ -330,14 +386,21 @@ const menuLabel = computed(() => {
       </span>
       <span v-if="selected" role="group" :aria-label="`Row ${selected.row + 1}`">
         <span class="table-card__line">Row {{ selected.row + 1 }}</span>
-        <button type="button" :disabled="rowsFull" @click="insert('row', selected.row)">
+        <button
+          type="button"
+          :disabled="rowsFull || view.reordered"
+          :title="view.reordered ? 'Not while the table is sorted or filtered' : undefined"
+          @click="insert('row', selected.row)"
+        >
           Insert row above
         </button>
         <button
           type="button"
           class="danger"
           :disabled="selected.row >= table.rowCount || (!table.columns && table.rowCount <= 1)"
-          @click="removeLines({ axis: 'row', first: selected.row, count: 1 })"
+          @click="
+            removeLines({ axis: 'row', first: view.place(selected.row) ?? selected.row, count: 1 })
+          "
         >
           Delete row
         </button>
@@ -357,6 +420,8 @@ const menuLabel = computed(() => {
         </button>
       </span>
     </div>
+
+    <TableDisplayBar v-if="table.columns" :table="table" />
 
     <!-- A strip along the right edge adds a column, and one along the bottom edge adds a row. -->
     <div class="table-card__grid">

@@ -1,8 +1,10 @@
 import type {
   ChartType,
   ColumnDefinition,
+  ConditionalRule,
   Effect,
   FormatRule,
+  TableDisplay,
   TableName,
 } from "@spreadsheet-app/engine";
 import type { SpreadsheetFile } from "@spreadsheet-app/shared";
@@ -181,6 +183,16 @@ export const tables = pgTable(
     columns: jsonb("columns").$type<ColumnDefinition[]>(),
     /** How cells are shown: rules applied in order, later ones over earlier ones. */
     formats: jsonb("formats").$type<FormatRule[]>().notNull().default([]),
+    /**
+     * How a data table's rows are shown: a sort and a filter. They leave the
+     * stored row order alone, so `A2` keeps its meaning under any sort.
+     */
+    display: jsonb("display").$type<TableDisplay>().notNull().default({ sort: [] }),
+    /** Formats a cell gets when its value meets a condition, laid over `formats`. */
+    conditionalFormats: jsonb("conditional_formats")
+      .$type<ConditionalRule[]>()
+      .notNull()
+      .default([]),
     /** The names a plain table holds, each with its formula. A data table holds none. */
     names: jsonb("names").$type<TableName[]>().notNull().default([]),
   },

@@ -22,7 +22,13 @@ import type {
   IdentifiedStructuralEditBody,
   IdentityFormatRange,
 } from "@spreadsheet-app/shared";
-import type { ChartType, ColumnType, FormatPatch, TableName } from "@spreadsheet-app/engine";
+import type {
+  ChartType,
+  ColumnType,
+  FormatPatch,
+  SortKey,
+  TableName,
+} from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
 export type {
@@ -253,6 +259,22 @@ export const api = {
       routes.tables[":tableId"].formats.$post({
         param: { tableId },
         json: { range, format, ...(reset ? { reset } : {}) },
+      }),
+    ),
+
+  /** Replaces how a data table's rows are sorted and filtered for display. */
+  setTableDisplay: (
+    tableId: string,
+    display: { sort: SortKey[]; filter?: string },
+    revision: number,
+  ): Promise<Change> =>
+    body(
+      routes.tables[":tableId"].display.$put({
+        param: { tableId },
+        json: {
+          sort: display.sort,
+          ...(display.filter === undefined ? {} : { filter: display.filter, revision }),
+        },
       }),
     ),
 

@@ -1,8 +1,11 @@
 import { PGlite } from "@electric-sql/pglite";
 import { randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { keyBetween } from "@spreadsheet-app/shared";
+
+// Each test starts a database and applies the migrations, which takes seconds when the whole suite runs at once.
+vi.setConfig({ testTimeout: 30_000 });
 
 const directory = new URL("../drizzle/", import.meta.url);
 

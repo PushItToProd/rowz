@@ -28,6 +28,7 @@ export class Contents {
       pages: snapshot.pages,
       tables: snapshot.tables.map((table) => ({
         ...table,
+        ...(table.display.filter === undefined ? {} : { filter: table.display.filter }),
         rowCount: this.layout(table.id).rowIds.length,
         colCount: table.colIds.length,
       })),

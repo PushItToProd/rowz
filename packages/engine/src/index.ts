@@ -23,6 +23,10 @@ export {
   columnFormulasAfterEdit,
   columnFormulasAfterMove,
   columnFormulasAfterRename,
+  filterFormulasAfterEdit,
+  filterFormulasAfterMove,
+  filterFormulasAfterRename,
+  type FilterFormula,
   nameFormulasAfterEdit,
   nameFormulasAfterMove,
   nameFormulasAfterRename,
@@ -38,6 +42,7 @@ export {
   type FunctionCategory,
   type FunctionDoc,
 } from "./docs";
+export { displayRows, type SortColumn, type SortKey, type TableDisplay } from "./display";
 export { chartData, type ChartData, type ChartSeries } from "./charts";
 export { dateFromParts, dateParts, formatDate, isDate, parseDate, type DateValue } from "./dates";
 export type {
@@ -105,6 +110,8 @@ export {
   type FormatColor,
   type FormatPatch,
   type FormatRule,
+  type ConditionalRule,
+  type RuleArea,
 } from "./formats";
 export {
   COLUMN_TYPES,

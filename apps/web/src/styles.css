@@ -771,6 +771,44 @@ select.cell-control--dropdown {
   padding: 2px 8px;
 }
 
+/* The sort and filter of a data table. */
+.table-display {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 20px;
+  margin-bottom: 10px;
+  font-size: 0.92rem;
+}
+
+.table-display__group,
+.table-display__key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-display__filter {
+  width: 16rem;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.table-display__label,
+.table-display__none,
+.table-display__hidden {
+  color: var(--muted);
+}
+
+.table-display__error {
+  color: var(--danger);
+}
+
+.table-display button,
+.table-display select {
+  padding: 2px 8px;
+}
+
 /* Suggestions and the function hint under a formula being typed. */
 .formula-assist {
   position: fixed;

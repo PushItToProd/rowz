@@ -608,3 +608,181 @@ it("sends distinct row insertions for rapid clicks on Add row", async () => {
   expect(requests[1]).toMatchObject({ kind: "insert", beforeId: null });
   expect(requests[0]?.ids[0]).not.toBe(requests[1]?.ids[0]);
 });
+
+describe("sorting and filtering a data table", () => {
+  const SORTED_TABLE = {
+    ...TABLE,
+    columns: [
+      { name: "Item", type: "any" as const },
+      { name: "Qty", type: "number" as const },
+      { name: "Note", type: "text" as const },
+    ],
+    display: { sort: [{ colId: "c2", descending: true }], filter: "=[Qty] > 1" },
+  };
+
+  async function renderSorted(role = "owner"): Promise<void> {
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith({ A1: "a", B1: "1", A2: "b", B2: "2", A3: "c", B3: "3" }, role),
+        tables: [SORTED_TABLE],
+      }),
+    );
+    await useWorkbookStore().load("s1");
+    wrapper = mount(TableCard, { props: { table: SORTED_TABLE }, attachTo: document.body });
+    server.setTableDisplay.mockResolvedValue(changeWith());
+  }
+
+  const bar = () => wrapper.get('[role="group"][aria-label="Sort and filter Table 1"]');
+
+  it("is not offered for a plain table", async () => {
+    await render();
+    expect(wrapper.find('[aria-label="Table filter"]').exists()).toBe(false);
+  });
+
+  it("shows the sort keys, the filter, and how many rows the filter hides", async () => {
+    await renderSorted();
+    expect(bar().get<HTMLInputElement>('[aria-label="Table filter"]').element.value).toBe(
+      "=[Qty] > 1",
+    );
+    expect(bar().get<HTMLSelectElement>('[aria-label="Sort column 1"]').element.value).toBe("c2");
+    expect(bar().get<HTMLSelectElement>('[aria-label="Sort direction 1"]').element.value).toBe(
+      "descending",
+    );
+    expect(bar().text()).toContain("2 rows hidden");
+  });
+
+  it("saves a changed filter with the revision it was started at", async () => {
+    await renderSorted();
+    const input = bar().get('[aria-label="Table filter"]');
+    const written = useWorkbookStore().revision;
+    await input.trigger("focus");
+    await input.setValue("=[Qty] > 2");
+    await input.trigger("keydown", { key: "Enter" });
+    await input.trigger("blur");
+    expect(server.setTableDisplay).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      { sort: [{ colId: "c2", descending: true }], filter: "=[Qty] > 2" },
+      written,
+    );
+  });
+
+  it("clears the filter and keeps the sort", async () => {
+    await renderSorted();
+    await button("Clear filter").trigger("click");
+    expect(server.setTableDisplay).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      { sort: [{ colId: "c2", descending: true }] },
+      expect.any(Number),
+    );
+  });
+
+  it("changes the direction of a key, adds one, and removes one, keeping the filter", async () => {
+    await renderSorted();
+    await bar().get('[aria-label="Sort direction 1"]').setValue("ascending");
+    await flushPromises();
+    expect(server.setTableDisplay).toHaveBeenLastCalledWith(
+      "t1",
+      { sort: [{ colId: "c2", descending: false }], filter: "=[Qty] > 1" },
+      expect.any(Number),
+    );
+    await button("Add sort").trigger("click");
+    await flushPromises();
+    expect(server.setTableDisplay).toHaveBeenLastCalledWith(
+      "t1",
+      {
+        sort: [
+          { colId: "c2", descending: true },
+          { colId: "c1", descending: false },
+        ],
+        filter: "=[Qty] > 1",
+      },
+      expect.any(Number),
+    );
+    await bar().get('[aria-label="Remove sort by Qty"]').trigger("click");
+    await flushPromises();
+    expect(server.setTableDisplay).toHaveBeenLastCalledWith(
+      "t1",
+      { sort: [], filter: "=[Qty] > 1" },
+      expect.any(Number),
+    );
+  });
+
+  it("sorts from a column's menu", async () => {
+    await renderSorted();
+    await wrapper.get('[data-cell="C3"]').trigger("contextmenu");
+    const item = (name: string) =>
+      wrapper.findAll('[role="menuitem"]').find((found) => found.text() === name)!;
+    await item("Sort ascending").trigger("click");
+    expect(server.setTableDisplay).toHaveBeenLastCalledWith(
+      "t1",
+      { sort: [{ colId: "c3", descending: false }], filter: "=[Qty] > 1" },
+      expect.any(Number),
+    );
+    await wrapper.get('[data-cell="C3"]').trigger("contextmenu");
+    await item("Clear sort").trigger("click");
+    expect(server.setTableDisplay).toHaveBeenLastCalledWith(
+      "t1",
+      { sort: [], filter: "=[Qty] > 1" },
+      expect.any(Number),
+    );
+  });
+
+  it("refuses to insert a row above or below while the table is sorted, and still adds one at the end", async () => {
+    await renderSorted();
+    await select("A3");
+    expect(button("Insert row above").element.disabled).toBe(true);
+    await wrapper.get('[data-cell="A3"]').trigger("contextmenu");
+    const items = wrapper.findAll('[role="menuitem"]');
+    expect(
+      items.find((found) => found.text() === "Insert row above")?.attributes("disabled"),
+    ).toBeDefined();
+    expect(
+      items.find((found) => found.text() === "Insert row below")?.attributes("disabled"),
+    ).toBeDefined();
+    server.editTable.mockResolvedValue(changeWith());
+    await wrapper.get('button[aria-label="Add row"]').trigger("click");
+    expect(server.editTable).toHaveBeenCalledOnce();
+  });
+
+  it("deletes the row selected, which is the stored row it shows", async () => {
+    await renderSorted();
+    // Sorted by Qty descending with Qty > 1 shown: stored rows 2 and 1.
+    await select("A3");
+    server.editTable.mockResolvedValue(changeWith());
+    await button("Delete row").trigger("click");
+    expect(server.editTable).toHaveBeenCalledExactlyOnceWith("t1", {
+      axis: "row",
+      kind: "delete",
+      ids: ["r2"],
+    });
+  });
+
+  it("shows a viewer what is sorted and filtered without the means to change it", async () => {
+    await renderSorted("viewer");
+    expect(bar().get('[aria-label="Table filter"]').attributes("disabled")).toBeDefined();
+    expect(bar().findAll("button")).toHaveLength(0);
+  });
+
+  it("keeps a filter typed just before a sort is added", async () => {
+    await renderSorted();
+    await button("Clear filter").trigger("click");
+    await flushPromises();
+    const input = bar().get('[aria-label="Table filter"]');
+    await input.trigger("focus");
+    await input.setValue("=[Qty] > 3");
+    await input.trigger("blur");
+    await button("Add sort").trigger("click");
+    await flushPromises();
+    expect(server.setTableDisplay).toHaveBeenLastCalledWith(
+      "t1",
+      {
+        sort: [
+          { colId: "c2", descending: true },
+          { colId: "c1", descending: false },
+        ],
+        filter: "=[Qty] > 3",
+      },
+      expect.any(Number),
+    );
+  });
+});

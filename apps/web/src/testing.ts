@@ -41,6 +41,8 @@ export const TABLE: TableRecord = {
   })),
   columns: null,
   formats: [],
+  display: { sort: [] },
+  conditionalFormats: [],
   names: [],
 };
 
@@ -291,6 +293,7 @@ export function mockApi(): MockedApi {
     updateTable: vi.fn(),
     editTable: vi.fn(),
     formatCells: vi.fn(),
+    setTableDisplay: vi.fn(),
     setTableNames: vi.fn(),
     nameColumns: vi.fn(),
     dropColumns: vi.fn(),

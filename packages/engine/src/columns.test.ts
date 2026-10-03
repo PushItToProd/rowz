@@ -5,6 +5,9 @@ import {
   columnFormulasAfterEdit,
   columnFormulasAfterMove,
   columnFormulasAfterRename,
+  filterFormulasAfterEdit,
+  filterFormulasAfterMove,
+  filterFormulasAfterRename,
 } from "./columns";
 import { parseFormula, parseFormulaWithReferences } from "./parser";
 import { inputsAfterRename, rewriteReferences, translateInput } from "./rewrite";
@@ -498,5 +501,98 @@ describe("rewriting column references", () => {
     expect(
       columnFormulasAfterEdit(shape, { tableId: "t1", axis: "col", kind: "delete", index: 1 }),
     ).toEqual([{ tableId: "t1", col: 3, formula: "=[Price] * [Qty] + Notes!A2 + #REF!" }]);
+  });
+});
+
+describe("table filters", () => {
+  function filtered(filter: string): WorkbookStructure {
+    const shape = structure();
+    return { ...shape, tables: shape.tables.map((t) => (t.id === "t1" ? { ...t, filter } : t)) };
+  }
+
+  it("shows the rows for which the formula is true", () => {
+    const book = workbook({ t1: CELLS }, filtered("=[Price] > 1"));
+    expect(book.filterRows("t1", "=[Price] > 1")).toEqual({ shown: [true, true, false] });
+  });
+
+  it("reads a filter written without the equals sign", () => {
+    const book = workbook({ t1: CELLS }, filtered("[Qty] = 3"));
+    expect(book.filterRows("t1", "[Qty] = 3").shown).toEqual([false, true, false]);
+  });
+
+  it("can read a formula column", () => {
+    const book = workbook();
+    expect(book.filterRows("t1", "=[Total] >= 10").shown).toEqual([true, true, false]);
+  });
+
+  it("keeps a row shown when the formula gives an error there, and reports the first error", () => {
+    const book = workbook({ t1: { ...CELLS, C2: "=1/0" } });
+    const { shown, error } = book.filterRows("t1", "=[Qty] > 1");
+    expect(shown).toEqual([true, true, false]);
+    expect(error?.code).toBe("#DIV/0!");
+  });
+
+  it("reports a formula that does not parse", () => {
+    const { shown, error } = workbook().filterRows("t1", "=[Price] >");
+    expect(shown).toEqual([true, true, true]);
+    expect(error).toBeDefined();
+  });
+
+  it("reports a filter that is not true or false", () => {
+    const { shown, error } = workbook().filterRows("t1", "=[Item]");
+    expect(shown).toEqual([true, true, true]);
+    expect(error?.code).toBe("#VALUE!");
+  });
+
+  it("is rewritten when a column is renamed", () => {
+    expect(
+      filterFormulasAfterRename(filtered("=[Price] > 1"), {
+        kind: "column",
+        tableId: "t1",
+        from: "Price",
+        name: "Cost",
+      }),
+    ).toEqual([{ tableId: "t1", formula: "=[Cost] > 1" }]);
+  });
+
+  it("keeps a filter written without the equals sign that way", () => {
+    expect(
+      filterFormulasAfterRename(filtered("[Price] > 1"), {
+        kind: "column",
+        tableId: "t1",
+        from: "Price",
+        name: "Cost",
+      }),
+    ).toEqual([{ tableId: "t1", formula: "[Cost] > 1" }]);
+  });
+
+  it("is rewritten when a table it reads is renamed or moved, or a row it reads is deleted", () => {
+    const shape = filtered("=[Price] > Notes!A2");
+    expect(
+      filterFormulasAfterRename(shape, { kind: "table", tableId: "t2", name: "Memo" }),
+    ).toEqual([{ tableId: "t1", formula: "=[Price] > Memo!A2" }]);
+    expect(filterFormulasAfterMove(shape, { kind: "table", tableId: "t2", pageId: "p2" })).toEqual([
+      { tableId: "t1", formula: "=[Price] > 'Other Page'!Notes!A2" },
+    ]);
+    expect(
+      filterFormulasAfterEdit(shape, {
+        tableId: "t2",
+        axis: "row",
+        kind: "insert",
+        index: 0,
+        count: 1,
+      }),
+    ).toEqual([{ tableId: "t1", formula: "=[Price] > Notes!A3" }]);
+  });
+
+  it("is left alone when nothing it reads changes", () => {
+    expect(
+      filterFormulasAfterRename(filtered("=[Price] > 1"), {
+        kind: "column",
+        tableId: "t1",
+        from: "Qty",
+        name: "Count",
+      }),
+    ).toEqual([]);
   });
 });

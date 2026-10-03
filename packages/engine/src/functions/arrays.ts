@@ -1,5 +1,12 @@
 import { callLambda } from "../evaluate";
-import { compare, identityOf, isError, isScalar, type CellValue, type Evaluated } from "../values";
+import {
+  cellOrder,
+  identityOf,
+  isError,
+  isScalar,
+  type CellValue,
+  type Evaluated,
+} from "../values";
 import {
   array,
   boolean,
@@ -21,13 +28,6 @@ function width(rows: readonly CellValue[][]): number {
 
 function result(rows: CellValue[][], whenEmpty: string): Evaluated {
   return rows.length === 0 || width(rows) === 0 ? fail("#N/A", whenEmpty) : array(rows);
-}
-
-/** Orders two cells for sorting. Empty cells and non-values go last, whichever way the sort runs. */
-function cellOrder(a: CellValue, b: CellValue, direction: number): number {
-  const sortable = (cell: CellValue): boolean => isScalar(cell) && cell !== null;
-  if (!sortable(a) || !sortable(b)) return Number(sortable(b)) - Number(sortable(a));
-  return isScalar(a) && isScalar(b) ? compare(a, b) * direction : 0;
 }
 
 /** A key under which two cells that compare as equal are the same. */

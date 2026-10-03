@@ -34,10 +34,12 @@ import {
   isFormulaInput,
   kindOf,
   literalInput,
+  toBoolean,
   toText,
   type ControlValue,
   isError,
   isRange,
+  isScalar,
   parseLiteralInput,
   parseNumber,
   type ActionValue,
@@ -325,6 +327,36 @@ export class Workbook {
       }
     }
     this.computedRows.set(tableId, row + 1);
+  }
+
+  /**
+   * Which rows of a table pass a filter formula, such as `=[Payout] > 60000`.
+   * The formula is evaluated for each row as a formula column's would be, so
+   * `[Column]` means that row's own cell. A row for which the formula gives an
+   * error is shown, and the first error is returned beside the rows.
+   */
+  filterRows(tableId: string, formula: string): { shown: boolean[]; error?: ErrorValue } {
+    this.settle();
+    const rows = this.extent(tableId).rows;
+    const shown = Array.from({ length: rows }, () => true);
+    const written = formula.trim();
+    const content = parseContent(written.startsWith("=") ? written : `=${written}`);
+    if (content.type === "invalid") return { shown, error: content.error };
+    if (content.type !== "formula") {
+      return { shown, error: error("#VALUE!", "A filter is a formula") };
+    }
+    let first: ErrorValue | undefined;
+    for (let row = 0; row < rows; row += 1) {
+      const value = evaluate(content.ast, this.context({ tableId, row, col: 0 }));
+      const truth = isError(value)
+        ? value
+        : isScalar(value)
+          ? toBoolean(value)
+          : error("#VALUE!", "A filter must give TRUE or FALSE");
+      if (typeof truth === "boolean") shown[row] = truth;
+      else first ??= truth;
+    }
+    return { shown, ...(first ? { error: first } : {}) };
   }
 
   /** The column a cell is in, when its table has named columns. */

@@ -48,10 +48,35 @@ export interface FormatRule {
   reset?: boolean;
 }
 
+/** The cells a rule covers: a rectangle of a table's rows and columns, open at the bottom or right. */
+export type RuleArea = Pick<FormatRule, "startRow" | "endRow" | "startCol" | "endCol">;
+
+/**
+ * A format given to the cells of an area that meet a condition, or a color
+ * scale over the numbers in the area. It is stored apart from the plain
+ * rules and is laid over them when a cell is shown.
+ */
+export type ConditionalRule = RuleArea &
+  (
+    | {
+        kind: "criterion";
+        /** A criterion as `COUNTIF` takes it, tested against the cell's own value: `>100`, `"Done"`, `<>`. */
+        criterion: string;
+        format: FormatPatch;
+      }
+    | {
+        kind: "scale";
+        /** The color of the smallest number. `null` is the cell's own background. */
+        low: FormatColor | null;
+        /** The color of the largest number. */
+        high: FormatColor;
+      }
+  );
+
 /** More rules than a person makes by hand. Past this a table's formats must be cleared before more are added. */
 export const MAX_FORMAT_RULES = 500;
 
-type Area = Pick<FormatRule, "startRow" | "endRow" | "startCol" | "endCol">;
+type Area = RuleArea;
 
 function within(start: number, end: number | null, index: number): boolean {
   return index >= start && (end === null || index <= end);

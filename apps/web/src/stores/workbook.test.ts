@@ -1995,3 +1995,142 @@ it("queues formatting and renaming behind an earlier cell save, and continues af
     server.renamePage.mock.invocationCallOrder[0]!,
   );
 });
+
+describe("a sorted and filtered data table", () => {
+  const COLUMNS: ColumnDefinition[] = [
+    { name: "Item", type: "any" },
+    { name: "Qty", type: "number" },
+  ];
+
+  // Item reads b, d, a, c down the stored rows. Sorted ascending they show stored rows 2, 0, 3, 1.
+  async function openSorted(display: (typeof TABLE)["display"]) {
+    const table = { ...TABLE, columns: COLUMNS, display };
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith({ A1: "b", A2: "d", A3: "a", A4: "c", B1: "1", B2: "2", B3: "3", B4: "4" }),
+        tables: [table],
+      }),
+    );
+    const store = useWorkbookStore();
+    await store.load("s1");
+    return store;
+  }
+  const SORTED = { sort: [{ colId: "c1", descending: false }] };
+
+  it("gives the rows in display order and maps places to stored rows and back", async () => {
+    const store = await openSorted(SORTED);
+    const view = store.rowView("t1");
+    expect(view.rows).toEqual([2, 0, 3, 1]);
+    expect(view.reordered).toBe(true);
+    expect([0, 1, 2, 3].map((row) => view.place(row))).toEqual([1, 3, 0, 2]);
+    expect([0, 1, 2, 3, 4].map(view.storedRow)).toEqual([2, 0, 3, 1, 4]);
+    // A row the table does not have yet is placed after the last shown.
+    expect(view.place(4)).toBe(4);
+  });
+
+  it("shows every row in stored order when there is no sort or filter", async () => {
+    const store = await openSorted({ sort: [] });
+    expect(store.rowView("t1")).toMatchObject({ rows: [0, 1, 2, 3], reordered: false, hidden: 0 });
+  });
+
+  it("leaves out the rows a filter rejects, counts them, and reports an error in the formula", async () => {
+    const store = await openSorted({ sort: [], filter: "=[Qty] > 2" });
+    expect(store.rowView("t1")).toMatchObject({ rows: [2, 3], hidden: 2, filterError: undefined });
+    expect(store.rowView("t1").place(0)).toBeUndefined();
+    const broken = await openSorted({ sort: [], filter: "=[Qty] >" });
+    expect(broken.rowView("t1").filterError).toBeDefined();
+    expect(broken.rowView("t1").hidden).toBe(0);
+  });
+
+  it("re-sorts as cells change, and the selection follows its cell", async () => {
+    const store = await openSorted(SORTED);
+    store.selection = at("A3");
+    await store.setCell(at("A3"), "z");
+    expect(store.rowView("t1").rows).toEqual([0, 3, 1, 2]);
+    expect(store.selection).toEqual(at("A3"));
+    expect(store.selectedRange).toEqual({ startRow: 3, endRow: 3, startCol: 0, endCol: 0 });
+  });
+
+  it("makes the selection a rectangle of the rows shown", async () => {
+    const store = await openSorted(SORTED);
+    store.selection = at("A3");
+    store.extendSelection(at("A4"));
+    expect(store.selectedRange).toEqual({ startRow: 0, endRow: 2, startCol: 0, endCol: 0 });
+  });
+
+  it("clears the selection when a filter hides its row", async () => {
+    const store = await openSorted({ sort: [], filter: "=[Qty] > 1" });
+    store.selection = at("B2");
+    await store.setCell(at("B2"), "0");
+    expect(store.selection).toBeNull();
+  });
+
+  it("pastes down the rows shown, each formula moving by the stored distance", async () => {
+    const store = await openSorted(SORTED);
+    store.selection = at("A3");
+    store.extendSelection(at("B3"));
+    // Place 0 is stored row 3 (a, 3). Pasting it at place 2 lands in stored row 4 (c, 4).
+    const text = store.copySelection();
+    expect(text).toBe("a\t3");
+    store.selection = at("A4");
+    await store.paste(text);
+    expect(server.setCells.mock.calls[0]?.[1]).toEqual([
+      { rowId: "r3", colId: "c1", input: "a" },
+      { rowId: "r3", colId: "c2", input: "3" },
+    ]);
+  });
+
+  it("deletes the stored rows of the places selected, though they are not adjacent", async () => {
+    const store = await openSorted(SORTED);
+    server.editTable.mockResolvedValue(changeWith());
+    // Stored rows 2 and 3 sit next to each other, and rows 0 and 3 do not.
+    await store.deleteLines("t1", "row", [0, 3]);
+    expect(server.editTable).toHaveBeenCalledExactlyOnceWith("t1", {
+      axis: "row",
+      kind: "delete",
+      ids: ["r0", "r3"],
+    });
+  });
+
+  it("refuses to format several rows, and formats one row or whole columns", async () => {
+    const store = await openSorted(SORTED);
+    store.selection = at("A3");
+    store.extendSelection(at("B1"));
+    expect(await store.formatSelection({ bold: true })).toBe(false);
+    expect(store.notice?.text).toContain("sorted or filtered");
+    expect(server.formatCells).not.toHaveBeenCalled();
+
+    server.formatCells.mockResolvedValue(changeWith());
+    store.selection = at("A3");
+    store.extendSelection(at("B3"));
+    expect(await store.formatSelection({ bold: true })).toBe(true);
+    expect(server.formatCells).toHaveBeenLastCalledWith(
+      "t1",
+      { startRowId: "r2", endRowId: "r2", startColId: "c1", endColId: "c2" },
+      { bold: true },
+      false,
+    );
+
+    // The first place is stored row 3, but a whole column covers every stored row.
+    store.selection = at("B3");
+    store.extendSelection(at("B2"));
+    expect(await store.formatSelection({ italic: true })).toBe(true);
+    expect(server.formatCells).toHaveBeenLastCalledWith(
+      "t1",
+      { startRowId: "r0", endRowId: null, startColId: "c2", endColId: "c2" },
+      { italic: true },
+      false,
+    );
+  });
+
+  it("saves the sort and filter", async () => {
+    const store = await openSorted(SORTED);
+    server.setTableDisplay.mockResolvedValue(changeWith());
+    await store.setTableDisplay("t1", { sort: [], filter: "=[Qty] > 1" }, 7);
+    expect(server.setTableDisplay).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      { sort: [], filter: "=[Qty] > 1" },
+      7,
+    );
+  });
+});

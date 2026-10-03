@@ -166,6 +166,42 @@ describe("pasteWrites", () => {
   });
 });
 
+/** A table showing stored rows 2, 0, 1 (rows 3, 1, 2) in that order, with a place past the end for a new row. */
+const SORTED = [2, 0, 1];
+const storedRow = (place: number): number => SORTED[place] ?? place;
+
+describe("ranges over a sorted or filtered table", () => {
+  it("fills the places and writes the stored rows, moving a formula by the stored distance", () => {
+    // Place 0 is stored row 3 (A3). Filling places 1 and 2 copies it to stored rows 1 and 2.
+    const inputAt = (cell: CellAddress): string => (cell.row === 0 ? "=A3*2" : "");
+    expect(
+      byAddress(fillWrites(range("A1:A1"), range("A1:A3"), inputAt, false, storedRow)),
+    ).toEqual({ A1: "=A1*2", A2: "=A2*2" });
+  });
+
+  it("clears the stored rows of the places selected", () => {
+    const inputAt = (): string => "x";
+    expect(byAddress(clearWrites(range("A1:A2"), inputAt, storedRow))).toEqual({ A3: "", A1: "" });
+  });
+
+  it("pastes formulas by the distance between the stored rows each copy came from and lands in", () => {
+    // Copied from stored rows 5 and 6, pasted into places 0 and 1: stored rows 2 and 0.
+    const writes = pasteWrites([["=A5"], ["=A7"]], at("A1"), at("A1"), {
+      storedRow,
+      sourceRows: [4, 6],
+    });
+    expect(byAddress(writes)).toEqual({ A3: "=A3", A1: "=A1" });
+  });
+
+  it("writes past the shown rows to the rows after the last stored row", () => {
+    const writes = pasteWrites([["a"], ["b"], ["c"], ["d"]], at("A1"), undefined, {
+      storedRow,
+      sourceRows: [],
+    });
+    expect(byAddress(writes)).toEqual({ A3: "a", A1: "b", A2: "c", A4: "d" });
+  });
+});
+
 describe("clipboard text", () => {
   it("writes rows as lines of tab-separated cells and reads them back", () => {
     const rows = [

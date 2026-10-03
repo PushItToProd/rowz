@@ -2,6 +2,19 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-02: Sorting, filtering, choices, and conditional formats
+
+Four decisions shape how a data table is shown.
+
+- **One filter formula per table**, such as `=[Payout] > 60000`. It is written in the table, so `[Column]` means the row's own cell, as in a formula column.
+- **A selection is a rectangle of the rows shown.** While a table is sorted or filtered, copy, clear, fill, paste, and delete act on those rows.
+- **A dropdown column takes its choices from a list on the column, or from a column of another data table.**
+- **A conditional format tests the cell's own value** with a `COUNTIF`-style criterion, or shades a range with a two-color scale.
+
+Sort and filter are display settings stored on the table. The stored row order does not change, so a position such as `A2` reads the same cell under any sort or filter.
+
+**What would reopen it.** A filter that is several conditions the person edits separately, a conditional format that reads other cells, or a view of one table with its own sort and filter.
+
 ## 2026-10-02: An ambiguous name is an error
 
 A word written alone in a formula, such as `Total` or `Sales`, can mean a name or a table anywhere in the document. When it has more than one meaning it is `#NAME?`. This holds for two names of one spelling, whatever holds them, and for a name and a table of one spelling, on any page. No meaning wins by being nearer to the formula: a name in the formula's own script does not beat the same name in another script.

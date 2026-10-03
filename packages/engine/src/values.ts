@@ -302,3 +302,10 @@ export function compare(leftValue: Scalar, rightValue: Scalar): number {
   if (typeof left === "boolean" && typeof right === "boolean") return Number(left) - Number(right);
   return KIND_RANK[kindOf(left)] - KIND_RANK[kindOf(right)];
 }
+
+/** Orders two cells for sorting. Empty cells and non-values go last, whichever way the sort runs. */
+export function cellOrder(a: CellValue, b: CellValue, direction: number): number {
+  const sortable = (cell: CellValue): boolean => isScalar(cell) && cell !== null;
+  if (!sortable(a) || !sortable(b)) return Number(sortable(b)) - Number(sortable(a));
+  return isScalar(a) && isScalar(b) ? compare(a, b) * direction : 0;
+}

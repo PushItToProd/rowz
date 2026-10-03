@@ -73,11 +73,18 @@ function commit(): void {
 
 /** Saves, and moves on to the cell below, as Enter in a cell does. */
 function finish(): void {
+  // The next row is the one below before the edit, which can move the row it is in.
+  const before = editing.value && store.positionOf(editing.value);
+  const view = before ? store.rowView(before.tableId) : undefined;
+  const below =
+    before && view
+      ? view.rows[Math.min((view.place(before.row) ?? before.row) + 1, view.rows.length - 1)]
+      : undefined;
   commit();
   const target = editing.value && store.positionOf(editing.value);
   const table = store.tables.find((candidate) => candidate.id === target?.tableId);
   if (target && table) {
-    store.selection = { ...target, row: Math.min(target.row + 1, table.rowCount - 1) };
+    store.selection = { ...target, row: below ?? target.row };
     // Until the grid takes the keyboard, the field edits the cell now selected.
     editing.value = store.identityOf(store.selection) ?? null;
     draft.value = stored.value;

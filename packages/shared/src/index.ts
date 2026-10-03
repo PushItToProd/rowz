@@ -184,6 +184,37 @@ export const updateColumnBody = z
     }
   });
 
+/** Sort keys one table has. More than this is not a sort a person chooses by hand. */
+export const MAX_SORT_KEYS = 5;
+
+const sortKey = z.object({ colId: z.uuid(), descending: z.boolean() });
+
+/**
+ * How a data table's rows are shown, all of it: the sort and filter replace
+ * the table's. A filter is a formula, so the request carries the revision it
+ * was written at, like any other formula.
+ */
+export const setTableDisplayBody = z
+  .object({
+    sort: z
+      .array(sortKey)
+      .max(MAX_SORT_KEYS)
+      .refine((keys) => new Set(keys.map(({ colId }) => colId)).size === keys.length, {
+        message: "A column can be a sort key once",
+      }),
+    filter: z.string().trim().max(LIMITS.inputLength).optional(),
+    revision: writtenAt,
+  })
+  .superRefine((body, context) => {
+    if (body.filter !== undefined && body.filter !== "" && body.revision === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["revision"],
+        message: "A revision is required when writing a filter",
+      });
+    }
+  });
+
 /**
  * An insert or delete of rows or columns as the editor asks for it, by
  * position. The store turns it into the ids it names before it is queued.
@@ -318,6 +349,12 @@ export const moveBlockBody = z.object({ pageId: z.uuid() });
 
 export const FILE_FORMAT = "spreadsheet-app";
 
+/** How a file's table is shown. A file has no ids, so a sort key names its column by position. */
+const fileDisplay = z.object({
+  sort: z.array(z.object({ column: cellIndex, descending: z.boolean() })).max(MAX_SORT_KEYS),
+  filter: z.string().max(LIMITS.inputLength).optional(),
+});
+
 const fileTable = z.object({
   type: z.literal("table"),
   name,
@@ -330,6 +367,8 @@ const fileTable = z.object({
   formats: z.array(formatRule).max(MAX_FORMAT_RULES).optional(),
   /** The names a plain table holds. Left out when it holds none. */
   names: z.array(tableName).max(LIMITS.tableNames).optional(),
+  /** The sort and filter of a data table. Left out when it has neither. */
+  display: fileDisplay.optional(),
   /** Cells that hold something. Empty cells and the cells of formula columns are left out. */
   cells: z.array(cellInput).max(FILE_LIMITS.cells),
 });
@@ -389,6 +428,9 @@ interface Placed {
 interface PlacedTable extends Placed {
   rowCount: number;
   colCount: number;
+  /** The ids of the table's columns, which a sort key names. */
+  colIds: readonly string[];
+  display: { sort: readonly { colId: string; descending: boolean }[]; filter?: string | undefined };
   columns: FileTable["columns"] | null;
   formats: NonNullable<FileTable["formats"]>;
   names: NonNullable<FileTable["names"]>;
@@ -397,6 +439,17 @@ interface PlacedView extends Placed {
   kind: "chart" | "text" | "script";
   source: string;
   chartType: "bar" | "line" | "pie" | "scatter" | null;
+}
+
+/** The file's form of a table's sort and filter: nothing when the table shows every row in stored order. */
+function fileDisplayOf(table: PlacedTable): { display?: z.infer<typeof fileDisplay> } {
+  const sort = table.display.sort.flatMap(({ colId, descending }) => {
+    const column = table.colIds.indexOf(colId);
+    return column < 0 ? [] : [{ column, descending }];
+  });
+  const filter = table.display.filter;
+  if (sort.length === 0 && (filter === undefined || filter === "")) return {};
+  return { display: { sort, ...(filter === undefined || filter === "" ? {} : { filter }) } };
 }
 
 /**
@@ -423,6 +476,7 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
           ...(table.columns ? { columns: table.columns } : {}),
           ...(table.formats.length > 0 ? { formats: table.formats } : {}),
           ...(table.names.length > 0 ? { names: table.names } : {}),
+          ...fileDisplayOf(table),
           cells: cellsOf(table),
         } satisfies FileBlock,
       })),

@@ -465,6 +465,20 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "sort and filter a data table",
+    async prepare({ id, tableId }) {
+      await owner.json("POST", `/tables/${tableId}/columns`, { headerRow: false });
+      const [colId] = (await readSnapshot(owner, id)).tables[0]!.colIds;
+      const revision = (await readSnapshot(owner, id)).revision;
+      return {
+        method: "PUT",
+        path: `/tables/${tableId}/display`,
+        body: { sort: [{ colId, descending: true }], filter: "=[Column 1] <> 1", revision },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "drop named columns",
     async prepare({ tableId }) {
       await owner.json("POST", `/tables/${tableId}/columns`, { headerRow: false });

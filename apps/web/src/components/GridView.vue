@@ -42,10 +42,34 @@ const draft = ref<string | null>(null);
 const editing = shallowRef<IdentifiedCell | null>(null);
 let editRevision = 0;
 let newRowColumn: string | undefined;
+/**
+ * The rows the table shows, in the order it shows them. A row is addressed by
+ * its place here, and by its stored row everywhere else: the selection, the
+ * cell addresses, and the formulas that name it.
+ */
+const view = computed(() => store.rowView(props.table.id));
+const shownRows = computed(() => view.value.rows.length);
 const displayedRows = computed(
-  () =>
-    props.table.rowCount + (props.table.columns && props.table.rowCount < LIMITS.tableRows ? 1 : 0),
+  () => shownRows.value + (props.table.columns && props.table.rowCount < LIMITS.tableRows ? 1 : 0),
 );
+
+function storedRow(place: number): number {
+  return view.value.storedRow(place);
+}
+
+function placeOf(row: number): number {
+  return view.value.place(row) ?? row;
+}
+
+/** A cell at a place and a column, named by the stored row it shows. */
+function cellAt(place: number, col: number): CellId {
+  return cell(storedRow(place), col);
+}
+
+/** A place and column as the stored address the store's selection names. */
+function stored({ row, col }: CellAddress): CellAddress {
+  return { row: storedRow(row), col };
+}
 watch(
   () => store.rejectedDraft,
   (rejected) => {
@@ -76,9 +100,14 @@ function cell(row: number, col: number): CellId {
   return { tableId: props.table.id, row, col };
 }
 
-function isSelected(row: number, col: number): boolean {
-  return selected.value?.row === row && selected.value.col === col;
+function isSelected(place: number, col: number): boolean {
+  return selected.value?.row === storedRow(place) && selected.value.col === col;
 }
+
+/** The selected cell as a place. */
+const selectedPlace = computed<CellAddress | null>(() =>
+  selected.value ? { row: placeOf(selected.value.row), col: selected.value.col } : null,
+);
 
 function commit(): void {
   const input = draft.value;
@@ -107,15 +136,17 @@ function onEditorBlur(event: FocusEvent): void {
 /** The selected cells, when the selection is in this table. */
 const range = computed(() => (selected.value ? store.selectedRange : null));
 
-function inRange(row: number, col: number): boolean {
-  return range.value !== null && contains(range.value, { row, col });
+function inRange(place: number, col: number): boolean {
+  return range.value !== null && contains(range.value, { row: place, col });
 }
 
-function select(row: number, col: number): void {
+function select(place: number, col: number): void {
   // Clicking the cell being edited keeps the edit. Clicking it as part of a range selects it alone.
-  if (isSelected(row, col) && store.selectionEnd === null) return;
+  if (isSelected(place, col) && store.selectionEnd === null) return;
+  // Committing can re-sort the rows, and the cell clicked is the one that was under the pointer.
+  const target = cellAt(place, col);
   commit();
-  store.selection = cell(row, col);
+  store.selection = target;
 }
 
 /** The definition of a column, when the table has named columns. */
@@ -138,7 +169,7 @@ function onColumnMousedown(event: MouseEvent, col: number): void {
  * the selected cell's row or column to this one.
  */
 function onHeaderMousedown(event: MouseEvent, axis: Axis, index: number): void {
-  const from = event.shiftKey && selected.value ? selected.value[axis] : index;
+  const from = event.shiftKey && selectedPlace.value ? selectedPlace.value[axis] : index;
   selectLines(axis, from, index);
   drag.value = { kind: "lines", axis, from };
   window.addEventListener("mouseup", endDrag, { once: true });
@@ -152,16 +183,19 @@ function onHeaderMouseenter(axis: Axis, index: number): void {
 
 /** Selects whole rows or columns: every one from `from` to `to`. */
 function selectLines(axis: Axis, from: number, to: number): void {
+  const last = { row: Math.max(0, shownRows.value - 1), col: props.table.colCount - 1 };
+  const anchor = axis === "row" ? cellAt(from, 0) : cellAt(0, from);
+  const end = stored(axis === "row" ? { row: to, col: last.col } : { row: last.row, col: to });
   commit();
-  const last = { row: Math.max(0, props.table.rowCount - 1), col: props.table.colCount - 1 };
-  store.selection = axis === "row" ? cell(from, 0) : cell(0, from);
-  store.extendSelection(axis === "row" ? { row: to, col: last.col } : { row: last.row, col: to });
+  store.selection = anchor;
+  store.extendSelection(end);
   focusGrid();
 }
 
 /** Whether a row or column is selected whole, alone or among others. */
 function isLineSelected(axis: Axis, index: number): boolean {
-  const { rowCount, colCount } = props.table;
+  const rowCount = shownRows.value;
+  const { colCount } = props.table;
   const whole = range.value;
   if (!whole) return false;
   return axis === "row"
@@ -174,11 +208,10 @@ function isLineSelected(axis: Axis, index: number): boolean {
 }
 
 function selectAll(): void {
-  store.selection = cell(0, 0);
-  store.extendSelection({
-    row: Math.max(0, props.table.rowCount - 1),
-    col: props.table.colCount - 1,
-  });
+  store.selection = cellAt(0, 0);
+  store.extendSelection(
+    stored({ row: Math.max(0, shownRows.value - 1), col: props.table.colCount - 1 }),
+  );
 }
 
 /**
@@ -223,16 +256,19 @@ function clamp({ row, col }: CellAddress): CellAddress {
 }
 
 function move(rows: number, cols: number): void {
-  const from = selected.value;
+  const from = selectedPlace.value;
   if (!from) return;
   const next = clamp({ row: from.row + rows, col: from.col + cols });
-  store.selection = cell(next.row, next.col);
+  store.selection = cellAt(next.row, next.col);
 }
 
 /** Grows or shrinks the selected range by moving its far corner. */
 function extend(rows: number, cols: number): void {
-  const corner = store.selectionEnd ?? selected.value;
-  if (corner) store.extendSelection(clamp({ row: corner.row + rows, col: corner.col + cols }));
+  const end = store.selectionEnd;
+  const corner = end ? { row: placeOf(end.row), col: end.col } : selectedPlace.value;
+  if (corner) {
+    store.extendSelection(stored(clamp({ row: corner.row + rows, col: corner.col + cols })));
+  }
 }
 
 /**
@@ -248,12 +284,12 @@ const drag = ref<
 /** The cells a fill in progress would cover. */
 const fillPreview = ref<GridRange | null>(null);
 
-function inFillPreview(row: number, col: number): boolean {
-  return fillPreview.value !== null && contains(fillPreview.value, { row, col });
+function inFillPreview(place: number, col: number): boolean {
+  return fillPreview.value !== null && contains(fillPreview.value, { row: place, col });
 }
 
-function isHandleCell(row: number, col: number): boolean {
-  return range.value?.endRow === row && range.value.endCol === col;
+function isHandleCell(place: number, col: number): boolean {
+  return range.value?.endRow === place && range.value.endCol === col;
 }
 
 /**
@@ -262,9 +298,9 @@ function isHandleCell(row: number, col: number): boolean {
  */
 let tapOnSelected = false;
 
-function onCellPointerdown(event: PointerEvent, row: number, col: number): void {
+function onCellPointerdown(event: PointerEvent, place: number, col: number): void {
   tapOnSelected =
-    event.pointerType === "touch" && isSelected(row, col) && store.selectionEnd === null;
+    event.pointerType === "touch" && isSelected(place, col) && store.selectionEnd === null;
 }
 
 function onCellClick(): void {
@@ -272,25 +308,26 @@ function onCellClick(): void {
   tapOnSelected = false;
 }
 
-function onCellMousedown(event: MouseEvent, row: number, col: number): void {
+function onCellMousedown(event: MouseEvent, place: number, col: number): void {
   if (event.button !== 0) return;
   if (event.shiftKey && selected.value) {
+    const end = stored({ row: place, col });
     commit();
-    store.extendSelection({ row, col });
+    store.extendSelection(end);
   } else {
-    select(row, col);
+    select(place, col);
   }
   drag.value = { kind: "select" };
   window.addEventListener("mouseup", endDrag, { once: true });
 }
 
-function onCellMouseenter(row: number, col: number): void {
-  if (drag.value?.kind === "select") store.extendSelection({ row, col });
+function onCellMouseenter(place: number, col: number): void {
+  if (drag.value?.kind === "select") store.extendSelection(stored({ row: place, col }));
   // A drag that began on a header and strays into the cells still selects whole rows or columns.
   else if (drag.value?.kind === "lines")
-    onHeaderMouseenter(drag.value.axis, { row, col }[drag.value.axis]);
+    onHeaderMouseenter(drag.value.axis, { row: place, col }[drag.value.axis]);
   else if (drag.value?.kind === "fill")
-    fillPreview.value = fillTarget(drag.value.source, { row, col });
+    fillPreview.value = fillTarget(drag.value.source, { row: place, col });
 }
 
 function startFill(): void {
@@ -309,8 +346,8 @@ function endDrag(): void {
   // Dragging continues a series such as 1, 2. Ctrl+D and Ctrl+R copy exactly.
   void store.fill(props.table.id, finished.source, target, true);
   // Leave the filled cells selected, so the fill can be continued or undone by hand.
-  store.selection = cell(target.startRow, target.startCol);
-  store.extendSelection({ row: target.endRow, col: target.endCol });
+  store.selection = cellAt(target.startRow, target.startCol);
+  store.extendSelection(stored({ row: target.endRow, col: target.endCol }));
 }
 
 /** Copies the first row of the selection down, or its first column across. */
@@ -414,14 +451,34 @@ watch(selected, async (current) => {
  * Runs the button in a cell. A running button is disabled, and a disabled
  * element drops keyboard focus, so focus moves to the grid first.
  */
-function run(row: number, col: number): void {
+function run(place: number, col: number): void {
   focusGrid();
-  void store.click(cell(row, col));
+  void store.click(cellAt(place, col));
 }
 
+/**
+ * Saves the edit and moves on. The next cell is picked before the edit is
+ * committed, because committing can move the row: Enter goes down from where
+ * the row was, to the row that was below it.
+ */
 async function finish(rows: number, cols: number): Promise<void> {
+  const from = selectedPlace.value;
+  const wanted = from && {
+    row: storedRow(Math.max(0, from.row + rows)),
+    col: from.col + cols,
+    place: Math.max(0, from.row + rows),
+  };
   commit();
-  move(rows, cols);
+  if (wanted) {
+    const place = view.value.place(wanted.row);
+    if (place === undefined && rows === 0) {
+      // The edit moved the row the cell is in out of what the filter shows.
+      store.selection = null;
+    } else {
+      const next = clamp({ row: place ?? wanted.place, col: wanted.col });
+      store.selection = cellAt(next.row, next.col);
+    }
+  }
   await nextTick();
   focusGrid();
 }
@@ -531,7 +588,11 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="row in displayedRows" :key="table.rows[row - 1]?.id ?? 'new'" role="row">
+        <tr
+          v-for="row in displayedRows"
+          :key="table.rows[storedRow(row - 1)]?.id ?? 'new'"
+          role="row"
+        >
           <th
             scope="row"
             :class="{ 'grid__header--selected': isLineSelected('row', row - 1) }"
@@ -539,22 +600,22 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             @mouseenter="onHeaderMouseenter('row', row - 1)"
             @contextmenu="onHeaderContextMenu($event, 'row', row - 1)"
           >
-            {{ row > table.rowCount ? "+" : row }}
+            {{ row > shownRows ? "+" : storedRow(row - 1) + 1 }}
           </th>
           <td
             v-for="col in table.colCount"
             :key="table.colIds[col - 1]"
             role="gridcell"
-            :data-cell="formatAddress({ row: row - 1, col: col - 1 })"
+            :data-cell="formatAddress({ row: storedRow(row - 1), col: col - 1 })"
             :aria-selected="isSelected(row - 1, col - 1)"
             :class="{
               'grid__cell--selected': isSelected(row - 1, col - 1),
               'grid__cell--in-range': inRange(row - 1, col - 1),
               'grid__cell--fill-preview': inFillPreview(row - 1, col - 1),
-              'grid__cell--filled': store.filledBy(cell(row - 1, col - 1)) !== undefined,
+              'grid__cell--filled': store.filledBy(cellAt(row - 1, col - 1)) !== undefined,
               'grid__cell--computed': columnAt(col - 1)?.type === 'formula',
             }"
-            :style="cellStyle(store.formatOf(cell(row - 1, col - 1)))"
+            :style="cellStyle(store.formatOf(cellAt(row - 1, col - 1)))"
             @pointerdown="onCellPointerdown($event, row - 1, col - 1)"
             @mousedown="onCellMousedown($event, row - 1, col - 1)"
             @click="onCellClick"
@@ -577,14 +638,14 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             />
             <CellView
               v-else
-              :value="store.valueOf(cell(row - 1, col - 1))"
-              :running="store.isRunning(cell(row - 1, col - 1))"
+              :value="store.valueOf(cellAt(row - 1, col - 1))"
+              :running="store.isRunning(cellAt(row - 1, col - 1))"
               :can-run="store.canEdit"
               :checkbox="columnAt(col - 1)?.type === 'checkbox'"
-              :format="store.formatOf(cell(row - 1, col - 1))"
-              @toggle="store.setCell(cell(row - 1, col - 1), $event ? 'TRUE' : 'FALSE')"
+              :format="store.formatOf(cellAt(row - 1, col - 1))"
+              @toggle="store.setCell(cellAt(row - 1, col - 1), $event ? 'TRUE' : 'FALSE')"
               @run="run(row - 1, col - 1)"
-              @choose="store.input(cell(row - 1, col - 1), $event)"
+              @choose="store.input(cellAt(row - 1, col - 1), $event)"
             />
             <span
               v-if="store.canEdit && draft === null && isHandleCell(row - 1, col - 1)"

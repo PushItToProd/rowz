@@ -4,6 +4,9 @@ import {
   columnFormulasAfterMove,
   columnFormulasAfterRename,
   defaultFunctions,
+  filterFormulasAfterEdit,
+  filterFormulasAfterMove,
+  filterFormulasAfterRename,
   refusedName,
   renamedNames,
   nameFormulasAfterEdit,
@@ -28,8 +31,12 @@ import {
   type ColumnDefinition,
   type ColumnFormula,
   type ColumnType,
+  type ConditionalRule,
   type Effect,
+  type FilterFormula,
   type FormatRule,
+  type SortKey,
+  type TableDisplay,
   type Move,
   type Rename,
   type StoredInput,
@@ -154,6 +161,10 @@ export interface TableRecord {
   columns: ColumnDefinition[] | null;
   /** How cells are shown: rules applied in order, later ones over earlier ones. */
   formats: FormatRule[];
+  /** How a data table's rows are shown: a sort and a filter. The stored row order does not change. */
+  display: TableDisplay;
+  /** Formats a cell gets when its value meets a condition, laid over `formats`. */
+  conditionalFormats: ConditionalRule[];
   /** The names a plain table holds. Always empty for a data table. */
   names: TableName[];
 }
@@ -227,6 +238,8 @@ const tableColumns = {
   colIds: tables.colIds,
   columns: tables.columns,
   formats: tables.formats,
+  display: tables.display,
+  conditionalFormats: tables.conditionalFormats,
   names: tables.names,
 };
 
@@ -307,7 +320,7 @@ function checkFile(file: SpreadsheetFile): void {
     if (holder !== undefined) {
       invalid(`Two tables or scripts on ${pageName} are named ${holder}`);
     }
-    for (const { name, rowCount, colCount, cells: fileCells, columns } of fileTables) {
+    for (const { name, rowCount, colCount, cells: fileCells, columns, display } of fileTables) {
       totalRows += rowCount;
       if (rowCount === 0 && !columns) invalid(`The table ${name} has no rows`);
       if (columns) {
@@ -322,6 +335,16 @@ function checkFile(file: SpreadsheetFile): void {
           ({ type, formula = "" }) => type === "formula" && ["", "="].includes(formula.trim()),
         );
         if (empty) invalid(`The formula column ${empty.name} of ${name} has no formula`);
+      }
+      if (display) {
+        if (!columns) invalid(`The table ${name} has a sort or filter and no named columns`);
+        const keys = display.sort.map(({ column }) => column);
+        if (keys.some((column) => column >= colCount)) {
+          invalid(`The sort of ${name} names a column outside the table`);
+        }
+        if (new Set(keys).size !== keys.length) {
+          invalid(`The sort of ${name} names a column twice`);
+        }
       }
       const seen = new Set<string>();
       for (const { row, col } of fileCells) {
@@ -767,6 +790,7 @@ export class SpreadsheetRepository {
             columns,
             formats: block.formats ?? [],
             names: block.names ?? [],
+            display: displayFromFile(block.display, colIds),
           })
           .returning({ id: tables.id });
         if (!table) throw new Error("Insert returned no table");
@@ -1426,6 +1450,34 @@ export class SpreadsheetRepository {
   }
 
   /**
+   * Replaces how a data table's rows are shown: its sort and filter. Neither
+   * changes the stored row order. A filter is a formula, so it is refused when
+   * it was written before something it names was renamed, moved, inserted, or
+   * deleted.
+   */
+  async setTableDisplay(
+    tableId: string,
+    display: { sort: SortKey[]; filter?: string | undefined; revision?: number | undefined },
+  ): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
+      if (!table.columns) {
+        throw unprocessable("not_a_data_table", `${table.name} has no named columns`);
+      }
+      if (display.sort.some(({ colId }) => !table.colIds.includes(colId))) throw columnDeleted();
+      const written = display.filter?.trim() ?? "";
+      const filter = written === "" || written === "=" ? "" : filterFormula(written);
+      if (filter !== "" && filter !== table.display.filter) {
+        await this.checkWrittenAt(tx, table.spreadsheetId, display.revision);
+      }
+      writer.setLabel(`Sort and filter ${table.name}`);
+      await writer.updateTable(tableId, {
+        display: { sort: display.sort, ...(filter === "" ? {} : { filter }) },
+      });
+    });
+    return change;
+  }
+
+  /**
    * Changes how a range of cells is shown. The format is added to whatever
    * the cells already have. The range names the rows and columns at its
    * corners by id, and a format rule holds their positions as they are now.
@@ -1480,7 +1532,7 @@ export class SpreadsheetRepository {
         table.spreadsheetId,
         `Before removing the column names of ${table.name}`,
       );
-      await writer.updateTable(tableId, { columns: null });
+      await writer.updateTable(tableId, { columns: null, display: { sort: [] } });
       if ((await orderedRows(tx, tableId)).length === 0) await writer.insertRows(tableId, 0, 1);
     });
     return change;
@@ -1965,6 +2017,7 @@ export class SpreadsheetRepository {
     const sources = viewsAfterEdit(data, data.views, edit);
     const columnFormulas = columnFormulasAfterEdit(data, edit);
     const nameFormulas = nameFormulasAfterEdit(data, edit);
+    const filters = filterFormulasAfterEdit(data, edit);
 
     if (rows && edit.kind === "insert") {
       await writer.insertRows(table.id, edit.index, edit.count, edit.ids);
@@ -1975,6 +2028,9 @@ export class SpreadsheetRepository {
     await this.storeViewSources(writer, sources);
     const changed = await this.storeColumnFormulas(writer, data.tables, columnFormulas);
     await this.storeNameFormulas(writer, data.tables, nameFormulas);
+    const filtered = await this.storeFilterFormulas(writer, data.tables, filters);
+    const display =
+      filtered.find((candidate) => candidate.id === table.id)?.display ?? table.display;
     // The formulas were rewritten at the positions the columns had before the edit.
     const current =
       changed.find((candidate) => candidate.id === table.id)?.columns ?? table.columns;
@@ -1996,6 +2052,7 @@ export class SpreadsheetRepository {
         colIds: table.colIds.toSpliced(edit.index, edit.count),
         columns: current?.toSpliced(edit.index, edit.count) ?? null,
         formats,
+        display: { ...display, sort: display.sort.filter(({ colId }) => !removed.includes(colId)) },
       });
     }
   }
@@ -2500,6 +2557,7 @@ export class SpreadsheetRepository {
       views: viewsAfterRename(data, data.views, rename),
       columns: columnFormulasAfterRename(data, rename),
       names: nameFormulasAfterRename(data, rename),
+      filters: filterFormulasAfterRename(data, rename),
     });
     return contents;
   }
@@ -2522,10 +2580,11 @@ export class SpreadsheetRepository {
       views: viewsAfterMove(data, data.views, move),
       columns: columnFormulasAfterMove(data, move),
       names: nameFormulasAfterMove(data, move),
+      filters: filterFormulasAfterMove(data, move),
     });
   }
 
-  /** Stores what a rewrite changed in the three places that hold formulas. */
+  /** Stores what a rewrite changed in the places that hold formulas. */
   private async storeRewrite(
     writer: ContentWriter,
     contents: Contents,
@@ -2534,6 +2593,7 @@ export class SpreadsheetRepository {
       views: { id: string; source: string }[];
       columns: ColumnFormula[];
       names: NameFormula[];
+      filters: FilterFormula[];
     },
   ): Promise<void> {
     writer.markRewrites();
@@ -2541,6 +2601,7 @@ export class SpreadsheetRepository {
     await this.storeViewSources(writer, rewritten.views);
     await this.storeColumnFormulas(writer, contents.data.tables, rewritten.columns);
     await this.storeNameFormulas(writer, contents.data.tables, rewritten.names);
+    await this.storeFilterFormulas(writer, contents.data.tables, rewritten.filters);
   }
 
   /** Stores rewritten formulas of the names tables hold. */
@@ -2559,6 +2620,21 @@ export class SpreadsheetRepository {
       namesOf.set(tableId, names);
     }
     for (const [tableId, names] of namesOf) await writer.updateTable(tableId, { names });
+  }
+
+  /** Stores rewritten filters, and returns the tables they belong to as they now are. */
+  private async storeFilterFormulas(
+    writer: ContentWriter,
+    before: readonly TableRecord[],
+    changed: readonly FilterFormula[],
+  ): Promise<TableRecord[]> {
+    const stored: TableRecord[] = [];
+    for (const { tableId, formula } of changed) {
+      const held = before.find((table) => table.id === tableId)?.display;
+      if (!held) continue;
+      stored.push(await writer.updateTable(tableId, { display: { ...held, filter: formula } }));
+    }
+    return stored;
   }
 
   /** Stores rewritten formulas of formula columns, and returns the tables they belong to as they now are. */
@@ -2723,6 +2799,27 @@ async function lockSpreadsheet(db: Database, spreadsheetId: string): Promise<voi
     .from(spreadsheets)
     .where(eq(spreadsheets.id, spreadsheetId))
     .for("update");
+}
+
+/** A file's sort and filter as they are stored: sort keys name column ids, which are new. */
+function displayFromFile(
+  display: NonNullable<
+    SpreadsheetFile["pages"][number]["blocks"][number] & { type: "table" }
+  >["display"],
+  colIds: readonly string[],
+): TableDisplay {
+  if (!display) return { sort: [] };
+  const sort = display.sort.flatMap(({ column, descending }) => {
+    const colId = colIds[column];
+    return colId === undefined ? [] : [{ colId, descending }];
+  });
+  const filter = display.filter?.trim() ?? "";
+  return { sort, ...(filter === "" ? {} : { filter: filterFormula(filter) }) };
+}
+
+/** A filter as it is stored: a formula with its leading `=`. */
+function filterFormula(text: string): string {
+  return isFormulaInput(text) ? text : `=${text}`;
 }
 
 /** A column definition as it is stored: a formula only on a formula column, and starting with `=`. */

@@ -7,6 +7,7 @@ import {
   makeColumnsBody,
   moveBlockBody,
   setCellsBody,
+  setTableDisplayBody,
   setTableNamesBody,
   structuralEditBody,
   tableParam,
@@ -68,6 +69,19 @@ export function tableRoutes(dependencies: ActionDependencies) {
             await c.var.repository.formatCells(c.req.valid("param").tableId, range, format, reset),
           );
         },
+      )
+      // Replaces how a data table's rows are sorted and filtered for display.
+      .put(
+        "/:tableId/display",
+        zValidator("param", tableParam, onInvalid),
+        zValidator("json", setTableDisplayBody, onInvalid),
+        async (c) =>
+          c.json(
+            await c.var.repository.setTableDisplay(
+              c.req.valid("param").tableId,
+              c.req.valid("json"),
+            ),
+          ),
       )
       // Replaces the names a plain table holds.
       .put(

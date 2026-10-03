@@ -1315,3 +1315,162 @@ it("reopens a stale formula draft after restoring the confirmed cell", async () 
   expect(store.inputOf(at("A2"))).toBe("old");
   expect(wrapper.get<HTMLInputElement>(".grid__editor").element.value).toBe("=A2");
 });
+
+describe("a sorted and filtered data table", () => {
+  // The Item column reads b, d, a, c down the stored rows, and Qty reads 1 to 4.
+  const INPUTS = {
+    A1: "b",
+    A2: "d",
+    A3: "a",
+    A4: "c",
+    B1: "1",
+    B2: "2",
+    B3: "3",
+    B4: "4",
+  };
+  const COLUMNS = [
+    { name: "Item", type: "any" as const },
+    { name: "Qty", type: "number" as const },
+    { name: "Twice", type: "formula" as const, formula: "=[Qty] * 2" },
+  ];
+
+  async function mountShown(
+    display: (typeof TABLE)["display"],
+    inputs: Record<string, string> = INPUTS,
+  ): Promise<void> {
+    const table = { ...TABLE, columns: COLUMNS, display };
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({ ...snapshotWith(inputs), tables: [table] }),
+    );
+    await useWorkbookStore().load("s1");
+    wrapper = mount(GridView, { props: { table }, attachTo: document.body });
+  }
+
+  const SORTED = { sort: [{ colId: "c1", descending: false }] };
+  const shownAddresses = (): (string | undefined)[] =>
+    wrapper.findAll("tbody tr td:first-of-type").map((cell) => cell.attributes("data-cell"));
+
+  it("shows the rows in the order of the sort, each with its stored row number and address", async () => {
+    await mountShown(SORTED);
+    expect(shownAddresses()).toEqual(["A3", "A1", "A4", "A2", "A5"]);
+    expect(wrapper.findAll("tbody th").map((th) => th.text())).toEqual(["3", "1", "4", "2", "+"]);
+    expect(wrapper.findAll("tbody tr td:first-of-type").map((cell) => cell.text())).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+      "",
+    ]);
+  });
+
+  it("sorts descending, and leaves out the rows a filter rejects", async () => {
+    await mountShown({ sort: [{ colId: "c1", descending: true }], filter: "=[Qty] > 1" });
+    expect(shownAddresses()).toEqual(["A2", "A4", "A3", "A5"]);
+    expect(wrapper.findAll("tbody th").map((th) => th.text())).toEqual(["2", "4", "3", "+"]);
+  });
+
+  it("moves the selection through the rows in the order shown", async () => {
+    await mountShown(SORTED);
+    await select("A3");
+    await press("ArrowDown");
+    expect(selectedAddress()).toBe("A1");
+    await press("ArrowDown");
+    await press("ArrowDown");
+    expect(selectedAddress()).toBe("A2");
+    await press("ArrowUp");
+    expect(selectedAddress()).toBe("A4");
+  });
+
+  it("selects a rectangle of the rows shown", async () => {
+    await mountShown(SORTED);
+    await select("A1");
+    await cellAt("A4").trigger("mousedown", { shiftKey: true });
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    expect(
+      wrapper.findAll(".grid__cell--in-range").map((cell) => cell.attributes("data-cell")),
+    ).toEqual(["A1", "A4"]);
+  });
+
+  it("clears the stored rows of the cells selected", async () => {
+    await mountShown(SORTED);
+    await select("A3");
+    await cellAt("A1").trigger("mousedown", { shiftKey: true });
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await press("Delete");
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [
+        { rowId: "r2", colId: "c1", input: "" },
+        { rowId: "r0", colId: "c1", input: "" },
+      ],
+      expect.any(String),
+      expect.any(Number),
+      expect.any(Array),
+    );
+  });
+
+  it("fills down the rows shown, moving a formula by the distance between the stored rows", async () => {
+    // Sorted by Qty descending the places are stored rows 4, 3, 2, 1. A formula in the first
+    // place, stored row 4, moves up one row for the second place and two for the third.
+    await mountShown({ sort: [{ colId: "c2", descending: true }] }, { ...INPUTS, A4: "=B4*10" });
+    await select("A4");
+    await wrapper.get(".grid__fill-handle").trigger("mousedown");
+    await cellAt("A2").trigger("mouseenter");
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await vi.waitFor(() => {
+      expect(server.setCells).toHaveBeenCalledOnce();
+    });
+    expect(server.setCells.mock.calls[0]?.[1]).toEqual([
+      { rowId: "r2", colId: "c1", input: "=B3*10" },
+      { rowId: "r1", colId: "c1", input: "=B2*10" },
+    ]);
+  });
+
+  it("saves an edit and moves to the row that was below it, though the edit moves its own row", async () => {
+    await mountShown(SORTED);
+    await select("A3");
+    await press("z");
+    await press("Enter");
+    // The row held a and now holds z, which sorts last. Enter went to b, the row shown next.
+    expect(selectedAddress()).toBe("A1");
+    expect(shownAddresses().slice(0, 4)).toEqual(["A1", "A4", "A2", "A3"]);
+  });
+
+  it("copies the cells in the order shown", async () => {
+    await mountShown(SORTED);
+    await select("A3");
+    await cellAt("C4").trigger("mousedown", { shiftKey: true });
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    wrapper.get<HTMLElement>(".grid").element.focus();
+    const data = new Map<string, string>();
+    const event = new Event("copy", { bubbles: true, cancelable: true });
+    Object.assign(event, {
+      clipboardData: {
+        getData: () => "",
+        setData: (_: string, value: string) => data.set("t", value),
+      },
+    });
+    document.dispatchEvent(event);
+    expect(data.get("t")).toBe("a\t3\t6\nb\t1\t2\nc\t4\t8");
+  });
+
+  it("clears the selection when a filter hides the row it is in", async () => {
+    await mountShown({ sort: [], filter: "=[Qty] > 1" });
+    expect(shownAddresses()).toEqual(["A2", "A3", "A4", "A5"]);
+    await select("B2");
+    await press("0");
+    // Tab stays in the row, which the new Qty of 0 no longer lets through the filter.
+    await press("Tab");
+    expect(wrapper.find('[data-cell="A2"]').exists()).toBe(false);
+    expect(selectedAddress()).toBeUndefined();
+  });
+
+  it("selects the cell clicked, though the edit it commits re-sorts the rows", async () => {
+    await mountShown(SORTED);
+    await select("A3");
+    await press("z");
+    // The row under the pointer is b (A1), the second place, when the click lands.
+    await cellAt("A1").trigger("mousedown");
+    expect(selectedAddress()).toBe("A1");
+  });
+});

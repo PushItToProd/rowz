@@ -552,3 +552,20 @@ Together they make a form: inputs, a Save button that appends to a log table and
 - The server refuses a name that reads as a cell address, a value, or a function, and a name a table already lists. It does not check that a formula parses; the panel shows the error as the value, as a script does.
 
 **To change.** `setTableNames` in `apps/server/src/repo/spreadsheets.ts` and `setTableNamesBody` in `packages/shared/src/index.ts`.
+
+## 2026-10-02: Sort and filter
+
+**Decision.**
+
+- A sorted table re-sorts as its cells change. A row moves as soon as an edit changes its sort key.
+- A row for which the filter formula gives an error stays shown, and the filter bar shows the first error.
+- The server refuses a new or changed filter that was written before the last rewrite of references, as it does for any formula. Clearing a filter or changing only the sort carries no new formula and is never refused.
+- Formatting more than one row is refused while the table is sorted or filtered, because a format rule covers a run of stored rows. One row and whole columns work, and a selection is a whole column only while the filter hides no rows.
+- Inserting a row above or below is disabled while the table is sorted or filtered. The strip that adds a row at the end still works.
+- CSV export writes every row in stored order, whatever is shown.
+- A filter is stored with its leading `=`, and the server adds it when the text lacks one.
+- A filter that names a column that has been deleted keeps its text and shows an error in the filter bar. Rewriting leaves `[Column]` references alone when a column is deleted, as it does for formula columns.
+
+**Why.** Each keeps the display settings from changing stored data. An error that hides every row would make a typo in a filter look like data loss.
+
+**To change.** `displayRows` in `packages/engine/src/display.ts`, `Workbook.filterRows`, `rowViews` in the workbook store, and `setTableDisplay` in `apps/server/src/repo/spreadsheets.ts`.

@@ -50,6 +50,8 @@ describe("spreadsheets", () => {
         colIds: expect.any(Array),
         columns: null,
         formats: [],
+        display: { sort: [] },
+        conditionalFormats: [],
         names: [],
       },
     ]);

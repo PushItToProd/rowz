@@ -11,7 +11,7 @@ import {
   type Rename,
   type StructuralEdit,
 } from "./rewrite";
-import { TableResolver, type WorkbookStructure } from "./structure";
+import { TableResolver, type TableDefinition, type WorkbookStructure } from "./structure";
 
 /** The formula of one name a table holds, identified by its table and its place in the table's list. */
 export interface NameFormula {
@@ -25,6 +25,32 @@ export interface ColumnFormula {
   tableId: string;
   col: number;
   formula: string;
+}
+
+/** The formula of one table's filter, identified by its table. */
+export interface FilterFormula {
+  tableId: string;
+  formula: string;
+}
+
+/**
+ * A formula written in a table, rewritten. A reference in it with no table
+ * name means that table. `formula` has its leading `=`.
+ */
+function rewriteInTable(
+  resolver: TableResolver,
+  structure: WorkbookStructure,
+  table: TableDefinition,
+  formula: string,
+  decide: Decide,
+  replaceBare?: (name: string) => string | undefined,
+): string {
+  const origin = { pageId: table.pageId, tableId: table.id };
+  const rewritten = rewriteReferences(formula, (reference, qualified) =>
+    decide(reference, targetOf(resolver, reference, qualified, origin, structure), origin),
+  );
+  if (!replaceBare || !rewritten.startsWith("=")) return rewritten;
+  return `=${rewriteBareNames(rewritten.slice(1), replaceBare)}`;
 }
 
 /**
@@ -41,13 +67,14 @@ function rewriteColumns(
   return structure.tables.flatMap((table) =>
     (table.columns ?? []).flatMap((column, col) => {
       if (column.formula === undefined) return [];
-      const origin = { pageId: table.pageId, tableId: table.id };
-      let formula = rewriteReferences(column.formula, (reference, qualified) =>
-        decide(reference, targetOf(resolver, reference, qualified, origin, structure), origin),
+      const formula = rewriteInTable(
+        resolver,
+        structure,
+        table,
+        column.formula,
+        decide,
+        replaceBare,
       );
-      if (replaceBare && formula.startsWith("=")) {
-        formula = `=${rewriteBareNames(formula.slice(1), replaceBare)}`;
-      }
       return formula === column.formula ? [] : [{ tableId: table.id, col, formula }];
     }),
   );
@@ -102,13 +129,9 @@ function rewriteNames(
     seen.set(holderId, index + 1);
     const table = structure.tables.find((candidate) => candidate.id === holderId);
     if (!table) return [];
-    const origin = { pageId: table.pageId, tableId: table.id };
     // A name's formula may be written without the `=` that rewriting looks for.
     const written = formula.startsWith("=") ? formula : `=${formula}`;
-    let rewritten = rewriteReferences(written, (reference, qualified) =>
-      decide(reference, targetOf(resolver, reference, qualified, origin, structure), origin),
-    );
-    if (replaceBare) rewritten = `=${rewriteBareNames(rewritten.slice(1), replaceBare)}`;
+    const rewritten = rewriteInTable(resolver, structure, table, written, decide, replaceBare);
     if (rewritten === written) return [];
     return [
       {
@@ -166,4 +189,50 @@ export function nameFormulasAfterEdit(
   edit: StructuralEdit,
 ): NameFormula[] {
   return rewriteNames(structure, editDecider(edit));
+}
+
+/**
+ * The filters of tables whose formulas change under a rewrite. A filter is
+ * written in its table, like a formula column's formula, and may lack the `=`.
+ */
+function rewriteFilters(
+  structure: WorkbookStructure,
+  decide: Decide,
+  replaceBare?: (name: string) => string | undefined,
+): FilterFormula[] {
+  const resolver = new TableResolver(structure);
+  return structure.tables.flatMap((table) => {
+    if (table.filter === undefined) return [];
+    const written = table.filter.startsWith("=") ? table.filter : `=${table.filter}`;
+    const rewritten = rewriteInTable(resolver, structure, table, written, decide, replaceBare);
+    if (rewritten === written) return [];
+    return [
+      { tableId: table.id, formula: table.filter.startsWith("=") ? rewritten : rewritten.slice(1) },
+    ];
+  });
+}
+
+/** The filters that name a page, table, or column being renamed, with the new name written in. */
+export function filterFormulasAfterRename(
+  structure: WorkbookStructure,
+  rename: Rename,
+): FilterFormula[] {
+  return rewriteFilters(
+    structure,
+    renameDecider(new TableResolver(structure), rename),
+    bareNamesAfterRename(structure, rename),
+  );
+}
+
+/** The filters that must name a page for a table to move to another page. */
+export function filterFormulasAfterMove(structure: WorkbookStructure, move: Move): FilterFormula[] {
+  return rewriteFilters(structure, moveDecider(structure, move));
+}
+
+/** The filters that read a table whose row or column is being inserted or deleted, rewritten to follow. */
+export function filterFormulasAfterEdit(
+  structure: WorkbookStructure,
+  edit: StructuralEdit,
+): FilterFormula[] {
+  return rewriteFilters(structure, editDecider(edit));
 }

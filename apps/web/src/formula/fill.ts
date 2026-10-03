@@ -111,6 +111,18 @@ export function seriesOf(inputs: readonly string[]): ((position: number) => stri
 }
 
 /**
+ * Where the rows of a range sit in the table. A sorted or filtered table
+ * shows its rows in an order of its own, and a range is a rectangle of the
+ * rows shown, so its rows are places in that order. `storedRow` gives the row
+ * a place holds, which is what the cells are stored under and what a formula's
+ * `A2` names. A formula copied between places moves its references by the
+ * distance between the stored rows.
+ */
+export type StoredRow = (place: number) => number;
+
+const IN_PLACE: StoredRow = (place) => place;
+
+/**
  * The inputs that fill `target` with the pattern of `source`: the source
  * cells repeat in every direction, and each copy of a formula has its
  * relative references moved by the distance it was copied. Cells of the
@@ -118,12 +130,16 @@ export function seriesOf(inputs: readonly string[]): ((position: number) => stri
  *
  * With `series`, a line of source cells that begins a series is continued
  * instead of repeated: `1, 2` goes on to `3, 4`.
+ *
+ * The ranges and `inputAt` are in places, and the inputs written are in the
+ * stored rows `storedRow` gives.
  */
 export function fillWrites(
   source: GridRange,
   target: GridRange,
   inputAt: (cell: CellAddress) => string,
   series = false,
+  storedRow: StoredRow = IN_PLACE,
 ): CellInput[] {
   const height = source.endRow - source.startRow + 1;
   const width = source.endCol - source.startCol + 1;
@@ -151,21 +167,29 @@ export function fillWrites(
       const continued = seriesAt({ row, col });
       if (continued) {
         const position = vertical ? row - source.startRow : col - source.startCol;
-        return { row, col, input: continued(position) };
+        return { row: storedRow(row), col, input: continued(position) };
       }
       const from = {
         row: source.startRow + wrap(row - source.startRow, height),
         col: source.startCol + wrap(col - source.startCol, width),
       };
-      return { row, col, input: translateInput(inputAt(from), row - from.row, col - from.col) };
+      return {
+        row: storedRow(row),
+        col,
+        input: translateInput(inputAt(from), storedRow(row) - storedRow(from.row), col - from.col),
+      };
     });
 }
 
 /** The inputs that empty every cell of a range that holds something. */
-export function clearWrites(range: GridRange, inputAt: (cell: CellAddress) => string): CellInput[] {
+export function clearWrites(
+  range: GridRange,
+  inputAt: (cell: CellAddress) => string,
+  storedRow: StoredRow = IN_PLACE,
+): CellInput[] {
   return cellsOf(range)
     .filter((cell) => inputAt(cell) !== "")
-    .map((cell) => ({ ...cell, input: "" }));
+    .map((cell) => ({ row: storedRow(cell.row), col: cell.col, input: "" }));
 }
 
 /** The inputs of a range as rows, for copying. */
@@ -179,26 +203,45 @@ export function inputsOf(range: GridRange, inputAt: (cell: CellAddress) => strin
   return rows;
 }
 
+/** How copied rows map to the rows they are pasted into when the table is sorted or filtered. */
+export interface Placement {
+  storedRow: StoredRow;
+  /** The stored row each copied row came from. */
+  sourceRows: readonly number[];
+}
+
 /**
  * The inputs that paste rows of cells with their top-left corner at `at`.
  * When the rows were copied from this app, `copiedFrom` is where their
  * top-left corner was, and formulas move their relative references by the
  * distance between the two places.
+ *
+ * With a `placement`, `at` is a place and the inputs are written to stored
+ * rows. Each formula moves by the distance between the stored row it was
+ * copied from and the stored row it lands in, which differs from row to row
+ * when the table is sorted.
  */
 export function pasteWrites(
   rows: readonly (readonly string[])[],
   at: CellAddress,
   copiedFrom?: CellAddress,
+  placement?: Placement,
 ): CellInput[] {
-  const rowShift = copiedFrom ? at.row - copiedFrom.row : 0;
   const colShift = copiedFrom ? at.col - copiedFrom.col : 0;
-  return rows.flatMap((cells, rowOffset) =>
-    cells.map((input, colOffset) => ({
-      row: at.row + rowOffset,
+  return rows.flatMap((cells, rowOffset) => {
+    const row = placement ? placement.storedRow(at.row + rowOffset) : at.row + rowOffset;
+    const source = placement ? placement.sourceRows[rowOffset] : undefined;
+    const rowShift = !copiedFrom
+      ? 0
+      : source === undefined
+        ? at.row - copiedFrom.row
+        : row - source;
+    return cells.map((input, colOffset) => ({
+      row,
       col: at.col + colOffset,
       input: copiedFrom ? translateInput(input, rowShift, colShift) : input,
-    })),
-  );
+    }));
+  });
 }
 
 // Tab between cells and a line break between rows: what spreadsheet apps put on the clipboard.

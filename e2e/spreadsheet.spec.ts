@@ -714,6 +714,65 @@ test("a table with named columns has typed columns, a formula column, and column
   await expect(cell(page, "A1", "Table 2")).toHaveText("46");
 });
 
+test("a data table is sorted and filtered in place, and edits and fills act on the rows shown", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  const rows = [
+    ["Item", "Qty"],
+    ["pear", "3"],
+    ["apple", "1"],
+    ["fig", "2"],
+  ];
+  for (const [row, cells] of rows.entries()) {
+    for (const [col, text] of cells.entries()) {
+      await enter(page, `${"AB"[col] ?? ""}${String(row + 1)}`, text);
+    }
+  }
+  await page.getByRole("button", { name: "Name columns" }).click();
+  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+
+  // Sorting by Item shows apple, fig, pear, which are stored rows 2, 3, and 1.
+  await page
+    .locator('[data-table="Table 1"] thead th[data-column="Item"]')
+    .click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Sort ascending" }).click();
+  const shown = page.locator('[data-table="Table 1"] tbody tr td:first-of-type');
+  await expect(shown.nth(0)).toHaveText("apple");
+  await expect(shown.nth(1)).toHaveText("fig");
+  await expect(shown.nth(2)).toHaveText("pear");
+  await expect(shown.nth(0)).toHaveAttribute("data-cell", "A2");
+
+  // Editing the first row shown changes that row, and Enter goes to the row shown next.
+  await cell(page, "A2").click();
+  await page.keyboard.type("zebra");
+  await page.keyboard.press("Enter");
+  await expect(shown.nth(0)).toHaveText("fig");
+  await expect(shown.nth(2)).toHaveText("zebra");
+  await expect(page.locator('[data-table="Table 1"] [aria-selected="true"]')).toHaveAttribute(
+    "data-cell",
+    "A3",
+  );
+
+  // A filter hides rows, and the table says how many.
+  await page.getByLabel("Table filter").fill("=[Qty] > 1");
+  await page.getByLabel("Table filter").press("Enter");
+  await expect(page.getByText("1 row hidden")).toBeVisible();
+  await expect(shown).toHaveCount(3);
+
+  // Filling down the rows shown writes the stored rows beneath them.
+  await enter(page, "B3", "9");
+  await cell(page, "B3").click();
+  await page.keyboard.press("Shift+ArrowDown");
+  await page.keyboard.press("Control+d");
+  await expect(cell(page, "B1")).toHaveText("9");
+
+  await page.getByRole("button", { name: "Clear filter" }).click();
+  await expect(page.getByText("row hidden")).toHaveCount(0);
+  await reload(page);
+  await expect(page.getByLabel("Sort column 1")).toBeVisible();
+});
+
 test("cells are formatted from the toolbar, and the formats follow their cells", async ({
   page,
 }) => {
