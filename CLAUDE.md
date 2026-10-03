@@ -24,6 +24,7 @@ The author sets priorities. When the author gives a task that is hardening work,
 - `pnpm check:migrations` verifies that the SQL migration files match the Drizzle journal and committed checksums. Run it after adding a migration.
 - `pnpm e2e` runs Playwright. It starts its own servers on ports 3100 and 5273 with an in-memory database. (This doesn't work in the Claude Code or Codex sandboxes.)
 - `pnpm e2e:remote` runs the same tests with the browser in the `playwright` container of `compose.yaml`. (Agents running in Claude Code or Codex should use this.)
+  - `pnpm e2e:remote:codex` should be used by agents running under Codex, as it adds a workaround for some Codex sandbox limitations.
 - `pnpm exec vitest run --project engine` (or `server`, `web`) runs one package's tests.
 - `pnpm --filter @spreadsheet-app/server db:generate` writes a migration after a schema change.
 

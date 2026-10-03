@@ -304,6 +304,17 @@ A Claude Code session can run `pnpm e2e:remote` inside its Bash sandbox with the
 }
 ```
 
+A Codex session can run `pnpm e2e:remote:codex` inside its sandbox with the following settings in `.codex/config.toml`:
+
+```toml
+[permissions.workspace.network.domains]
+"localhost" = "allow"
+
+[permissions.workspace.network]
+enabled = true
+allow_local_binding = true
+```
+
 The sandbox gives each command its own loopback interface, so the command reaches the container's port through the sandbox's proxy, and `allowedDomains` is what lets the proxy connect to it. The entry opens every loopback port of the machine to sandboxed commands, not only the Playwright server's.
 
 ## License
