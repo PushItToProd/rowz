@@ -1239,3 +1239,64 @@ test("saving a script does not scroll to the selected cell", async ({ page }) =>
   await expect(script.locator(".script")).toContainText("42");
   await expect(cell(page, "A1")).not.toBeInViewport();
 });
+
+test("errors stay visible across pages and in the document list", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "=1/0");
+  await expect(page.getByRole("button", { name: "1 error", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "Table 1 contains errors", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "Page 1 contains errors", exact: true }),
+  ).toBeVisible();
+  await cell(page, "A1").locator(".cell-value--error").hover();
+  await expect(page.getByRole("tooltip")).toContainText("#DIV/0!");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await page.getByRole("button", { name: "Add page", exact: true }).click();
+  await page.getByRole("button", { name: "1 error", exact: true }).click();
+  const errors = page.getByRole("dialog", { name: "Document errors" });
+  await expect(errors).toContainText("Page 1");
+  await errors.getByRole("button", { name: /Table 1!A1/ }).click();
+  await expect(cell(page, "A1")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
+  await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
+  await page.getByRole("link", { name: "← Spreadsheets" }).click();
+  await expect(
+    page.getByRole("img", { name: "Untitled spreadsheet contains errors" }),
+  ).toBeVisible();
+  const link = page.getByRole("link", { name: /Untitled spreadsheet/ });
+  const href = await link.getAttribute("href");
+  const spreadsheetId = href?.split("/")[2];
+  if (!spreadsheetId) throw new Error("The document link has no document ID");
+  let releaseSnapshot!: () => void;
+  const snapshotGate = new Promise<void>((resolve) => {
+    releaseSnapshot = resolve;
+  });
+  await page.route(`**/api/spreadsheets/${spreadsheetId}`, async (route) => {
+    await snapshotGate;
+    await route.continue();
+  });
+  const request = page.waitForRequest(
+    (request) => new URL(request.url()).pathname === `/api/spreadsheets/${spreadsheetId}`,
+  );
+  await link.click();
+  await request;
+  try {
+    await expect(page.getByText("Loading…", { exact: true })).toBeVisible();
+    await expect(page.getByRole("grid")).toHaveCount(0);
+  } finally {
+    releaseSnapshot();
+  }
+  await enter(page, "A1", "5");
+  await expect(page.getByRole("button", { name: "1 error", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "Page 1 contains errors", exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
+  await page.getByRole("link", { name: "← Spreadsheets" }).click();
+  await expect(page.getByRole("img", { name: "Untitled spreadsheet contains errors" })).toHaveCount(
+    0,
+  );
+});

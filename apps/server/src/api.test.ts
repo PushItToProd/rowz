@@ -5,6 +5,7 @@ import type { Change, PageRecord, SpreadsheetSummary, TableRecord } from "./app"
 import { spreadsheets, workspaceMembers } from "./db/schema";
 import {
   addTable,
+  addView,
   cellsBody,
   changedCells,
   createSpreadsheet,
@@ -71,6 +72,25 @@ describe("spreadsheets", () => {
     await lister.json("PUT", `/tables/${first(older).table.id}/cells`, cellsBody({ A1: "1" }), 200);
     expect(await names()).toEqual(["Older", "Newer"]);
     expect(newer.id).not.toBe(older.id);
+  });
+
+  it("reports errors in the document list and clears the warning after correction", async () => {
+    const caller = await server.signUp();
+    const snapshot = await createSpreadsheet(caller, "Diagnostics");
+    const { table, page } = first(snapshot);
+    const listed = async () =>
+      (await caller.json<{ id: string; hasErrors: boolean }[]>("GET", "/spreadsheets")).find(
+        (item) => item.id === snapshot.id,
+      );
+    expect(await listed()).toMatchObject({ hasErrors: false });
+    await caller.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "=1/0" }));
+    expect(await listed()).toMatchObject({ hasErrors: true });
+    await caller.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "1" }));
+    const text = await addView(caller, page.id, "text");
+    await caller.json("PATCH", `/views/${text.id}`, { source: "{{ Missing }}" });
+    expect(await listed()).toMatchObject({ hasErrors: true });
+    await caller.json("PATCH", `/views/${text.id}`, { source: "{{ 1 }}" });
+    expect(await listed()).toMatchObject({ hasErrors: false });
   });
 
   it("puts all of a user's spreadsheets in one workspace, even when created at once", async () => {

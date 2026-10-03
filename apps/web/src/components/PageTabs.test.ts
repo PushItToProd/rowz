@@ -102,3 +102,16 @@ describe("PageTabs", () => {
     expect(wrapper.findAll("button")).toEqual([]);
   });
 });
+
+it("marks a page with errors and removes its warning after correction", async () => {
+  const wrapper = await render();
+  const store = useWorkbookStore();
+  await store.setCell({ tableId: "t1", row: 0, col: 0 }, "=1/0");
+  await wrapper.vm.$nextTick();
+  expect(wrapper.find('[aria-label="Page 1 contains errors"]').exists()).toBe(true);
+  expect(wrapper.find('[aria-label="Page 2 contains errors"]').exists()).toBe(false);
+  await store.setCell({ tableId: "t1", row: 0, col: 0 }, "1");
+  await wrapper.vm.$nextTick();
+  expect(wrapper.find('[aria-label="Page 1 contains errors"]').exists()).toBe(false);
+  wrapper.unmount();
+});

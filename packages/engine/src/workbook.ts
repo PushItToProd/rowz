@@ -80,12 +80,16 @@ interface NameRecord {
   line?: number;
 }
 
-/** An `ASSERT` that is false, and where it is. */
-export type AssertionFailure = { message: string } & (
+/** Where an evaluated cell, named value, or script statement is defined. */
+type ErrorLocation =
   | { kind: "cell"; cell: CellId }
   | { kind: "name"; holderId: string; name: string }
-  | { kind: "statement"; holderId: string; line: number }
-);
+  | { kind: "statement"; holderId: string; line: number };
+
+/** An evaluated error and its location in the workbook. */
+export type WorkbookError = ErrorLocation & { code: ErrorValue["code"]; message: string };
+/** An `ASSERT` that is false, and where it is. */
+export type AssertionFailure = ErrorLocation & { message: string };
 
 /** The value a qualified name stands for when no cell holds its formula. */
 const NO_CELL: CellId = { tableId: "", row: 0, col: 0 };
@@ -487,34 +491,58 @@ export class Workbook {
    * too, since it has the cell's error as its value.
    */
   failedAssertions(): AssertionFailure[] {
+    return this.errors().flatMap(({ code, ...failure }) => (code === "#ASSERT!" ? [failure] : []));
+  }
+
+  /** Every evaluated error in cells, named values, and script statements. */
+  errors(): WorkbookError[] {
     this.settle();
-    const failures: AssertionFailure[] = [];
+    const failures: WorkbookError[] = [];
     for (const records of this.cells.values()) {
       for (const { id } of records.values()) {
         const value = this.current(id);
-        if (isError(value) && value.code === "#ASSERT!") {
-          failures.push({ kind: "cell", cell: id, message: value.message ?? "" });
+        if (isError(value)) {
+          failures.push({
+            kind: "cell",
+            cell: id,
+            code: value.code,
+            message: value.message ?? value.code,
+          });
         }
+      }
+    }
+    for (const cells of this.spillAreas.values()) {
+      for (const cell of cells) {
+        const value = this.current(cell);
+        if (isError(value))
+          failures.push({
+            kind: "cell",
+            cell,
+            code: value.code,
+            message: value.message ?? value.code,
+          });
       }
     }
     for (const record of [...this.names.values()].flat()) {
       const value = this.valueOfName(record);
-      if (!isError(value) || value.code !== "#ASSERT!") continue;
+      if (!isError(value)) continue;
       failures.push({
         kind: "name",
         holderId: record.holder.id,
         name: record.name,
-        message: value.message ?? "",
+        code: value.code,
+        message: value.message ?? value.code,
       });
     }
     for (const record of this.statements) {
       const value = this.valueOfName(record);
-      if (!isError(value) || value.code !== "#ASSERT!" || record.line === undefined) continue;
+      if (!isError(value) || record.line === undefined) continue;
       failures.push({
         kind: "statement",
         holderId: record.holder.id,
         line: record.line,
-        message: value.message ?? "",
+        code: value.code,
+        message: value.message ?? value.code,
       });
     }
     return failures;

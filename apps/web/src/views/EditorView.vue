@@ -9,6 +9,9 @@ import ChartCard from "../components/ChartCard.vue";
 import ContextMenu from "../components/ContextMenu.vue";
 import type { MenuItem } from "../components/menu";
 import FormatBar from "../components/FormatBar.vue";
+import ErrorsPanel from "../components/ErrorsPanel.vue";
+import ErrorWarning from "../components/ErrorWarning.vue";
+import type { DocumentError } from "@spreadsheet-app/engine";
 import AssertionsPanel from "../components/AssertionsPanel.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
 import SharePanel from "../components/SharePanel.vue";
@@ -45,6 +48,40 @@ function exportFile(): void {
 const historyOpen = ref(false);
 const shareOpen = ref(false);
 const assertionsOpen = ref(false);
+const errorsOpen = ref(false);
+async function goToError(target: DocumentError): Promise<void> {
+  await router.push({
+    name: "editor",
+    params: { spreadsheetId: props.spreadsheetId, pageId: target.pageId },
+  });
+  errorsOpen.value = false;
+  await nextTick();
+  const block = document.getElementById(`block-${target.blockId}`);
+  if (target.cell && store.rowView(target.cell.tableId).place(target.cell.row) !== undefined) {
+    store.selection = target.cell;
+    await nextTick();
+    store.focusGrid();
+  } else {
+    if (target.name && target.line === undefined) {
+      const toggle = block?.querySelector<HTMLButtonElement>("[data-open-names]");
+      if (toggle?.getAttribute("aria-expanded") === "false") toggle.click();
+      await nextTick();
+    }
+    const location =
+      target.line !== undefined
+        ? block?.querySelector(`[data-script-line="${String(target.line)}"]`)
+        : target.name
+          ? block?.querySelector(`[data-name="${CSS.escape(target.name)}"]`)
+          : undefined;
+    block?.focus({ preventScroll: true });
+    (location ?? block)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (target.cell)
+      store.notice = {
+        kind: "error",
+        text: `${target.label} is hidden by the table filter. Edit or clear the filter to show it.`,
+      };
+  }
+}
 
 /** Opens the page of a failing assertion and selects its cell. */
 async function goToAssertion(target: (typeof store.assertions)[number]): Promise<void> {
@@ -73,7 +110,10 @@ async function openCopy(spreadsheetId: string): Promise<void> {
   await router.push({ name: "editor", params: { spreadsheetId } });
 }
 
-const loaded = computed(() => store.spreadsheet?.id === props.spreadsheetId);
+const opened = ref<string | null>(null);
+const loaded = computed(
+  () => opened.value === props.spreadsheetId && store.spreadsheet?.id === props.spreadsheetId,
+);
 // The store may still hold the spreadsheet that was open before this one.
 usePageTitle(() => (loaded.value ? store.spreadsheet?.name : undefined));
 const page = computed(() => store.pages.find((candidate) => candidate.id === props.pageId));
@@ -124,6 +164,7 @@ watch(
       stop?.();
     });
     loadError.value = null;
+    opened.value = null;
     try {
       await store.load(spreadsheetId);
     } catch (cause) {
@@ -133,6 +174,7 @@ watch(
       return;
     }
     if (!isActive()) return;
+    opened.value = spreadsheetId;
     stop = watchSpreadsheet(spreadsheetId, (change) => {
       if (change) {
         void store.receiveChange(change).catch((cause: unknown) => {
@@ -210,6 +252,17 @@ watch(
           {{ store.saving ? "Saving…" : "Saved" }}
         </span>
         <button
+          v-if="loaded && store.errors.length > 0"
+          type="button"
+          class="editor__errors"
+          :aria-label="`${store.errors.length} ${store.errors.length === 1 ? 'error' : 'errors'}`"
+          aria-haspopup="dialog"
+          @click="errorsOpen = true"
+        >
+          <ErrorWarning label="Document contains errors" />
+          {{ store.errors.length }} {{ store.errors.length === 1 ? "error" : "errors" }}
+        </button>
+        <button
           v-if="loaded && store.assertions.length > 0"
           type="button"
           class="editor__assertions"
@@ -236,7 +289,13 @@ watch(
     <p v-if="loadError" class="notice notice--error" role="alert">{{ loadError }}</p>
     <p v-else-if="!loaded" class="editor__loading">Loading…</p>
     <main v-else-if="page" class="editor__page">
-      <div v-for="(block, index) in blocks" :key="block.record.id" class="editor__block">
+      <div
+        v-for="(block, index) in blocks"
+        :id="`block-${block.record.id}`"
+        :key="block.record.id"
+        tabindex="-1"
+        class="editor__block"
+      >
         <TableCard v-if="block.table" :table="block.table" />
         <ChartCard v-else-if="block.view.kind === 'chart'" :view="block.view" />
         <ScriptCard v-else-if="block.view.kind === 'script'" :view="block.view" />
@@ -302,6 +361,7 @@ watch(
       @close="shareOpen = false"
       @left="router.push({ name: 'spreadsheets' })"
     />
+    <ErrorsPanel v-if="errorsOpen && loaded" @close="errorsOpen = false" @go="goToError" />
     <AssertionsPanel
       v-if="assertionsOpen && loaded"
       @close="assertionsOpen = false"

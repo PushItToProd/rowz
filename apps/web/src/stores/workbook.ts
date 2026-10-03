@@ -1,5 +1,6 @@
 import {
   createWorkbook,
+  documentErrors,
   conditionalFormatAt,
   displayRows,
   prepareConditionals,
@@ -610,6 +611,16 @@ export const useWorkbookStore = defineStore("workbook", () => {
   function statementValue(holderId: string, line: number): Evaluated | undefined {
     return engine.value.getStatement(holderId, line);
   }
+
+  const errors = computed(() =>
+    documentErrors(
+      engine.value,
+      tables.value.map((table) => ({ ...table, filter: table.display.filter })),
+      views.value,
+    ),
+  );
+  const errorPages = computed(() => new Set(errors.value.map((failure) => failure.pageId)));
+  const errorBlocks = computed(() => new Set(errors.value.map((failure) => failure.blockId)));
 
   /** The `ASSERT`s that are false, each with where it is and the page to open to see it. */
   const assertions = computed(() =>
@@ -1760,6 +1771,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     setTableNames,
     statementValue,
     assertions,
+    errors,
+    errorPages,
+    errorBlocks,
     documentNames,
     addView,
     updateView,

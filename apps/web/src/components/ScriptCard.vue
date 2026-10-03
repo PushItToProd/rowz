@@ -5,6 +5,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import type { ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import EditableName from "./EditableName.vue";
+import ErrorWarning from "./ErrorWarning.vue";
 import { shown } from "./shownValue";
 
 const props = defineProps<{ view: ViewRecord }>();
@@ -85,6 +86,10 @@ const statements = computed(() =>
   <section :id="`script-${view.id}`" class="view-card" :data-view="view.name">
     <header class="view-card__header">
       <h2>
+        <ErrorWarning
+          v-if="store.errorBlocks.has(view.id)"
+          :label="`${view.name} contains errors`"
+        />
         <EditableName
           :value="view.name"
           label="Script name"
@@ -118,7 +123,11 @@ const statements = computed(() =>
       @dblclick="edit"
     >
       <tbody>
-        <tr v-for="statement in statements" :key="statement.line">
+        <tr
+          v-for="statement in statements"
+          :key="statement.line"
+          :data-script-line="statement.line"
+        >
           <th scope="row" class="script__name">{{ statement.label }}</th>
           <td :class="{ script__error: statement.value.error }">
             {{ statement.value.text }}

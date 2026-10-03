@@ -3,6 +3,7 @@ import { useRouter } from "vue-router";
 import type { PageRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import EditableName from "./EditableName.vue";
+import ErrorWarning from "./ErrorWarning.vue";
 
 const props = defineProps<{ spreadsheetId: string; activePageId: string }>();
 const store = useWorkbookStore();
@@ -40,6 +41,7 @@ async function remove(page: PageRecord): Promise<void> {
       :aria-current="page.id === activePageId ? 'page' : undefined"
       @click="open(page.id)"
     >
+      <ErrorWarning v-if="store.errorPages.has(page.id)" :label="`${page.name} contains errors`" />
       <!-- The name is a link, so the keyboard reaches each page. The tab around it takes the click. -->
       <EditableName
         :value="page.name"

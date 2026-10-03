@@ -2,6 +2,14 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-03: Collect document errors without storing computed state
+
+The editor and document list use the same pure engine collector for evaluated errors in cells, formula columns, names, script statements, filters, charts, and Markdown templates. The document-list request reads and evaluates each accessible document to return `hasErrors`. Computed results remain unpersisted. This adds work proportional to the contents of the listed documents; a revision-keyed cache can reduce it if the list becomes slow.
+
+Repeated identical errors from one template expression are grouped so a loop does not produce hundreds of identical entries. Errors in distinct expressions remain separate. A link to a filtered-out cell opens its page and table and explains which filter hides it; navigation does not clear a saved filter.
+
+**To change.** `documentErrors` in `packages/engine/src/diagnostics.ts`, `SpreadsheetRepository.listSpreadsheets`, and `goToError` in the editor.
+
 ## 2026-10-02: Rename names when a replacement preserves one formula
 
 `PUT /tables/:tableId/names` replaces a table's whole name list, so it has no explicit rename operation. When exactly one old entry is removed and exactly one new entry is added with the same formula (ignoring a leading `=` and surrounding whitespace), treat that pair as a rename and rewrite its bare and qualified uses. Do not infer a rename when either side has multiple matches. This preserves references for the common edit-in-place case without guessing across duplicate formulas.

@@ -16,6 +16,7 @@ import {
 import { computed } from "vue";
 import { formattedText, textStyle } from "../formatStyle";
 import { markdown } from "../markdown";
+import CellError from "./CellError.vue";
 
 const props = defineProps<{
   value: CellValue;
@@ -75,7 +76,6 @@ const kind = computed(() => {
 const formatted = computed(() =>
   isMarkdown(props.value) ? markdown.renderInline(props.value.text) : "",
 );
-const hint = computed(() => (isError(props.value) ? props.value.message : undefined));
 
 const control = computed(() => (isControl(props.value) ? props.value : undefined));
 /** Which dropdown choice the target cell holds, or -1 when it holds none of them. */
@@ -177,7 +177,6 @@ function onChoice(event: Event): void {
     v-html="formatted"
   ></span>
   <!-- eslint-enable vue/no-v-html -->
-  <span v-else class="cell-value" :class="`cell-value--${kind}`" :style="style" :title="hint">{{
-    text
-  }}</span>
+  <CellError v-else-if="isError(value)" :error="value" :text-style="style" />
+  <span v-else class="cell-value" :class="`cell-value--${kind}`" :style="style">{{ text }}</span>
 </template>

@@ -10,6 +10,7 @@ import ContextMenu from "./ContextMenu.vue";
 import ChoicesPanel from "./ChoicesPanel.vue";
 import ConditionalFormatsPanel from "./ConditionalFormatsPanel.vue";
 import EditableName from "./EditableName.vue";
+import ErrorWarning from "./ErrorWarning.vue";
 import GridView from "./GridView.vue";
 import NamesPanel from "./NamesPanel.vue";
 import ResizeTable from "./ResizeTable.vue";
@@ -354,6 +355,10 @@ const menuLabel = computed(() => {
   <section class="table-card" :data-table="table.name">
     <header class="table-card__header">
       <h2>
+        <ErrorWarning
+          v-if="store.errorBlocks.has(table.id)"
+          :label="`${table.name} contains errors`"
+        />
         <EditableName
           :value="table.name"
           label="Table name"
@@ -366,6 +371,7 @@ const menuLabel = computed(() => {
         <button
           v-if="!table.columns"
           type="button"
+          data-open-names
           :aria-expanded="namesOpen"
           @click="namesOpen = !namesOpen"
         >
@@ -390,6 +396,15 @@ const menuLabel = computed(() => {
         <button type="button" class="danger" @click="remove">Delete table</button>
       </div>
       <div v-else class="table-card__actions">
+        <button
+          v-if="!table.columns && table.names.length > 0"
+          type="button"
+          data-open-names
+          :aria-expanded="namesOpen"
+          @click="namesOpen = !namesOpen"
+        >
+          Names ({{ table.names.length }})
+        </button>
         <button type="button" @click="exportCsv">Export CSV</button>
       </div>
       <ResizeTable v-if="resizing" :table="table" @close="resizing = false" @resize="resize" />

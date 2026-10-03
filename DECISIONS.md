@@ -2,6 +2,14 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-03: Errors are always visible
+
+**Decision.** Error visibility is a core product principle. rowz puts errors front and center throughout a document, including errors on inactive pages and in filtered-out rows. A prominent header indicator opens a list of errors with links to their locations. Blocks, pages, and documents in the document list carry warning triangles when they contain errors. Cell errors show explanations in an in-app popover.
+
+**Why.** An error in a traditional spreadsheet can disappear into a remote corner of a large document. rowz should make errors impossible to overlook, so a document's calculations and logic can be trusted only after its errors have been addressed.
+
+**What would reopen it.** The presentation can change, but errors must remain visible without searching individual cells or visiting every page.
+
 ## 2026-10-02: Sorting, filtering, choices, and conditional formats
 
 Four decisions shape how a data table is shown.

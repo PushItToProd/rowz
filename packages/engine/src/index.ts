@@ -163,4 +163,7 @@ export {
   type ActionPlan,
   type AssertionFailure,
   type WorkbookOptions,
+  type WorkbookError,
 } from "./workbook";
+
+export { documentErrors, type DocumentError } from "./diagnostics";

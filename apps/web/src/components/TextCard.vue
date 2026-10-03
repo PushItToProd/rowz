@@ -7,6 +7,7 @@ import { markdown } from "../markdown";
 import { useWorkbookStore } from "../stores/workbook";
 import ChartView from "./ChartView.vue";
 import EditableName from "./EditableName.vue";
+import ErrorWarning from "./ErrorWarning.vue";
 
 const props = defineProps<{ view: ViewRecord }>();
 const store = useWorkbookStore();
@@ -74,6 +75,10 @@ const parts = computed(() =>
   <section class="view-card" :data-view="view.name">
     <header class="view-card__header">
       <h2>
+        <ErrorWarning
+          v-if="store.errorBlocks.has(view.id)"
+          :label="`${view.name} contains errors`"
+        />
         <EditableName
           :value="view.name"
           label="Text view name"

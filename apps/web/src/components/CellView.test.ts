@@ -113,13 +113,22 @@ describe("CellView", () => {
     expect(wrapper.get("span").attributes("title")).toContain("text view");
   });
 
-  it("shows an error code with its explanation as a tooltip", () => {
-    const span = render({ kind: "error", code: "#DIV/0!", message: "Division by zero" }).get(
-      "span",
-    );
+  it("shows an error explanation in a popover on hover and keyboard focus", async () => {
+    const wrapper = render({ kind: "error", code: "#DIV/0!", message: "Division by zero" });
+    const span = wrapper.get("span");
     expect(span.text()).toBe("#DIV/0!");
     expect(span.classes()).toContain("cell-value--error");
-    expect(span.attributes("title")).toBe("Division by zero");
+    expect(span.attributes("title")).toBeUndefined();
+    await span.trigger("mouseenter");
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain("Division by zero");
+    await span.trigger("keydown", { key: "Escape" });
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    await span.trigger("focus");
+    expect(document.querySelector('[role="tooltip"]')).not.toBeNull();
+    window.dispatchEvent(new Event("scroll"));
+    await wrapper.vm.$nextTick();
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    wrapper.unmount();
   });
 
   it("shows a button with its label and emits run when clicked", async () => {

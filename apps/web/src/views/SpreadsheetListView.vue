@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import ErrorWarning from "../components/ErrorWarning.vue";
 import { api, type ListedSpreadsheetItem } from "../api/client";
 import { APP_NAME } from "../appName";
 import { readSpreadsheetFile } from "../files/spreadsheetFile";
@@ -92,6 +93,10 @@ onMounted(refresh);
     <ul v-else class="list__items">
       <li v-for="spreadsheet in spreadsheets" :key="spreadsheet.id">
         <RouterLink :to="{ name: 'editor', params: { spreadsheetId: spreadsheet.id } }">
+          <ErrorWarning
+            v-if="spreadsheet.hasErrors"
+            :label="`${spreadsheet.name} contains errors`"
+          />
           {{ spreadsheet.name }}
         </RouterLink>
         <span v-if="spreadsheet.role !== 'owner'" class="badge">

@@ -59,7 +59,8 @@ export type ControlInput = string | number | boolean | null;
 export type VersionListItem = Omit<VersionRecord, "createdAt"> & { createdAt: string };
 export type SpreadsheetListItem = Omit<SpreadsheetSummary, "updatedAt"> & { updatedAt: string };
 /** A spreadsheet in the list, with the viewer's role on it. */
-export type ListedSpreadsheetItem = SpreadsheetListItem & Pick<ListedSpreadsheet, "role">;
+export type ListedSpreadsheetItem = SpreadsheetListItem &
+  Pick<ListedSpreadsheet, "role" | "hasErrors">;
 
 /** A response with an error status. `message` is written for the person using the app. */
 export class ApiRequestError extends Error {

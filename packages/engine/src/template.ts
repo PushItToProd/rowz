@@ -11,6 +11,7 @@ import {
   type CellValue,
   type ChartValue,
   type Evaluated,
+  type ErrorValue,
 } from "./values";
 
 /**
@@ -336,6 +337,7 @@ function rowsOf(value: Evaluated): CellValue[][] {
 export function renderNodes(
   nodes: readonly TemplateNode[],
   evaluate: (expression: string, names: ReadonlyMap<string, Evaluated>) => Evaluated,
+  onError?: (error: ErrorValue) => void,
 ): TemplateBlock[] {
   const blocks: TemplateBlock[] = [];
   let markdown = "";
@@ -379,6 +381,7 @@ export function renderNodes(
           const test = isScalar(value)
             ? toBoolean(value)
             : error("#VALUE!", "Expected a single value");
+          if (isError(test) && !isError(value)) onError?.(test);
           // A condition that cannot be decided shows its error where the block would be.
           if (isError(value) || isError(test)) output(isError(value) ? value : test);
           else run(test ? node.then : node.otherwise, new Map(names));
@@ -431,9 +434,10 @@ export function renderNodes(
 export function renderTemplate(
   source: string,
   evaluate: (expression: string, names: ReadonlyMap<string, Evaluated>) => Evaluated,
+  onError?: (error: ErrorValue) => void,
 ): TemplateBlock[] {
   try {
-    return renderNodes(parseTemplate(source), evaluate);
+    return renderNodes(parseTemplate(source), evaluate, onError);
   } catch (cause) {
     if (!(cause instanceof TemplateSyntaxError)) throw cause;
     return [{ type: "error", message: `Line ${String(cause.line)}: ${cause.message}` }];

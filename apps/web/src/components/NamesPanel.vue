@@ -73,7 +73,7 @@ function remove(index: number): void {
   <section class="names-panel" :aria-label="`Names in ${table.name}`">
     <table v-if="table.names.length > 0">
       <tbody>
-        <tr v-for="(entry, index) in held" :key="entry.name">
+        <tr v-for="(entry, index) in held" :key="entry.name" :data-name="entry.name">
           <th scope="row">
             <EditableName
               :value="entry.name"

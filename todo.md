@@ -22,6 +22,7 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 ## Inbox - to be categorized
 
 - [ ] "Save as"/"Save a copy" for duplicating an existing document
+- [ ] when errors appear in a rendered markdown block, show the errors as a chip with the error message. e.g. writing `{{ A+nonexistentvar }}` currently just renders `#NAME?` verbatim, but not even what name is invalid
 
 ## Plans
 
@@ -128,7 +129,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] syntax highlighting for formulas in scripts and Markdown
   - Coordinate completion, reference picking, reference colors, and keyboard behavior across these editors. The formula-column prompt replacement below is part of this work.
 - [x] hitting tab with the formula bar focused should have the same effect as hitting tab with the cell itself selected
-- [ ] **P4** show cell errors in a popover on hover instead of using a native browser tooltip
+- [x] show cell errors in a popover on hover instead of using a native browser tooltip
 - [ ] **P4** (Claude) clicking a cell or dragging over a range while a formula is being typed writes its reference at the caret, as Excel and Sheets do. A formula's references are typed by hand today
 - [ ] **P4** (Claude) color each reference in the formula being edited, and outline the cells it names in the same color
 - [ ] **P7** when a spill error is caused by table dimensions, show a “Resize table to fit” button in its popover
@@ -281,10 +282,10 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] replace Claudeslop phrasing like "what it holds"
   - [ ] revise "row of this column" help text in autocomplete
   - [ ] revise "Write the one meant" in `workbook.ts`
-- [ ] **P5** make errors highly visible throughout the document
-  - [ ] show a button in the editor header whenever the document has errors, like the failing-assertions indicator; open a popup listing all errors with links to their locations
-  - [ ] show a warning triangle on blocks and pages that contain errors
-  - [ ] show a warning triangle on documents that contain errors in the document list
+- [x] make errors highly visible throughout the document
+  - [x] show a button in the editor header whenever the document has errors, like the failing-assertions indicator; open a popup listing all errors with links to their locations
+  - [x] show a warning triangle on blocks and pages that contain errors
+  - [x] show a warning triangle on documents that contain errors in the document list
 - [ ] (Claude) say "document" instead of "spreadsheet" in the UI and help page, as the README does
 - [x] mobile friendly UI (layout, touch targets, tap twice to edit)
 - [ ] **P10** revamp the phone-width UI so it is less cramped. The editor header is the tightest part: it holds the back arrow, the spreadsheet's name, the saving indicator, Share, History, Export, and Help on one line.

@@ -1,0 +1,51 @@
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from "vue";
+import type { DocumentError } from "@spreadsheet-app/engine";
+import { useWorkbookStore } from "../stores/workbook";
+
+const store = useWorkbookStore();
+const emit = defineEmits<{ close: []; go: [target: DocumentError] }>();
+const panel = ref<HTMLElement>();
+const opener = document.activeElement;
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") emit("close");
+}
+onMounted(() => {
+  document.addEventListener("keydown", onKeydown);
+  panel.value?.focus({ preventScroll: true });
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("keydown", onKeydown);
+  if (
+    opener instanceof HTMLElement &&
+    (panel.value?.contains(document.activeElement) || document.activeElement === document.body)
+  )
+    opener.focus({ preventScroll: true });
+});
+</script>
+
+<template>
+  <aside
+    ref="panel"
+    class="side-panel errors"
+    role="dialog"
+    aria-label="Document errors"
+    tabindex="-1"
+  >
+    <header class="side-panel__header">
+      <h2>Document errors</h2>
+      <button type="button" aria-label="Close errors" @click="emit('close')">×</button>
+    </header>
+    <p v-if="store.errors.length === 0">No errors in this document.</p>
+    <ul v-else class="assertions__list">
+      <li v-for="(failure, index) in store.errors" :key="index">
+        <button type="button" @click="emit('go', failure)">
+          <span>{{ store.pages.find((page) => page.id === failure.pageId)?.name }}</span>
+          <strong>{{ failure.label }}</strong>
+          <span class="errors__code">{{ failure.code }}</span>
+          <span v-if="failure.message !== failure.code">{{ failure.message }}</span>
+        </button>
+      </li>
+    </ul>
+  </aside>
+</template>

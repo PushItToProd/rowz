@@ -2340,3 +2340,16 @@ describe("conditional formats", () => {
     expect(server.setConditionalFormats.mock.calls[0]?.[1]).toMatchObject([{ kind: "scale" }]);
   });
 });
+
+it("updates document errors and page/block warnings when cells are corrected", async () => {
+  const store = await open({ A1: "=1/0", B1: "=Missing" });
+  expect(store.errors.map((failure) => failure.label)).toEqual(["Table 1!A1", "Table 1!B1"]);
+  expect(store.errorPages.has("p1")).toBe(true);
+  expect(store.errorBlocks.has("t1")).toBe(true);
+  await store.setCell(at("A1"), "1");
+  expect(store.errors).toHaveLength(1);
+  await store.setCell(at("B1"), "2");
+  expect(store.errors).toEqual([]);
+  expect(store.errorPages.size).toBe(0);
+  expect(store.errorBlocks.size).toBe(0);
+});

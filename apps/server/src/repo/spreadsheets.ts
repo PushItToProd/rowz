@@ -1,5 +1,7 @@
 import {
   addFormatRule,
+  createWorkbook,
+  documentErrors,
   columnFormulasAfterEdit,
   columnFormulasAfterMove,
   columnFormulasAfterRename,
@@ -140,6 +142,7 @@ export interface SpreadsheetSummary {
 /** A spreadsheet in the caller's list, with the caller's role on it. */
 export interface ListedSpreadsheet extends SpreadsheetSummary {
   role: Role;
+  hasErrors: boolean;
 }
 
 export interface PageRecord {
@@ -659,7 +662,7 @@ export class SpreadsheetRepository {
   }
 
   async listSpreadsheets(): Promise<ListedSpreadsheet[]> {
-    return this.db
+    const listed = await this.db
       .select({
         id: spreadsheets.id,
         name: spreadsheets.name,
@@ -669,6 +672,15 @@ export class SpreadsheetRepository {
       .from(spreadsheets)
       .innerJoin(this.access, this.granted())
       .orderBy(desc(spreadsheets.updatedAt));
+    const result: ListedSpreadsheet[] = [];
+    for (const item of listed) {
+      const { data } = await this.read(item.id);
+      result.push({
+        ...item,
+        hasErrors: documentErrors(createWorkbook(data), data.tables, data.views).length > 0,
+      });
+    }
+    return result;
   }
 
   /** Everyone who can open a spreadsheet: the members of its workspace, then the people it is shared with. */
