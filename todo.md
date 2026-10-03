@@ -219,10 +219,11 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] **P7** pages
   - [ ] **P6** rows and cols by dragging and dropping their headers (including when a range of them is selected) (but no need to handle dragging and dropping a selected range of cells - only do it if the user has specifically selected full rows or columns)
   - [ ] **P7** blocks
-- [ ] add context menus for pages and blocks
+- [ ] add context menus when right clicking on pages tab and block headers/margins
   - [ ] page actions: delete, move left/right
   - [ ] block actions: whatever each block supports
     - block context menu should appear when right clocking on the card around it but not the controls within it. keep a button in the upper right with a vertical ellipsis that I can click to show the same menu as well
+- [ ] data tables - allow choices to be drawn from a formula's result (when the formula value changes, keep the raw underlying value in the cell but flag it visibly as invalid)
 
 ## Formatting
 
