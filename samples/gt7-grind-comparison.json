@@ -4,12 +4,62 @@
   "name": "GT7 grind comparison",
   "pages": [
     {
-      "name": "Data",
+      "name": "Single Race Payout Comparison",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "About",
+          "source": "# Single race payout comparison\n\nThis table shows the expected payout if you were to grind the same race as many times as possible for exactly 8 hours a day, 5 days a week, assuming you don't run a partial race at the end of the day.\n\nFor example, say it consistently takes you 31 minutes to finish Le Mans. After 8 hours with no breaks, you'd have finished Le Mans 15 times with 15 minutes to spare - not enough to finish another race. Thus, the (Le Mans, 31) value only counts the payout for 15 full races. (This is also why the 23 and 24 minute payouts are the same for Tokyo - 70%.)\n\nEach column is your max time plus break time between races, in minutes. A Tokyo row is the share of races you finish with the clean race bonus.\n"
+        },
+        {
+          "type": "table",
+          "name": "Payout (8*5 hours)",
+          "rowCount": 11,
+          "colCount": 15,
+          "formats": [
+            {
+              "startRow": 1,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": null,
+              "format": {
+                "numberFormat": "#,##0"
+              }
+            }
+          ],
+          "conditionalFormats": [
+            {
+              "startRow": 1,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": null,
+              "kind": "scale",
+              "low": "red",
+              "high": "green"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "=QUERY(Runs, \"select Race, sum(`Payout (40 hrs)`) where Race <> 'Spa' group by Race pivot Duration\")"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "Conclusions",
+          "source": "If you can finish Sardegna in 24 minutes or less, then Tokyo is only better if:\n\n- You can finish in under 21 minutes with the clean race bonus at least 40% of the time.\n- You can finish in under 22 minutes with the clean race bonus at least 50% of the time.\n- You can finish in under 24 minutes with the clean race bonus at least 70% of the time.\n- You can finish in under 25 minutes with the clean race bonus at least 80% of the time.\n- You can finish in under 26 minutes with the clean race bonus 100% of the time.\n"
+        }
+      ]
+    },
+    {
+      "name": "Race Payout data",
       "blocks": [
         {
           "type": "table",
           "name": "Races",
-          "rowCount": 5,
+          "rowCount": 11,
           "colCount": 4,
           "columns": [
             {
@@ -17,7 +67,7 @@
               "type": "text"
             },
             {
-              "name": "Payout with bonus",
+              "name": "Payout w Bonus",
               "type": "number"
             },
             {
@@ -44,174 +94,1744 @@
             {
               "row": 0,
               "col": 0,
-              "input": "Tokyo Expressway East, 3 laps"
+              "input": "Spa"
             },
             {
               "row": 0,
               "col": 1,
-              "input": "92000"
+              "input": "1500000"
             },
             {
               "row": 0,
               "col": 2,
-              "input": "6"
+              "input": "60"
             },
             {
               "row": 0,
               "col": 3,
-              "input": "8"
+              "input": "66"
             },
             {
               "row": 1,
               "col": 0,
-              "input": "Deep Forest Raceway, 5 laps"
+              "input": "Le Mans"
             },
             {
               "row": 1,
               "col": 1,
-              "input": "115000"
+              "input": "825000"
             },
             {
               "row": 1,
               "col": 2,
-              "input": "7"
+              "input": "30"
             },
             {
               "row": 1,
               "col": 3,
-              "input": "9"
+              "input": "34"
             },
             {
               "row": 2,
               "col": 0,
-              "input": "Autodromo Lago Maggiore GP"
+              "input": "Sardegna"
             },
             {
               "row": 2,
               "col": 1,
-              "input": "78000"
+              "input": "727500"
             },
             {
               "row": 2,
               "col": 2,
-              "input": "6"
+              "input": "21"
             },
             {
               "row": 2,
               "col": 3,
-              "input": "7"
+              "input": "29"
             },
             {
               "row": 3,
               "col": 0,
-              "input": "Dragon Trail Seaside"
+              "input": "Tokyo - 100%"
             },
             {
               "row": 3,
               "col": 1,
-              "input": "66000"
+              "input": "825000"
             },
             {
               "row": 3,
               "col": 2,
-              "input": "7"
+              "input": "21"
             },
             {
               "row": 3,
               "col": 3,
-              "input": "8"
+              "input": "29"
             },
             {
               "row": 4,
               "col": 0,
-              "input": "Special Stage Route 5"
+              "input": "Tokyo - 090%"
             },
             {
               "row": 4,
               "col": 1,
-              "input": "104000"
+              "input": "797500"
             },
             {
               "row": 4,
               "col": 2,
-              "input": "8"
+              "input": "21"
             },
             {
               "row": 4,
               "col": 3,
-              "input": "9"
+              "input": "29"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "Tokyo - 080%"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "770000"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 5,
+              "col": 3,
+              "input": "29"
+            },
+            {
+              "row": 6,
+              "col": 0,
+              "input": "Tokyo - 070%"
+            },
+            {
+              "row": 6,
+              "col": 1,
+              "input": "742500"
+            },
+            {
+              "row": 6,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 6,
+              "col": 3,
+              "input": "29"
+            },
+            {
+              "row": 7,
+              "col": 0,
+              "input": "Tokyo - 060%"
+            },
+            {
+              "row": 7,
+              "col": 1,
+              "input": "715000"
+            },
+            {
+              "row": 7,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 7,
+              "col": 3,
+              "input": "29"
+            },
+            {
+              "row": 8,
+              "col": 0,
+              "input": "Tokyo - 050%"
+            },
+            {
+              "row": 8,
+              "col": 1,
+              "input": "687500"
+            },
+            {
+              "row": 8,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 8,
+              "col": 3,
+              "input": "29"
+            },
+            {
+              "row": 9,
+              "col": 0,
+              "input": "Tokyo - 040%"
+            },
+            {
+              "row": 9,
+              "col": 1,
+              "input": "660000"
+            },
+            {
+              "row": 9,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 9,
+              "col": 3,
+              "input": "29"
+            },
+            {
+              "row": 10,
+              "col": 0,
+              "input": "Tokyo - 030%"
+            },
+            {
+              "row": 10,
+              "col": 1,
+              "input": "632500"
+            },
+            {
+              "row": 10,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 10,
+              "col": 3,
+              "input": "29"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Rebuild",
+          "rowCount": 1,
+          "colCount": 1,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "=BUTTON(\"Rebuild Runs from Races\", OVERWRITE(DROP(REDUCE(\"\", SEQUENCE(ROWS(Races[Race Name])), LAMBDA(rows, n, LET(shortest, INDEX(Races[Min Duration], n), minutes, SEQUENCE(INDEX(Races[Max Duration], n) - shortest + 1, 1, shortest), VSTACK(rows, HSTACK(MAP(minutes, LAMBDA(minute, n)), MAP(minutes, LAMBDA(minute, INDEX(Races[Race Name], n))), minutes))))), 1), Runs!A:C))"
             }
           ]
         },
         {
           "type": "table",
           "name": "Runs",
-          "rowCount": 10,
-          "colCount": 7,
+          "rowCount": 93,
+          "colCount": 8,
           "columns": [
             {
+              "name": "#",
+              "type": "number"
+            },
+            {
               "name": "Race",
-              "type": "choice",
-              "choicesFrom": {
-                "page": "Data",
-                "table": "Races",
-                "column": "Race Name"
-              }
+              "type": "text"
             },
             {
               "name": "Duration",
               "type": "number"
             },
             {
-              "name": "Payout per minute",
+              "name": "Payout per Minute",
               "type": "formula",
-              "formula": "=IFERROR(INDEX(Races[Payout with bonus], MATCH([Race], Races[Race Name], 0)) / [Duration], \"\")"
+              "formula": "=XLOOKUP([Race], Races[Race Name], Races[Payout w Bonus]) / [Duration]"
             },
             {
               "name": "Races per hour",
               "type": "formula",
-              "formula": "=IFERROR(60 / [Duration], \"\")"
+              "formula": "=60 / [Duration]"
             },
             {
               "name": "Races in 8 hours",
               "type": "formula",
-              "formula": "=IFERROR(8 * 60 / [Duration], \"\")"
+              "formula": "=FLOOR(8 * 60 / [Duration])"
             },
             {
-              "name": "Races in 5 days",
+              "name": "Races in 5 8hr days",
               "type": "formula",
-              "formula": "=IFERROR(5 * 8 * 60 / [Duration], \"\")"
+              "formula": "=5 * [Races in 8 hours]"
             },
             {
-              "name": "Payout over 40 hours",
+              "name": "Payout (40 hrs)",
               "type": "formula",
-              "formula": "=IFERROR([Payout per minute] * 40 * 60, \"\")"
+              "formula": "=[Races in 5 8hr days] * XLOOKUP([Race], Races[Race Name], Races[Payout w Bonus])"
             }
           ],
           "formats": [
             {
               "startRow": 0,
               "endRow": null,
-              "startCol": 2,
-              "endCol": 2,
+              "startCol": 3,
+              "endCol": 4,
+              "format": {
+                "numberFormat": "#,##0.00"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 7,
+              "endCol": 7,
               "format": {
                 "numberFormat": "#,##0"
               }
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "1"
             },
             {
-              "startRow": 0,
+              "row": 0,
+              "col": 1,
+              "input": "Spa"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "60"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "1"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "Spa"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "61"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "1"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "Spa"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "62"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "1"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "Spa"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "63"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "1"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "Spa"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "64"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "1"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "Spa"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "65"
+            },
+            {
+              "row": 6,
+              "col": 0,
+              "input": "1"
+            },
+            {
+              "row": 6,
+              "col": 1,
+              "input": "Spa"
+            },
+            {
+              "row": 6,
+              "col": 2,
+              "input": "66"
+            },
+            {
+              "row": 7,
+              "col": 0,
+              "input": "2"
+            },
+            {
+              "row": 7,
+              "col": 1,
+              "input": "Le Mans"
+            },
+            {
+              "row": 7,
+              "col": 2,
+              "input": "30"
+            },
+            {
+              "row": 8,
+              "col": 0,
+              "input": "2"
+            },
+            {
+              "row": 8,
+              "col": 1,
+              "input": "Le Mans"
+            },
+            {
+              "row": 8,
+              "col": 2,
+              "input": "31"
+            },
+            {
+              "row": 9,
+              "col": 0,
+              "input": "2"
+            },
+            {
+              "row": 9,
+              "col": 1,
+              "input": "Le Mans"
+            },
+            {
+              "row": 9,
+              "col": 2,
+              "input": "32"
+            },
+            {
+              "row": 10,
+              "col": 0,
+              "input": "2"
+            },
+            {
+              "row": 10,
+              "col": 1,
+              "input": "Le Mans"
+            },
+            {
+              "row": 10,
+              "col": 2,
+              "input": "33"
+            },
+            {
+              "row": 11,
+              "col": 0,
+              "input": "2"
+            },
+            {
+              "row": 11,
+              "col": 1,
+              "input": "Le Mans"
+            },
+            {
+              "row": 11,
+              "col": 2,
+              "input": "34"
+            },
+            {
+              "row": 12,
+              "col": 0,
+              "input": "3"
+            },
+            {
+              "row": 12,
+              "col": 1,
+              "input": "Sardegna"
+            },
+            {
+              "row": 12,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 13,
+              "col": 0,
+              "input": "3"
+            },
+            {
+              "row": 13,
+              "col": 1,
+              "input": "Sardegna"
+            },
+            {
+              "row": 13,
+              "col": 2,
+              "input": "22"
+            },
+            {
+              "row": 14,
+              "col": 0,
+              "input": "3"
+            },
+            {
+              "row": 14,
+              "col": 1,
+              "input": "Sardegna"
+            },
+            {
+              "row": 14,
+              "col": 2,
+              "input": "23"
+            },
+            {
+              "row": 15,
+              "col": 0,
+              "input": "3"
+            },
+            {
+              "row": 15,
+              "col": 1,
+              "input": "Sardegna"
+            },
+            {
+              "row": 15,
+              "col": 2,
+              "input": "24"
+            },
+            {
+              "row": 16,
+              "col": 0,
+              "input": "3"
+            },
+            {
+              "row": 16,
+              "col": 1,
+              "input": "Sardegna"
+            },
+            {
+              "row": 16,
+              "col": 2,
+              "input": "25"
+            },
+            {
+              "row": 17,
+              "col": 0,
+              "input": "3"
+            },
+            {
+              "row": 17,
+              "col": 1,
+              "input": "Sardegna"
+            },
+            {
+              "row": 17,
+              "col": 2,
+              "input": "26"
+            },
+            {
+              "row": 18,
+              "col": 0,
+              "input": "3"
+            },
+            {
+              "row": 18,
+              "col": 1,
+              "input": "Sardegna"
+            },
+            {
+              "row": 18,
+              "col": 2,
+              "input": "27"
+            },
+            {
+              "row": 19,
+              "col": 0,
+              "input": "3"
+            },
+            {
+              "row": 19,
+              "col": 1,
+              "input": "Sardegna"
+            },
+            {
+              "row": 19,
+              "col": 2,
+              "input": "28"
+            },
+            {
+              "row": 20,
+              "col": 0,
+              "input": "3"
+            },
+            {
+              "row": 20,
+              "col": 1,
+              "input": "Sardegna"
+            },
+            {
+              "row": 20,
+              "col": 2,
+              "input": "29"
+            },
+            {
+              "row": 21,
+              "col": 0,
+              "input": "4"
+            },
+            {
+              "row": 21,
+              "col": 1,
+              "input": "Tokyo - 100%"
+            },
+            {
+              "row": 21,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 22,
+              "col": 0,
+              "input": "4"
+            },
+            {
+              "row": 22,
+              "col": 1,
+              "input": "Tokyo - 100%"
+            },
+            {
+              "row": 22,
+              "col": 2,
+              "input": "22"
+            },
+            {
+              "row": 23,
+              "col": 0,
+              "input": "4"
+            },
+            {
+              "row": 23,
+              "col": 1,
+              "input": "Tokyo - 100%"
+            },
+            {
+              "row": 23,
+              "col": 2,
+              "input": "23"
+            },
+            {
+              "row": 24,
+              "col": 0,
+              "input": "4"
+            },
+            {
+              "row": 24,
+              "col": 1,
+              "input": "Tokyo - 100%"
+            },
+            {
+              "row": 24,
+              "col": 2,
+              "input": "24"
+            },
+            {
+              "row": 25,
+              "col": 0,
+              "input": "4"
+            },
+            {
+              "row": 25,
+              "col": 1,
+              "input": "Tokyo - 100%"
+            },
+            {
+              "row": 25,
+              "col": 2,
+              "input": "25"
+            },
+            {
+              "row": 26,
+              "col": 0,
+              "input": "4"
+            },
+            {
+              "row": 26,
+              "col": 1,
+              "input": "Tokyo - 100%"
+            },
+            {
+              "row": 26,
+              "col": 2,
+              "input": "26"
+            },
+            {
+              "row": 27,
+              "col": 0,
+              "input": "4"
+            },
+            {
+              "row": 27,
+              "col": 1,
+              "input": "Tokyo - 100%"
+            },
+            {
+              "row": 27,
+              "col": 2,
+              "input": "27"
+            },
+            {
+              "row": 28,
+              "col": 0,
+              "input": "4"
+            },
+            {
+              "row": 28,
+              "col": 1,
+              "input": "Tokyo - 100%"
+            },
+            {
+              "row": 28,
+              "col": 2,
+              "input": "28"
+            },
+            {
+              "row": 29,
+              "col": 0,
+              "input": "4"
+            },
+            {
+              "row": 29,
+              "col": 1,
+              "input": "Tokyo - 100%"
+            },
+            {
+              "row": 29,
+              "col": 2,
+              "input": "29"
+            },
+            {
+              "row": 30,
+              "col": 0,
+              "input": "5"
+            },
+            {
+              "row": 30,
+              "col": 1,
+              "input": "Tokyo - 090%"
+            },
+            {
+              "row": 30,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 31,
+              "col": 0,
+              "input": "5"
+            },
+            {
+              "row": 31,
+              "col": 1,
+              "input": "Tokyo - 090%"
+            },
+            {
+              "row": 31,
+              "col": 2,
+              "input": "22"
+            },
+            {
+              "row": 32,
+              "col": 0,
+              "input": "5"
+            },
+            {
+              "row": 32,
+              "col": 1,
+              "input": "Tokyo - 090%"
+            },
+            {
+              "row": 32,
+              "col": 2,
+              "input": "23"
+            },
+            {
+              "row": 33,
+              "col": 0,
+              "input": "5"
+            },
+            {
+              "row": 33,
+              "col": 1,
+              "input": "Tokyo - 090%"
+            },
+            {
+              "row": 33,
+              "col": 2,
+              "input": "24"
+            },
+            {
+              "row": 34,
+              "col": 0,
+              "input": "5"
+            },
+            {
+              "row": 34,
+              "col": 1,
+              "input": "Tokyo - 090%"
+            },
+            {
+              "row": 34,
+              "col": 2,
+              "input": "25"
+            },
+            {
+              "row": 35,
+              "col": 0,
+              "input": "5"
+            },
+            {
+              "row": 35,
+              "col": 1,
+              "input": "Tokyo - 090%"
+            },
+            {
+              "row": 35,
+              "col": 2,
+              "input": "26"
+            },
+            {
+              "row": 36,
+              "col": 0,
+              "input": "5"
+            },
+            {
+              "row": 36,
+              "col": 1,
+              "input": "Tokyo - 090%"
+            },
+            {
+              "row": 36,
+              "col": 2,
+              "input": "27"
+            },
+            {
+              "row": 37,
+              "col": 0,
+              "input": "5"
+            },
+            {
+              "row": 37,
+              "col": 1,
+              "input": "Tokyo - 090%"
+            },
+            {
+              "row": 37,
+              "col": 2,
+              "input": "28"
+            },
+            {
+              "row": 38,
+              "col": 0,
+              "input": "5"
+            },
+            {
+              "row": 38,
+              "col": 1,
+              "input": "Tokyo - 090%"
+            },
+            {
+              "row": 38,
+              "col": 2,
+              "input": "29"
+            },
+            {
+              "row": 39,
+              "col": 0,
+              "input": "6"
+            },
+            {
+              "row": 39,
+              "col": 1,
+              "input": "Tokyo - 080%"
+            },
+            {
+              "row": 39,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 40,
+              "col": 0,
+              "input": "6"
+            },
+            {
+              "row": 40,
+              "col": 1,
+              "input": "Tokyo - 080%"
+            },
+            {
+              "row": 40,
+              "col": 2,
+              "input": "22"
+            },
+            {
+              "row": 41,
+              "col": 0,
+              "input": "6"
+            },
+            {
+              "row": 41,
+              "col": 1,
+              "input": "Tokyo - 080%"
+            },
+            {
+              "row": 41,
+              "col": 2,
+              "input": "23"
+            },
+            {
+              "row": 42,
+              "col": 0,
+              "input": "6"
+            },
+            {
+              "row": 42,
+              "col": 1,
+              "input": "Tokyo - 080%"
+            },
+            {
+              "row": 42,
+              "col": 2,
+              "input": "24"
+            },
+            {
+              "row": 43,
+              "col": 0,
+              "input": "6"
+            },
+            {
+              "row": 43,
+              "col": 1,
+              "input": "Tokyo - 080%"
+            },
+            {
+              "row": 43,
+              "col": 2,
+              "input": "25"
+            },
+            {
+              "row": 44,
+              "col": 0,
+              "input": "6"
+            },
+            {
+              "row": 44,
+              "col": 1,
+              "input": "Tokyo - 080%"
+            },
+            {
+              "row": 44,
+              "col": 2,
+              "input": "26"
+            },
+            {
+              "row": 45,
+              "col": 0,
+              "input": "6"
+            },
+            {
+              "row": 45,
+              "col": 1,
+              "input": "Tokyo - 080%"
+            },
+            {
+              "row": 45,
+              "col": 2,
+              "input": "27"
+            },
+            {
+              "row": 46,
+              "col": 0,
+              "input": "6"
+            },
+            {
+              "row": 46,
+              "col": 1,
+              "input": "Tokyo - 080%"
+            },
+            {
+              "row": 46,
+              "col": 2,
+              "input": "28"
+            },
+            {
+              "row": 47,
+              "col": 0,
+              "input": "6"
+            },
+            {
+              "row": 47,
+              "col": 1,
+              "input": "Tokyo - 080%"
+            },
+            {
+              "row": 47,
+              "col": 2,
+              "input": "29"
+            },
+            {
+              "row": 48,
+              "col": 0,
+              "input": "7"
+            },
+            {
+              "row": 48,
+              "col": 1,
+              "input": "Tokyo - 070%"
+            },
+            {
+              "row": 48,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 49,
+              "col": 0,
+              "input": "7"
+            },
+            {
+              "row": 49,
+              "col": 1,
+              "input": "Tokyo - 070%"
+            },
+            {
+              "row": 49,
+              "col": 2,
+              "input": "22"
+            },
+            {
+              "row": 50,
+              "col": 0,
+              "input": "7"
+            },
+            {
+              "row": 50,
+              "col": 1,
+              "input": "Tokyo - 070%"
+            },
+            {
+              "row": 50,
+              "col": 2,
+              "input": "23"
+            },
+            {
+              "row": 51,
+              "col": 0,
+              "input": "7"
+            },
+            {
+              "row": 51,
+              "col": 1,
+              "input": "Tokyo - 070%"
+            },
+            {
+              "row": 51,
+              "col": 2,
+              "input": "24"
+            },
+            {
+              "row": 52,
+              "col": 0,
+              "input": "7"
+            },
+            {
+              "row": 52,
+              "col": 1,
+              "input": "Tokyo - 070%"
+            },
+            {
+              "row": 52,
+              "col": 2,
+              "input": "25"
+            },
+            {
+              "row": 53,
+              "col": 0,
+              "input": "7"
+            },
+            {
+              "row": 53,
+              "col": 1,
+              "input": "Tokyo - 070%"
+            },
+            {
+              "row": 53,
+              "col": 2,
+              "input": "26"
+            },
+            {
+              "row": 54,
+              "col": 0,
+              "input": "7"
+            },
+            {
+              "row": 54,
+              "col": 1,
+              "input": "Tokyo - 070%"
+            },
+            {
+              "row": 54,
+              "col": 2,
+              "input": "27"
+            },
+            {
+              "row": 55,
+              "col": 0,
+              "input": "7"
+            },
+            {
+              "row": 55,
+              "col": 1,
+              "input": "Tokyo - 070%"
+            },
+            {
+              "row": 55,
+              "col": 2,
+              "input": "28"
+            },
+            {
+              "row": 56,
+              "col": 0,
+              "input": "7"
+            },
+            {
+              "row": 56,
+              "col": 1,
+              "input": "Tokyo - 070%"
+            },
+            {
+              "row": 56,
+              "col": 2,
+              "input": "29"
+            },
+            {
+              "row": 57,
+              "col": 0,
+              "input": "8"
+            },
+            {
+              "row": 57,
+              "col": 1,
+              "input": "Tokyo - 060%"
+            },
+            {
+              "row": 57,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 58,
+              "col": 0,
+              "input": "8"
+            },
+            {
+              "row": 58,
+              "col": 1,
+              "input": "Tokyo - 060%"
+            },
+            {
+              "row": 58,
+              "col": 2,
+              "input": "22"
+            },
+            {
+              "row": 59,
+              "col": 0,
+              "input": "8"
+            },
+            {
+              "row": 59,
+              "col": 1,
+              "input": "Tokyo - 060%"
+            },
+            {
+              "row": 59,
+              "col": 2,
+              "input": "23"
+            },
+            {
+              "row": 60,
+              "col": 0,
+              "input": "8"
+            },
+            {
+              "row": 60,
+              "col": 1,
+              "input": "Tokyo - 060%"
+            },
+            {
+              "row": 60,
+              "col": 2,
+              "input": "24"
+            },
+            {
+              "row": 61,
+              "col": 0,
+              "input": "8"
+            },
+            {
+              "row": 61,
+              "col": 1,
+              "input": "Tokyo - 060%"
+            },
+            {
+              "row": 61,
+              "col": 2,
+              "input": "25"
+            },
+            {
+              "row": 62,
+              "col": 0,
+              "input": "8"
+            },
+            {
+              "row": 62,
+              "col": 1,
+              "input": "Tokyo - 060%"
+            },
+            {
+              "row": 62,
+              "col": 2,
+              "input": "26"
+            },
+            {
+              "row": 63,
+              "col": 0,
+              "input": "8"
+            },
+            {
+              "row": 63,
+              "col": 1,
+              "input": "Tokyo - 060%"
+            },
+            {
+              "row": 63,
+              "col": 2,
+              "input": "27"
+            },
+            {
+              "row": 64,
+              "col": 0,
+              "input": "8"
+            },
+            {
+              "row": 64,
+              "col": 1,
+              "input": "Tokyo - 060%"
+            },
+            {
+              "row": 64,
+              "col": 2,
+              "input": "28"
+            },
+            {
+              "row": 65,
+              "col": 0,
+              "input": "8"
+            },
+            {
+              "row": 65,
+              "col": 1,
+              "input": "Tokyo - 060%"
+            },
+            {
+              "row": 65,
+              "col": 2,
+              "input": "29"
+            },
+            {
+              "row": 66,
+              "col": 0,
+              "input": "9"
+            },
+            {
+              "row": 66,
+              "col": 1,
+              "input": "Tokyo - 050%"
+            },
+            {
+              "row": 66,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 67,
+              "col": 0,
+              "input": "9"
+            },
+            {
+              "row": 67,
+              "col": 1,
+              "input": "Tokyo - 050%"
+            },
+            {
+              "row": 67,
+              "col": 2,
+              "input": "22"
+            },
+            {
+              "row": 68,
+              "col": 0,
+              "input": "9"
+            },
+            {
+              "row": 68,
+              "col": 1,
+              "input": "Tokyo - 050%"
+            },
+            {
+              "row": 68,
+              "col": 2,
+              "input": "23"
+            },
+            {
+              "row": 69,
+              "col": 0,
+              "input": "9"
+            },
+            {
+              "row": 69,
+              "col": 1,
+              "input": "Tokyo - 050%"
+            },
+            {
+              "row": 69,
+              "col": 2,
+              "input": "24"
+            },
+            {
+              "row": 70,
+              "col": 0,
+              "input": "9"
+            },
+            {
+              "row": 70,
+              "col": 1,
+              "input": "Tokyo - 050%"
+            },
+            {
+              "row": 70,
+              "col": 2,
+              "input": "25"
+            },
+            {
+              "row": 71,
+              "col": 0,
+              "input": "9"
+            },
+            {
+              "row": 71,
+              "col": 1,
+              "input": "Tokyo - 050%"
+            },
+            {
+              "row": 71,
+              "col": 2,
+              "input": "26"
+            },
+            {
+              "row": 72,
+              "col": 0,
+              "input": "9"
+            },
+            {
+              "row": 72,
+              "col": 1,
+              "input": "Tokyo - 050%"
+            },
+            {
+              "row": 72,
+              "col": 2,
+              "input": "27"
+            },
+            {
+              "row": 73,
+              "col": 0,
+              "input": "9"
+            },
+            {
+              "row": 73,
+              "col": 1,
+              "input": "Tokyo - 050%"
+            },
+            {
+              "row": 73,
+              "col": 2,
+              "input": "28"
+            },
+            {
+              "row": 74,
+              "col": 0,
+              "input": "9"
+            },
+            {
+              "row": 74,
+              "col": 1,
+              "input": "Tokyo - 050%"
+            },
+            {
+              "row": 74,
+              "col": 2,
+              "input": "29"
+            },
+            {
+              "row": 75,
+              "col": 0,
+              "input": "10"
+            },
+            {
+              "row": 75,
+              "col": 1,
+              "input": "Tokyo - 040%"
+            },
+            {
+              "row": 75,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 76,
+              "col": 0,
+              "input": "10"
+            },
+            {
+              "row": 76,
+              "col": 1,
+              "input": "Tokyo - 040%"
+            },
+            {
+              "row": 76,
+              "col": 2,
+              "input": "22"
+            },
+            {
+              "row": 77,
+              "col": 0,
+              "input": "10"
+            },
+            {
+              "row": 77,
+              "col": 1,
+              "input": "Tokyo - 040%"
+            },
+            {
+              "row": 77,
+              "col": 2,
+              "input": "23"
+            },
+            {
+              "row": 78,
+              "col": 0,
+              "input": "10"
+            },
+            {
+              "row": 78,
+              "col": 1,
+              "input": "Tokyo - 040%"
+            },
+            {
+              "row": 78,
+              "col": 2,
+              "input": "24"
+            },
+            {
+              "row": 79,
+              "col": 0,
+              "input": "10"
+            },
+            {
+              "row": 79,
+              "col": 1,
+              "input": "Tokyo - 040%"
+            },
+            {
+              "row": 79,
+              "col": 2,
+              "input": "25"
+            },
+            {
+              "row": 80,
+              "col": 0,
+              "input": "10"
+            },
+            {
+              "row": 80,
+              "col": 1,
+              "input": "Tokyo - 040%"
+            },
+            {
+              "row": 80,
+              "col": 2,
+              "input": "26"
+            },
+            {
+              "row": 81,
+              "col": 0,
+              "input": "10"
+            },
+            {
+              "row": 81,
+              "col": 1,
+              "input": "Tokyo - 040%"
+            },
+            {
+              "row": 81,
+              "col": 2,
+              "input": "27"
+            },
+            {
+              "row": 82,
+              "col": 0,
+              "input": "10"
+            },
+            {
+              "row": 82,
+              "col": 1,
+              "input": "Tokyo - 040%"
+            },
+            {
+              "row": 82,
+              "col": 2,
+              "input": "28"
+            },
+            {
+              "row": 83,
+              "col": 0,
+              "input": "10"
+            },
+            {
+              "row": 83,
+              "col": 1,
+              "input": "Tokyo - 040%"
+            },
+            {
+              "row": 83,
+              "col": 2,
+              "input": "29"
+            },
+            {
+              "row": 84,
+              "col": 0,
+              "input": "11"
+            },
+            {
+              "row": 84,
+              "col": 1,
+              "input": "Tokyo - 030%"
+            },
+            {
+              "row": 84,
+              "col": 2,
+              "input": "21"
+            },
+            {
+              "row": 85,
+              "col": 0,
+              "input": "11"
+            },
+            {
+              "row": 85,
+              "col": 1,
+              "input": "Tokyo - 030%"
+            },
+            {
+              "row": 85,
+              "col": 2,
+              "input": "22"
+            },
+            {
+              "row": 86,
+              "col": 0,
+              "input": "11"
+            },
+            {
+              "row": 86,
+              "col": 1,
+              "input": "Tokyo - 030%"
+            },
+            {
+              "row": 86,
+              "col": 2,
+              "input": "23"
+            },
+            {
+              "row": 87,
+              "col": 0,
+              "input": "11"
+            },
+            {
+              "row": 87,
+              "col": 1,
+              "input": "Tokyo - 030%"
+            },
+            {
+              "row": 87,
+              "col": 2,
+              "input": "24"
+            },
+            {
+              "row": 88,
+              "col": 0,
+              "input": "11"
+            },
+            {
+              "row": 88,
+              "col": 1,
+              "input": "Tokyo - 030%"
+            },
+            {
+              "row": 88,
+              "col": 2,
+              "input": "25"
+            },
+            {
+              "row": 89,
+              "col": 0,
+              "input": "11"
+            },
+            {
+              "row": 89,
+              "col": 1,
+              "input": "Tokyo - 030%"
+            },
+            {
+              "row": 89,
+              "col": 2,
+              "input": "26"
+            },
+            {
+              "row": 90,
+              "col": 0,
+              "input": "11"
+            },
+            {
+              "row": 90,
+              "col": 1,
+              "input": "Tokyo - 030%"
+            },
+            {
+              "row": 90,
+              "col": 2,
+              "input": "27"
+            },
+            {
+              "row": 91,
+              "col": 0,
+              "input": "11"
+            },
+            {
+              "row": 91,
+              "col": 1,
+              "input": "Tokyo - 030%"
+            },
+            {
+              "row": 91,
+              "col": 2,
+              "input": "28"
+            },
+            {
+              "row": 92,
+              "col": 0,
+              "input": "11"
+            },
+            {
+              "row": 92,
+              "col": 1,
+              "input": "Tokyo - 030%"
+            },
+            {
+              "row": 92,
+              "col": 2,
+              "input": "29"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Runs by payout",
+          "rowCount": 94,
+          "colCount": 8,
+          "formats": [
+            {
+              "startRow": 1,
               "endRow": null,
               "startCol": 3,
-              "endCol": 5,
+              "endCol": 4,
               "format": {
-                "numberFormat": "0.0"
+                "numberFormat": "#,##0.00"
               }
             },
             {
-              "startRow": 0,
+              "startRow": 1,
               "endRow": null,
-              "startCol": 6,
-              "endCol": 6,
+              "startCol": 7,
+              "endCol": 7,
+              "format": {
+                "numberFormat": "#,##0"
+              }
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "=QUERY(Runs, \"select * order by `Payout (40 hrs)` desc, `Payout per Minute` desc\")"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Payout by duration",
+          "rowCount": 11,
+          "colCount": 15,
+          "formats": [
+            {
+              "startRow": 1,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": null,
               "format": {
                 "numberFormat": "#,##0"
               }
@@ -219,141 +1839,28 @@
           ],
           "conditionalFormats": [
             {
-              "startRow": 0,
+              "startRow": 1,
               "endRow": null,
-              "startCol": 2,
-              "endCol": 2,
+              "startCol": 1,
+              "endCol": null,
               "kind": "scale",
               "low": "red",
               "high": "green"
             }
           ],
-          "display": {
-            "sort": [
-              {
-                "column": 2,
-                "descending": true
-              }
-            ]
-          },
           "cells": [
             {
               "row": 0,
               "col": 0,
-              "input": "Tokyo Expressway East, 3 laps"
-            },
-            {
-              "row": 0,
-              "col": 1,
-              "input": "6"
-            },
-            {
-              "row": 1,
-              "col": 0,
-              "input": "Tokyo Expressway East, 3 laps"
-            },
-            {
-              "row": 1,
-              "col": 1,
-              "input": "8"
-            },
-            {
-              "row": 2,
-              "col": 0,
-              "input": "Deep Forest Raceway, 5 laps"
-            },
-            {
-              "row": 2,
-              "col": 1,
-              "input": "7"
-            },
-            {
-              "row": 3,
-              "col": 0,
-              "input": "Deep Forest Raceway, 5 laps"
-            },
-            {
-              "row": 3,
-              "col": 1,
-              "input": "9"
-            },
-            {
-              "row": 4,
-              "col": 0,
-              "input": "Autodromo Lago Maggiore GP"
-            },
-            {
-              "row": 4,
-              "col": 1,
-              "input": "6"
-            },
-            {
-              "row": 5,
-              "col": 0,
-              "input": "Autodromo Lago Maggiore GP"
-            },
-            {
-              "row": 5,
-              "col": 1,
-              "input": "7"
-            },
-            {
-              "row": 6,
-              "col": 0,
-              "input": "Dragon Trail Seaside"
-            },
-            {
-              "row": 6,
-              "col": 1,
-              "input": "7"
-            },
-            {
-              "row": 7,
-              "col": 0,
-              "input": "Dragon Trail Seaside"
-            },
-            {
-              "row": 7,
-              "col": 1,
-              "input": "8"
-            },
-            {
-              "row": 8,
-              "col": 0,
-              "input": "Special Stage Route 5"
-            },
-            {
-              "row": 8,
-              "col": 1,
-              "input": "8"
-            },
-            {
-              "row": 9,
-              "col": 0,
-              "input": "Special Stage Route 5"
-            },
-            {
-              "row": 9,
-              "col": 1,
-              "input": "9"
+              "input": "=QUERY(Runs, \"select Race, sum(`Payout (40 hrs)`) where Race <> 'Spa' group by Race pivot Duration\")"
             }
           ]
-        }
-      ]
-    },
-    {
-      "name": "Report",
-      "blocks": [
-        {
-          "type": "text",
-          "name": "Summary",
-          "source": "# Grinding credits in Gran Turismo 7\n\nWhich race pays the most for the time it takes? **Races** lists each race with its payout, bonus included, and the shortest and longest time a run takes in minutes. **Runs** records a run of each race at those times. Choose the race from the dropdown and enter the duration in minutes: the columns to the right work out the payout per minute and what a long grind adds up to.\n\n{% let best = MAX(Data!Runs[Payout per minute]) %}\nThe best run pays **{{ TEXT(best, \"#,##0\") }}** credits a minute, in {{ INDEX(Data!Runs[Race], MATCH(best, Data!Runs[Payout per minute], 0)) }}. At that rate 40 hours of racing pays **{{ TEXT(best * 40 * 60, \"#,##0\") }}** credits.\n\nThe races and payouts here are representative examples. Replace them with the ones you can run.\n"
         },
         {
           "type": "table",
-          "name": "Payout over 40 hours",
-          "rowCount": 8,
-          "colCount": 6,
+          "name": "Payout per minute by duration",
+          "rowCount": 10,
+          "colCount": 10,
           "formats": [
             {
               "startRow": 1,
@@ -361,7 +1868,7 @@
               "startCol": 1,
               "endCol": null,
               "format": {
-                "numberFormat": "#,##0"
+                "numberFormat": "#,##0.00"
               }
             }
           ],
@@ -372,7 +1879,7 @@
               "startCol": 1,
               "endCol": null,
               "kind": "scale",
-              "low": null,
+              "low": "red",
               "high": "green"
             }
           ],
@@ -380,7 +1887,7 @@
             {
               "row": 0,
               "col": 0,
-              "input": "=QUERY(Runs, \"select Race, sum(`Payout over 40 hours`) group by Race pivot Duration\")"
+              "input": "=QUERY(Runs, \"select Duration, sum(`Payout per Minute`) where Duration <= 29 group by Duration pivot Race\")"
             }
           ]
         }
