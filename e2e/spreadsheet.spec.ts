@@ -823,32 +823,33 @@ test("a conditional format fills the cells that meet a criterion and follows the
   await expect(cell(page, "A2")).toHaveCSS("background-color", "rgb(253, 226, 223)");
 });
 
-test("the Gran Turismo sample imports sorted, with dropdowns and color scales, and survives an export", async ({
+test("the Gran Turismo sample imports its comparison and checkbox, and preserves its color scale on export", async ({
   page,
 }, testInfo) => {
   await signUp(page);
   await page.getByLabel("Import").setInputFiles("samples/gt7-grind-comparison.json");
-  // The n-th row shown and the column, whichever stored row they are.
-  const shown = (row: number, col: number): Locator =>
-    page.locator(
-      `[data-table="Runs"] tbody tr:nth-child(${String(row)}) td:nth-child(${String(col + 2)})`,
-    );
+  const payout = (address: string): Locator => cell(page, address, "Payout (8*5 hours)");
+  const showSpa = (): Locator =>
+    cell(page, "A1", "Options").getByRole("checkbox", { name: "Show Spa" });
 
-  // The runs are shown by payout per minute, highest first, and the best is shaded the most.
+  // The comparison starts without Spa; its largest and smallest payouts have different scale colors.
   const expectSampleSettings = async (): Promise<void> => {
-    await expect(shown(1, 0).getByRole("combobox")).toHaveValue("Deep Forest Raceway, 5 laps");
-    await expect(shown(1, 2)).toHaveText("16,429");
-    const best = await shown(1, 2).evaluate((element) => getComputedStyle(element).backgroundColor);
-    const worst = await shown(10, 2).evaluate(
+    await expect(payout("A1")).toHaveText("Race");
+    await expect(payout("A2")).toHaveText("Le Mans");
+    await expect(payout("B11")).toHaveText("90,750,000");
+    await expect(payout("J4")).toHaveText("50,600,000");
+    const best = await payout("B11").evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    );
+    const worst = await payout("J4").evaluate(
       (element) => getComputedStyle(element).backgroundColor,
     );
     expect(best).not.toBe(worst);
-    // The dropdown offers the races of the Races table, and an empty choice.
-    await expect(shown(1, 0).getByRole("option")).toHaveCount(6);
+    await expect(showSpa()).not.toBeChecked();
   };
   await expectSampleSettings();
 
-  // The sort, dropdowns, and scales travel in the file.
+  // The comparison, checkbox, and scale travel in the file.
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const file = await download;
@@ -858,15 +859,10 @@ test("the Gran Turismo sample imports sorted, with dropdowns and color scales, a
   await page.getByLabel("Import").setInputFiles(filePath);
   await expectSampleSettings();
 
-  // Picking another race changes what the row earns, and the row moves to its place in the sort.
-  await shown(1, 0).getByRole("combobox").selectOption("Dragon Trail Seaside");
-  await expect(shown(1, 2)).not.toHaveText("16,429");
-  await expect(shown(1, 0).getByRole("combobox")).not.toHaveValue("Dragon Trail Seaside");
-
-  // The report page pivots the payout by race and duration, shaded by a scale.
-  await page.getByText("Report", { exact: true }).click();
-  await expect(cell(page, "A1", "Payout over 40 hours")).toHaveText("Race");
-  await expect(cell(page, "B1", "Payout over 40 hours")).toHaveText("6");
+  // Checking the option adds Spa's payouts to the comparison.
+  await showSpa().check();
+  await expect(payout("A4")).toHaveText("Spa");
+  await expect(payout("P1")).toHaveText("60");
 });
 
 test("cells are formatted from the toolbar, and the formats follow their cells", async ({
