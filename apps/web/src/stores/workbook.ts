@@ -840,6 +840,20 @@ export const useWorkbookStore = defineStore("workbook", () => {
     ]);
   }
 
+  /** Changes what one conditional format of a table does, by its place in the list. It keeps the cells it covers. */
+  function editConditionalFormat(
+    tableId: string,
+    index: number,
+    action: ConditionalAction,
+  ): Promise<boolean> {
+    return setConditionalFormats(
+      tableId,
+      identityRules(tableId).map((rule, position) =>
+        position === index ? { range: rule.range, ...action } : rule,
+      ),
+    );
+  }
+
   /** Removes one conditional format of a table, by its place in the list. */
   function removeConditionalFormat(tableId: string, index: number): Promise<boolean> {
     return setConditionalFormats(
@@ -1722,6 +1736,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     rowView,
     conditionalFormatsOf,
     addConditionalFormat,
+    editConditionalFormat,
     removeConditionalFormat,
     nameColumns,
     dropColumns,

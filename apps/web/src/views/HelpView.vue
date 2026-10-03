@@ -916,6 +916,10 @@ const OPERATORS = [
           Rules follow their cells when rows and columns are inserted or deleted, and are laid over
           the formats from the toolbar. Later rules win over earlier ones.
         </li>
+        <li>
+          <strong>Edit</strong> beside a rule changes its criterion or colors and keeps the cells it
+          covers. <strong>×</strong> removes a rule after asking you to confirm.
+        </li>
       </ul>
     </section>
 

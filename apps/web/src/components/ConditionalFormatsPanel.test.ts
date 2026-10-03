@@ -122,13 +122,69 @@ describe("ConditionalFormatsPanel", () => {
 
   it("removes a rule, and gives a viewer the list without the controls", async () => {
     await render(RULES);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     await wrapper.get('button[aria-label="Remove the rule for B1:B"]').trigger("click");
     await flushPromises();
+    expect(confirm).toHaveBeenCalledOnce();
     expect(server.setConditionalFormats.mock.calls[0]?.[1]).toMatchObject([{ kind: "scale" }]);
     wrapper.unmount();
     setActivePinia(createPinia());
     await render(RULES, "viewer");
     expect(wrapper.find("form").exists()).toBe(false);
     expect(wrapper.find(".conditional-panel__rules button").exists()).toBe(false);
+  });
+
+  it("keeps the rule when the confirmation to remove it is declined", async () => {
+    await render(RULES);
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    await wrapper.get('button[aria-label="Remove the rule for B1:B"]').trigger("click");
+    await flushPromises();
+    expect(server.setConditionalFormats).not.toHaveBeenCalled();
+  });
+
+  it("changes a rule in place, keeping its cells and what the form does not show", async () => {
+    const rules: ConditionalRule[] = [
+      { ...RULES[0]!, format: { fill: "red", bold: true, italic: true } } as ConditionalRule,
+      RULES[1]!,
+    ];
+    await render(rules);
+    await wrapper.get('button[aria-label="Edit the rule for B1:B"]').trigger("click");
+    expect(wrapper.text()).toContain("Changing the rule for B1:B");
+    expect(wrapper.get<HTMLInputElement>('[aria-label="Criterion"]').element.value).toBe(">100");
+    expect(wrapper.get<HTMLSelectElement>('[aria-label="Rule fill"]').element.value).toBe("red");
+    await wrapper.get('[aria-label="Criterion"]').setValue(">200");
+    await wrapper.get('[aria-label="Rule fill"]').setValue("green");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(server.setConditionalFormats.mock.calls[0]?.[1]).toMatchObject([
+      {
+        range: { startRowId: "r0", endRowId: null, startColId: "c2", endColId: "c2" },
+        kind: "criterion",
+        criterion: ">200",
+        format: { fill: "green", bold: true, italic: true },
+      },
+      { kind: "scale" },
+    ]);
+    expect(wrapper.text()).not.toContain("Changing the rule");
+  });
+
+  it("changes a color scale, and cancels a change without saving", async () => {
+    await render(RULES);
+    await wrapper.get('button[aria-label="Edit the rule for A1:A4"]').trigger("click");
+    expect(wrapper.get<HTMLSelectElement>('[aria-label="Scale high color"]').element.value).toBe(
+      "green",
+    );
+    await wrapper.get('[aria-label="Scale high color"]').setValue("blue");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(server.setConditionalFormats.mock.calls[0]?.[1]).toMatchObject([
+      { kind: "criterion" },
+      { kind: "scale", low: null, high: "blue" },
+    ]);
+    await wrapper.get('button[aria-label="Edit the rule for A1:A4"]').trigger("click");
+    const cancel = wrapper.findAll("button").find((button) => button.text() === "Cancel");
+    await cancel!.trigger("click");
+    expect(wrapper.text()).not.toContain("Changing the rule");
+    expect(server.setConditionalFormats).toHaveBeenCalledTimes(1);
   });
 });

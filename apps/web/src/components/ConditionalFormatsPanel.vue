@@ -10,7 +10,7 @@ import {
 import { LIMITS, MAX_CONDITIONAL_RULES } from "@spreadsheet-app/shared";
 import { computed, ref } from "vue";
 import type { TableRecord } from "../api/client";
-import { useWorkbookStore } from "../stores/workbook";
+import { useWorkbookStore, type ConditionalAction } from "../stores/workbook";
 
 const props = defineProps<{ table: TableRecord }>();
 const emit = defineEmits<{ close: [] }>();
@@ -71,25 +71,65 @@ const bold = ref(false);
 const low = ref<FormatColor | "">("");
 const high = ref<FormatColor>("green");
 
-const format = computed<FormatPatch>(() => ({
-  ...(fill.value ? { fill: fill.value } : {}),
-  ...(color.value ? { color: color.value } : {}),
-  ...(bold.value ? { bold: true } : {}),
-}));
-const canAdd = computed(
+/** The place in the list of the rule being changed, or `null` when the form adds a new one. */
+const editing = ref<number | null>(null);
+const edited = computed(() => (editing.value === null ? undefined : rules.value[editing.value]));
+
+function edit(index: number): void {
+  const rule = rules.value[index];
+  if (!rule) return;
+  editing.value = index;
+  kind.value = rule.kind;
+  if (rule.kind === "criterion") {
+    criterion.value = rule.criterion;
+    fill.value = rule.format.fill ?? "";
+    color.value = rule.format.color ?? "";
+    bold.value = rule.format.bold === true;
+  } else {
+    low.value = rule.low ?? "";
+    high.value = rule.high;
+  }
+}
+
+function remove(index: number, rule: ConditionalRule): void {
+  if (!window.confirm(`Remove the conditional format for ${areaOf(rule)}?`)) return;
+  if (editing.value === index) editing.value = null;
+  void store.removeConditionalFormat(props.table.id, index);
+}
+
+const format = computed<FormatPatch>(() => {
+  // The form sets a fill, a text color, and bold. What else a rule being changed sets stays as it was.
+  const kept: FormatPatch = edited.value?.kind === "criterion" ? { ...edited.value.format } : {};
+  delete kept.fill;
+  delete kept.color;
+  delete kept.bold;
+  return {
+    ...kept,
+    ...(fill.value ? { fill: fill.value } : {}),
+    ...(color.value ? { color: color.value } : {}),
+    ...(bold.value ? { bold: true } : {}),
+  };
+});
+const action = computed<ConditionalAction>(() =>
+  kind.value === "criterion"
+    ? { kind: "criterion", criterion: criterion.value, format: format.value }
+    : { kind: "scale", low: low.value === "" ? null : low.value, high: high.value },
+);
+const canSave = computed(
   () =>
-    selected.value !== null &&
-    rules.value.length < MAX_CONDITIONAL_RULES &&
+    (edited.value !== undefined ||
+      (selected.value !== null && rules.value.length < MAX_CONDITIONAL_RULES)) &&
     (kind.value === "scale" || Object.keys(format.value).length > 0),
 );
 
-async function add(): Promise<void> {
-  if (!canAdd.value) return;
-  await store.addConditionalFormat(
-    kind.value === "criterion"
-      ? { kind: "criterion", criterion: criterion.value, format: format.value }
-      : { kind: "scale", low: low.value === "" ? null : low.value, high: high.value },
-  );
+async function save(): Promise<void> {
+  if (!canSave.value) return;
+  const index = editing.value;
+  const saved =
+    index !== null && edited.value
+      ? await store.editConditionalFormat(props.table.id, index, action.value)
+      : await store.addConditionalFormat(action.value);
+  if (saved) editing.value = null;
 }
 </script>
 
@@ -102,9 +142,17 @@ async function add(): Promise<void> {
         <button
           v-if="store.canEdit"
           type="button"
+          :aria-label="`Edit the rule for ${areaOf(rule)}`"
+          @click="edit(index)"
+        >
+          Edit
+        </button>
+        <button
+          v-if="store.canEdit"
+          type="button"
           class="danger"
           :aria-label="`Remove the rule for ${areaOf(rule)}`"
-          @click="store.removeConditionalFormat(table.id, index)"
+          @click="remove(index, rule)"
         >
           ×
         </button>
@@ -114,9 +162,10 @@ async function add(): Promise<void> {
       This table has no conditional formats. Select cells and add one below.
     </p>
 
-    <form v-if="store.canEdit" class="conditional-panel__add" @submit.prevent="add">
+    <form v-if="store.canEdit" class="conditional-panel__add" @submit.prevent="save">
       <p>
-        <template v-if="selected">Applies to {{ selectedText }}.</template>
+        <template v-if="edited">Changing the rule for {{ areaOf(edited) }}.</template>
+        <template v-else-if="selected">Applies to {{ selectedText }}.</template>
         <template v-else>Select the cells the rule is for.</template>
       </p>
       <fieldset>
@@ -169,7 +218,8 @@ async function add(): Promise<void> {
         </label>
       </template>
       <div class="conditional-panel__actions">
-        <button type="submit" :disabled="!canAdd">Add rule</button>
+        <button type="submit" :disabled="!canSave">{{ edited ? "Save rule" : "Add rule" }}</button>
+        <button v-if="edited" type="button" @click="editing = null">Cancel</button>
         <button type="button" @click="emit('close')">Close</button>
       </div>
     </form>
