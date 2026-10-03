@@ -674,6 +674,88 @@ it("sends distinct row insertions for rapid clicks on Add row", async () => {
   expect(requests[0]?.ids[0]).not.toBe(requests[1]?.ids[0]);
 });
 
+it.each([
+  ["row", "rows", "Add row", "Add 5 rows", TABLE.rowCount],
+  ["col", "columns", "Add column", "Add 10 columns", TABLE.colCount],
+] as const)(
+  "opens the %s growth menu and adds the preset count in one request",
+  async (axis, noun, strip, label, index) => {
+    await render();
+    await wrapper.get(`button[aria-label="${strip}"]`).trigger("contextmenu", {
+      clientX: 25,
+      clientY: 30,
+    });
+
+    expect(wrapper.get('[role="menu"]').attributes("aria-label")).toBe(`Add ${noun}`);
+    await wrapper
+      .findAll('[role="menuitem"]')
+      .find((item) => item.text() === label)!
+      .trigger("click");
+
+    expect(server.editTable).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      expectedEdit({ axis, kind: "insert", index, count: axis === "row" ? 5 : 10 }),
+    );
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+  },
+);
+
+it("validates a custom count and clamps it to the table's remaining row limit", async () => {
+  await render();
+  await wrapper.get('button[aria-label="Add row"]').trigger("contextmenu");
+  await wrapper
+    .findAll('[role="menuitem"]')
+    .find((item) => item.text() === "Add custom number…")!
+    .trigger("click");
+
+  const form = wrapper.get(".context-menu__custom");
+  const input = form.get('input[aria-label="Number of rows"]');
+  await input.setValue("0");
+  await form.trigger("submit");
+  expect(form.get('[role="alert"]').text()).toBe("Enter a positive whole number.");
+
+  await input.setValue("2.5");
+  await form.trigger("submit");
+  expect(form.get('[role="alert"]').text()).toBe("Enter a positive whole number.");
+  expect(server.editTable).not.toHaveBeenCalled();
+
+  await input.setValue("999999999999");
+  await form.trigger("submit");
+  expect(server.editTable).toHaveBeenCalledExactlyOnceWith(
+    "t1",
+    expectedEdit({
+      axis: "row",
+      kind: "insert",
+      index: TABLE.rowCount,
+      count: 1000 - TABLE.rowCount,
+    }),
+  );
+  expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+});
+
+it("clamps a custom column count to the table's remaining column limit", async () => {
+  await render();
+  await wrapper.get('button[aria-label="Add column"]').trigger("contextmenu");
+  await wrapper
+    .findAll('[role="menuitem"]')
+    .find((item) => item.text() === "Add custom number…")!
+    .trigger("click");
+
+  const form = wrapper.get(".context-menu__custom");
+  await form.get('input[aria-label="Number of columns"]').setValue("1000");
+  await form.trigger("submit");
+
+  expect(server.editTable).toHaveBeenCalledExactlyOnceWith(
+    "t1",
+    expectedEdit({
+      axis: "col",
+      kind: "insert",
+      index: TABLE.colCount,
+      count: 100 - TABLE.colCount,
+    }),
+  );
+});
+
 describe("sorting and filtering a data table", () => {
   const SORTED_TABLE = {
     ...TABLE,

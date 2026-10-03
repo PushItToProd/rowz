@@ -1210,6 +1210,46 @@ select.cell-control--dropdown {
   padding-top: 8px;
 }
 
+.context-menu__custom {
+  display: grid;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 8px 6px 4px;
+  border-top: 1px solid var(--line);
+}
+
+.context-menu__custom label,
+.context-menu__hint,
+.context-menu__error {
+  font-size: 12px;
+}
+
+.context-menu__custom-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.context-menu__custom input {
+  box-sizing: border-box;
+  width: 64px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+
+.context-menu__custom button {
+  flex: 1;
+}
+
+.context-menu__hint {
+  color: var(--muted);
+}
+
+.context-menu__error {
+  color: var(--danger);
+}
+
 .grid thead th,
 .grid tbody th {
   cursor: pointer;

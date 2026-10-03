@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { columnLabel, formatAddress, type ColumnType } from "@spreadsheet-app/engine";
 import { GRID_SIZE, LIMITS } from "@spreadsheet-app/shared";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { parseCsv, toCsv } from "../files/csv";
 import { download, fileName } from "../files/download";
 import type { TableRecord } from "../api/client";
@@ -270,6 +270,100 @@ function columnItems(col: number): MenuItem[] {
 /** Where the menu of row, column, and cell actions is open, if it is, and what it acts on. */
 const menuAt = ref<{ x: number; y: number; scope: MenuScope } | null>(null);
 
+/** Where a growth menu is open, and whether it adds rows or columns. */
+const growMenu = ref<{ x: number; y: number; axis: Axis } | null>(null);
+const growCount = ref("");
+const growError = ref<string | null>(null);
+const growCustomOpen = ref(false);
+const growCountInput = ref<HTMLInputElement>();
+
+/** The rows or columns still available under the shared spreadsheet limits. */
+function growthAvailable(axis: Axis): number {
+  if (axis === "col") return Math.max(0, LIMITS.tableCols - props.table.colCount);
+  const spreadsheetRows = store.tables.reduce((total, table) => total + table.rowCount, 0);
+  return Math.max(
+    0,
+    Math.min(LIMITS.tableRows - props.table.rowCount, LIMITS.spreadsheetRows - spreadsheetRows),
+  );
+}
+
+const growLimit = computed(() => (growMenu.value ? growthAvailable(growMenu.value.axis) : 0));
+const growNoun = computed(() => (growMenu.value?.axis === "row" ? "rows" : "columns"));
+
+function openGrowMenu(event: MouseEvent, axis: Axis): void {
+  if (!store.canEdit) return;
+  event.preventDefault();
+  growCount.value = "";
+  growError.value = null;
+  growCustomOpen.value = false;
+  growMenu.value = { x: event.clientX, y: event.clientY, axis };
+}
+
+function closeGrowMenu(): void {
+  growMenu.value = null;
+  growCustomOpen.value = false;
+  growError.value = null;
+}
+
+function addGrowth(axis: Axis, count: number): void {
+  const index = axis === "row" ? props.table.rowCount : props.table.colCount;
+  void store.editTable(props.table.id, { axis, kind: "insert", index, count });
+}
+
+function openCustomGrowth(): void {
+  growCount.value = "";
+  growError.value = null;
+  growCustomOpen.value = true;
+  void nextTick(() => growCountInput.value?.focus({ preventScroll: true }));
+}
+
+function addCustomGrowth(): void {
+  const axis = growMenu.value?.axis;
+  if (!axis) return;
+  if (!/^\d+$/.test(growCount.value)) {
+    growError.value = "Enter a positive whole number.";
+    return;
+  }
+  const requested = BigInt(growCount.value);
+  if (requested <= 0n) {
+    growError.value = "Enter a positive whole number.";
+    return;
+  }
+  const available = BigInt(growthAvailable(axis));
+  const count = Number(requested > available ? available : requested);
+  if (count < 1) {
+    growError.value = `No more ${axis === "row" ? "rows" : "columns"} can be added.`;
+    return;
+  }
+  // Keep the value in the field aligned with the amount that will fit.
+  growCount.value = String(count);
+  closeGrowMenu();
+  addGrowth(axis, count);
+}
+
+const growItems = computed((): MenuItem[] => {
+  const axis = growMenu.value?.axis;
+  if (!axis) return [];
+  const noun = axis === "row" ? "rows" : "columns";
+  const available = growthAvailable(axis);
+  return [
+    ...[5, 10, 15].map((count) => ({
+      label: `Add ${String(count)} ${noun}`,
+      disabled: count > available,
+      run: () => {
+        addGrowth(axis, count);
+      },
+    })),
+    {
+      label: "Add custom number…",
+      disabled: available === 0,
+      keepOpen: true,
+      separated: true,
+      run: openCustomGrowth,
+    },
+  ];
+});
+
 const resizingLines = ref<{ axis: "row" | "col"; ids: string[]; initial: number } | null>(null);
 
 function openLineResize({ axis, first, count }: Lines): void {
@@ -523,6 +617,7 @@ const menuLabel = computed(() => {
           title="Add column"
           :disabled="colsFull"
           @click="store.updateTable(table.id, { colCount: table.colCount + 1 })"
+          @contextmenu="openGrowMenu($event, 'col')"
         >
           +
         </button>
@@ -533,6 +628,7 @@ const menuLabel = computed(() => {
           title="Add row"
           :disabled="rowsFull"
           @click="store.editTable(table.id, { axis: 'row', kind: 'insert', index: table.rowCount })"
+          @contextmenu="openGrowMenu($event, 'row')"
         >
           +
         </button>
@@ -565,5 +661,54 @@ const menuLabel = computed(() => {
       :items="menuItems"
       @close="menuAt = null"
     />
+    <ContextMenu
+      v-if="growMenu"
+      :x="growMenu.x"
+      :y="growMenu.y"
+      :label="`Add ${growNoun}`"
+      :items="growItems"
+      @close="closeGrowMenu"
+    >
+      <template #content>
+        <form
+          v-if="growCustomOpen && growMenu"
+          class="context-menu__custom"
+          role="group"
+          :aria-label="`Add custom ${growNoun}`"
+          @submit.prevent="addCustomGrowth"
+        >
+          <label :for="`grow-count-${table.id}`">Add custom number…</label>
+          <div class="context-menu__custom-controls">
+            <input
+              :id="`grow-count-${table.id}`"
+              ref="growCountInput"
+              v-model="growCount"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              maxlength="12"
+              :aria-label="`Number of ${growNoun}`"
+              :aria-describedby="growError ? `grow-count-error-${table.id}` : undefined"
+              :disabled="growLimit === 0"
+            />
+            <button type="submit" role="menuitem" :disabled="growLimit === 0">
+              Add {{ growNoun }}
+            </button>
+          </div>
+          <small v-if="growLimit > 0" class="context-menu__hint">
+            Up to {{ growLimit }} {{ growNoun }} can be added.
+          </small>
+          <small v-else class="context-menu__hint">No more {{ growNoun }} can be added.</small>
+          <small
+            v-if="growError"
+            :id="`grow-count-error-${table.id}`"
+            class="context-menu__error"
+            role="alert"
+          >
+            {{ growError }}
+          </small>
+        </form>
+      </template>
+    </ContextMenu>
   </section>
 </template>

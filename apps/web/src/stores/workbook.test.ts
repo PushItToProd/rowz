@@ -883,6 +883,23 @@ describe("structure", () => {
     expect(server.editTable).toHaveBeenCalledOnce();
   });
 
+  it.each(["row", "col"] as const)(
+    "inserts several %ss with one request and distinct identities",
+    async (axis) => {
+      const store = await open();
+      server.editTable.mockResolvedValue(changeWith());
+      const index = axis === "row" ? TABLE.rowCount : TABLE.colCount;
+
+      expect(await store.editTable("t1", { axis, kind: "insert", index, count: 5 })).toBe(true);
+
+      expect(server.editTable).toHaveBeenCalledOnce();
+      const request = server.editTable.mock.calls[0]?.[1];
+      expect(request).toMatchObject({ axis, kind: "insert", beforeId: null });
+      expect(request?.ids).toHaveLength(5);
+      expect(new Set(request?.ids).size).toBe(5);
+    },
+  );
+
   it("reports a refused row or column edit", async () => {
     const store = await open();
     server.editTable.mockRejectedValue(new Error("A table needs at least one row"));

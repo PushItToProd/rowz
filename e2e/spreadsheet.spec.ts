@@ -955,6 +955,33 @@ test("undo reverses a format, a row insertion, and a cell edit", async ({ page }
   await expect(cell(page, "A1").locator(".cell-value")).not.toHaveCSS("font-weight", "700");
 });
 
+test("the row and column growth menus add a batch in one undo step", async ({ page }) => {
+  await newSpreadsheet(page);
+  const table = page.locator('[data-table="Table 1"]');
+  const rowStrip = page.getByRole("button", { name: "Add row" });
+  // The menu closes when the page scrolls, so let Playwright's scroll finish first.
+  await rowStrip.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await rowStrip.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Add 5 rows" }).click();
+  await expect(table.locator("tbody tr")).toHaveCount(25);
+
+  await cell(page, "A1").click();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(table.locator("tbody tr")).toHaveCount(20);
+
+  const columnStrip = page.getByRole("button", { name: "Add column" });
+  await columnStrip.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await columnStrip.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Add 5 columns" }).click();
+  await expect(table.locator("thead th")).toHaveCount(14);
+
+  await cell(page, "A1").click();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(table.locator("thead th")).toHaveCount(9);
+});
+
 test("header border resizing persists and supports reset, undo, and redo", async ({ page }) => {
   await newSpreadsheet(page);
   async function drag(label: string, dx: number, dy: number) {

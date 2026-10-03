@@ -139,7 +139,9 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - example: in a table, select C3. hit tab 3 times (optionally entering values in any cells in C3:E3 along the way) - now you're in F3. hit enter to focus the cell input (or just start typing), type anything (or nothing), and hit enter to submit. the selection should move to C4.
 
 - [x] add a long thin "+" button along the full width/height of the bottom/right side of each table for adding rows/cols. this way I can just click anywhere along the range
-- [ ] right-clicking the row and column "+" strips opens a context menu to add 5, 10, or 15 rows or columns, or enter a custom count
+- [x] right-clicking the row and column "+" strips opens a context menu to add 5, 10, or 15 rows or columns, or enter a custom count
+  - [ ] **P8** (Claude) a growth menu with every item disabled (the spreadsheet is at its row limit) cannot be dismissed with Escape from the keyboard, because no button takes focus and the menu has no `tabindex`. [ContextMenu.vue](apps/web/src/components/ContextMenu.vue)
+  - [ ] **P8** (Claude) the row "+" strip's left click ignores the spreadsheet-wide row limit: `rowsFull` in [TableCard.vue](apps/web/src/components/TableCard.vue) checks only the table's own limit, so at the spreadsheet limit the strip stays enabled and the server rejects the click
 - [x] support resizing a whole table by just setting its width and height in cols/rows (warn the user and show a confirmation prompt if resizing will delete data)
 - [x] dragging over col/row headers should select multiple full columns/rows
 - [x] when multiple rows/columns are selected (either via row/col selection or by selecting specific cells), the context menu's "insert [row/column]" actions should become "insert N [rows/columns]", where `N` is the number of selected rows and cols as appropriate
@@ -382,6 +384,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 ## Before sharing with others
 
 These items harden rowz for several users, hostile input, or a deployed server. They are parked while one person uses rowz on their own machine. Review findings of that kind go here.
+
+- [ ] **P10** (Claude) The capacity the growth menu offers can be stale while an insert is pending. [TableCard.vue](apps/web/src/components/TableCard.vue) computes it from table records that update only when the server answers. With five spreadsheet rows left, choose "Add 5 rows", reopen the menu before the response arrives, and choose it again: the second request is rejected by the server.
 
 - [ ] **P10** (Claude) A stale tab can insert a block at the wrong place. The insert-block requests send only a numeric index ([AddBlockRow.vue](apps/web/src/components/AddBlockRow.vue)), and the server checks it against the current block count, not against the order the client saw. With two tabs showing `[A, B]`, one inserts `X` at the top, and the stale tab then inserts at index 1: the block lands before `A` in `[X, A, B]`. Send the ID of the block to insert before (or after) instead.
 
