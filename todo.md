@@ -142,7 +142,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - e.g. if we have A1 = 1, A2 = 2, A3 = 3, A4 = `SUM(A1:A3)` and the user right clicks and inserts a row above or below A2, the range should be updated to `A1:A4`
   - (Claude) this already works. `inputsAfterEdit` in [rewrite.ts](packages/engine/src/rewrite.ts) turns `SUM(A1:A3)` into `SUM(A1:A4)` for a row inserted before row 2 or row 3, and into `SUM(A2:A4)` for one inserted before row 1
 - [ ] **P7** (Claude) decide whether a row inserted directly below a range joins it. With `SUM(A1:A3)` in A4, a row inserted before row 4 leaves the range as `A1:A3`, so a value typed into the new row is not summed. Excel and Sheets do the same. Growing the range is right for a total under a list and wrong for a range that ends where it does on purpose. An auto-growing data table with `SUM(Sales[Amount])` avoids the question
-- [ ] **P4** allow resizing rows/cols
+- [ ] **P4** allow resizing rows heights and column widths
   - [ ] by clicking and dragging on the borders of the row/col headers
   - [ ] by a "resize [row/column]" ctx menu item shown when right clicking on row/col headers
 - [x] when multiple cells/cols/rows are selected, allow deleting the columns or rows containing them from the context menu
