@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Reference } from "./ast";
 import { formatAddress } from "./address";
+import { defaultFunctions } from "./functions";
+import type { FunctionRegistry, PureFunction } from "./functions/registry";
 import {
   formulasAfterEdit,
   inputsAfterMove,
@@ -229,6 +231,37 @@ describe("inputsAfterRename", () => {
         input: "=SUM(Revenue) + LET(x, Revenue, x) + LAMBDA('Other Table', 'Other Table')(1)",
       },
     ]);
+  });
+
+  it("does not rewrite a call target when renaming a table with the same name", () => {
+    const customFunction: PureFunction = {
+      kind: "pure",
+      minArgs: 0,
+      maxArgs: 0,
+      call: () => 7,
+    };
+    const functions: FunctionRegistry = new Map([...defaultFunctions, ["FOO", customFunction]]);
+    const data: WorkbookData = {
+      ...STRUCTURE,
+      tables: STRUCTURE.tables.map((table) =>
+        table.id === "t2" ? { ...table, name: "Foo" } : table,
+      ),
+      cells: [{ ...at("A1"), input: "=FOO()" }],
+    };
+    const before = new Workbook({ functions });
+    before.setStructure(data);
+    before.setCell(at("A1"), "=FOO()");
+
+    expect(inputsAfterRename(data, { kind: "table", tableId: "t2", name: "Bar" })).toEqual([]);
+
+    const after = new Workbook({ functions });
+    after.setStructure({
+      ...data,
+      tables: data.tables.map((table) => (table.id === "t2" ? { ...table, name: "Bar" } : table)),
+    });
+    after.setCell(at("A1"), "=FOO()");
+    expect(before.getValue(at("A1"))).toBe(7);
+    expect(after.getValue(at("A1"))).toBe(7);
   });
 
   it("rewrites bare and qualified uses when a name is renamed", () => {

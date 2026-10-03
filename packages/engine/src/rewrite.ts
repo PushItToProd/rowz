@@ -52,10 +52,13 @@ export function rewriteReferences(input: string, replace: Replace): string {
   return `=${text}`;
 }
 
-/** Rewrites unbound bare names in formula text, preserving every other character. */
+/**
+ * Rewrites unbound bare names in formula text, preserving every other character.
+ * `replace` receives `isCall` when a name is written as a call target such as `FOO()`.
+ */
 export function rewriteBareNames(
   text: string,
-  replace: (name: string) => string | undefined,
+  replace: (name: string, isCall?: boolean) => string | undefined,
   bound: ReadonlySet<string> = new Set(),
 ): string {
   const edits = bareNameEdits(text, replace, bound);
@@ -69,7 +72,7 @@ export function rewriteBareNames(
 /** The edits made by `rewriteBareNames`, for a caller that must preserve surrounding comments. */
 export function bareNameEdits(
   text: string,
-  replace: (name: string) => string | undefined,
+  replace: (name: string, isCall?: boolean) => string | undefined,
   bound: ReadonlySet<string> = new Set(),
 ): { from: number; to: number; text: string }[] {
   let names: ReturnType<typeof parseFormulaWithReferences>["names"];
@@ -84,7 +87,7 @@ export function bareNameEdits(
   const edits = nameNodesOf(ast, defaultFunctions, bound).flatMap(({ use, node }) => {
     if ("holder" in use) return [];
     const span = located.get(node);
-    const replacement = replace(use.name);
+    const replacement = replace(use.name, node.type === "call");
     return span && replacement !== undefined
       ? [{ from: span.from, to: span.to, text: quoteName(replacement) }]
       : [];
@@ -245,11 +248,13 @@ function documentNames(structure: WorkbookStructure | undefined): NameDefinition
 export function bareNamesAfterRename(
   structure: WorkbookStructure,
   rename: Rename,
-): (word: string) => string | undefined {
+): (word: string, isCall?: boolean) => string | undefined {
   if (rename.kind !== "table" && rename.kind !== "name") return () => undefined;
   const resolver = new TableResolver(structure);
   const definitions = documentNames(structure);
-  return (word) => {
+  return (word, isCall) => {
+    // A call target may be a custom registered function, not a reference to the table.
+    if (rename.kind === "table" && isCall) return undefined;
     if (
       !sameName(
         word,
