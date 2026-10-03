@@ -3,6 +3,7 @@ import { FILE_LIMITS } from "@spreadsheet-app/shared";
 import { computed, nextTick, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import EditableName from "../components/EditableName.vue";
+import AddBlockRow from "../components/AddBlockRow.vue";
 import FormulaBar from "../components/FormulaBar.vue";
 import PageTabs from "../components/PageTabs.vue";
 import ChartCard from "../components/ChartCard.vue";
@@ -294,60 +295,52 @@ watch(
     <p v-if="loadError" class="notice notice--error" role="alert">{{ loadError }}</p>
     <p v-else-if="!loaded" class="editor__loading">Loading…</p>
     <main v-else-if="page" class="editor__page">
-      <div
-        v-for="(block, index) in blocks"
-        :id="`block-${block.record.id}`"
-        :key="block.record.id"
-        tabindex="-1"
-        class="editor__block"
-      >
-        <TableCard v-if="block.table" :table="block.table" />
-        <ChartCard v-else-if="block.view.kind === 'chart'" :view="block.view" />
-        <ScriptCard v-else-if="block.view.kind === 'script'" :view="block.view" />
-        <TextCard v-else :view="block.view" />
-        <div
-          v-if="store.canEdit && (blocks.length > 1 || store.pages.length > 1)"
-          class="editor__move"
-        >
-          <template v-if="blocks.length > 1">
-            <button
-              type="button"
-              title="Move up"
-              :aria-label="`Move ${block.record.name} up`"
-              :disabled="index === 0"
-              @click="store.moveBlock(page.id, block.record.id, -1)"
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              title="Move down"
-              :aria-label="`Move ${block.record.name} down`"
-              :disabled="index === blocks.length - 1"
-              @click="store.moveBlock(page.id, block.record.id, 1)"
-            >
-              ↓
-            </button>
-          </template>
-          <button
-            v-if="store.pages.length > 1"
-            type="button"
-            title="Move to another page"
-            aria-haspopup="menu"
-            :aria-label="`Move ${block.record.name} to another page`"
-            @click="openPageMenu($event, block.record)"
+      <template v-for="(block, index) in blocks" :key="block.record.id">
+        <AddBlockRow :page-id="page.id" :position="index" />
+        <div :id="`block-${block.record.id}`" tabindex="-1" class="editor__block">
+          <TableCard v-if="block.table" :table="block.table" />
+          <ChartCard v-else-if="block.view.kind === 'chart'" :view="block.view" />
+          <ScriptCard v-else-if="block.view.kind === 'script'" :view="block.view" />
+          <TextCard v-else :view="block.view" />
+          <div
+            v-if="store.canEdit && (blocks.length > 1 || store.pages.length > 1)"
+            class="editor__move"
           >
-            ⇄
-          </button>
+            <template v-if="blocks.length > 1">
+              <button
+                type="button"
+                title="Move up"
+                :aria-label="`Move ${block.record.name} up`"
+                :disabled="index === 0"
+                @click="store.moveBlock(page.id, block.record.id, -1)"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                title="Move down"
+                :aria-label="`Move ${block.record.name} down`"
+                :disabled="index === blocks.length - 1"
+                @click="store.moveBlock(page.id, block.record.id, 1)"
+              >
+                ↓
+              </button>
+            </template>
+            <button
+              v-if="store.pages.length > 1"
+              type="button"
+              title="Move to another page"
+              aria-haspopup="menu"
+              :aria-label="`Move ${block.record.name} to another page`"
+              @click="openPageMenu($event, block.record)"
+            >
+              ⇄
+            </button>
+          </div>
         </div>
-      </div>
+      </template>
       <p v-if="blocks.length === 0" class="editor__empty">This page is empty.</p>
-      <div v-if="store.canEdit" class="editor__add">
-        <button type="button" @click="store.addTable(page.id)">Add table</button>
-        <button type="button" @click="store.addView(page.id, 'chart')">Add chart</button>
-        <button type="button" @click="store.addView(page.id, 'text')">Add text</button>
-        <button type="button" @click="store.addView(page.id, 'script')">Add script</button>
-      </div>
+      <AddBlockRow :page-id="page.id" :position="blocks.length" />
     </main>
 
     <ContextMenu

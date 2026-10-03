@@ -385,7 +385,12 @@ export const controlInputBody = z.object({
 /** The blocks of a page (its tables, charts, and text views), by id, in the order they are to sit on it. */
 export const reorderBody = z.object({ blocks: z.array(z.uuid()).min(1).max(1000) });
 
-export const createViewBody = z.object({ kind: z.enum(["chart", "text", "script"]) });
+const insertPosition = z.number().int().nonnegative().optional();
+export const createTableBody = optionalNameBody.extend({ position: insertPosition });
+export const createViewBody = z.object({
+  kind: z.enum(["chart", "text", "script"]),
+  position: insertPosition,
+});
 
 export const updateViewBody = z
   .object({

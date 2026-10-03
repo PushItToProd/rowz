@@ -42,6 +42,58 @@ async function viewsOf(spreadsheetId: string): Promise<ViewRecord[]> {
 }
 
 describe("creating views", () => {
+  it("inserts mixed blocks at the top, middle, and end, including after a deletion", async () => {
+    const { id, page, table } = await start();
+    const chart = await add(page.id, "chart");
+    const text = await user.json<{ view: ViewRecord }>(
+      "POST",
+      `/pages/${page.id}/views`,
+      { kind: "text", position: 0 },
+      201,
+    );
+    const middle = await user.json<{ table: TableRecord; change: Change }>(
+      "POST",
+      `/pages/${page.id}/tables`,
+      { position: 2 },
+      201,
+    );
+    expect(middle.change.changed?.views).toMatchObject([{ id: chart.id, view: { position: 3 } }]);
+    const order = async () => {
+      const snapshot = await readSnapshot(user, id);
+      return [...snapshot.tables, ...snapshot.views]
+        .sort((a, b) => a.position - b.position)
+        .map(({ id }) => id);
+    };
+    expect(await order()).toEqual([text.view.id, table.id, middle.table.id, chart.id]);
+    await user.json("DELETE", `/tables/${middle.table.id}`);
+    const last = await user.json<{ view: ViewRecord }>(
+      "POST",
+      `/pages/${page.id}/views`,
+      { kind: "chart", position: 3 },
+      201,
+    );
+    expect(await order()).toEqual([text.view.id, table.id, chart.id, last.view.id]);
+  });
+
+  it.each(["tables", "views"])(
+    "rejects invalid insertion positions for %s without changing content",
+    async (endpoint) => {
+      const { id, page } = await start();
+      const before = await readSnapshot(user, id);
+      for (const position of [-1, 0.5, "0", 2]) {
+        await user.json(
+          "POST",
+          `/pages/${page.id}/${endpoint}`,
+          { position, ...(endpoint === "views" ? { kind: "text" } : {}) },
+          position === 2 ? 422 : 400,
+        );
+      }
+      const after = await readSnapshot(user, id);
+      expect(after.tables).toEqual(before.tables);
+      expect(after.views).toEqual(before.views);
+    },
+  );
+
   it("starts a spreadsheet with none", async () => {
     const { id } = await start();
     expect(await viewsOf(id)).toEqual([]);

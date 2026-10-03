@@ -115,13 +115,13 @@ test("capture the README screenshots", async ({ page }) => {
     await bar.getByLabel("Number format").selectOption("$#,##0.00");
   }
 
-  await page.getByRole("button", { name: "Add chart" }).click();
+  await page.getByRole("button", { name: "Add chart" }).last().click();
   const chart = page.locator('[data-view="Chart 1"]');
   await chart.getByLabel("Chart data").fill("HSTACK(Orders[Item], Orders[Total])");
   await chart.getByLabel("Chart data").press("Enter");
   await expect(chart.locator(".chart__bar")).toHaveCount(5);
 
-  await page.getByRole("button", { name: "Add text" }).click();
+  await page.getByRole("button", { name: "Add text" }).last().click();
   const text = page.locator('[data-view="Text 1"]');
   await text.getByRole("button", { name: "Edit" }).click();
   await text
@@ -170,7 +170,7 @@ test("capture the README screenshots", async ({ page }) => {
   await page.getByRole("button", { name: "Add page" }).click();
   await expect(pages.locator('[aria-current="page"]')).toHaveText(/Page 1/);
   await rename(page, "Page", pages.locator('[aria-current="page"]'), "Order form");
-  await page.getByRole("button", { name: "Add table" }).click();
+  await page.getByRole("button", { name: "Add table" }).last().click();
   await fill(page, [["Item", "Tea pot"], ["Size"], ["Gift"]]);
   await enter(page, "C2", '=DROPDOWN("small, medium, large", B2)');
   await enter(page, "C3", '=CHECKBOX(B3, "wrap it")');

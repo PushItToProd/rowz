@@ -1584,9 +1584,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }, "The page could not be deleted");
   }
 
-  function addTable(pageId: string): Promise<boolean> {
+  function addTable(pageId: string, position?: number): Promise<boolean> {
     return attempt(async () => {
-      await receiveChange((await api.createTable(pageId)).change);
+      await receiveChange((await api.createTable(pageId, position)).change);
     }, "The table could not be added");
   }
 
@@ -1687,9 +1687,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }, "The table could not be changed");
   }
 
-  function addView(pageId: string, kind: ViewRecord["kind"]): Promise<boolean> {
+  function addView(pageId: string, kind: ViewRecord["kind"], position?: number): Promise<boolean> {
     return attempt(async () => {
-      await receiveChange((await api.createView(pageId, kind)).change);
+      await receiveChange((await api.createView(pageId, kind, position)).change);
     }, "The view could not be added");
   }
 

@@ -79,7 +79,7 @@ function writeRoutes(): Route[] {
     // The page they are on already, which is refused only once the caller may write.
     ["PUT", `/tables/${table}/page`, { pageId: page }],
     ["PUT", `/views/${view}/page`, { pageId: page }],
-    ["POST", `/pages/${page}/tables`, {}],
+    ["POST", `/pages/${page}/tables`, { position: 0 }],
     ["PATCH", `/tables/${table}`, { name: "Taken over" }],
     ["PUT", `/tables/${table}/cells`, cellsBody({ C3: "written" })],
     // Below the button in A1, so the click that follows still finds it.
@@ -98,7 +98,7 @@ function writeRoutes(): Route[] {
     ["DELETE", `/tables/${table}/columns`],
     // After the columns are dropped again, since a data table holds no names.
     ["PUT", `/tables/${table}/names`, { names: [{ name: "Corner", formula: "A1" }] }],
-    ["POST", `/pages/${page}/views`, { kind: "text" }],
+    ["POST", `/pages/${page}/views`, { kind: "text", position: 1 }],
     ["PATCH", `/views/${view}`, { source: "A1:B2", chartType: "pie" }],
     ["DELETE", `/views/${view}`],
     ["DELETE", `/tables/${table}`],

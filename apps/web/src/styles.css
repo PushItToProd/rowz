@@ -1129,7 +1129,13 @@ select.cell-control--dropdown {
 
 .editor__add {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  width: 100%;
+}
+
+.editor__add button {
+  padding: 3px 8px;
+  font-size: 12px;
 }
 
 /* Context menu */

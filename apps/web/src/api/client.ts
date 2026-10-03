@@ -230,8 +230,11 @@ export const api = {
   deletePage: (pageId: string): Promise<Change> =>
     body(routes.pages[":pageId"].$delete({ param: { pageId } })),
 
-  createTable: (pageId: string): Promise<{ table: StoredTable; change: Change }> =>
-    body(routes.pages[":pageId"].tables.$post({ param: { pageId }, json: {} })),
+  createTable: (
+    pageId: string,
+    position?: number,
+  ): Promise<{ table: StoredTable; change: Change }> =>
+    body(routes.pages[":pageId"].tables.$post({ param: { pageId }, json: { position } })),
 
   updateTable: (
     tableId: string,
@@ -321,12 +324,13 @@ export const api = {
       }),
     ),
 
-  /** Adds a chart or a text view to the end of a page. */
+  /** Adds a view at an index, defaulting to the end of a page. */
   createView: (
     pageId: string,
     kind: ViewRecord["kind"],
+    position?: number,
   ): Promise<{ view: ViewRecord; change: Change }> =>
-    body(routes.pages[":pageId"].views.$post({ param: { pageId }, json: { kind } })),
+    body(routes.pages[":pageId"].views.$post({ param: { pageId }, json: { kind, position } })),
 
   updateView: (
     viewId: string,

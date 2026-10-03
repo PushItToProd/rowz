@@ -1397,12 +1397,13 @@ export class SpreadsheetRepository {
     pageId: string,
     name: string | undefined,
     writer: ContentWriter,
+    position?: number,
   ): Promise<TableRecord> {
     if (name !== undefined) await this.checkHolderName(tx, pageId, name, { kind: "table" });
     const values = {
       pageId,
       name: name ?? nextName("Table", await this.holderNames(tx, pageId)),
-      position: await this.within(tx).nextPosition(pageId),
+      position: await this.within(tx).insertPosition(pageId, writer, position),
     };
     return writer
       .insertTable(values, DEFAULT_TABLE_SIZE)
@@ -1421,10 +1422,14 @@ export class SpreadsheetRepository {
   }
 
   /** Creates an empty table. Without a name the table gets the next free `Table N`. */
-  async createTable(pageId: string, name?: string): Promise<Created<{ table: TableRecord }>> {
+  async createTable(
+    pageId: string,
+    name?: string,
+    position?: number,
+  ): Promise<Created<{ table: TableRecord }>> {
     const { result, change } = await this.changePage(pageId, async (_page, tx, writer) => {
       writer.setLabel("Add table");
-      return this.insertTable(tx, pageId, name, writer);
+      return this.insertTable(tx, pageId, name, writer, position);
     });
     return { table: result, change };
   }
@@ -1825,11 +1830,15 @@ export class SpreadsheetRepository {
     if (!found.colIds.includes(source.colId)) throw columnDeleted();
   }
 
-  /** Adds a chart, a text view, or a script to the end of a page. */
-  async createView(pageId: string, kind: ViewKind): Promise<Created<{ view: ViewRecord }>> {
+  /** Adds a view at an index, defaulting to the end of a page. */
+  async createView(
+    pageId: string,
+    kind: ViewKind,
+    insertAt?: number,
+  ): Promise<Created<{ view: ViewRecord }>> {
     const { result, change } = await this.changePage(pageId, async (_page, tx, writer) => {
       writer.setLabel(VIEW_LABELS[kind]);
-      const position = await this.within(tx).nextPosition(pageId);
+      const position = await this.within(tx).insertPosition(pageId, writer, insertAt);
       if (kind === "script") {
         const name = nextName("Script", await this.holderNames(tx, pageId));
         return writer.insertView({ pageId, kind, position, name, source: STARTER_SCRIPT });
@@ -2881,6 +2890,41 @@ export class SpreadsheetRepository {
     for (const { id, source } of changed) {
       await writer.updateView(id, { source });
     }
+  }
+
+  /** Makes room at a display index, journaling shifted blocks under the page lock. */
+  private async insertPosition(
+    pageId: string,
+    writer: ContentWriter,
+    index?: number,
+  ): Promise<number> {
+    const end = await this.nextPosition(pageId);
+    if (index === undefined) return end;
+    const [pageTables, pageViews] = await Promise.all([
+      this.db
+        .select({ id: tables.id, position: tables.position })
+        .from(tables)
+        .where(eq(tables.pageId, pageId)),
+      this.db
+        .select({ id: views.id, position: views.position })
+        .from(views)
+        .where(eq(views.pageId, pageId)),
+    ]);
+    const blocks = [...pageTables, ...pageViews].sort((a, b) => a.position - b.position);
+    if (index > blocks.length) {
+      throw unprocessable(
+        "invalid_position",
+        "Insertion position exceeds the number of blocks on the page",
+      );
+    }
+    const tableIds = new Set(pageTables.map(({ id }) => id));
+    for (const [offset, block] of blocks.entries()) {
+      const position = offset < index ? offset : offset + 1;
+      if (position === block.position) continue;
+      if (tableIds.has(block.id)) await writer.updateTable(block.id, { position });
+      else await writer.updateView(block.id, { position });
+    }
+    return index;
   }
 
   /**

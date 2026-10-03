@@ -86,7 +86,7 @@ test("a button writes the sum of two cells into a third, and the result persists
 test("formulas read other tables and other pages, and follow their changes", async ({ page }) => {
   await newSpreadsheet(page);
 
-  await page.getByRole("button", { name: "Add table" }).click();
+  await page.getByRole("button", { name: "Add table" }).last().click();
   await enter(page, "A1", "5", "Table 2");
   await enter(page, "A1", "='Table 2'!A1*2");
   await expect(cell(page, "A1")).toHaveText("10");
@@ -112,7 +112,7 @@ test("a block moves to another page, formulas follow it, and pages are reordered
   page,
 }) => {
   await newSpreadsheet(page);
-  await page.getByRole("button", { name: "Add table" }).click();
+  await page.getByRole("button", { name: "Add table" }).last().click();
   await enter(page, "A1", "5", "Table 2");
   await enter(page, "A1", "='Table 2'!A1*2");
   await page.getByRole("button", { name: "Add page" }).click();
@@ -168,7 +168,7 @@ test("a button sends an email built from cells, and reports a bad address", asyn
 
 test("renaming a table or page rewrites the formulas that name it", async ({ page }) => {
   await newSpreadsheet(page);
-  await page.getByRole("button", { name: "Add table" }).click();
+  await page.getByRole("button", { name: "Add table" }).last().click();
   await enter(page, "A1", "5", "Table 2");
   await enter(page, "A1", "='Table 2'!A1+1");
   await enter(page, "A2", "='Page 1'!'Table 2'!A1*2");
@@ -346,7 +346,7 @@ test("a formula with several results fills the cells around it", async ({ page }
 
 test("a form with a checkbox and a dropdown saves rows to a log", async ({ page }) => {
   await newSpreadsheet(page);
-  await page.getByRole("button", { name: "Add table" }).click();
+  await page.getByRole("button", { name: "Add table" }).last().click();
 
   // Table 1 is the form. Table 2 is the log.
   await enter(page, "A1", "Item");
@@ -502,7 +502,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await enter(page, "A2", "pears");
   await enter(page, "B2", "5");
 
-  await page.getByRole("button", { name: "Add chart" }).click();
+  await page.getByRole("button", { name: "Add chart" }).last().click();
   const chart = page.locator('[data-view="Chart 1"]');
   await expect(chart).toContainText("Enter the cells to chart");
   await chart.getByLabel("Chart data").fill("'Table 1'!A1:B2");
@@ -513,8 +513,16 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await expect(chart.locator(".chart__slice")).toHaveCount(2);
   await expect(chart).toContainText("pears 63%");
 
-  await page.getByRole("button", { name: "Add text" }).click();
+  await page
+    .locator('[data-insert-position="1"]')
+    .getByRole("button", { name: "Add text" })
+    .click();
   const text = page.locator('[data-view="Text 1"]');
+  await expect(page.locator(".editor__block [data-table], .editor__block [data-view]")).toHaveCount(
+    3,
+  );
+  await expect(page.locator(".editor__block").nth(1)).toContainText("Text 1");
+  await expect(page.locator(".editor__block").nth(2)).toContainText("Chart 1");
   await expect(text.getByRole("heading", { name: "New text view" })).toBeVisible();
   await text.getByRole("button", { name: "Edit" }).click();
   await text
@@ -563,7 +571,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await expect(chart.getByLabel("Chart type")).toHaveValue("pie");
   await expect(text.getByRole("listitem")).toHaveText(["apples: 15", "pears: 5"]);
 
-  // The text view moves above the table, and stays there.
+  // The inserted text view moves down, then above the table, and stays there.
   const order = () =>
     page
       .locator(".editor__block > :first-child")
@@ -572,8 +580,12 @@ test("a page shows a chart and a text view of its tables, and they follow change
           (card) => card.getAttribute("data-table") ?? card.getAttribute("data-view") ?? "",
         ),
       );
+  await expect.poll(order).toEqual(["Fruit", "Text 1", "Chart 1"]);
+  await page.getByRole("button", { name: "Move Text 1 down" }).click();
   await expect.poll(order).toEqual(["Fruit", "Chart 1", "Text 1"]);
+  await expect(page.getByRole("button", { name: "Move Text 1 down" })).toBeDisabled();
   await page.getByRole("button", { name: "Move Text 1 up" }).click();
+  await expect.poll(order).toEqual(["Fruit", "Text 1", "Chart 1"]);
   await page.getByRole("button", { name: "Move Text 1 up" }).click();
   await expect(page.getByRole("button", { name: "Move Text 1 up" })).toBeDisabled();
   await expect.poll(order).toEqual(["Text 1", "Fruit", "Chart 1"]);
@@ -595,7 +607,7 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await enter(page, "B1", "3");
   await enter(page, "A2", "pears, ripe");
   await enter(page, "B2", "=B1*2");
-  await page.getByRole("button", { name: "Add chart" }).click();
+  await page.getByRole("button", { name: "Add chart" }).last().click();
   const chart = page.locator('[data-view="Chart 1"]');
   await chart.getByLabel("Chart data").fill("'Table 1'!A1:B2");
   await chart.getByLabel("Chart data").press("Enter");
@@ -698,7 +710,7 @@ test("a table with named columns has typed columns, a formula column, and column
   await expect(cell(page, "E2")).toHaveText("16");
 
   // Another table reads a whole column by the table's name.
-  await page.getByRole("button", { name: "Add table" }).click();
+  await page.getByRole("button", { name: "Add table" }).last().click();
   await enter(page, "A1", "=SUM('Table 1'[Total])", "Table 2");
   await expect(cell(page, "A1", "Table 2")).toHaveText("37");
 
@@ -1226,7 +1238,7 @@ test("Tab traversal works across the grid and formula bar", async ({ page }) => 
 test("saving a script does not scroll to the selected cell", async ({ page }) => {
   await newSpreadsheet(page);
   await cell(page, "A1").click();
-  await page.getByRole("button", { name: "Add script", exact: true }).click();
+  await page.getByRole("button", { name: "Add script", exact: true }).last().click();
   const script = page.locator('[data-view="Script 1"]');
   await script.getByRole("button", { name: "Edit", exact: true }).click();
   const source = script.getByLabel("Script source");

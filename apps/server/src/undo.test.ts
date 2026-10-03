@@ -601,6 +601,30 @@ const NOT_JOURNALED = [
 ];
 
 describe("undo round trips", () => {
+  it.each(["table", "chart", "text"])("restores block order after inserting a %s", async (kind) => {
+    const fixture = await fresh();
+    await addView(owner, fixture.pageId, "chart");
+    await addTable(owner, fixture.pageId);
+    const client = withClientId(owner);
+    const before = content(await snapshot(client, fixture.id));
+    await client.json(
+      "POST",
+      `/pages/${fixture.pageId}/${kind === "table" ? "tables" : "views"}`,
+      { position: 1, ...(kind === "table" ? {} : { kind }) },
+      201,
+    );
+    const after = content(await snapshot(client, fixture.id));
+    expect(after).not.toEqual(before);
+    expect(
+      (await client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`)).outcome,
+    ).toBe("done");
+    expect(content(await snapshot(client, fixture.id))).toEqual(before);
+    expect(
+      (await client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/redo`)).outcome,
+    ).toBe("done");
+    expect(content(await snapshot(client, fixture.id))).toEqual(after);
+  });
+
   /** The routes the cases sent their requests to. */
   const roundTripped = new Set<string>();
 

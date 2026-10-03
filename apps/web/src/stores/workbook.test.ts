@@ -956,7 +956,7 @@ describe("views", () => {
     const store = await openWith([]);
     server.createView.mockResolvedValue(createdView(CHART));
     expect(await store.addView("p1", "chart")).toBe(true);
-    expect(server.createView).toHaveBeenCalledWith("p1", "chart");
+    expect(server.createView).toHaveBeenCalledWith("p1", "chart", undefined);
     expect(store.views).toEqual([CHART]);
   });
 

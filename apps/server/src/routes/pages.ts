@@ -2,7 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import {
   createViewBody,
   nameBody,
-  optionalNameBody,
+  createTableBody,
   pageParam,
   reorderBody,
 } from "@spreadsheet-app/shared";
@@ -43,16 +43,18 @@ export function pageRoutes() {
         zValidator("json", createViewBody, onInvalid),
         async (c) => {
           const { pageId } = c.req.valid("param");
-          return c.json(await c.var.repository.createView(pageId, c.req.valid("json").kind), 201);
+          const { kind, position } = c.req.valid("json");
+          return c.json(await c.var.repository.createView(pageId, kind, position), 201);
         },
       )
       .post(
         "/:pageId/tables",
         zValidator("param", pageParam, onInvalid),
-        zValidator("json", optionalNameBody, onInvalid),
+        zValidator("json", createTableBody, onInvalid),
         async (c) => {
           const { pageId } = c.req.valid("param");
-          return c.json(await c.var.repository.createTable(pageId, c.req.valid("json").name), 201);
+          const { name, position } = c.req.valid("json");
+          return c.json(await c.var.repository.createTable(pageId, name, position), 201);
         },
       )
   );
