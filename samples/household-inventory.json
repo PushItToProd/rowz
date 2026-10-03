@@ -1,0 +1,132 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "Household Inventory & Warranties",
+  "pages": [
+    {
+      "name": "Inventory",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Getting started",
+          "source": "# Household inventory\n\nTrack household items, where they live, and when their warranties end. **Warranty status** updates from today’s date. Add items in the next empty row and enter dates as dates.\n\nReceipt references use paths relative to your own records folder, such as `receipts/2025/kitchen/air-purifier.pdf`. Replace the example paths with your own locations; leave Receipt reference blank when you do not have a receipt."
+        },
+        {
+          "type": "table",
+          "name": "Inventory",
+          "rowCount": 10,
+          "colCount": 8,
+          "columns": [
+            { "name": "Item", "type": "text" },
+            { "name": "Category", "type": "text" },
+            { "name": "Location", "type": "text" },
+            { "name": "Purchase Date", "type": "date" },
+            { "name": "Warranty End", "type": "date" },
+            { "name": "Receipt Reference", "type": "text" },
+            {
+              "name": "Warranty Status",
+              "type": "formula",
+              "formula": "=IF([Warranty End]=\"\",\"No date\",IF([Warranty End]<TODAY(),\"Expired\",IF([Warranty End]<=TODAY()+30,\"Expiring soon\",\"Covered\")))"
+            },
+            {
+              "name": "Days Remaining",
+              "type": "formula",
+              "formula": "=IF([Warranty End]=\"\",\"\",[Warranty End]-TODAY())"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 3,
+              "endCol": 4,
+              "format": { "numberFormat": "mmm d, yyyy" }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 7,
+              "endCol": 7,
+              "format": { "numberFormat": "0" }
+            }
+          ],
+          "cells": [
+            { "row": 0, "col": 0, "input": "Countertop air purifier" },
+            { "row": 0, "col": 1, "input": "Appliance" },
+            { "row": 0, "col": 2, "input": "Kitchen" },
+            { "row": 0, "col": 3, "input": "2025-03-14" },
+            { "row": 0, "col": 4, "input": "2027-03-14" },
+            { "row": 0, "col": 5, "input": "receipts/2025/kitchen/air-purifier.pdf" },
+
+            { "row": 1, "col": 0, "input": "Front-load washer" },
+            { "row": 1, "col": 1, "input": "Appliance" },
+            { "row": 1, "col": 2, "input": "Laundry room" },
+            { "row": 1, "col": 3, "input": "2023-06-02" },
+            { "row": 1, "col": 4, "input": "2026-10-18" },
+            { "row": 1, "col": 5, "input": "receipts/2023/laundry/washer.pdf" },
+
+            { "row": 2, "col": 0, "input": "Cordless vacuum" },
+            { "row": 2, "col": 1, "input": "Cleaning" },
+            { "row": 2, "col": 2, "input": "Hall closet" },
+            { "row": 2, "col": 3, "input": "2024-11-09" },
+            { "row": 2, "col": 4, "input": "2026-10-25" },
+            { "row": 2, "col": 5, "input": "receipts/2024/cleaning/vacuum.pdf" },
+
+            { "row": 3, "col": 0, "input": "Wi-Fi router" },
+            { "row": 3, "col": 1, "input": "Electronics" },
+            { "row": 3, "col": 2, "input": "Office" },
+            { "row": 3, "col": 3, "input": "2025-08-21" },
+            { "row": 3, "col": 4, "input": "2028-08-21" },
+            { "row": 3, "col": 5, "input": "receipts/2025/office/router.pdf" },
+
+            { "row": 4, "col": 0, "input": "Cordless drill kit" },
+            { "row": 4, "col": 1, "input": "Tools" },
+            { "row": 4, "col": 2, "input": "Garage shelf" },
+            { "row": 4, "col": 3, "input": "2021-04-17" },
+            { "row": 4, "col": 4, "input": "2024-04-17" },
+            { "row": 4, "col": 5, "input": "receipts/2021/garage/drill.pdf" },
+
+            { "row": 5, "col": 0, "input": "Fire extinguisher" },
+            { "row": 5, "col": 1, "input": "Safety" },
+            { "row": 5, "col": 2, "input": "Pantry" },
+            { "row": 5, "col": 3, "input": "2024-01-12" },
+            { "row": 5, "col": 4, "input": "2026-01-12" },
+            { "row": 5, "col": 5, "input": "receipts/2024/safety/extinguisher.pdf" },
+
+            { "row": 6, "col": 0, "input": "Standing desk" },
+            { "row": 6, "col": 1, "input": "Furniture" },
+            { "row": 6, "col": 2, "input": "Office" },
+            { "row": 6, "col": 3, "input": "2022-09-30" },
+            { "row": 6, "col": 4, "input": "2032-09-30" },
+            { "row": 6, "col": 5, "input": "receipts/2022/office/standing-desk.pdf" },
+
+            { "row": 7, "col": 0, "input": "Robot vacuum" },
+            { "row": 7, "col": 1, "input": "Cleaning" },
+            { "row": 7, "col": 2, "input": "Living room cabinet" },
+            { "row": 7, "col": 3, "input": "2025-12-05" },
+            { "row": 7, "col": 4, "input": "2026-12-05" },
+            { "row": 7, "col": 5, "input": "receipts/2025/cleaning/robot-vacuum.pdf" },
+
+            { "row": 8, "col": 0, "input": "Carbon monoxide alarm" },
+            { "row": 8, "col": 1, "input": "Safety" },
+            { "row": 8, "col": 2, "input": "Upstairs hallway" },
+            { "row": 8, "col": 3, "input": "2026-02-11" },
+            { "row": 8, "col": 4, "input": "2027-02-11" },
+
+            { "row": 9, "col": 0, "input": "Patio string lights" },
+            { "row": 9, "col": 1, "input": "Outdoor" },
+            { "row": 9, "col": 2, "input": "Garage bin 4" },
+            { "row": 9, "col": 3, "input": "2022-05-28" },
+            { "row": 9, "col": 4, "input": "2023-05-28" },
+            { "row": 9, "col": 5, "input": "" }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "Warranty snapshot",
+          "source": "## Warranty snapshot\n\n**Tracked items:** {{ COUNTA(Inventory[Item]) }} · **Expired:** {{ COUNTIF(Inventory[Warranty Status], \"Expired\") }} · **Expiring soon:** {{ COUNTIF(Inventory[Warranty Status], \"Expiring soon\") }}"
+        }
+      ]
+    }
+  ]
+}

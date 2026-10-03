@@ -1,0 +1,125 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "One-Hour Fix Queue",
+  "pages": [
+    {
+      "name": "Today",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "How to use this queue",
+          "source": "# One-hour fix queue\n\nChoose one small household fix that fits the time, tools, and materials you have today. Edit the settings below, then mark completed work as `Done`.\n\nThe queue checks each task independently. **Suggested** marks the eligible task with the smallest priority number (1 is highest). If you finish it, update its status and the next eligible task becomes the suggestion. This is a simple priority pick, not a plan that optimizes the total work packed into the hour."
+        },
+        {
+          "type": "table",
+          "name": "Settings",
+          "rowCount": 1,
+          "colCount": 9,
+          "columns": [
+            { "name": "Available Minutes", "type": "number" },
+            { "name": "Drill", "type": "checkbox" },
+            { "name": "Screwdriver", "type": "checkbox" },
+            { "name": "Wrench", "type": "checkbox" },
+            { "name": "Pliers", "type": "checkbox" },
+            { "name": "Cleaning Kit", "type": "checkbox" },
+            { "name": "Wood Filler", "type": "checkbox" },
+            { "name": "Light Bulb", "type": "checkbox" },
+            { "name": "Hardware", "type": "checkbox" }
+          ],
+          "cells": [
+            { "row": 0, "col": 0, "input": "60" },
+            { "row": 0, "col": 1, "input": "TRUE" },
+            { "row": 0, "col": 2, "input": "TRUE" },
+            { "row": 0, "col": 3, "input": "FALSE" },
+            { "row": 0, "col": 4, "input": "TRUE" },
+            { "row": 0, "col": 5, "input": "TRUE" },
+            { "row": 0, "col": 6, "input": "FALSE" },
+            { "row": 0, "col": 7, "input": "TRUE" },
+            { "row": 0, "col": 8, "input": "TRUE" }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Tasks",
+          "rowCount": 8,
+          "colCount": 9,
+          "columns": [
+            { "name": "Task", "type": "text" },
+            { "name": "Priority", "type": "number" },
+            { "name": "Minutes", "type": "number" },
+            { "name": "Tool", "type": "text" },
+            { "name": "Material", "type": "text" },
+            { "name": "Status", "type": "text" },
+            {
+              "name": "Ready",
+              "type": "formula",
+              "formula": "=AND(IF([Tool]=\"Drill\",Settings!B1,IF([Tool]=\"Screwdriver\",Settings!C1,IF([Tool]=\"Wrench\",Settings!D1,IF([Tool]=\"Pliers\",Settings!E1,FALSE)))),IF([Material]=\"Cleaning Kit\",Settings!F1,IF([Material]=\"Wood Filler\",Settings!G1,IF([Material]=\"Light Bulb\",Settings!H1,IF([Material]=\"Hardware\",Settings!I1,FALSE)))))"
+            },
+            { "name": "Fits Time", "type": "formula", "formula": "=[Minutes]<=Settings!A1" },
+            {
+              "name": "Eligible",
+              "type": "formula",
+              "formula": "=AND([Ready],[Fits Time],[Status]<>\"Done\")"
+            }
+          ],
+          "cells": [
+            { "row": 0, "col": 0, "input": "Tighten loose dining chair" },
+            { "row": 0, "col": 1, "input": "1" },
+            { "row": 0, "col": 2, "input": "15" },
+            { "row": 0, "col": 3, "input": "Screwdriver" },
+            { "row": 0, "col": 4, "input": "Hardware" },
+            { "row": 0, "col": 5, "input": "Ready" },
+            { "row": 1, "col": 0, "input": "Replace burnt-out hallway bulb" },
+            { "row": 1, "col": 1, "input": "2" },
+            { "row": 1, "col": 2, "input": "10" },
+            { "row": 1, "col": 3, "input": "Pliers" },
+            { "row": 1, "col": 4, "input": "Light Bulb" },
+            { "row": 1, "col": 5, "input": "Ready" },
+            { "row": 2, "col": 0, "input": "Patch nail holes in entry wall" },
+            { "row": 2, "col": 1, "input": "3" },
+            { "row": 2, "col": 2, "input": "35" },
+            { "row": 2, "col": 3, "input": "Screwdriver" },
+            { "row": 2, "col": 4, "input": "Wood Filler" },
+            { "row": 2, "col": 5, "input": "Ready" },
+            { "row": 3, "col": 0, "input": "Clean bathroom fan grille" },
+            { "row": 3, "col": 1, "input": "4" },
+            { "row": 3, "col": 2, "input": "25" },
+            { "row": 3, "col": 3, "input": "Screwdriver" },
+            { "row": 3, "col": 4, "input": "Cleaning Kit" },
+            { "row": 3, "col": 5, "input": "Ready" },
+            { "row": 4, "col": 0, "input": "Secure wobbly bookcase to wall" },
+            { "row": 4, "col": 1, "input": "1" },
+            { "row": 4, "col": 2, "input": "40" },
+            { "row": 4, "col": 3, "input": "Drill" },
+            { "row": 4, "col": 4, "input": "Hardware" },
+            { "row": 4, "col": 5, "input": "Planned" },
+            { "row": 5, "col": 0, "input": "Tighten kitchen faucet handle" },
+            { "row": 5, "col": 1, "input": "2" },
+            { "row": 5, "col": 2, "input": "20" },
+            { "row": 5, "col": 3, "input": "Wrench" },
+            { "row": 5, "col": 4, "input": "Hardware" },
+            { "row": 5, "col": 5, "input": "Ready" },
+            { "row": 6, "col": 0, "input": "Oil squeaky bedroom door hinge" },
+            { "row": 6, "col": 1, "input": "5" },
+            { "row": 6, "col": 2, "input": "10" },
+            { "row": 6, "col": 3, "input": "Pliers" },
+            { "row": 6, "col": 4, "input": "Hardware" },
+            { "row": 6, "col": 5, "input": "Done" },
+            { "row": 7, "col": 0, "input": "Replace cabinet pull" },
+            { "row": 7, "col": 1, "input": "3" },
+            { "row": 7, "col": 2, "input": "15" },
+            { "row": 7, "col": 3, "input": "Screwdriver" },
+            { "row": 7, "col": 4, "input": "Hardware" },
+            { "row": 7, "col": 5, "input": "Ready" }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "Queue suggestion",
+          "source": "{% let best = MINIFS(Tasks[Priority], Tasks[Eligible], TRUE) %}\n## Suggested pick\n\n{% if COUNTIF(Tasks[Eligible], TRUE) = 0 %}No task currently fits the available time, tools, and materials. Update the settings or task list.{% else %}{{ INDEX(FILTER(Tasks[Task], Tasks[Priority] = best, Tasks[Eligible]), 1) }} is the next pick (priority {{ best }}). Mark it Done when finished to advance the suggestion.{% end %}"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,218 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "Monthly Budget | September 2026",
+  "pages": [
+    {
+      "name": "September Budget",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Overview",
+          "source": "# September 2026\n\nPlan monthly spending by category, record income and expenses, and compare this month’s expense totals with the plan. Enter all transaction amounts as positive numbers; **Kind** determines whether a row is income or spending.\n\n{% let income = SUMIFS(Transactions[Amount], Transactions[Kind], \"Income\", Transactions[Date], \">=\"&DATE(2026, 9, 1), Transactions[Date], \"<\"&DATE(2026, 10, 1)) %}\n{% let spending = SUMIFS(Transactions[Amount], Transactions[Kind], \"Expense\", Transactions[Date], \">=\"&DATE(2026, 9, 1), Transactions[Date], \"<\"&DATE(2026, 10, 1)) %}\n**Income:** {{ TEXT(income, \"$#,##0.00\") }} · **Spending:** {{ TEXT(spending, \"$#,##0.00\") }} · **Left after spending:** {{ TEXT(income-spending, \"$#,##0.00\") }}\n\nThe budget and ledger use September 2026 dates. Update the date window in this overview if you reuse the workbook for another month."
+        },
+        {
+          "type": "table",
+          "name": "Budget",
+          "rowCount": 7,
+          "colCount": 4,
+          "columns": [
+            { "name": "Category", "type": "text" },
+            { "name": "Planned", "type": "number" },
+            {
+              "name": "Actual",
+              "type": "formula",
+              "formula": "=SUMIFS(Transactions[Amount], Transactions[Kind], \"Expense\", Transactions[Category], [Category], Transactions[Date], \">=\"&DATE(2026, 9, 1), Transactions[Date], \"<\"&DATE(2026, 10, 1))"
+            },
+            { "name": "Remaining", "type": "formula", "formula": "=[Planned]-[Actual]" }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": 3,
+              "format": { "numberFormat": "$#,##0.00" }
+            }
+          ],
+          "cells": [
+            { "row": 0, "col": 0, "input": "Housing" },
+            { "row": 0, "col": 1, "input": "1800" },
+            { "row": 1, "col": 0, "input": "Utilities" },
+            { "row": 1, "col": 1, "input": "220" },
+            { "row": 2, "col": 0, "input": "Groceries" },
+            { "row": 2, "col": 1, "input": "600" },
+            { "row": 3, "col": 0, "input": "Transportation" },
+            { "row": 3, "col": 1, "input": "350" },
+            { "row": 4, "col": 0, "input": "Dining" },
+            { "row": 4, "col": 1, "input": "250" },
+            { "row": 5, "col": 0, "input": "Health" },
+            { "row": 5, "col": 1, "input": "180" },
+            { "row": 6, "col": 0, "input": "Personal & home" },
+            { "row": 6, "col": 1, "input": "200" }
+          ]
+        },
+        {
+          "type": "chart",
+          "name": "Planned and actual by category",
+          "source": "Budget!A1:C7",
+          "chartType": "bar"
+        },
+        {
+          "type": "table",
+          "name": "Monthly Totals",
+          "rowCount": 4,
+          "colCount": 2,
+          "cells": [
+            { "row": 0, "col": 0, "input": "September summary" },
+            { "row": 0, "col": 1, "input": "Amount" },
+            { "row": 1, "col": 0, "input": "Income" },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "=SUMIFS(Transactions[Amount], Transactions[Kind], \"Income\", Transactions[Date], \">=\"&DATE(2026, 9, 1), Transactions[Date], \"<\"&DATE(2026, 10, 1))"
+            },
+            { "row": 2, "col": 0, "input": "Expenses" },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "=SUMIFS(Transactions[Amount], Transactions[Kind], \"Expense\", Transactions[Date], \">=\"&DATE(2026, 9, 1), Transactions[Date], \"<\"&DATE(2026, 10, 1))"
+            },
+            { "row": 3, "col": 0, "input": "Net after expenses" },
+            { "row": 3, "col": 1, "input": "=B2-B3" }
+          ],
+          "formats": [
+            {
+              "startRow": 1,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": 1,
+              "format": { "numberFormat": "$#,##0.00" }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Transactions",
+          "rowCount": 18,
+          "colCount": 5,
+          "columns": [
+            { "name": "Date", "type": "date" },
+            { "name": "Description", "type": "text" },
+            { "name": "Amount", "type": "number" },
+            { "name": "Kind", "type": "text" },
+            { "name": "Category", "type": "text" }
+          ],
+          "cells": [
+            { "row": 0, "col": 0, "input": "2026-09-01" },
+            { "row": 0, "col": 1, "input": "Monthly salary" },
+            { "row": 0, "col": 2, "input": "3200" },
+            { "row": 0, "col": 3, "input": "Income" },
+            { "row": 0, "col": 4, "input": "Paycheck" },
+            { "row": 1, "col": 0, "input": "2026-09-01" },
+            { "row": 1, "col": 1, "input": "Rent" },
+            { "row": 1, "col": 2, "input": "1800" },
+            { "row": 1, "col": 3, "input": "Expense" },
+            { "row": 1, "col": 4, "input": "Housing" },
+            { "row": 2, "col": 0, "input": "2026-09-03" },
+            { "row": 2, "col": 1, "input": "Electric and water" },
+            { "row": 2, "col": 2, "input": "145" },
+            { "row": 2, "col": 3, "input": "Expense" },
+            { "row": 2, "col": 4, "input": "Utilities" },
+            { "row": 3, "col": 0, "input": "2026-09-04" },
+            { "row": 3, "col": 1, "input": "Weekly groceries" },
+            { "row": 3, "col": 2, "input": "132" },
+            { "row": 3, "col": 3, "input": "Expense" },
+            { "row": 3, "col": 4, "input": "Groceries" },
+            { "row": 4, "col": 0, "input": "2026-09-05" },
+            { "row": 4, "col": 1, "input": "Bus pass" },
+            { "row": 4, "col": 2, "input": "96" },
+            { "row": 4, "col": 3, "input": "Expense" },
+            { "row": 4, "col": 4, "input": "Transportation" },
+            { "row": 5, "col": 0, "input": "2026-09-07" },
+            { "row": 5, "col": 1, "input": "Dinner with friends" },
+            { "row": 5, "col": 2, "input": "68" },
+            { "row": 5, "col": 3, "input": "Expense" },
+            { "row": 5, "col": 4, "input": "Dining" },
+            { "row": 6, "col": 0, "input": "2026-09-08" },
+            { "row": 6, "col": 1, "input": "Pharmacy" },
+            { "row": 6, "col": 2, "input": "42" },
+            { "row": 6, "col": 3, "input": "Expense" },
+            { "row": 6, "col": 4, "input": "Health" },
+            { "row": 7, "col": 0, "input": "2026-09-10" },
+            { "row": 7, "col": 1, "input": "Household supplies" },
+            { "row": 7, "col": 2, "input": "56" },
+            { "row": 7, "col": 3, "input": "Expense" },
+            { "row": 7, "col": 4, "input": "Personal & home" },
+            { "row": 8, "col": 0, "input": "2026-09-12" },
+            { "row": 8, "col": 1, "input": "Freelance project" },
+            { "row": 8, "col": 2, "input": "450" },
+            { "row": 8, "col": 3, "input": "Income" },
+            { "row": 8, "col": 4, "input": "Other income" },
+            { "row": 9, "col": 0, "input": "2026-09-14" },
+            { "row": 9, "col": 1, "input": "Internet and mobile" },
+            { "row": 9, "col": 2, "input": "78" },
+            { "row": 9, "col": 3, "input": "Expense" },
+            { "row": 9, "col": 4, "input": "Utilities" },
+            { "row": 10, "col": 0, "input": "2026-09-15" },
+            { "row": 10, "col": 1, "input": "Groceries and pantry" },
+            { "row": 10, "col": 2, "input": "168" },
+            { "row": 10, "col": 3, "input": "Expense" },
+            { "row": 10, "col": 4, "input": "Groceries" },
+            { "row": 11, "col": 0, "input": "2026-09-17" },
+            { "row": 11, "col": 1, "input": "Fuel" },
+            { "row": 11, "col": 2, "input": "54" },
+            { "row": 11, "col": 3, "input": "Expense" },
+            { "row": 11, "col": 4, "input": "Transportation" },
+            { "row": 12, "col": 0, "input": "2026-09-19" },
+            { "row": 12, "col": 1, "input": "Lunch out" },
+            { "row": 12, "col": 2, "input": "35" },
+            { "row": 12, "col": 3, "input": "Expense" },
+            { "row": 12, "col": 4, "input": "Dining" },
+            { "row": 13, "col": 0, "input": "2026-09-21" },
+            { "row": 13, "col": 1, "input": "Dental copay" },
+            { "row": 13, "col": 2, "input": "90" },
+            { "row": 13, "col": 3, "input": "Expense" },
+            { "row": 13, "col": 4, "input": "Health" },
+            { "row": 14, "col": 0, "input": "2026-09-23" },
+            { "row": 14, "col": 1, "input": "Cleaning supplies" },
+            { "row": 14, "col": 2, "input": "62" },
+            { "row": 14, "col": 3, "input": "Expense" },
+            { "row": 14, "col": 4, "input": "Personal & home" },
+            { "row": 15, "col": 0, "input": "2026-09-26" },
+            { "row": 15, "col": 1, "input": "Monthly salary" },
+            { "row": 15, "col": 2, "input": "3200" },
+            { "row": 15, "col": 3, "input": "Income" },
+            { "row": 15, "col": 4, "input": "Paycheck" },
+            { "row": 16, "col": 0, "input": "2026-09-27" },
+            { "row": 16, "col": 1, "input": "Final groceries" },
+            { "row": 16, "col": 2, "input": "114" },
+            { "row": 16, "col": 3, "input": "Expense" },
+            { "row": 16, "col": 4, "input": "Groceries" },
+            { "row": 17, "col": 0, "input": "2026-09-29" },
+            { "row": 17, "col": 1, "input": "Streaming subscription" },
+            { "row": 17, "col": 2, "input": "18" },
+            { "row": 17, "col": 3, "input": "Expense" },
+            { "row": 17, "col": 4, "input": "Personal & home" }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 0,
+              "endCol": 0,
+              "format": { "numberFormat": "mmm d, yyyy" }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 2,
+              "format": { "numberFormat": "$#,##0.00" }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
