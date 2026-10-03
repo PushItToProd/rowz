@@ -157,9 +157,15 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [x] if I select C3:E6 and right click on the selected range, show me both "Delete columns C-E" and "Delete rows 3-6"
 - [ ] **P8** merge cells across selection - support merging multiple cells across one or more rows and one or more columns
 - [ ] **P5** (Claude) draw only the rows and columns in view. `GridView` makes a cell component for every row and column of a table, 100,000 of them for a table of 1,000 rows and 100 columns, and a page shows every table on it. Each edit also triggers the one ref that holds the engine, so everything that read a value through it is computed again. Do this before raising `tableRows`
-- [ ] (Claude) find and replace within a table, page, or document
-- [ ] (Claude) hide rows and columns
-- [ ] (Claude) freeze header rows and columns so they stay in view while a table scrolls
+- [ ] find and replace within a block, page, or document
+  - [ ] standalone find without replace - search just the current document
+    - [ ] allow filtering by just the current page or block
+  - [ ] find and replace within a document
+  - [ ] cross-document search
+  - don't implement cross-document find and replace -- too risky
+- [ ] support hiding rows and columns
+- [ ] support hiding pages
+- [ ] freeze header rows and columns so they stay in view while a table scrolls
 
 ## Tables, pages, charts, and text views
 
@@ -200,7 +206,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [x] sort and filter a data table in place (`plans/data-tables.md`, stage 1)
   - [x] dropdown columns (`plans/data-tables.md`, stage 2)
 - [ ] export variables declared in Markdown templates as named values, like script declarations and named ranges in tables
-- [ ] add a way to save multiple sort and filter view presets for each data table
+- [ ] **P3** add a way to save multiple sort and filter view presets for each data table
 - [ ] explore adding a generated, dynamically sized data table block type defined by the output of a formula, so changing the result's row or column count does not require manually managing table dimensions; the implementation approach is open and needs to consider conditional formatting and other proprrties as well (may also be addressed by the proposal to support conditional formatting and sorting when rendering data tables in markdown)
 - [ ] (Claude) consider deleting a data table's row when its last cell is cleared. `plans/persistent-row-identity.md` keeps such a row, so that its id stays valid for a relation that points at it, and deletes empty rows only at the end of a table when its columns are named
 - [ ] **P6** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable
@@ -215,6 +221,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] stacked bars
   - [ ] colors
 - [ ] **P6** when a chart has dates on one axis, they should be spaced out like numeric data, not categorical -- right now if I have a plot with `2018-08-22`, `2019-03-04`, `2019-12-03`, `2020-03-01`, `2021-08-25` on the X-axis, those points all appear equally horizontally spaced, but they should have variable width gaps proportional to the number of days between them just like they would if they were ordinary numbers and the X-axis should have dates at regular intervals covering the time period
+- [ ] adopt a reasonable charting library -- something lightweight that saves us from having to worry about too much minutiae (unvetted possibilities: ECharts, Chart.js)
 - [ ] **P10** show labels on charts on hover
 - [x] allow editing markdown views by just double clicking on the text (instead of clicking "Edit"). save and exit edit mode when the user unfocuses the input (instead of requiring user to hit "Done") (keep the "Edit" and "Done" buttons for user convenience)
 - [ ] support conditional formatting and sorting when rendering a data table in Markdown, or allow embedding an existing table/sheet in a Markdown view so its conditional formatting is applied
@@ -232,6 +239,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] block actions: whatever each block supports
     - block context menu should appear when right clocking on the card around it but not the controls within it. keep a button in the upper right with a vertical ellipsis that I can click to show the same menu as well
 - [ ] data tables - allow choices to be drawn from a formula's result (when the formula value changes, keep the raw underlying value in the cell but flag it visibly as invalid)
+- [ ] allow creating links to navigate directly to a page, table cell, block, etc.
 
 ## Formatting
 
@@ -317,6 +325,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] use icons to make the toolbar denser
 - [ ] **P5** plan to add keyboard shortcuts
 - [ ] **P4** identify where we should use in-app modals instead of browser-based `input` and alerts -- we have specific tasks for a couple of these already so this would just cover identifying anything I missed
+- [ ] allow renaming, deleting, and duplicating docs from the docs list view 
 
 ## Import and export
 
