@@ -41,6 +41,7 @@ export const TABLE: TableRecord = {
   })),
   columns: null,
   formats: [],
+  names: [],
 };
 
 /** A spreadsheet with one page and one 4x3 table holding `inputs`, keyed by address. */
@@ -290,6 +291,7 @@ export function mockApi(): MockedApi {
     updateTable: vi.fn(),
     editTable: vi.fn(),
     formatCells: vi.fn(),
+    setTableNames: vi.fn(),
     nameColumns: vi.fn(),
     dropColumns: vi.fn(),
     updateColumn: vi.fn(),

@@ -9,6 +9,7 @@ import { useWorkbookStore } from "../stores/workbook";
 import ContextMenu from "./ContextMenu.vue";
 import EditableName from "./EditableName.vue";
 import GridView from "./GridView.vue";
+import NamesPanel from "./NamesPanel.vue";
 import ResizeTable from "./ResizeTable.vue";
 import type { MenuItem, MenuScope } from "./menu";
 
@@ -115,6 +116,20 @@ function resize({ rowCount, colCount }: { rowCount: number; colCount: number }):
   resizing.value = false;
   if (rowCount === props.table.rowCount && colCount === props.table.colCount) return;
   void store.updateTable(id, { rowCount, colCount });
+}
+
+/** Whether the panel of the table's names is open, and the formula a new name starts with. */
+const namesOpen = ref(false);
+const nameSuggestion = ref<string>();
+
+/** Opens the names panel with a new name for the selected range. */
+function nameRange(): void {
+  const range = store.selectedRange;
+  if (!range) return;
+  const start = formatAddress({ row: range.startRow, col: range.startCol });
+  const end = formatAddress({ row: range.endRow, col: range.endCol });
+  nameSuggestion.value = start === end ? start : `${start}:${end}`;
+  namesOpen.value = true;
 }
 
 /** Where the menu that offers the two ways to name columns is open, if it is. */
@@ -245,6 +260,7 @@ const menuItems = computed((): MenuItem[] => {
     scope === "row" ? [] : lineItems(cols),
     // What a column holds is set one column at a time.
     scope === "row" || cols.count > 1 ? [] : columnItems(cols.first),
+    scope !== "cells" || props.table.columns ? [] : [{ label: "Name this range…", run: nameRange }],
     [{ label: "Clear cells", run: () => void store.clearSelection() }],
   ];
   return groups
@@ -277,6 +293,14 @@ const menuLabel = computed(() => {
       </h2>
       <div v-if="store.canEdit" class="table-card__actions">
         <button type="button" aria-haspopup="dialog" @click="resizing = !resizing">Resize</button>
+        <button
+          v-if="!table.columns"
+          type="button"
+          :aria-expanded="namesOpen"
+          @click="namesOpen = !namesOpen"
+        >
+          Names{{ table.names.length > 0 ? ` (${table.names.length})` : "" }}
+        </button>
         <button v-if="table.columns" type="button" @click="dropColumns">Remove column names</button>
         <button v-else type="button" aria-haspopup="menu" @click="openNaming">Name columns</button>
         <label class="file-button">
@@ -291,6 +315,13 @@ const menuLabel = computed(() => {
       </div>
       <ResizeTable v-if="resizing" :table="table" @close="resizing = false" @resize="resize" />
     </header>
+
+    <NamesPanel
+      v-if="namesOpen && !table.columns"
+      :table="table"
+      :suggestion="nameSuggestion"
+      @close="namesOpen = false"
+    />
 
     <!-- Always present, so selecting a cell does not push the grid down. -->
     <div v-if="store.canEdit" class="table-card__lines">

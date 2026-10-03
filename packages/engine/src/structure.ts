@@ -83,6 +83,18 @@ export interface NameDefinition {
   formula: string;
 }
 
+/**
+ * A name as a plain table lists it. A data table lists none: its rows can be
+ * sorted and filtered for display while `B2` stays positional, so a named
+ * cell could appear to point at a row it does not read, and its columns
+ * already have names.
+ */
+export interface TableName {
+  name: string;
+  /** With or without the leading `=`. */
+  formula: string;
+}
+
 /** What holds a name: a table or a script, either of which is on a page and has a name. */
 export interface Holder {
   kind: "table" | "script";

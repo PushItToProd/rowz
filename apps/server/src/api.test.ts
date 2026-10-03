@@ -50,6 +50,7 @@ describe("spreadsheets", () => {
         colIds: expect.any(Array),
         columns: null,
         formats: [],
+        names: [],
       },
     ]);
     expect(snapshot.tables[0]?.colIds).toHaveLength(DEFAULT_TABLE_SIZE.colCount);

@@ -14,6 +14,8 @@ Step 2 is implemented in `packages/engine/src/script.ts`, with tests in `script.
 
 Step 5 is implemented. `ASSERT` is in `functions/logic.ts`. `Workbook.failedAssertions()` reports failing cells, names, and bare script statements, and `getStatement(scriptId, line)` gives a bare statement's value. The editor header shows the count and opens `AssertionsPanel.vue`.
 
+Step 6 is implemented. A plain table lists its names in `tables.names` (migration 0011), and `PUT /tables/:tableId/names` replaces the list. The names are rewritten with the other formulas a table holds (`nameFormulasAfterRename`, `nameFormulasAfterMove`, `nameFormulasAfterEdit` in `columns.ts`), written through `ContentWriter`, and saved in the file format. `NamesPanel.vue` lists them on a table's block, and "Name this range…" in the cell menu starts one from the selection.
+
 Step 1 is implemented in `packages/engine`: `scope.ts`, `names.ts`, and the name records in `workbook.ts`, with tests in `names.test.ts`. Three parts of it are left:
 
 - `CHECKBOX` and `DROPDOWN` do not accept a name as the cell they write to. `EXECUTE`, `APPEND_ROW`, `CLEAR`, and the data actions do.

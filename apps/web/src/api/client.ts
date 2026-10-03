@@ -22,7 +22,7 @@ import type {
   IdentifiedStructuralEditBody,
   IdentityFormatRange,
 } from "@spreadsheet-app/shared";
-import type { ChartType, ColumnType, FormatPatch } from "@spreadsheet-app/engine";
+import type { ChartType, ColumnType, FormatPatch, TableName } from "@spreadsheet-app/engine";
 import { hc } from "hono/client";
 
 export type {
@@ -255,6 +255,10 @@ export const api = {
         json: { range, format, ...(reset ? { reset } : {}) },
       }),
     ),
+
+  /** Replaces the names a plain table holds. */
+  setTableNames: (tableId: string, names: TableName[]): Promise<Change> =>
+    body(routes.tables[":tableId"].names.$put({ param: { tableId }, json: { names } })),
 
   /** Names a table's columns, which makes it a data table. With `headerRow`, the first row supplies the names. */
   nameColumns: (tableId: string, headerRow: boolean): Promise<Change> =>

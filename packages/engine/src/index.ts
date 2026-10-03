@@ -23,6 +23,10 @@ export {
   columnFormulasAfterEdit,
   columnFormulasAfterMove,
   columnFormulasAfterRename,
+  nameFormulasAfterEdit,
+  nameFormulasAfterMove,
+  nameFormulasAfterRename,
+  type NameFormula,
   type ColumnFormula,
 } from "./columns";
 export {
@@ -110,6 +114,7 @@ export {
   type ColumnType,
   type Holder,
   type NameDefinition,
+  type TableName,
   type PageDefinition,
   type ScriptDefinition,
   type StoredInput,

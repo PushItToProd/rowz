@@ -89,6 +89,7 @@ const tableColumns = {
   colIds: tables.colIds,
   columns: tables.columns,
   formats: tables.formats,
+  names: tables.names,
 };
 const viewColumns = {
   id: views.id,
@@ -886,6 +887,7 @@ export async function applyRecorded(
           colIds: table.colIds,
           columns: table.columns,
           formats: table.formats,
+          names: table.names,
         },
       });
   }

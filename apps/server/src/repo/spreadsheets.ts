@@ -3,6 +3,12 @@ import {
   columnFormulasAfterEdit,
   columnFormulasAfterMove,
   columnFormulasAfterRename,
+  defaultFunctions,
+  refusedName,
+  nameFormulasAfterEdit,
+  nameFormulasAfterMove,
+  nameFormulasAfterRename,
+  type NameFormula,
   columnLabel,
   formatAddress,
   formatRulesAfterEdit,
@@ -24,6 +30,7 @@ import {
   type Rename,
   type StoredInput,
   type StructuralEdit,
+  type TableName,
 } from "@spreadsheet-app/engine";
 import {
   DEFAULT_TABLE_SIZE,
@@ -143,6 +150,8 @@ export interface TableRecord {
   columns: ColumnDefinition[] | null;
   /** How cells are shown: rules applied in order, later ones over earlier ones. */
   formats: FormatRule[];
+  /** The names a plain table holds. Always empty for a data table. */
+  names: TableName[];
 }
 
 export interface ViewRecord {
@@ -214,6 +223,7 @@ const tableColumns = {
   colIds: tables.colIds,
   columns: tables.columns,
   formats: tables.formats,
+  names: tables.names,
 };
 
 const viewColumns = {
@@ -747,7 +757,13 @@ export class SpreadsheetRepository {
         const colIds = Array.from({ length: block.colCount }, () => randomUUID());
         const [table] = await tx
           .insert(tables)
-          .values({ ...placed, colIds, columns, formats: block.formats ?? [] })
+          .values({
+            ...placed,
+            colIds,
+            columns,
+            formats: block.formats ?? [],
+            names: block.names ?? [],
+          })
           .returning({ id: tables.id });
         if (!table) throw new Error("Insert returned no table");
         const rows = keysAfter(null, block.rowCount).map((orderKey) => ({
@@ -1329,6 +1345,9 @@ export class SpreadsheetRepository {
   async nameColumns(tableId: string, headerRow: boolean): Promise<Change> {
     const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
       if (table.columns) throw conflict(`${table.name} already has named columns`);
+      if (table.names.length > 0) {
+        throw conflict(`${table.name} holds names, and a table with named columns holds none`);
+      }
       const { spreadsheetId } = table;
       writer.setLabel(`Name the columns of ${table.name}`);
       if (headerRow) {
@@ -1358,6 +1377,30 @@ export class SpreadsheetRepository {
       await writer.updateTable(tableId, {
         columns: names.map((name) => ({ name, type: "any" as const })),
       });
+    });
+    return change;
+  }
+
+  /**
+   * Replaces the names a plain table holds. A name cannot be one that reads as
+   * a cell address, a value, or a function, and a table lists a name once.
+   */
+  async setTableNames(tableId: string, names: TableName[]): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, _tx, writer) => {
+      if (table.columns && names.length > 0) {
+        throw conflict(`${table.name} has named columns, and such a table holds no names`);
+      }
+      const seen = new Set<string>();
+      for (const { name } of names) {
+        const refused = refusedName(name, defaultFunctions);
+        if (refused !== undefined) throw unprocessable("invalid_name", refused);
+        if (seen.has(name.toLowerCase())) {
+          throw conflict(`${table.name} already has a name ${name}`);
+        }
+        seen.add(name.toLowerCase());
+      }
+      writer.setLabel(`Change the names of ${table.name}`);
+      await writer.updateTable(tableId, { names });
     });
     return change;
   }
@@ -1885,6 +1928,7 @@ export class SpreadsheetRepository {
     const formulas = formulasAfterEdit(data, edit).map((cell) => contents.identify(cell));
     const sources = viewsAfterEdit(data, data.views, edit);
     const columnFormulas = columnFormulasAfterEdit(data, edit);
+    const nameFormulas = nameFormulasAfterEdit(data, edit);
 
     if (rows && edit.kind === "insert") {
       await writer.insertRows(table.id, edit.index, edit.count, edit.ids);
@@ -1894,6 +1938,7 @@ export class SpreadsheetRepository {
     await writer.setCells(formulas);
     await this.storeViewSources(writer, sources);
     const changed = await this.storeColumnFormulas(writer, data.tables, columnFormulas);
+    await this.storeNameFormulas(writer, data.tables, nameFormulas);
     // The formulas were rewritten at the positions the columns had before the edit.
     const current =
       changed.find((candidate) => candidate.id === table.id)?.columns ?? table.columns;
@@ -2418,6 +2463,7 @@ export class SpreadsheetRepository {
       cells: inputsAfterRename(data, rename),
       views: viewsAfterRename(data, data.views, rename),
       columns: columnFormulasAfterRename(data, rename),
+      names: nameFormulasAfterRename(data, rename),
     });
   }
 
@@ -2438,6 +2484,7 @@ export class SpreadsheetRepository {
       cells: inputsAfterMove(data, move),
       views: viewsAfterMove(data, data.views, move),
       columns: columnFormulasAfterMove(data, move),
+      names: nameFormulasAfterMove(data, move),
     });
   }
 
@@ -2449,12 +2496,32 @@ export class SpreadsheetRepository {
       cells: StoredInput[];
       views: { id: string; source: string }[];
       columns: ColumnFormula[];
+      names: NameFormula[];
     },
   ): Promise<void> {
     writer.markRewrites();
     await writer.setCells(rewritten.cells.map((cell) => contents.identify(cell)));
     await this.storeViewSources(writer, rewritten.views);
     await this.storeColumnFormulas(writer, contents.data.tables, rewritten.columns);
+    await this.storeNameFormulas(writer, contents.data.tables, rewritten.names);
+  }
+
+  /** Stores rewritten formulas of the names tables hold. */
+  private async storeNameFormulas(
+    writer: ContentWriter,
+    before: readonly TableRecord[],
+    changed: readonly NameFormula[],
+  ): Promise<void> {
+    const namesOf = new Map<string, TableName[]>();
+    for (const { tableId, index, formula } of changed) {
+      const names = namesOf.get(tableId) ?? [
+        ...(before.find((table) => table.id === tableId)?.names ?? []),
+      ];
+      const held = names[index];
+      if (held) names[index] = { ...held, formula };
+      namesOf.set(tableId, names);
+    }
+    for (const [tableId, names] of namesOf) await writer.updateTable(tableId, { names });
   }
 
   /** Stores rewritten formulas of formula columns, and returns the tables they belong to as they now are. */

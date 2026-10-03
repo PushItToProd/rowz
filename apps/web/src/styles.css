@@ -1541,3 +1541,38 @@ select.cell-control--dropdown {
 .assertions__list span {
   display: block;
 }
+
+.names-panel {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.names-panel table {
+  border-collapse: collapse;
+}
+
+.names-panel th,
+.names-panel td {
+  padding: 2px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.names-panel__formula {
+  width: 16rem;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.names-panel__add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.names-panel__empty {
+  margin: 0;
+  color: var(--muted);
+}

@@ -528,3 +528,17 @@ Together they make a form: inputs, a Save button that appends to a log table and
 **Decision.** `#REF!`, `#DIV/0!`, and the other error codes are valid in formula text and evaluate to that error.
 
 **Why.** Deleting a row, column, or table has to leave something where a formula named the deleted cells. Spreadsheets write `#REF!` there. Without this, the rewritten formula would fail to parse and show `#ERROR!`, which hides the cause.
+
+## 2026-10-02: A table's names are written as one list
+
+**Decision.** `PUT /tables/:tableId/names` replaces the whole list a plain table holds. There are no routes to add, rename, or remove one name.
+
+**Why.** The list is small, one journal record covers any edit of it, and undo restores the table as a whole. The editor builds the new list from the one it has.
+
+**Consequences.**
+
+- Two editors changing different names of one table overwrite each other. The last write wins.
+- Renaming a name does not rewrite the qualified uses of it (`Summary!Total`) in other formulas. That belongs to the scope-aware rewrite of step 7.
+- The server refuses a name that reads as a cell address, a value, or a function, and a name a table already lists. It does not check that a formula parses; the panel shows the error as the value, as a script does.
+
+**To change.** `setTableNames` in `apps/server/src/repo/spreadsheets.ts` and `setTableNamesBody` in `packages/shared/src/index.ts`.

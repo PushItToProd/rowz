@@ -1,4 +1,10 @@
-import type { ChartType, ColumnDefinition, Effect, FormatRule } from "@spreadsheet-app/engine";
+import type {
+  ChartType,
+  ColumnDefinition,
+  Effect,
+  FormatRule,
+  TableName,
+} from "@spreadsheet-app/engine";
 import type { SpreadsheetFile } from "@spreadsheet-app/shared";
 import type { JournalData } from "../repo/journal";
 import { sql } from "drizzle-orm";
@@ -175,6 +181,8 @@ export const tables = pgTable(
     columns: jsonb("columns").$type<ColumnDefinition[]>(),
     /** How cells are shown: rules applied in order, later ones over earlier ones. */
     formats: jsonb("formats").$type<FormatRule[]>().notNull().default([]),
+    /** The names a plain table holds, each with its formula. A data table holds none. */
+    names: jsonb("names").$type<TableName[]>().notNull().default([]),
   },
   (table) => [uniqueIndex("tables_name").on(table.pageId, sql`lower(${table.name})`)],
 );

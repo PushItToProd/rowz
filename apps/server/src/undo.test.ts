@@ -414,6 +414,17 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "set a table's names",
+    prepare({ tableId }) {
+      return {
+        method: "PUT",
+        path: `/tables/${tableId}/names`,
+        body: { names: [{ name: "Corner", formula: "A1" }] },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "name columns",
     prepare({ tableId }) {
       return {

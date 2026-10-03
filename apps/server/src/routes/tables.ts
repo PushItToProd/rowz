@@ -7,6 +7,7 @@ import {
   makeColumnsBody,
   moveBlockBody,
   setCellsBody,
+  setTableNamesBody,
   structuralEditBody,
   tableParam,
   updateColumnBody,
@@ -67,6 +68,19 @@ export function tableRoutes(dependencies: ActionDependencies) {
             await c.var.repository.formatCells(c.req.valid("param").tableId, range, format, reset),
           );
         },
+      )
+      // Replaces the names a plain table holds.
+      .put(
+        "/:tableId/names",
+        zValidator("param", tableParam, onInvalid),
+        zValidator("json", setTableNamesBody, onInvalid),
+        async (c) =>
+          c.json(
+            await c.var.repository.setTableNames(
+              c.req.valid("param").tableId,
+              c.req.valid("json").names,
+            ),
+          ),
       )
       // Names the table's columns, which makes it a data table.
       .post(

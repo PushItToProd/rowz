@@ -1,17 +1,11 @@
 <script setup lang="ts">
-import {
-  formatValue,
-  isError,
-  isLambda,
-  isRange,
-  parseScript,
-  type Evaluated,
-} from "@spreadsheet-app/engine";
+import { parseScript } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
 import { computed, nextTick, ref, watch } from "vue";
 import type { ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import EditableName from "./EditableName.vue";
+import { shown } from "./shownValue";
 
 const props = defineProps<{ view: ViewRecord }>();
 const store = useWorkbookStore();
@@ -62,18 +56,6 @@ function onBlur(): void {
 
 function remove(): void {
   if (window.confirm(`Delete ${props.view.name}?`)) void store.deleteView(props.view.id);
-}
-
-/** How a name's value is shown in one line: a range by its size, a function by its parameters. */
-function shown(value: Evaluated | undefined): { text: string; error?: string } {
-  if (value === undefined) return { text: "" };
-  if (isError(value)) return { text: value.code, error: value.message ?? value.code };
-  if (isRange(value)) {
-    const cols = value.rows[0]?.length ?? 0;
-    return { text: `${String(value.rows.length)} × ${String(cols)} values` };
-  }
-  if (isLambda(value)) return { text: `function (${value.params.join(", ")})` };
-  return { text: formatValue(value) };
 }
 
 /** Each statement of the saved source, with the value of each name. */

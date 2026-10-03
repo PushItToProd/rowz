@@ -18,6 +18,7 @@ const TABLES: TableRecord[] = [
     colIds: ["c1", "c2"],
     columns: null,
     formats: [],
+    names: [],
     rows: [],
   },
   {
@@ -30,6 +31,7 @@ const TABLES: TableRecord[] = [
     colIds: ["c1", "c2", "c3"],
     columns: null,
     formats: [],
+    names: [],
     rows: [],
   },
 ];

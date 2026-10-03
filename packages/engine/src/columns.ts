@@ -11,6 +11,13 @@ import {
 } from "./rewrite";
 import { TableResolver, type WorkbookStructure } from "./structure";
 
+/** The formula of one name a table holds, identified by its table and its place in the table's list. */
+export interface NameFormula {
+  tableId: string;
+  index: number;
+  formula: string;
+}
+
 /** The formula of one formula column, identified by its table and its position there. */
 export interface ColumnFormula {
   tableId: string;
@@ -63,4 +70,55 @@ export function columnFormulasAfterEdit(
   edit: StructuralEdit,
 ): ColumnFormula[] {
   return rewriteColumns(structure, editDecider(edit));
+}
+
+/**
+ * The names tables hold whose formulas change under a rewrite. Like a
+ * column's formula, a name's formula is written in its table. A table's names
+ * are in `structure.names`, in the order the table lists them.
+ */
+function rewriteNames(structure: WorkbookStructure, decide: Decide): NameFormula[] {
+  const resolver = new TableResolver(structure);
+  const seen = new Map<string, number>();
+  return (structure.names ?? []).flatMap(({ holderId, formula }) => {
+    const index = seen.get(holderId) ?? 0;
+    seen.set(holderId, index + 1);
+    const table = structure.tables.find((candidate) => candidate.id === holderId);
+    if (!table) return [];
+    const origin = { pageId: table.pageId, tableId: table.id };
+    // A name's formula may be written without the `=` that rewriting looks for.
+    const written = formula.startsWith("=") ? formula : `=${formula}`;
+    const rewritten = rewriteReferences(written, (reference, qualified) =>
+      decide(reference, targetOf(resolver, reference, qualified, origin), origin),
+    );
+    if (rewritten === written) return [];
+    return [
+      {
+        tableId: holderId,
+        index,
+        formula: formula.startsWith("=") ? rewritten : rewritten.slice(1),
+      },
+    ];
+  });
+}
+
+/** The names of tables whose formulas name a page, table, or column being renamed. */
+export function nameFormulasAfterRename(
+  structure: WorkbookStructure,
+  rename: Rename,
+): NameFormula[] {
+  return rewriteNames(structure, renameDecider(new TableResolver(structure), rename));
+}
+
+/** The names of tables whose formulas must name a page for a table to move to another page. */
+export function nameFormulasAfterMove(structure: WorkbookStructure, move: Move): NameFormula[] {
+  return rewriteNames(structure, moveDecider(structure, move));
+}
+
+/** The names of tables whose formulas read a table whose row or column is being inserted or deleted. */
+export function nameFormulasAfterEdit(
+  structure: WorkbookStructure,
+  edit: StructuralEdit,
+): NameFormula[] {
+  return rewriteNames(structure, editDecider(edit));
 }

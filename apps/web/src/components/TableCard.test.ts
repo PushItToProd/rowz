@@ -276,6 +276,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert column left",
       "Insert column right",
       "Delete column B",
+      "Name this range…",
       "Clear cells",
     ]);
   });
@@ -315,6 +316,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert 2 columns left",
       "Insert 2 columns right",
       "Delete columns B-C",
+      "Name this range…",
       "Clear cells",
     ]);
   });

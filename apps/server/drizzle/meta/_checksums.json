@@ -44,6 +44,10 @@
     {
       "tag": "0010_cells_by_id",
       "sha256": "09280941cf04ceed2c830efddb24a4f3e55ceb33a1e1d32ee9b579b65255b9f2"
+    },
+    {
+      "tag": "0011_table_names",
+      "sha256": "4c633d57c80a148845cbab0efd5df4f08a4f315058c2a70c27b17287fb1a944e"
     }
   ]
 }

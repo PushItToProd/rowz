@@ -18,6 +18,7 @@ import {
   type Evaluated,
   type FormatPatch,
   type Scalar,
+  type TableName,
 } from "@spreadsheet-app/engine";
 import {
   LIMITS,
@@ -276,6 +277,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
       pages: pages.value,
       tables: tables.value,
       scripts: views.value.filter((view) => view.kind === "script"),
+      names: tables.value.flatMap((table) =>
+        table.names.map(({ name, formula }) => ({ holderId: table.id, name, formula })),
+      ),
       cells,
     });
   }
@@ -438,18 +442,22 @@ export const useWorkbookStore = defineStore("workbook", () => {
           );
         }
         const script = views.value.find((candidate) => candidate.id === failure.holderId);
+        const holder =
+          script ?? tables.value.find((candidate) => candidate.id === failure.holderId);
         const label =
           failure.kind === "name"
-            ? `${script?.name ?? ""}!${failure.name}`
-            : `${script?.name ?? ""} line ${String(failure.line)}`;
-        return script && { pageId: script.pageId, label, scriptId: script.id };
+            ? `${holder?.name ?? ""}!${failure.name}`
+            : `${holder?.name ?? ""} line ${String(failure.line)}`;
+        return (
+          holder && { pageId: holder.pageId, label, ...(script ? { scriptId: script.id } : {}) }
+        );
       })();
       return where ? [{ ...where, message: failure.message }] : [];
     }),
   );
 
   /** The names the document's scripts define, with the script that holds each, for completion. */
-  const documentNames = computed(() =>
+  const scriptNameList = computed(() =>
     views.value
       .filter((view) => view.kind === "script")
       .flatMap((script) =>
@@ -460,6 +468,13 @@ export const useWorkbookStore = defineStore("workbook", () => {
         })),
       ),
   );
+
+  const documentNames = computed(() => [
+    ...tables.value.flatMap((table) =>
+      table.names.map(({ name }) => ({ name, holder: table.name, pageId: table.pageId })),
+    ),
+    ...scriptNameList.value,
+  ]);
 
   /** Applies the content the server restored, then keeps or moves the selection. */
   function applyChanged(changed: ChangedContent): void {
@@ -595,6 +610,14 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return attempt(async () => {
       await receiveChange(await api.formatCells(table.id, range, patch, reset));
     }, "The format could not be changed");
+  }
+
+  /** Replaces the names a plain table holds. */
+  function setTableNames(tableId: string, names: TableName[]): Promise<boolean> {
+    if (!canEdit.value) return Promise.resolve(false);
+    return attempt(async () => {
+      await receiveChange(await api.setTableNames(tableId, names));
+    }, "The names could not be saved");
   }
 
   /** The column a cell is in, when its table has named columns. */
@@ -1293,6 +1316,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     toFile,
     evaluateOnPage,
     nameValue,
+    setTableNames,
     statementValue,
     assertions,
     documentNames,

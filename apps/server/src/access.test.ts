@@ -94,6 +94,8 @@ function writeRoutes(): Route[] {
     ["POST", `/tables/${table}/columns`, { headerRow: false }],
     ["PATCH", `/tables/${table}/columns/2`, { name: "Renamed", type: "text" }],
     ["DELETE", `/tables/${table}/columns`],
+    // After the columns are dropped again, since a data table holds no names.
+    ["PUT", `/tables/${table}/names`, { names: [{ name: "Corner", formula: "A1" }] }],
     ["POST", `/pages/${page}/views`, { kind: "text" }],
     ["PATCH", `/views/${view}`, { source: "A1:B2", chartType: "pie" }],
     ["DELETE", `/views/${view}`],
@@ -277,7 +279,7 @@ describe("an editor", () => {
     // added, and each move names the page the block is on. Sharing and deleting are the owner's.
     expect(await statuses(editor, writeRoutes())).toEqual([
       404, 204, 201, 200, 200, 200, 200, 409, 422, 422, 201, 200, 200, 200, 200, 200, 200, 200, 200,
-      200, 201, 200, 200, 200, 200, 403, 403, 403,
+      200, 200, 201, 200, 200, 200, 200, 403, 403, 403,
     ]);
     await owner.json("DELETE", `/spreadsheets/${snapshot.id}`, undefined, 204);
     await editor.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);

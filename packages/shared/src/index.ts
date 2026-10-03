@@ -18,6 +18,8 @@ export const LIMITS = {
   /** Stored rows across every table of one spreadsheet. */
   spreadsheetRows: 100_000,
   tableCols: 100,
+  /** Names one plain table holds. */
+  tableNames: 200,
   /** Characters in a chart's formula or a text view's template. */
   viewSourceLength: 50_000,
   /** Kept versions of one spreadsheet. Older ones are dropped. */
@@ -141,6 +143,17 @@ const formatRule = z.object({
 export const MAX_FORMAT_RULES = 500;
 
 /** Turning a plain table into a data table. With `headerRow`, its first row becomes the column names. */
+/** A name a plain table holds, and the formula that gives it its value. */
+export const tableName = z.object({
+  name,
+  formula: z.string().trim().min(1).max(LIMITS.inputLength),
+});
+
+/** The names of a table, all of them: the list replaces the one the table has. */
+export const setTableNamesBody = z.object({
+  names: z.array(tableName).max(LIMITS.tableNames),
+});
+
 export const makeColumnsBody = z.object({ headerRow: z.boolean() });
 
 /**
@@ -315,6 +328,8 @@ const fileTable = z.object({
   columns: z.array(columnDefinition).max(LIMITS.tableCols).optional(),
   /** How cells are shown: rules applied in order. Left out when nothing is formatted. */
   formats: z.array(formatRule).max(MAX_FORMAT_RULES).optional(),
+  /** The names a plain table holds. Left out when it holds none. */
+  names: z.array(tableName).max(LIMITS.tableNames).optional(),
   /** Cells that hold something. Empty cells and the cells of formula columns are left out. */
   cells: z.array(cellInput).max(FILE_LIMITS.cells),
 });
@@ -376,6 +391,7 @@ interface PlacedTable extends Placed {
   colCount: number;
   columns: FileTable["columns"] | null;
   formats: NonNullable<FileTable["formats"]>;
+  names: NonNullable<FileTable["names"]>;
 }
 interface PlacedView extends Placed {
   kind: "chart" | "text" | "script";
@@ -406,6 +422,7 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
           colCount: table.colCount,
           ...(table.columns ? { columns: table.columns } : {}),
           ...(table.formats.length > 0 ? { formats: table.formats } : {}),
+          ...(table.names.length > 0 ? { names: table.names } : {}),
           cells: cellsOf(table),
         } satisfies FileBlock,
       })),

@@ -32,6 +32,9 @@ export class Contents {
         colCount: table.colIds.length,
       })),
       views: snapshot.views,
+      names: snapshot.tables.flatMap((table) =>
+        table.names.map(({ name, formula }) => ({ holderId: table.id, name, formula })),
+      ),
       scripts: snapshot.views
         .filter((view) => view.kind === "script")
         .map(({ id, pageId, name, source }) => ({ id, pageId, name, source })),
