@@ -77,14 +77,17 @@ class Runner {
     headerRows: number,
     width: number,
     private readonly context: EvaluationContext,
+    columnNames?: readonly string[],
   ) {
-    this.headers = Array.from({ length: width }, (_, col) =>
-      cells
-        .slice(0, headerRows)
-        .map((row) => formatValue(row[col] ?? null))
-        .filter((part) => part !== "")
-        .join(" "),
-    );
+    this.headers =
+      columnNames?.slice(0, width) ??
+      Array.from({ length: width }, (_, col) =>
+        cells
+          .slice(0, headerRows)
+          .map((row) => formatValue(row[col] ?? null))
+          .filter((part) => part !== "")
+          .join(" "),
+      );
     this.rows = cells.slice(headerRows).map((row) => ({
       names: new Map(
         Array.from({ length: width }, (_, col) => [columnName(col), row[col] ?? null]),
@@ -318,21 +321,30 @@ export const queryFunctions: Record<string, FunctionDefinition> = {
    * of text above other kinds of values is taken to be one.
    */
   QUERY: lazy(2, 3, ([data, source, headers], context) => {
-    const cells = grid(data?.() ?? null);
+    const input = data?.() ?? null;
+    const cells = grid(input);
+    const columnNames = isRange(input) ? input.columnNames : undefined;
     // A range over a table with no rows has no columns to name either.
     if (cells.length === 0) fail("#N/A", "The query matches no rows");
     const width = Math.max(0, ...cells.map((row) => row.length));
-    const headerRows = headers ? integer(headers()) : detectHeaders(cells);
+    const headerRows =
+      headers !== undefined
+        ? integer(headers())
+        : columnNames === undefined
+          ? detectHeaders(cells)
+          : 0;
     if (headerRows < 0 || headerRows > cells.length) {
       fail("#VALUE!", "The number of header rows must be between 0 and the rows of the data");
     }
     const names = new Map<string, number>();
     for (let col = width - 1; col >= 0; col -= 1) {
-      const header = cells
-        .slice(0, headerRows)
-        .map((row) => formatValue(row[col] ?? null))
-        .filter((part) => part !== "")
-        .join(" ");
+      const header =
+        columnNames?.[col] ??
+        cells
+          .slice(0, headerRows)
+          .map((row) => formatValue(row[col] ?? null))
+          .filter((part) => part !== "")
+          .join(" ");
       if (header !== "") names.set(header.toLowerCase(), col);
     }
     let query: Query;
@@ -345,7 +357,9 @@ export const queryFunctions: Record<string, FunctionDefinition> = {
       if (!(cause instanceof QuerySyntaxError)) throw cause;
       return fail("#VALUE!", cause.message);
     }
-    const rows = new Runner(query, cells, headerRows, width, context).run(headerRows > 0);
+    const rows = new Runner(query, cells, headerRows, width, context, columnNames).run(
+      headerRows > 0 || columnNames !== undefined,
+    );
     return rows.length === 0 ? fail("#N/A", "The query matches no rows") : array(rows);
   }),
 };

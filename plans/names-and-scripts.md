@@ -6,7 +6,9 @@ The plan describes the code at commit `797a764`. It is a proposal. The decisions
 
 ## Progress
 
-Step 4 is implemented. `ScriptCard.vue` shows each statement with its value, the browser's engine reads the document's scripts, and completion offers document names, bare and after a script's name. Bare formulas show their text and no value until step 5.
+Steps 1–7 and step 8's documentation are implemented. Step 7 adds unique whole-table values, column names on table ranges, `QUERY` headings, and scope-aware rewrites for renamed tables and names. The README and help page document ambiguity and qualification. The [monthly budget example](../docs/reference/monthly-budget.json) uses representative October data because `_scratch/google-sheets` is not present in this checkout; its script totals, assertions, and category report are covered by a test.
+
+Step 4 is implemented. `ScriptCard.vue` shows each statement with its value, the browser's engine reads the document's scripts, and completion offers document names, bare and after a script's name. A bare formula such as `ASSERT` has a value for the saved source; a draft source has no live value.
 
 Step 3 is implemented. The server and the file format accept views of kind `script`, `Contents` gives scripts to the engine, and the click path therefore reads names. A script and a table on one page cannot share a name, checked in `checkHolderName` in `apps/server/src/repo/spreadsheets.ts`. Renaming or moving a script, a table, or a page rewrites qualified names such as `Summary!Total`: the parser records them as located references with `qualified` set. Tests are in `apps/server/src/scripts.test.ts` and `packages/engine/src/script.test.ts`. No route was added, so `access.test.ts` and `undo.test.ts` needed no new cases.
 
@@ -16,11 +18,9 @@ Step 5 is implemented. `ASSERT` is in `functions/logic.ts`. `Workbook.failedAsse
 
 Step 6 is implemented. A plain table lists its names in `tables.names` (migration 0011), and `PUT /tables/:tableId/names` replaces the list. The names are rewritten with the other formulas a table holds (`nameFormulasAfterRename`, `nameFormulasAfterMove`, `nameFormulasAfterEdit` in `columns.ts`), written through `ContentWriter`, and saved in the file format. `NamesPanel.vue` lists them on a table's block, and "Name this range…" in the cell menu starts one from the selection.
 
-Step 1 is implemented in `packages/engine`: `scope.ts`, `names.ts`, and the name records in `workbook.ts`, with tests in `names.test.ts`. Three parts of it are left:
+Step 1 is implemented in `packages/engine`: `scope.ts`, `names.ts`, and the name records in `workbook.ts`, with tests in `names.test.ts`. One gap remains:
 
 - `CHECKBOX` and `DROPDOWN` do not accept a name as the cell they write to. `EXECUTE`, `APPEND_ROW`, `CLEAR`, and the data actions do.
-- The parser does not record where a bare word or a qualified name is written. Step 3 needs that for qualified names, and step 7 for bare words.
-- A bare word that only a table matches is still `#NAME?`. Step 7 gives it the table's rows.
 
 ## Decisions made
 
@@ -129,12 +129,12 @@ One candidate is the meaning. A table found this way can be on any page, so `SUM
 
 `A!B`, where `B` is not a cell or a range, has two readings: the name `B` held by `A` on the formula's page, and the table `B` on the page `A`. When both exist it is `#NAME?`. `Page!A!B` then writes the name. The table has no unambiguous form until `Sales[#All]` exists.
 
-The parser gains a reference for a qualified name, which is located in the formula text as other references are. A rename of a table, script, or page rewrites it with the existing rename rewrite.
+The parser records qualified names as located references. A rename of a table, script, or page rewrites them with the existing rename rewrite.
 
-A bare word is not located today, and whether it is a name depends on what `LET` and `LAMBDA` bound around it. Step 1 adds a walk of a formula that reports each bare word that is not bound, with its position in the text. A text view passes in the names its `let` and `for` bound. Two things use the walk:
+The parser records bare words with their positions. `nameNodesOf` in `scope.ts` reports the words not bound by `LET` or `LAMBDA`; text views also pass in names their `let` and `for` tags bound. Two things use the walk:
 
-- `referencesOf` uses it from step 1, so a cell depends on a name only where it reads the name.
-- The rewrite uses it from step 7. Renaming a table rewrites a bare `Sales` and leaves alone a `Sales` that `LET` bound. Renaming a name does the same.
+- `referencesOf` uses it so a cell depends on a name only where it reads the name.
+- Renames use it so a table or name rename changes a bare `Sales` but leaves alone a `Sales` that `LET` bound.
 
 ### Names and tables share one namespace on a page
 
@@ -179,15 +179,14 @@ Each step ends with `pnpm check` passing.
 7. **Whole-table references.** The bare table name, column names carried on a range, `QUERY` headers from them, and rewriting of bare words on a rename of a table or a name.
 8. **Documentation and the reference document.** README and help page sections. Both state that an ambiguous name is an error and recommend distinct names or the qualified form, with `February!Total` and `March!Total` as the example. Build the monthly budget and record what gets in the way in `todo.md`.
 
-Steps 1 to 5 make scripts usable. Step 6 adds named ranges. Step 7 belongs to the data tables theme and can move after its other items, but the rewriting of bare words in it is also what a "rename this name" command needs. That part can be split off and done any time after step 2.
+The planned order grouped script support in steps 1–5, named ranges in step 6, and whole-table references with data-table work in step 7. Bare-word rewriting also supports a future "rename this name" command and can be implemented after step 2.
 
 ## Open questions
 
 1. **Struct values.** `todo.md` has a note on cells that hold structs, arrays, and nested tables. A script read as a whole (`Summary`) could then be a struct of its names, and `Summary!Name` a field of it. Nothing here builds that, and nothing here prevents it.
 
-## Not checked
+## Remaining gaps
 
-- How the web store builds `WorkbookStructure` from a snapshot. Step 4 assumes it can pass names through as it passes tables.
-- How action planning resolves a target, and so how much an alias needs there.
-- Whether a renamed name needs more than editing its script before step 7. Until then, bare uses of the old name show `#NAME?`.
-- Whether keeping a name's value until any cell changes is cheap enough inside `settle`, which computes many cells in one pass. A cell's value changing during the pass must drop the kept values that read it.
+- `CHECKBOX` and `DROPDOWN` do not accept a name as their target cell; `EXECUTE` and the data actions do.
+- A bare formula such as `ASSERT` shows a value for the saved script source, not while a draft is being typed.
+- The reference budget example could not be based on `_scratch/google-sheets`, because that directory is absent from this checkout.

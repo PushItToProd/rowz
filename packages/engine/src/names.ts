@@ -18,3 +18,29 @@ export function refusedName(name: string, functions: FunctionRegistry): string |
   if (functions.has(upper)) return `${upper} is a function and cannot be used as a name`;
   return undefined;
 }
+
+/** Name pairs that share a formula, where each old and new spelling occurs once. */
+export function renamedNames(
+  before: readonly { name: string; formula: string }[],
+  after: readonly { name: string; formula: string }[],
+): { from: string; name: string }[] {
+  const beforeNames = new Set(before.map(({ name }) => name.toLowerCase()));
+  const afterNames = new Set(after.map(({ name }) => name.toLowerCase()));
+  const old = before.filter(({ name }) => !afterNames.has(name.toLowerCase()));
+  const added = after.filter(({ name }) => !beforeNames.has(name.toLowerCase()));
+  const normalize = (formula: string): string =>
+    (formula.startsWith("=") ? formula.slice(1) : formula).trim();
+  const formulas = new Set([...old, ...added].map(({ formula }) => normalize(formula)));
+  return [...formulas].flatMap((formula) => {
+    const oldNames = old.filter((item) => normalize(item.formula) === formula);
+    const newNames = added.filter((item) => normalize(item.formula) === formula);
+    const from = oldNames[0]?.name;
+    const name = newNames[0]?.name;
+    return oldNames.length === 1 &&
+      newNames.length === 1 &&
+      from !== undefined &&
+      name !== undefined
+      ? [{ from, name }]
+      : [];
+  });
+}

@@ -63,9 +63,18 @@ export interface LocatedReference {
   qualified?: true;
 }
 
+/** A bare name or function name and the span of the token that writes it. */
+export interface LocatedName {
+  node: Node;
+  from: number;
+  to: number;
+}
+
 class Parser {
   /** Every reference in the formula, in the order written. */
   readonly references: LocatedReference[] = [];
+  /** Every bare name token, including names that may be bound by LET or LAMBDA. */
+  readonly names: LocatedName[] = [];
   private index = 0;
   /** Where the most recently consumed token ends. */
   private consumedTo = 0;
@@ -152,7 +161,11 @@ class Parser {
       case "quotedName":
         if (this.columnFollows(token)) return this.columnOf({ table: token.value }, token.position);
         // Single quotes always write a name, so a quoted name alone is a name with spaces in it.
-        if (!this.isPunctuation("!")) return { type: "name", name: token.value };
+        if (!this.isPunctuation("!")) {
+          const node: Node = { type: "name", name: token.value };
+          this.locatedName(node, token.position, token.end);
+          return node;
+        }
         return this.qualifiedReference(token.value, token.position);
       case "column":
         return this.located({ column: token.value }, token.position);
@@ -181,7 +194,9 @@ class Parser {
     const start = this.cornerOf(token);
     const isCell = start !== undefined && isWholeCell(start);
     if (this.isPunctuation("(") && !isCell) {
-      return { type: "call", name: name.toUpperCase(), args: this.arguments() };
+      const node: Node = { type: "call", name: name.toUpperCase(), args: this.arguments() };
+      this.locatedName(node, position, token.end);
+      return node;
     }
 
     const upper = name.toUpperCase();
@@ -189,8 +204,16 @@ class Parser {
     if (upper === "FALSE") return { type: "boolean", value: false };
 
     // A lone column such as `A` is only a reference as the start of a range.
-    if (!start || (!isCell && !this.isPunctuation(":"))) return { type: "name", name };
+    if (!start || (!isCell && !this.isPunctuation(":"))) {
+      const node: Node = { type: "name", name };
+      this.locatedName(node, position, token.end);
+      return node;
+    }
     return this.located(this.rangeFrom(start, token), position);
+  }
+
+  private locatedName(node: Node, from: number, to: number): void {
+    this.names.push({ node, from, to });
   }
 
   private located(reference: Reference, from: number): Node {
@@ -318,7 +341,9 @@ export function parseFormula(text: string): Node {
 export function parseFormulaWithReferences(text: string): {
   ast: Node;
   references: LocatedReference[];
+  names: LocatedName[];
 } {
   const parser = new Parser(tokenize(text), text);
-  return { ast: parser.parse(), references: parser.references };
+  const ast = parser.parse();
+  return { ast, references: parser.references, names: parser.names };
 }

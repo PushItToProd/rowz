@@ -1,5 +1,7 @@
 import {
   editDecider,
+  bareNamesAfterRename,
+  rewriteBareNames,
   moveDecider,
   renameDecider,
   rewriteReferences,
@@ -29,12 +31,17 @@ export interface ViewSource {
 }
 
 /** Rewrites the references in a view's source, whichever kind of source it is. */
-function rewriteSource({ kind, source }: ViewSource, replace: Replace): string {
-  if (kind === "text") return rewriteTemplate(source, replace);
-  if (kind === "script") return rewriteScript(source, replace);
+function rewriteSource(
+  { kind, source }: ViewSource,
+  replace: Replace,
+  replaceBare?: (name: string) => string | undefined,
+): string {
+  if (kind === "text") return rewriteTemplate(source, replace, replaceBare);
+  if (kind === "script") return rewriteScript(source, replace, replaceBare);
   // A chart's formula may be written with or without the leading `=`.
   const written = source.startsWith("=");
-  const rewritten = rewriteReferences(written ? source : `=${source}`, replace);
+  let rewritten = rewriteReferences(written ? source : `=${source}`, replace);
+  if (replaceBare) rewritten = `=${rewriteBareNames(rewritten.slice(1), replaceBare)}`;
   return written ? rewritten : rewritten.slice(1);
 }
 
@@ -43,12 +50,16 @@ function rewriteViews(
   structure: WorkbookStructure,
   views: readonly ViewSource[],
   decide: Decide,
+  replaceBare?: (name: string) => string | undefined,
 ): { id: string; source: string }[] {
   const resolver = new TableResolver(structure);
   return views.flatMap((view) => {
     const origin = { pageId: view.pageId, viewId: view.id };
-    const source = rewriteSource(view, (reference, qualified) =>
-      decide(reference, targetOf(resolver, reference, qualified, origin), origin),
+    const source = rewriteSource(
+      view,
+      (reference, qualified) =>
+        decide(reference, targetOf(resolver, reference, qualified, origin, structure), origin),
+      replaceBare,
     );
     return source === view.source ? [] : [{ id: view.id, source }];
   });
@@ -60,7 +71,32 @@ export function viewsAfterRename(
   views: readonly ViewSource[],
   rename: Rename,
 ): { id: string; source: string }[] {
-  return rewriteViews(structure, views, renameDecider(new TableResolver(structure), rename));
+  return rewriteViews(
+    structure,
+    views,
+    renameDecider(new TableResolver(structure), rename),
+    bareNamesAfterRename(structure, rename),
+  );
+}
+
+/** Rewrites one source against the workbook as it was before a rename. */
+export function viewSourceAfterRename(
+  structure: WorkbookStructure,
+  view: ViewSource,
+  rename: Rename,
+): string {
+  const resolver = new TableResolver(structure);
+  const origin = { pageId: view.pageId, viewId: view.id };
+  return rewriteSource(
+    view,
+    (reference, qualified) =>
+      renameDecider(resolver, rename)(
+        reference,
+        targetOf(resolver, reference, qualified, origin, structure),
+        origin,
+      ),
+    bareNamesAfterRename(structure, rename),
+  );
 }
 
 /**

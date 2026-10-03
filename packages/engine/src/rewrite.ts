@@ -5,7 +5,10 @@ import {
   type Reference,
   type ReferenceCell,
 } from "./ast";
+import { defaultFunctions } from "./functions";
 import { parseFormulaWithReferences, type LocatedReference } from "./parser";
+import { nameNodesOf } from "./scope";
+import { scriptNames } from "./script";
 import { FormulaSyntaxError } from "./tokenizer";
 import { isFormulaInput } from "./values";
 import {
@@ -14,10 +17,17 @@ import {
   type StoredInput,
   type WorkbookData,
   type WorkbookStructure,
+  type NameDefinition,
 } from "./structure";
 
 /** What to write in place of a reference: a new reference, or `#REF!` when its target is gone. */
-export type Replacement = Reference | "#REF!";
+export interface QualifiedTableReplacement {
+  kind: "qualifiedTable";
+  page: string;
+  table: string;
+}
+
+export type Replacement = Reference | QualifiedTableReplacement | "#REF!";
 
 /**
  * Decides what to write in place of a reference, or `undefined` to keep it.
@@ -40,6 +50,46 @@ export function rewriteReferences(input: string, replace: Replace): string {
     text = text.slice(0, edit.from) + edit.text + text.slice(edit.to);
   }
   return `=${text}`;
+}
+
+/** Rewrites unbound bare names in formula text, preserving every other character. */
+export function rewriteBareNames(
+  text: string,
+  replace: (name: string) => string | undefined,
+  bound: ReadonlySet<string> = new Set(),
+): string {
+  const edits = bareNameEdits(text, replace, bound);
+  let rewritten = text;
+  for (const edit of edits.toReversed()) {
+    rewritten = rewritten.slice(0, edit.from) + edit.text + rewritten.slice(edit.to);
+  }
+  return rewritten;
+}
+
+/** The edits made by `rewriteBareNames`, for a caller that must preserve surrounding comments. */
+export function bareNameEdits(
+  text: string,
+  replace: (name: string) => string | undefined,
+  bound: ReadonlySet<string> = new Set(),
+): { from: number; to: number; text: string }[] {
+  let names: ReturnType<typeof parseFormulaWithReferences>["names"];
+  let ast: ReturnType<typeof parseFormulaWithReferences>["ast"];
+  try {
+    ({ ast, names } = parseFormulaWithReferences(text));
+  } catch (cause) {
+    if (cause instanceof FormulaSyntaxError) return [];
+    throw cause;
+  }
+  const located = new Map(names.map((name) => [name.node, name]));
+  const edits = nameNodesOf(ast, defaultFunctions, bound).flatMap(({ use, node }) => {
+    if ("holder" in use) return [];
+    const span = located.get(node);
+    const replacement = replace(use.name);
+    return span && replacement !== undefined
+      ? [{ from: span.from, to: span.to, text: quoteName(replacement) }]
+      : [];
+  });
+  return edits;
 }
 
 /**
@@ -67,6 +117,9 @@ export function referenceEdits(
 
 function written(replacement: Replacement, qualified: boolean): string {
   if (replacement === "#REF!") return replacement;
+  if ("kind" in replacement) {
+    return `${quoteName(replacement.page)}!${quoteName(replacement.table)}`;
+  }
   if (!qualified || !isColumnReference(replacement)) return formatReference(replacement);
   const { page, table, column } = replacement;
   return [page, table, column]
@@ -102,6 +155,8 @@ export type Rename =
   | { kind: "page"; pageId: string; name: string }
   | { kind: "table"; tableId: string; name: string }
   | { kind: "script"; scriptId: string; name: string }
+  /** A name held by a table or script. */
+  | { kind: "name"; holderId: string; from: string; name: string }
   /** A column of a data table, named `from` before the rename. */
   | { kind: "column"; tableId: string; from: string; name: string };
 
@@ -131,6 +186,9 @@ export type Decide = (
 export interface Placed {
   id: string;
   pageId: string;
+  kind?: "table" | "script";
+  /** A qualified whole-table value written as `Page!Table`. */
+  qualifiedTable?: true;
 }
 
 /**
@@ -142,19 +200,99 @@ export function targetOf(
   reference: Reference,
   qualified: boolean,
   origin: { tableId?: string | undefined; pageId: string | undefined },
+  structure?: WorkbookStructure,
 ): Placed | undefined {
-  if (qualified) return resolver.findHolder(reference.table ?? "", reference.page, origin.pageId);
-  if (origin.tableId !== undefined) return resolver.find(reference, origin.tableId);
-  return origin.pageId === undefined ? undefined : resolver.findFromPage(reference, origin.pageId);
+  if (qualified) {
+    if (!isColumnReference(reference)) return undefined;
+    if (reference.page !== undefined) {
+      return resolver.findHolder(reference.table ?? "", reference.page, origin.pageId);
+    }
+    const holder = resolver.findHolder(reference.table ?? "", undefined, origin.pageId);
+    const table = resolver.tableOnPage(reference.table ?? "", reference.column);
+    const hasName =
+      holder !== undefined &&
+      documentNames(structure).some(
+        (definition) =>
+          definition.holderId === holder.id && sameName(definition.name, reference.column),
+      );
+    if (hasName && table) return undefined;
+    if (hasName) return holder;
+    if (table) return { id: table.id, pageId: table.pageId, kind: "table", qualifiedTable: true };
+    return holder;
+  }
+  const table =
+    origin.tableId !== undefined
+      ? resolver.find(reference, origin.tableId)
+      : origin.pageId === undefined
+        ? undefined
+        : resolver.findFromPage(reference, origin.pageId);
+  return table ? { id: table.id, pageId: table.pageId, kind: "table" } : undefined;
+}
+
+function sameName(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+function documentNames(structure: WorkbookStructure | undefined): NameDefinition[] {
+  if (!structure) return [];
+  return [
+    ...(structure.names ?? []),
+    ...(structure.scripts ?? []).flatMap((script) => scriptNames(script.id, script.source)),
+  ];
+}
+
+/** Bare words that uniquely name the table or name being renamed. */
+export function bareNamesAfterRename(
+  structure: WorkbookStructure,
+  rename: Rename,
+): (word: string) => string | undefined {
+  if (rename.kind !== "table" && rename.kind !== "name") return () => undefined;
+  const resolver = new TableResolver(structure);
+  const definitions = documentNames(structure);
+  return (word) => {
+    if (
+      !sameName(
+        word,
+        rename.kind === "table" ? (resolver.table(rename.tableId)?.name ?? "") : rename.from,
+      )
+    ) {
+      return undefined;
+    }
+    const names = definitions.filter((definition) => sameName(definition.name, word));
+    const tables = resolver.tablesNamed(word);
+    if (names.length + tables.length !== 1) return undefined;
+    if (rename.kind === "table") {
+      return tables[0]?.id === rename.tableId ? rename.name : undefined;
+    }
+    const found = names[0];
+    return found?.holderId === rename.holderId && sameName(found.name, rename.from)
+      ? rename.name
+      : undefined;
+  };
 }
 
 /** The rewrite a rename asks for: the new name in place of the old, wherever the old one is written. */
 export function renameDecider(resolver: TableResolver, rename: Rename): Decide {
   return (reference, target) => {
     if (rename.kind === "page") {
+      if (
+        target?.qualifiedTable &&
+        isColumnReference(reference) &&
+        reference.table !== undefined &&
+        resolver.isPage(reference.table, rename.pageId)
+      ) {
+        return { kind: "qualifiedTable", page: rename.name, table: reference.column };
+      }
       // The page qualifier is rewritten even when the table it names does not exist.
       return reference.page !== undefined && resolver.isPage(reference.page, rename.pageId)
         ? { ...reference, page: rename.name }
+        : undefined;
+    }
+    if (rename.kind === "name") {
+      return target?.id === rename.holderId &&
+        isColumnReference(reference) &&
+        sameName(reference.column, rename.from)
+        ? { ...reference, column: rename.name }
         : undefined;
     }
     if (rename.kind === "column") {
@@ -162,6 +300,11 @@ export function renameDecider(resolver: TableResolver, rename: Rename): Decide {
         target?.id === rename.tableId &&
         sameColumnName(reference.column, rename.from)
         ? { ...reference, column: rename.name }
+        : undefined;
+    }
+    if (target?.qualifiedTable && rename.kind === "table" && target.id === rename.tableId) {
+      return isColumnReference(reference) && reference.table !== undefined
+        ? { kind: "qualifiedTable", page: reference.table, table: rename.name }
         : undefined;
     }
     // A reference with no table name follows its formula's table and needs no rewrite.
@@ -185,6 +328,12 @@ export function moveDecider(structure: WorkbookStructure, move: Move): Decide {
     structure.pages.find((page) => page.id === pageId)?.name;
   const to = pageName(move.pageId);
   return (reference, target, origin) => {
+    if (target?.qualifiedTable) {
+      if (move.kind !== "table" || target.id !== move.tableId || to === undefined) return undefined;
+      return isColumnReference(reference) && reference.table !== undefined
+        ? { kind: "qualifiedTable", page: to, table: reference.column }
+        : undefined;
+    }
     // A reference with no table name follows its formula's table, wherever that goes.
     if (reference.table === undefined || !target || to === undefined) return undefined;
     // A script is a view that holds names, so a reference can mean a view that moves.
@@ -210,12 +359,20 @@ function withoutPage(reference: Reference): Reference {
 }
 
 /** The cells whose formulas a rewrite changes, as they are written after it. */
-function rewriteInputs(data: WorkbookData, resolver: TableResolver, decide: Decide): StoredInput[] {
+function rewriteInputs(
+  data: WorkbookData,
+  resolver: TableResolver,
+  decide: Decide,
+  bareName?: (word: string) => string | undefined,
+): StoredInput[] {
   return data.cells.flatMap(({ input, ...cell }) => {
     const origin = { pageId: resolver.table(cell.tableId)?.pageId, tableId: cell.tableId };
-    const rewritten = rewriteReferences(input, (reference, qualified) =>
-      decide(reference, targetOf(resolver, reference, qualified, origin), origin),
+    let rewritten = rewriteReferences(input, (reference, qualified) =>
+      decide(reference, targetOf(resolver, reference, qualified, origin, data), origin),
     );
+    if (bareName && isFormulaInput(rewritten)) {
+      rewritten = `=${rewriteBareNames(rewritten.slice(1), bareName)}`;
+    }
     return rewritten === input ? [] : [{ ...cell, input: rewritten }];
   });
 }
@@ -226,7 +383,12 @@ function rewriteInputs(data: WorkbookData, resolver: TableResolver, decide: Deci
  */
 export function inputsAfterRename(data: WorkbookData, rename: Rename): StoredInput[] {
   const resolver = new TableResolver(data);
-  return rewriteInputs(data, resolver, renameDecider(resolver, rename));
+  return rewriteInputs(
+    data,
+    resolver,
+    renameDecider(resolver, rename),
+    bareNamesAfterRename(data, rename),
+  );
 }
 
 /**

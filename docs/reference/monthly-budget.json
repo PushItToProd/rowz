@@ -1,0 +1,91 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "Monthly budget — October 2026",
+  "pages": [
+    {
+      "name": "Transactions",
+      "blocks": [
+        {
+          "type": "table",
+          "name": "Transactions",
+          "rowCount": 8,
+          "colCount": 6,
+          "columns": [
+            { "name": "Date", "type": "date" },
+            { "name": "Type", "type": "text" },
+            { "name": "Category", "type": "text" },
+            { "name": "Account", "type": "text" },
+            { "name": "Description", "type": "text" },
+            { "name": "Amount", "type": "number" }
+          ],
+          "cells": [
+            { "row": 0, "col": 0, "input": "2026-10-01" },
+            { "row": 0, "col": 1, "input": "Income" },
+            { "row": 0, "col": 2, "input": "Salary" },
+            { "row": 0, "col": 3, "input": "Checking" },
+            { "row": 0, "col": 4, "input": "Paycheck" },
+            { "row": 0, "col": 5, "input": "4200" },
+            { "row": 1, "col": 0, "input": "2026-10-02" },
+            { "row": 1, "col": 1, "input": "Income" },
+            { "row": 1, "col": 2, "input": "Interest" },
+            { "row": 1, "col": 3, "input": "Checking" },
+            { "row": 1, "col": 4, "input": "Savings interest" },
+            { "row": 1, "col": 5, "input": "4" },
+            { "row": 2, "col": 0, "input": "2026-10-01" },
+            { "row": 2, "col": 1, "input": "Expense" },
+            { "row": 2, "col": 2, "input": "Housing" },
+            { "row": 2, "col": 3, "input": "Checking" },
+            { "row": 2, "col": 4, "input": "Rent" },
+            { "row": 2, "col": 5, "input": "1600" },
+            { "row": 3, "col": 0, "input": "2026-10-03" },
+            { "row": 3, "col": 1, "input": "Expense" },
+            { "row": 3, "col": 2, "input": "Groceries" },
+            { "row": 3, "col": 3, "input": "Checking" },
+            { "row": 3, "col": 4, "input": "Market" },
+            { "row": 3, "col": 5, "input": "125" },
+            { "row": 4, "col": 0, "input": "2026-10-05" },
+            { "row": 4, "col": 1, "input": "Expense" },
+            { "row": 4, "col": 2, "input": "Utilities" },
+            { "row": 4, "col": 3, "input": "Checking" },
+            { "row": 4, "col": 4, "input": "Electric and water" },
+            { "row": 4, "col": 5, "input": "140" },
+            { "row": 5, "col": 0, "input": "2026-10-06" },
+            { "row": 5, "col": 1, "input": "Expense" },
+            { "row": 5, "col": 2, "input": "Transportation" },
+            { "row": 5, "col": 3, "input": "Credit Card" },
+            { "row": 5, "col": 4, "input": "Transit pass" },
+            { "row": 5, "col": 5, "input": "65" },
+            { "row": 6, "col": 0, "input": "2026-10-07" },
+            { "row": 6, "col": 1, "input": "Expense" },
+            { "row": 6, "col": 2, "input": "Groceries" },
+            { "row": 6, "col": 3, "input": "Credit Card" },
+            { "row": 6, "col": 4, "input": "Market" },
+            { "row": 6, "col": 5, "input": "50" },
+            { "row": 7, "col": 0, "input": "2026-10-08" },
+            { "row": 7, "col": 1, "input": "Expense" },
+            { "row": 7, "col": 2, "input": "Subscriptions" },
+            { "row": 7, "col": 3, "input": "Credit Card" },
+            { "row": 7, "col": 4, "input": "Streaming" },
+            { "row": 7, "col": 5, "input": "15" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "blocks": [
+        {
+          "type": "script",
+          "name": "Summary",
+          "source": "MonthStart = DATE(2026, 10, 1)\nMonthEnd = EOMONTH(MonthStart, 0)\nIncome = SUMIFS(Transactions!Transactions[Amount], Transactions!Transactions[Type], \"Income\", Transactions!Transactions[Date], \">=\" & MonthStart, Transactions!Transactions[Date], \"<=\" & MonthEnd)\nExpenses = SUMIFS(Transactions!Transactions[Amount], Transactions!Transactions[Type], \"Expense\", Transactions!Transactions[Date], \">=\" & MonthStart, Transactions!Transactions[Date], \"<=\" & MonthEnd)\nNet = Income - Expenses\nASSERT(Income >= 0, \"Income cannot be negative\")\nASSERT(Expenses >= 0, \"Expenses cannot be negative\")\nASSERT(Net = Income - Expenses, \"Net must equal income minus expenses\")"
+        },
+        {
+          "type": "text",
+          "name": "Monthly report",
+          "source": "# October 2026\n\nIncome: **${{ Income }}**  \nExpenses: **${{ Expenses }}**  \nNet: **${{ Net }}**\n\n### Expenses by category\n\n{{ QUERY(Transactions, \"select Category, sum(Amount) where Type = 'Expense' and `Date` >= date '2026-10-01' and `Date` <= date '2026-10-31' group by Category order by sum(Amount) desc\") }}\n\n### Amounts by account\n\n{{ QUERY(Transactions, \"select Type, Account, sum(Amount) where `Date` >= date '2026-10-01' and `Date` <= date '2026-10-31' group by Type, Account order by Type, sum(Amount) desc\") }}"
+        }
+      ]
+    }
+  ]
+}

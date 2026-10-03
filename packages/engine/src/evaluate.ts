@@ -46,6 +46,8 @@ export interface EvaluationContext {
   read(cell: CellId): CellValue;
   /** The size of a table, which is where a range with an open side stops. */
   extent(tableId: string): { rows: number; cols: number };
+  /** The names of a data table's columns, or `undefined` for a plain grid. */
+  columnNames?(tableId: string): readonly string[] | undefined;
   /** Values bound by `LET` and `LAMBDA`, keyed by name in lower case. */
   names?: ReadonlyMap<string, Evaluated>;
   /** The names the document defines. A binding in `names` comes before them. */
@@ -140,7 +142,12 @@ function readReference(reference: Reference, context: EvaluationContext): Evalua
     }
     rows.push(cells);
   }
-  return { kind: "range", rows };
+  const columnNames = context.columnNames?.(tableId)?.slice(startCol, endCol + 1);
+  return {
+    kind: "range",
+    rows,
+    ...(columnNames === undefined ? {} : { columnNames }),
+  };
 }
 
 /** The formula's own row or its own column. */

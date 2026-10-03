@@ -58,6 +58,26 @@ describe("scripts", () => {
     });
   });
 
+  it("rewrites formula uses when a script renames one of its names", async () => {
+    const { spreadsheetId, tableId, script } = await sheetWith(
+      "Total = 5\nUse = 'Script 1'!Total + Total + LET(Total, 2, Total)",
+      { A1: "='Script 1'!Total + Total + LET(Total, 1, Total)" },
+    );
+    await user.json("PATCH", `/views/${script.id}`, {
+      source: "Gross = 5\nUse = 'Script 1'!Total + Total + LET(Total, 2, Total)",
+    });
+
+    expect(await storedInputs(user, spreadsheetId, tableId)).toEqual({
+      "0:0": "='Script 1'!Gross + Gross + LET(Total, 1, Total)",
+    });
+    expect((await readSnapshot(user, spreadsheetId)).views).toMatchObject([
+      {
+        id: script.id,
+        source: "Gross = 5\nUse = 'Script 1'!Gross + Gross + LET(Total, 2, Total)",
+      },
+    ]);
+  });
+
   it("give their names to a button's action when it is clicked", async () => {
     const { spreadsheetId, tableId } = await sheetWith("Total = 5", {
       B1: '=BUTTON("Go", EXECUTE(Total + 1, A1))',

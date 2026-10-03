@@ -5,9 +5,11 @@ import {
   columnFormulasAfterRename,
   defaultFunctions,
   refusedName,
+  renamedNames,
   nameFormulasAfterEdit,
   nameFormulasAfterMove,
   nameFormulasAfterRename,
+  nameFormulaAfterRename,
   type NameFormula,
   columnLabel,
   formatAddress,
@@ -16,10 +18,12 @@ import {
   inputsAfterMove,
   inputsAfterRename,
   isFormulaInput,
+  scriptNames,
   sameColumnName,
   viewsAfterEdit,
   viewsAfterMove,
   viewsAfterRename,
+  viewSourceAfterRename,
   type ChartType,
   type ColumnDefinition,
   type ColumnFormula,
@@ -1386,7 +1390,7 @@ export class SpreadsheetRepository {
    * a cell address, a value, or a function, and a table lists a name once.
    */
   async setTableNames(tableId: string, names: TableName[]): Promise<Change> {
-    const { change } = await this.changeTable(tableId, async (table, _tx, writer) => {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
       if (table.columns && names.length > 0) {
         throw conflict(`${table.name} has named columns, and such a table holds no names`);
       }
@@ -1400,7 +1404,23 @@ export class SpreadsheetRepository {
         seen.add(name.toLowerCase());
       }
       writer.setLabel(`Change the names of ${table.name}`);
-      await writer.updateTable(tableId, { names });
+      let changed = [...names];
+      for (const rename of renamedNames(table.names, names)) {
+        const contents = await this.rewriteFormulas(tx, writer, table.spreadsheetId, {
+          kind: "name",
+          holderId: tableId,
+          ...rename,
+        });
+        changed = changed.map((entry) => ({
+          ...entry,
+          formula: nameFormulaAfterRename(contents.data, tableId, entry.formula, {
+            kind: "name",
+            holderId: tableId,
+            ...rename,
+          }),
+        }));
+      }
+      await writer.updateTable(tableId, { names: changed });
     });
     return change;
   }
@@ -1587,6 +1607,19 @@ export class SpreadsheetRepository {
       if (changes.source !== undefined && changes.source !== view.source) {
         await this.checkWrittenAt(tx, view.spreadsheetId, revision);
       }
+      let source = changes.source;
+      if (view.kind === "script" && source !== undefined && source !== view.source) {
+        const renames = renamedNames(scriptNames(viewId, view.source), scriptNames(viewId, source));
+        for (const rename of renames) {
+          const change = {
+            kind: "name" as const,
+            holderId: viewId,
+            ...rename,
+          };
+          const contents = await this.rewriteFormulas(tx, writer, view.spreadsheetId, change);
+          source = viewSourceAfterRename(contents.data, { ...view, source }, change);
+        }
+      }
       if (view.kind === "script" && changes.name !== undefined && changes.name !== view.name) {
         await this.checkHolderName(tx, view.pageId, changes.name, { kind: "script", id: viewId });
         await this.rewriteFormulas(tx, writer, view.spreadsheetId, {
@@ -1595,7 +1628,10 @@ export class SpreadsheetRepository {
           name: changes.name,
         });
       }
-      await writer.updateView(viewId, changes);
+      await writer.updateView(viewId, {
+        ...changes,
+        ...(source === undefined ? {} : { source }),
+      });
     });
     return change;
   }
@@ -2456,7 +2492,7 @@ export class SpreadsheetRepository {
     writer: ContentWriter,
     spreadsheetId: string,
     rename: Rename,
-  ): Promise<void> {
+  ): Promise<Contents> {
     const contents = await this.within(tx).read(spreadsheetId);
     const { data } = contents;
     await this.storeRewrite(writer, contents, {
@@ -2465,6 +2501,7 @@ export class SpreadsheetRepository {
       columns: columnFormulasAfterRename(data, rename),
       names: nameFormulasAfterRename(data, rename),
     });
+    return contents;
   }
 
   /**

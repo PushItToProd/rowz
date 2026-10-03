@@ -172,6 +172,12 @@ export class TableResolver {
     return this.findNamed(reference, pageId);
   }
 
+  /** A table named on a page, such as the table in `Page!Sales`. */
+  tableOnPage(page: string, name: string): TableDefinition | undefined {
+    const pageId = this.pageIdByName.get(nameKey(page));
+    return pageId === undefined ? undefined : this.tablesByPage.get(pageId)?.get(nameKey(name));
+  }
+
   private findNamed(
     reference: Reference,
     originPageId: string | undefined,

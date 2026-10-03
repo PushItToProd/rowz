@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ClickResult } from "./app";
 import {
   addTable,
+  addView,
   cellsBody,
   createSpreadsheet,
   readSnapshot,
@@ -78,6 +79,31 @@ describe("names a table holds", () => {
     await user.json("POST", `/tables/${tableId}/edits`, { axis: "row", kind: "insert", index: 0 });
     expect(await namesOf(spreadsheetId, tableId)).toEqual([
       { name: "Corner", formula: "=A3 + B3" },
+    ]);
+  });
+
+  it("rewrite qualified and bare uses when a held name is renamed", async () => {
+    const { spreadsheetId, pageId, tableId } = await sheetWith([{ name: "Fee", formula: "B1" }], {
+      A1: "=Fee + 'Table 1'!Fee + LET(Fee, 1, Fee)",
+      B1: "0.2",
+    });
+    const script = await addView(user, pageId, "script");
+    await user.json("PATCH", `/views/${script.id}`, {
+      source: "Use = 'Table 1'!Fee + Fee + LET(Fee, 1, Fee) + LAMBDA(Fee, Fee)(1)",
+    });
+    await user.json("PUT", `/tables/${tableId}/names`, {
+      names: [{ name: "TaxRate", formula: "B1" }],
+    });
+
+    expect(await storedInputs(user, spreadsheetId, tableId)).toEqual({
+      "0:0": "=TaxRate + 'Table 1'!TaxRate + LET(Fee, 1, Fee)",
+      "0:1": "0.2",
+    });
+    expect((await readSnapshot(user, spreadsheetId)).views).toMatchObject([
+      {
+        id: script.id,
+        source: "Use = 'Table 1'!TaxRate + TaxRate + LET(Fee, 1, Fee) + LAMBDA(Fee, Fee)(1)",
+      },
     ]);
   });
 

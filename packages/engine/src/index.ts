@@ -26,6 +26,7 @@ export {
   nameFormulasAfterEdit,
   nameFormulasAfterMove,
   nameFormulasAfterRename,
+  nameFormulaAfterRename,
   type NameFormula,
   type ColumnFormula,
 } from "./columns";
@@ -134,11 +135,12 @@ export {
   viewsAfterEdit,
   viewsAfterMove,
   viewsAfterRename,
+  viewSourceAfterRename,
   type ViewKind,
   type ViewSource,
 } from "./views";
 export { namesOf, type NameUse } from "./scope";
-export { refusedName } from "./names";
+export { refusedName, renamedNames } from "./names";
 export { parseScript, rewriteScript, scriptNames, type ScriptStatement } from "./script";
 export {
   createWorkbook,

@@ -89,6 +89,8 @@ export type CellValue =
 export interface RangeValue {
   kind: "range";
   rows: CellValue[][];
+  /** Names supplied by a data table; its rows do not contain a header row. */
+  columnNames?: readonly string[];
 }
 
 /**

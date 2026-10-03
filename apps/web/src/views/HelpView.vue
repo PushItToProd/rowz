@@ -167,6 +167,7 @@ const REFERENCES = [
   ["2:2", "All of row 2. 2:5 is rows 2 to 5."],
   ["A2:A", "Column A from row 2 to the bottom of the table."],
   ["A1:4", "Rows 1 to 4, from column A to the last column of the table."],
+  ["Sales", "All rows of the unique table named Sales, wherever it is in the document."],
   [
     "$A$1",
     "The same cell as A1. The $ marks keep it from moving when the formula is filled or pasted.",
@@ -174,6 +175,7 @@ const REFERENCES = [
   ["Sales!A1", "Cell A1 of the table named Sales on the formula's own page."],
   ["'Table 2'!A1:A9", "A table whose name has a space needs single quotes."],
   ["'Page 2'!Sales!A1", "Cell A1 of the table Sales on the page named Page 2."],
+  ["'Page 2'!Sales", "All rows of the table Sales on the page named Page 2."],
   [
     "[Price]",
     "In a table with named columns: the cell of the column Price in the formula's own row.",
@@ -453,8 +455,9 @@ const OPERATORS = [
           data.
         </li>
         <li>
-          <code>QUERY</code> over a range has no header row to read in such a table. Charts and
-          queries can name whole columns instead: <code>HSTACK(Sales[Item], Sales[Total])</code>.
+          <code>QUERY</code> reads a data table's column names from a range or a whole-table
+          reference. Array functions can combine whole columns, such as
+          <code>HSTACK(Sales[Item], Sales[Total])</code>.
         </li>
         <li>
           <strong>Remove column names</strong> makes the table a plain table again. Its formula
@@ -587,6 +590,19 @@ const OPERATORS = [
         not. Names ignore letter case.
       </p>
       <p>
+        A plain table or a script can hold names for values, ranges, and functions. A script has one
+        definition per line, such as <code>Total = SUM(Sales[Amount])</code> or
+        <code>WithTax(amount) = amount * (1 + TaxRate)</code>. A line can also check a formula with
+        <code>ASSERT(Total &gt;= 0, "Sales cannot be negative")</code>.
+      </p>
+      <p>
+        A bare name must have one meaning in the whole document. If two names, two tables, or a name
+        and table share a spelling, a bare use shows <code>#NAME?</code>. Give them distinct
+        spellings or qualify them by their holder. If the February and March scripts each define
+        <code>Total</code>, write <code>February!Total</code> and <code>March!Total</code>. Add the
+        page when the holder is on another page: <code>'Page 2'!Summary!Total</code>.
+      </p>
+      <p>
         <code>LAMBDA</code> makes a function. Its last part is what the function computes, and the
         parts before it are the names of its inputs. Call a function by putting values in
         parentheses after it.
@@ -682,6 +698,12 @@ const OPERATORS = [
         <code>QUERY(C1:E9, …)</code> column C is <code>A</code>. A column with a header can also be
         named by it: <code>select Amount</code>. A header of several words goes in backticks:
         <code>select `Sold on`</code>. Text in a query goes in single quotes.
+      </p>
+      <p>
+        A data table carries its column names into a query, without a header row in its data. For
+        example, <code>=QUERY(Sales, "select Category, sum(Amount) group by Category")</code> can
+        use those names and returns them as headings. The same works for a named-column range such
+        as <code>Sales!A:C</code>.
       </p>
       <table>
         <thead>

@@ -74,11 +74,11 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] (Claude) XLOOKUP and INDEX could return a whole row or column now that arrays exist
 - [x] (Claude) MIN and MAX over a range of dates; a TEXT function to show a date or number in a chosen format
 - [x] (Claude) financial functions (`PMT`, `PV`, `FV`, `NPV`, `IRR`, `RATE`, `NPER`), trig, and line fitting
-- [ ] **P1** named functions and values at the workbook level, so `=double(5)` works instead of `=D1(5)`
+- [x] **P1** named functions and values at the workbook level, so `=double(5)` works instead of `=D1(5)`
   - (Claude) plan before implementing. A name that holds a formula is a new place formulas are kept, so renames and row and column edits must rewrite it, and undo must record it
-- [ ] **P1** support creating named ranges of one or more cells
-- [ ] **P1** (Claude) plan one mechanism for document-level names before implementing the two items above. It should cover named values, named functions, named ranges, and the formula scripts under Ambitious ideas. A script block that holds `Name = formula` lines could cover all four, and rewriting and undo would then be extended for one new place that holds formulas
-  - (Claude) drafted in [plans/names-and-scripts.md](plans/names-and-scripts.md), which awaits the author's review
+- [x] **P1** support creating named ranges of one or more cells
+- [x] **P1** (Claude) plan one mechanism for document-level names before implementing the two items above. It should cover named values, named functions, named ranges, and the formula scripts under Ambitious ideas. A script block that holds `Name = formula` lines could cover all four, and rewriting and undo would then be extended for one new place that holds formulas
+  - (Claude) implemented in [plans/names-and-scripts.md](plans/names-and-scripts.md)
 - [ ] support optional named arguments to formula functions
   - [ ] **P6** plan before implementing so we can see how hard this would be
   - [ ] example use case: `=QUERY(Table1!A:A, "select *", column_headers=False)`
@@ -184,9 +184,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P2** data tables: sort and filter in place, dropdown columns, and `QUERY(Sales, ...)` over a whole table with its column names as headers
   - (Claude) after row identity, which sorting and hiding rows depend on
   - (author) sorting and filtering are display settings of a table. They leave the stored row order alone, so `A2` keeps its meaning
-  - [ ] allow referencing an entire data table without naming a specific range -- I would like to be able to write s.t. like `=QUERY('Table name'!, 'select * ...')` (not wedded to that exact syntax tho)
-    - [ ] **P2** evaluate syntax options and how painful they'd be to implement
-  - [ ] **P2** `QUERY` doesn't show col names in its output - if `Table1` is a table with named columns and we write `=QUERY(Table1!A:A, "select *")`, the output should show the column names by default
+  - [x] reference an entire data table by its unique name; `QUERY(Sales, ...)` uses the table's column names as headers
+  - [x] `QUERY` shows named columns in its output, including for ranges such as `Sales!A:C`
 - [ ] (Claude) consider deleting a data table's row when its last cell is cleared. `plans/persistent-row-identity.md` keeps such a row, so that its id stays valid for a relation that points at it, and deletes empty rows only at the end of a table when its columns are named
 - [ ] **P6** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable
 - [ ] **P4** when updating a formula column's formula, use an in-page editor with proper formula support (modal or popover or maybe just hijack the formula bar), not a browser `input` popup
@@ -258,7 +257,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P6** cell validation - require the value to match a pattern, regex, or custom formula
 - [ ] **P6** touch: select a range, fill by dragging, and a long-press menu on Android+iOS
 - [ ] **P1** build reference documents in rowz as far as its features allow, at the end of each theme
-  - [ ] a monthly budget: a data table of inflows and outflows, each with a category and an account, and reports of the month's amounts grouped by category and by account
+  - [x] a [monthly budget example](docs/reference/monthly-budget.json): a data table of inflows and outflows, each with a category and an account, and reports of the month's amounts grouped by category and by account
+    - (Codex) `_scratch/google-sheets` was absent from this checkout, so the example uses representative October transactions instead of source-sheet data.
   - [ ] a comparison of high-payout races in Gran Turismo 7, after https://docs.google.com/spreadsheets/d/1rZxgfay0Gjq7MuSmOkioZC4srW5yerPfiYR0XAXcE3c
   - [ ] a video game quest tracker, after https://docs.google.com/spreadsheets/d/1cwsRONdpXMJAvjpamauZ391NrTXX1gEdeTrx1Rf324o
   - [ ] a few standard templates in the style of Sheets and Excel (invoice, contacts list, to-do list), and one or two in the style of Access and FileMaker

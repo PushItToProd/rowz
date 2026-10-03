@@ -143,6 +143,117 @@ describe("names in a workbook", () => {
     expect(workbook.getValue(at("A2"))).toBe(0.2);
   });
 
+  it("reads a unique bare table name as its whole grid from any page", () => {
+    const workbook = workbookWith([], {
+      t1: { A1: "=SUM('Other Table')", A2: "=ROWS('Other Table')" },
+      t2: { A1: "2", B1: "3", A2: "4" },
+      t3: { A1: "=SUM('Page 1'!'Other Table')" },
+    });
+    expect(workbook.getValue(at("A1"))).toBe(9);
+    expect(workbook.getValue(at("A2"))).toBe(2);
+    expect(workbook.getValue(at("A1", "t3"))).toBe(9);
+  });
+
+  it("makes a bare table name ambiguous when another table has that name", () => {
+    const workbook = workbookWith([], { t1: { A1: "=Table1" } });
+    expect(workbook.getValue(at("A1"))).toMatchObject({ code: "#NAME?" });
+  });
+
+  it("treats Page!Table as a whole-table value when no held name also matches", () => {
+    const workbook = workbookWith([], {
+      t1: { A1: "=SUM('Page 1'!'Other Table')" },
+      t2: { A1: "2", A2: "4" },
+    });
+    expect(workbook.getValue(at("A1"))).toBe(6);
+  });
+
+  it("makes Page!Table ambiguous when it also names a value held on the formula's page", () => {
+    const structure: WorkbookStructure = {
+      pages: [
+        { id: "p1", name: "Summary" },
+        { id: "p2", name: "Archive" },
+      ],
+      tables: [
+        { id: "t1", pageId: "p2", name: "Main", rowCount: 1, colCount: 1 },
+        { id: "t2", pageId: "p1", name: "Total", rowCount: 1, colCount: 1 },
+      ],
+      scripts: [{ id: "s1", pageId: "p2", name: "Summary", source: "" }],
+    };
+    const workbook = workbookWith(
+      [name("s1", "Total", "1")],
+      {
+        t1: { A1: "=Summary!Total" },
+      },
+      structure,
+    );
+
+    expect(workbook.getValue(at("A1", "t1"))).toMatchObject({ code: "#NAME?" });
+  });
+
+  it("recalculates a whole-table use when a cell in that table changes", () => {
+    const workbook = workbookWith([], {
+      t1: { A1: "=SUM('Other Table')" },
+      t2: { A1: "2", A2: "4" },
+    });
+    expect(workbook.getValue(at("A1"))).toBe(6);
+    workbook.setCell(at("A2", "t2"), "10");
+    expect(workbook.getValue(at("A1"))).toBe(12);
+  });
+
+  it("uses data-table column names as QUERY headers without dropping the first record", () => {
+    const workbook = new Workbook();
+    workbook.setStructure({
+      pages: [
+        { id: "p1", name: "Main" },
+        { id: "p2", name: "Archive" },
+      ],
+      tables: [
+        {
+          id: "sales",
+          pageId: "p1",
+          name: "Sales",
+          rowCount: 3,
+          colCount: 3,
+          columns: [
+            { name: "Category", type: "text" },
+            { name: "Account", type: "text" },
+            { name: "Amount", type: "number" },
+          ],
+        },
+      ],
+    });
+    for (const [row, values] of [
+      ["Food", "Checking", "30"],
+      ["Utilities", "Checking", "50"],
+      ["Food", "Card", "12"],
+    ].entries()) {
+      values.forEach((input, col) => {
+        workbook.setCell({ tableId: "sales", row, col }, input);
+      });
+    }
+
+    const whole = workbook.evaluateOnPage("p2", "Sales");
+    expect(isRange(whole) && whole.columnNames).toEqual(["Category", "Account", "Amount"]);
+    const report = workbook.evaluateOnPage(
+      "p2",
+      'QUERY(Sales, "select Category, sum(Amount) group by Category")',
+    );
+    expect(isRange(report) && report.rows).toEqual([
+      ["Category", "sum Amount"],
+      ["Food", 42],
+      ["Utilities", 50],
+    ]);
+    const qualified = workbook.evaluateOnPage(
+      "p2",
+      'QUERY(Main!Sales!A:C, "select Category, sum(Amount) group by Category")',
+    );
+    expect(isRange(qualified) && qualified.rows).toEqual([
+      ["Category", "sum Amount"],
+      ["Food", 42],
+      ["Utilities", 50],
+    ]);
+  });
+
   it("recalculates a cell when a cell its name reads changes", () => {
     const workbook = workbookWith(
       [name("s1", "Total", "SUM(Table1!A1:A2)"), name("s1", "Double", "Total * 2")],

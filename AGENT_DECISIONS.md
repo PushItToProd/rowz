@@ -2,6 +2,16 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-02: Rename names when a replacement preserves one formula
+
+`PUT /tables/:tableId/names` replaces a table's whole name list, so it has no explicit rename operation. When exactly one old entry is removed and exactly one new entry is added with the same formula (ignoring a leading `=` and surrounding whitespace), treat that pair as a rename and rewrite its bare and qualified uses. Do not infer a rename when either side has multiple matches. This preserves references for the common edit-in-place case without guessing across duplicate formulas.
+
+**To change.** Make name edits explicit in the route and have the client send rename identities. Remove `renamedNames` in `packages/engine/src/names.ts` and its caller in `apps/server/src/repo/spreadsheets.ts`.
+
+For whole-table values, `Page!Table` means the table on that named page. Rewrites preserve this form when either name changes, and use the new page name when that table moves. A data-table range carries its column names so `QUERY` can use them as headers without treating the first record as a header.
+
+**To change.** Update `qualifiedMeaning` in `packages/engine/src/workbook.ts`, `targetOf` and its rename/move deciders in `packages/engine/src/rewrite.ts`, and `RangeValue.columnNames` with the `QUERY` header handling.
+
 ## 2026-10-02: Rows and columns have ids
 
 Cells, requests, responses, and journal entries name row and column UUIDs. Rows have their own records and fractional order keys; columns remain an ordered array of UUIDs on their table. `TableLayout` translates to positions for the pure engine. Row and column edits write changed formulas and format rules, never moved cells. Snapshots return rows separately from table records. Migration 0010 backfills cell IDs, aborts on unmatched cells, removes positional storage and stored counts, and clears incompatible undo history.

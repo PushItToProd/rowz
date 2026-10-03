@@ -12,6 +12,8 @@ import {
   type StructuralEdit,
 } from "./rewrite";
 import { at, STRUCTURE } from "./testing";
+import { nameFormulasAfterRename } from "./columns";
+import { viewsAfterRename } from "./views";
 import type { WorkbookData } from "./structure";
 import { Workbook } from "./workbook";
 
@@ -176,14 +178,27 @@ describe("inputsAfterRename", () => {
     expect(
       after(
         {
-          t1: { A1: "=archive!Table1!A1", A2: "=Table1!A1" },
+          t1: {
+            A1: "=archive!Table1!A1",
+            A2: "=Table1!A1",
+            A3: "=SUM(Archive!Table1)",
+          },
           t3: { A1: "=ARCHIVE!Table1!A1 + 'Page 1'!Table1!A1" },
         },
         { kind: "page", pageId: "p2", name: "Old Years" },
       ),
     ).toEqual([
       "t1:0:0 ='Old Years'!Table1!A1",
+      "t1:2:0 =SUM('Old Years'!Table1)",
       "t3:0:0 ='Old Years'!Table1!A1 + 'Page 1'!Table1!A1",
+    ]);
+  });
+
+  it("keeps a page-qualified whole-table reference when the table is renamed", () => {
+    const data = workbook({ t3: { A1: "=SUM('Page 1'!'Other Table')" } });
+
+    expect(inputsAfterRename(data, { kind: "table", tableId: "t2", name: "Revenue" })).toEqual([
+      { ...at("A1", "t3"), input: "=SUM('Page 1'!Revenue)" },
     ]);
   });
 
@@ -195,6 +210,58 @@ describe("inputsAfterRename", () => {
     const cells = { t1: { A1: "='Other Table'!A1 + Archive!Table1!A1" } };
     expect(after(cells, { kind: "table", tableId: "missing", name: "x" })).toEqual([]);
     expect(after(cells, { kind: "page", pageId: "missing", name: "x" })).toEqual([]);
+  });
+
+  it("rewrites a renamed table's bare uses, but not LET or LAMBDA bindings", () => {
+    const data: WorkbookData = {
+      ...STRUCTURE,
+      cells: [
+        {
+          ...at("A1"),
+          input:
+            "=SUM('Other Table') + LET(x, 'Other Table', x) + LAMBDA('Other Table', 'Other Table')(1)",
+        },
+      ],
+    };
+    expect(inputsAfterRename(data, { kind: "table", tableId: "t2", name: "Revenue" })).toEqual([
+      {
+        ...at("A1"),
+        input: "=SUM(Revenue) + LET(x, Revenue, x) + LAMBDA('Other Table', 'Other Table')(1)",
+      },
+    ]);
+  });
+
+  it("rewrites bare and qualified uses when a name is renamed", () => {
+    const source = [
+      "Total = 1",
+      "Next = Summary!Total + Total + LET(Total, 2, Total) + LAMBDA(Total, Total)(3)",
+    ].join("\n");
+    const data: WorkbookData = {
+      ...STRUCTURE,
+      scripts: [{ id: "s1", pageId: "p1", name: "Summary", source }],
+      names: [{ holderId: "t2", name: "Fee", formula: "Summary!Total + Total" }],
+      cells: [
+        { ...at("A1"), input: "=Total + LET(Total, 1, Total) + LAMBDA(Total, Total)(2)" },
+        { ...at("A2"), input: "=Summary!Total + 'Page 1'!Summary!Total" },
+      ],
+    };
+    const rename: Rename = { kind: "name", holderId: "s1", from: "Total", name: "Gross" };
+    expect(inputsAfterRename(data, rename)).toEqual([
+      { ...at("A1"), input: "=Gross + LET(Total, 1, Total) + LAMBDA(Total, Total)(2)" },
+      { ...at("A2"), input: "=Summary!Gross + 'Page 1'!Summary!Gross" },
+    ]);
+    expect(nameFormulasAfterRename(data, rename)).toEqual([
+      { tableId: "t2", index: 0, formula: "Summary!Gross + Gross" },
+    ]);
+    expect(
+      viewsAfterRename(data, [{ id: "s1", pageId: "p1", kind: "script", source }], rename),
+    ).toEqual([
+      {
+        id: "s1",
+        source:
+          "Total = 1\nNext = Summary!Gross + Gross + LET(Total, 2, Total) + LAMBDA(Total, Total)(3)",
+      },
+    ]);
   });
 });
 
@@ -230,8 +297,17 @@ describe("inputsAfterMove", () => {
 
   it("needs no page name in formulas on the page the table moves to", () => {
     expect(
-      after({ t3: { A1: "='Page 1'!'Other Table'!A1", A2: "='Other Table'!A1" } }, toArchive),
-    ).toEqual(["t3 A1 ='Other Table'!A1"]);
+      after(
+        {
+          t3: {
+            A1: "='Page 1'!'Other Table'!A1",
+            A2: "='Other Table'!A1",
+            A3: "=SUM('Page 1'!'Other Table')",
+          },
+        },
+        toArchive,
+      ),
+    ).toEqual(["t3 A1 ='Other Table'!A1", "t3 A3 =SUM(Archive!'Other Table')"]);
   });
 
   it("names the old page in the moved table's formulas that read tables left behind", () => {

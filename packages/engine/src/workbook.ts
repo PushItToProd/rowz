@@ -603,8 +603,8 @@ export class Workbook {
         ...referencesOf(ast, this.functions)
           .map((read) => this.precedent(read, record.id))
           .filter((range) => range !== undefined),
-        ...namesOf(ast, this.functions).flatMap(
-          (use) => this.nameUsed(use, pageId)?.precedents ?? [],
+        ...namesOf(ast, this.functions).flatMap((use) =>
+          this.precedentsOf(this.nameUsed(use, pageId)),
         ),
       ];
     }
@@ -683,7 +683,8 @@ export class Workbook {
         .filter((range) => range !== undefined),
       ...namesOf(ast, this.functions).flatMap((use) => {
         const used = this.nameUsed(use, holder.pageId);
-        return used ? this.namePrecedents(used, seen) : [];
+        if (!used) return [];
+        return "holder" in used ? this.namePrecedents(used, seen) : [this.tableRange(used.id)];
       }),
     ];
   }
@@ -714,8 +715,8 @@ export class Workbook {
     };
   }
 
-  /** The one name a word written alone means, or `undefined`. Fails when the word has several meanings. */
-  private bareName(word: string): NameRecord | undefined {
+  /** The one name or table a word written alone means, or `undefined`. */
+  private bareMeaning(word: string): NameRecord | TableDefinition | undefined {
     const { names, tables } = this.meanings(word);
     if (names.length + tables.length > 1) {
       const all = [
@@ -724,7 +725,15 @@ export class Workbook {
       ];
       fail("#NAME?", `${word} has more than one meaning: ${all.join(", ")}. Write the one meant`);
     }
-    return names[0];
+    if (names[0]) return names[0];
+    const table = tables[0];
+    return table && this.tables.table(table.id);
+  }
+
+  /** A bare document name; tables are values, not action targets. */
+  private bareName(word: string): NameRecord | undefined {
+    const meaning = this.bareMeaning(word);
+    return meaning && "holder" in meaning ? meaning : undefined;
   }
 
   private qualifiedName(
@@ -739,12 +748,48 @@ export class Workbook {
     return record ?? fail("#NAME?", `${holder.name} has no name ${name}`);
   }
 
+  /** Resolves `Summary!Total` as a held name or `Page!Sales` as a whole table. */
+  private qualifiedMeaning(
+    node: Node & { type: "qualified" },
+    pageId: string | undefined,
+  ): NameRecord | TableDefinition {
+    if (node.page !== undefined) return this.qualifiedName(node, pageId);
+
+    const holder = this.tables.findHolder(node.holder, undefined, pageId);
+    const record = holder
+      ? this.names
+          .get(node.name.toLowerCase())
+          ?.find((candidate) => candidate.holder.id === holder.id)
+      : undefined;
+    const table = this.tables.tableOnPage(node.holder, node.name);
+    if (record && table) {
+      const writtenName = this.written(record.holder, record.name);
+      const writtenTable = this.written({
+        kind: "table",
+        id: table.id,
+        pageId: table.pageId,
+        name: table.name,
+      });
+      fail(
+        "#NAME?",
+        `${node.holder}!${node.name} has more than one meaning: ${writtenName}, ${writtenTable}. Write the one meant`,
+      );
+    }
+    if (record) return record;
+    if (table) return table;
+    if (holder) fail("#NAME?", `${holder.name} has no name ${node.name}`);
+    fail("#NAME?", `There is no table or script named ${node.holder}`);
+  }
+
   /** The name a formula on a page uses, or `undefined` when the use is an error. */
-  private nameUsed(use: NameUse, pageId: string | undefined): NameRecord | undefined {
+  private nameUsed(
+    use: NameUse,
+    pageId: string | undefined,
+  ): NameRecord | TableDefinition | undefined {
     try {
       return "holder" in use
-        ? this.qualifiedName({ type: "qualified", ...use }, pageId)
-        : this.bareName(use.name);
+        ? this.qualifiedMeaning({ type: "qualified", ...use }, pageId)
+        : this.bareMeaning(use.name);
     } catch (cause) {
       if (cause instanceof Failure) return undefined;
       throw cause;
@@ -780,10 +825,14 @@ export class Workbook {
   private scope(pageId: string | undefined): NameScope {
     return {
       bare: (word) => {
-        const record = this.bareName(word);
-        return record && this.nameValue(record);
+        const meaning = this.bareMeaning(word);
+        if (!meaning) return undefined;
+        return "holder" in meaning ? this.nameValue(meaning) : this.tableValue(meaning);
       },
-      qualified: (node) => this.nameValue(this.qualifiedName(node, pageId)),
+      qualified: (node) => {
+        const meaning = this.qualifiedMeaning(node, pageId);
+        return "holder" in meaning ? this.nameValue(meaning) : this.tableValue(meaning);
+      },
     };
   }
 
@@ -878,6 +927,29 @@ export class Workbook {
     return { rows: table?.rowCount ?? rows, cols: table?.colCount ?? cols };
   }
 
+  /** A bare table name returns all its stored cells, with schema labels for data tables. */
+  private tableValue(table: TableDefinition): Evaluated {
+    const { rows: height, cols: width } = this.extent(table.id);
+    const rows = Array.from({ length: height }, (_, row) =>
+      Array.from({ length: width }, (_, col) => this.current({ tableId: table.id, row, col })),
+    );
+    return {
+      kind: "range",
+      rows,
+      ...(table.columns ? { columnNames: table.columns.map((column) => column.name) } : {}),
+    };
+  }
+
+  /** A dependency range that includes every current or future cell of a table. */
+  private tableRange(tableId: string): CellRange {
+    return { tableId, startRow: 0, endRow: Infinity, startCol: 0, endCol: Infinity };
+  }
+
+  private precedentsOf(meaning: NameRecord | TableDefinition | undefined): CellRange[] {
+    if (!meaning) return [];
+    return "holder" in meaning ? meaning.precedents : [this.tableRange(meaning.id)];
+  }
+
   private context(origin: CellId): EvaluationContext {
     return {
       origin,
@@ -885,6 +957,7 @@ export class Workbook {
       resolve: (reference) => this.resolve(reference, origin),
       read: (cell) => this.current(cell),
       extent: (tableId) => this.extent(tableId),
+      columnNames: (tableId) => this.tables.table(tableId)?.columns?.map((column) => column.name),
       now: this.now,
       document: this.scope(this.tables.table(origin.tableId)?.pageId),
     };
@@ -899,6 +972,7 @@ export class Workbook {
       resolve: (reference) => this.rangeOf(reference, this.tables.findFromPage(reference, pageId)),
       read: (cell) => this.current(cell),
       extent: (tableId) => this.extent(tableId),
+      columnNames: (tableId) => this.tables.table(tableId)?.columns?.map((column) => column.name),
       now: this.now,
       document: this.scope(pageId),
     };

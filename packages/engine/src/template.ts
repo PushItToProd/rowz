@@ -1,4 +1,4 @@
-import { rewriteReferences, type Replace } from "./rewrite";
+import { rewriteBareNames, rewriteReferences, type Replace } from "./rewrite";
 import {
   error,
   formatValue,
@@ -53,6 +53,10 @@ export type TemplateBlock =
 interface Span {
   from: number;
   to: number;
+}
+
+interface FormulaSpan extends Span {
+  bound: ReadonlySet<string>;
 }
 
 interface Tag extends Span {
@@ -193,15 +197,51 @@ function parseStatement(source: string, tag: Tag): Statement {
   throw new TemplateSyntaxError(`{% ${word} %} is not a tag this view understands`, line);
 }
 
-/** Where each formula expression sits in a template, for rewriting references in place. */
-function expressionSpans(source: string): Span[] {
-  return findTags(source).flatMap((tag): Span[] => {
-    if (tag.kind === "comment") return [];
-    if (tag.kind === "output")
-      return [{ from: tag.innerFrom, to: tag.innerFrom + tag.inner.length }];
+/** Where each formula expression sits, with the template variables bound at its point. */
+function expressionSpans(source: string): FormulaSpan[] {
+  const spans: FormulaSpan[] = [];
+  let bound = new Set<string>();
+  const open: { type: "for" | "if"; outer: Set<string> }[] = [];
+  for (const tag of findTags(source)) {
+    if (tag.kind === "comment") continue;
+    if (tag.kind === "output") {
+      spans.push({
+        from: tag.innerFrom,
+        to: tag.innerFrom + tag.inner.length,
+        bound: new Set(bound),
+      });
+      continue;
+    }
     const statement = parseStatement(source, tag);
-    return "expression" in statement ? [statement.expression] : [];
-  });
+    if ("expression" in statement) {
+      spans.push({ ...statement.expression, bound: new Set(bound) });
+    }
+    switch (statement.type) {
+      case "let":
+        bound.add(statement.name.toLowerCase());
+        break;
+      case "for":
+        open.push({ type: "for", outer: bound });
+        bound = new Set(bound);
+        for (const name of statement.names) bound.add(name.toLowerCase());
+        break;
+      case "if":
+        open.push({ type: "if", outer: bound });
+        bound = new Set(bound);
+        break;
+      case "else": {
+        const block = open.at(-1);
+        if (block?.type === "if") bound = new Set(block.outer);
+        break;
+      }
+      case "end": {
+        const block = open.pop();
+        if (block) bound = new Set(block.outer);
+        break;
+      }
+    }
+  }
+  return spans;
 }
 
 /**
@@ -404,8 +444,12 @@ export function renderTemplate(
  * Rewrites the references in every expression of a template and leaves the
  * rest of the text alone. A template that does not parse is returned unchanged.
  */
-export function rewriteTemplate(source: string, replace: Replace): string {
-  let spans: Span[];
+export function rewriteTemplate(
+  source: string,
+  replace: Replace,
+  replaceBare?: (name: string) => string | undefined,
+): string {
+  let spans: FormulaSpan[];
   try {
     spans = expressionSpans(source);
   } catch (cause) {
@@ -414,8 +458,9 @@ export function rewriteTemplate(source: string, replace: Replace): string {
   }
   let text = source;
   // Last to first, so earlier offsets stay valid while later text changes length.
-  for (const { from, to } of spans.toReversed()) {
-    const rewritten = rewriteReferences(`=${text.slice(from, to)}`, replace).slice(1);
+  for (const { from, to, bound } of spans.toReversed()) {
+    let rewritten = rewriteReferences(`=${text.slice(from, to)}`, replace).slice(1);
+    if (replaceBare) rewritten = rewriteBareNames(rewritten, replaceBare, bound);
     text = text.slice(0, from) + rewritten + text.slice(to);
   }
   return text;

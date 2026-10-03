@@ -34,7 +34,6 @@ The aim is to do what a traditional spreadsheet does, and do it better. I build 
 - **Layout:** merged cells, borders, resizing rows and columns, wrapping text in a cell, hiding rows and columns, and freezing header rows.
 - **Working with data:** sorting and filtering a table in place, pivot tables (`QUERY` has a `pivot` clause), find and replace, conditional formats, and validation of what a cell accepts.
 - **Functions:** coverage follows what I use. Less common financial, statistical, and scientific functions are missing or lightly tested. There are no regular expressions, no random numbers, and no `INDIRECT` or `OFFSET`.
-- **Names:** a range, value, or function cannot be given a name for the whole document.
 - **Charts:** four kinds, with no axis titles, colors, or stacking.
 - **Files:** rowz does not open or save Excel files. It has no layout for printing.
 - **Dates:** there are no time zones, and numbers and dates are written one way whatever the reader's locale.
@@ -85,6 +84,8 @@ A table is a grid of cells with its own column letters and row numbers.
 
 A table can have named columns, which makes it a data table. `[Price]` is the cell of that column in the formula's own row, and `Sales[Price]` is the whole column of the table Sales. A column can be typed (text, number, date, checkbox) or be a formula column, which computes one formula in every stored row. A data table holds the rows added to it, including rows whose values were later cleared, and can have no rows. An empty line below its last row adds a row when you type into it. Naming columns removes trailing empty rows.
 
+A unique table name by itself refers to all of its rows. `QUERY(Sales, "select Category, sum(Amount) group by Category")` uses a data table's column names as query headers. It also reads those names from ranges such as `Sales!A:C`. A plain table can also hold named values, functions, and ranges.
+
 The toolbar under the formula bar gives the selected cells bold, italic, an alignment, a number format, a text color, or a fill color. Formats are stored per table as rules over ranges, so a whole column is one rule.
 
 Each table also exports to CSV (the values shown) and imports from CSV.
@@ -113,6 +114,20 @@ We sold **{{ total }}** in all.
 <img src="docs/screenshots/text-view.png" alt="A text view being edited, with its source above the result" width="407">
 
 `{{ }}` shows one value in the sentence, a range as a table, and the result of `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, or `SCATTER_CHART` as a chart. A formula in a chart or text view is written on a page and not in a table, so it names the table of every cell it reads.
+
+### Names and scripts
+
+A plain table or script can hold named formulas. A script is a block whose lines define names, functions, or checks:
+
+```text
+Total = SUM(Sales[Amount])
+WithTax(amount) = amount * (1 + TaxRate)
+ASSERT(Total >= 0, "Sales cannot be negative")
+```
+
+Formulas anywhere in the document can use `Total` or `Summary!Total`, and call `WithTax(A2)`. A table name by itself, such as `Sales`, returns the table's rows; `'Page 2'!Sales` returns a table on another page. A data table's rows carry their column names, so `QUERY(Sales, "select Category, sum(Amount) group by Category")` can use those names and returns them as headings.
+
+A bare name must be unique across the document. If two names, two tables, or a name and table share a spelling, the bare word shows `#NAME?`. Give them distinct spellings or qualify each one by its holder. For example, if the February and March scripts each define `Total`, use `February!Total` and `March!Total`. A holder on another page can be named with three parts, as in `'Page 2'!Summary!Total`.
 
 ## Formulas
 

@@ -1,4 +1,4 @@
-import { referenceEdits, type Replace } from "./rewrite";
+import { bareNameEdits, referenceEdits, type Replace } from "./rewrite";
 import type { NameDefinition } from "./structure";
 
 /**
@@ -155,11 +155,28 @@ export function scriptStatements(
  * Rewrites the references in each statement of a script and leaves every
  * other character, comments included, as the user typed it.
  */
-export function rewriteScript(source: string, replace: Replace): string {
+export function rewriteScript(
+  source: string,
+  replace: Replace,
+  replaceBare?: (name: string) => string | undefined,
+): string {
   const edits = parseScript(source).flatMap((statement) =>
     statement.kind === "error"
       ? []
-      : referenceEdits(statement.formula, replace).map((edit) => ({
+      : [
+          ...referenceEdits(statement.formula, replace),
+          ...(replaceBare
+            ? bareNameEdits(
+                statement.formula,
+                replaceBare,
+                new Set(
+                  statement.kind === "name"
+                    ? (statement.params ?? []).map((name) => name.toLowerCase())
+                    : [],
+                ),
+              )
+            : []),
+        ].map((edit) => ({
           ...edit,
           from: edit.from + statement.from,
           to: edit.to + statement.from,
