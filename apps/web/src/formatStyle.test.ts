@@ -20,6 +20,30 @@ describe("textStyle and cellStyle", () => {
   });
 });
 
+describe("cellStyle for a color scale", () => {
+  it("shades from the low color to the high color by where the cell sits", () => {
+    const shade = (at: number) => ({ shade: { low: "red" as const, high: "green" as const, at } });
+    expect(cellStyle(shade(0))).toEqual({ background: "rgb(242, 139, 130)" });
+    expect(cellStyle(shade(1))).toEqual({ background: "rgb(129, 201, 149)" });
+    expect(cellStyle(shade(0.5))).toEqual({ background: "rgb(186, 170, 140)" });
+  });
+
+  it("starts from white when there is no low color, and from the cell's own fill when it has one", () => {
+    expect(cellStyle({ shade: { low: null, high: "green", at: 0 } })).toEqual({
+      background: "rgb(255, 255, 255)",
+    });
+    expect(cellStyle({ fill: "gray", shade: { low: null, high: "green", at: 0 } })).toEqual({
+      background: "rgb(233, 236, 241)",
+    });
+  });
+
+  it("keeps a position outside the scale on its edge", () => {
+    expect(cellStyle({ shade: { low: "red", high: "green", at: 7 } })).toEqual({
+      background: "rgb(129, 201, 149)",
+    });
+  });
+});
+
 describe("formattedText", () => {
   const date = { kind: "date" as const, ms: Date.UTC(2026, 8, 30) };
 

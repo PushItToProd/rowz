@@ -224,7 +224,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] (Claude) number formatting for cells (text views and formulas can use `TEXT(value, format)`)
 - [ ] more formatting: 
   - [ ] **P8** borders
-  - [ ] **P2** basic conditional formatting
+  - [x] basic conditional formatting (`plans/data-tables.md`, stage 3)
   - [ ] **P8** carrying formats through copy, fill, and paste
   - [ ] (Claude) wrap long text within a cell
 

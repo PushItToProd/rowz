@@ -796,6 +796,33 @@ test("a dropdown column offers a list of choices, and a choice is picked", async
   await expect(cell(page, "A1").getByRole("combobox")).toHaveValue("Sprint");
 });
 
+test("a conditional format fills the cells that meet a criterion and follows their values", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "50");
+  await enter(page, "A2", "150");
+  await page.getByRole("button", { name: "Conditional formats" }).click();
+  await cell(page, "A1").click();
+  await cell(page, "A2").click({ modifiers: ["Shift"] });
+  await page.getByLabel("Criterion").fill(">100");
+  await page.getByLabel("Rule fill").selectOption("red");
+  await page.getByRole("button", { name: "Add rule" }).click();
+
+  // The fill is the color of the rule, and only the cell that meets it has it.
+  await expect(cell(page, "A2")).toHaveCSS("background-color", "rgb(253, 226, 223)");
+  await expect(cell(page, "A1")).not.toHaveCSS("background-color", "rgb(253, 226, 223)");
+
+  // Changing the value moves the fill, and the rule survives a reload.
+  await enter(page, "A1", "500");
+  await expect(cell(page, "A1")).toHaveCSS("background-color", "rgb(253, 226, 223)");
+  await enter(page, "A2", "20");
+  await expect(cell(page, "A2")).not.toHaveCSS("background-color", "rgb(253, 226, 223)");
+  await enter(page, "A2", "150");
+  await reload(page);
+  await expect(cell(page, "A2")).toHaveCSS("background-color", "rgb(253, 226, 223)");
+});
+
 test("cells are formatted from the toolbar, and the formats follow their cells", async ({
   page,
 }) => {

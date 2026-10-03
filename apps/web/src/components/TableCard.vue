@@ -8,6 +8,7 @@ import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import ContextMenu from "./ContextMenu.vue";
 import ChoicesPanel from "./ChoicesPanel.vue";
+import ConditionalFormatsPanel from "./ConditionalFormatsPanel.vue";
 import EditableName from "./EditableName.vue";
 import GridView from "./GridView.vue";
 import NamesPanel from "./NamesPanel.vue";
@@ -136,6 +137,9 @@ function resize({ rowCount, colCount }: { rowCount: number; colCount: number }):
   if (rowCount === props.table.rowCount && colCount === props.table.colCount) return;
   void store.updateTable(id, { rowCount, colCount });
 }
+
+/** Whether the panel of the table's conditional formats is open. */
+const conditionalOpen = ref(false);
 
 /** Whether the panel of the table's names is open, and the formula a new name starts with. */
 const namesOpen = ref(false);
@@ -367,6 +371,15 @@ const menuLabel = computed(() => {
         >
           Names{{ table.names.length > 0 ? ` (${table.names.length})` : "" }}
         </button>
+        <button
+          type="button"
+          :aria-expanded="conditionalOpen"
+          @click="conditionalOpen = !conditionalOpen"
+        >
+          Conditional formats{{
+            table.conditionalFormats.length > 0 ? ` (${table.conditionalFormats.length})` : ""
+          }}
+        </button>
         <button v-if="table.columns" type="button" @click="dropColumns">Remove column names</button>
         <button v-else type="button" aria-haspopup="menu" @click="openNaming">Name columns</button>
         <label class="file-button">
@@ -387,6 +400,12 @@ const menuLabel = computed(() => {
       :table="table"
       :suggestion="nameSuggestion"
       @close="namesOpen = false"
+    />
+
+    <ConditionalFormatsPanel
+      v-if="conditionalOpen"
+      :table="table"
+      @close="conditionalOpen = false"
     />
 
     <!-- Always present, so selecting a cell does not push the grid down. -->

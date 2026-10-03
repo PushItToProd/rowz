@@ -585,3 +585,17 @@ Together they make a form: inputs, a Save button that appends to a log table and
 **Why.** Checking a cell against another column would make every choice cell depend on that column, and a fixed list should behave the same way. A stale value should not become an error that hides what the person typed.
 
 **To change.** `choicesOf` in the workbook store and `updateColumn` in `apps/server/src/repo/spreadsheets.ts`.
+
+## 2026-10-02: Conditional formats
+
+**Decision.**
+
+- Conditional rules are stored apart from the plain format rules and laid over them when a cell is shown. A rule's format wins over a plain one, and a later rule wins over an earlier one.
+- A criterion rule tests the cell's own value only. A cell that is an error, a button, or another non-value is tested as empty.
+- A color scale covers the numbers in its range and ignores text and empty cells. When every number is equal the cells get the middle shade. With no low color the scale starts from the cell's own fill, or white.
+- A scale's shade is computed and never stored. The request schema has no field for it.
+- A table has at most 50 conditional rules. The criterion schema limit of 255 characters is the length the wildcard matcher takes, so a criterion that passes the schema can always be built. The server still builds each criterion on save and refuses one that fails.
+- A rule over selected cells follows the formatting rule for sorted and filtered tables: one row or whole columns.
+- Conditional rules follow inserted and deleted rows and columns as plain format rules do.
+
+**To change.** `packages/engine/src/conditional.ts`, `setConditionalFormats` in `apps/server/src/repo/spreadsheets.ts`, and `formatOf` in the workbook store.

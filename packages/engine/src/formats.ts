@@ -25,10 +25,19 @@ export interface CellFormat {
   fill?: FormatColor;
   /** A format in the notation `TEXT` takes, applied to numbers and dates: `#,##0.00`, `mmm d, yyyy`. */
   numberFormat?: string;
+  /**
+   * A fill that shades with the cell's value, laid by a color scale. `at` runs
+   * from 0, the smallest number the scale covers, to 1, the largest. Clients
+   * cannot write it: a scale is a conditional rule, and the format a rule
+   * gives is computed from the cell.
+   */
+  shade?: { low: FormatColor | null; high: FormatColor; at: number };
 }
 
 /** A change to formats: a value to set, or `null` to go back to the default. */
-export type FormatPatch = { [Key in keyof CellFormat]?: CellFormat[Key] | null };
+export type FormatPatch = {
+  [Key in Exclude<keyof CellFormat, "shade">]?: CellFormat[Key] | null;
+};
 
 /**
  * A format given to a range of cells. A table's formats are a list of rules,
@@ -155,10 +164,10 @@ export function addFormatRule(rules: readonly FormatRule[], rule: FormatRule): F
  * inserted inside it, shrinks when one inside it is deleted, and is dropped
  * when every row or column it covered is deleted.
  */
-export function formatRulesAfterEdit(
-  rules: readonly FormatRule[],
+export function formatRulesAfterEdit<Rule extends RuleArea>(
+  rules: readonly Rule[],
   edit: Pick<StructuralEdit, "axis" | "kind" | "index" | "count">,
-): FormatRule[] {
+): Rule[] {
   const [startKey, endKey] =
     edit.axis === "row" ? (["startRow", "endRow"] as const) : (["startCol", "endCol"] as const);
   return rules.flatMap((rule) => {

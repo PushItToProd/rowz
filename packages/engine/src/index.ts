@@ -42,6 +42,14 @@ export {
   type FunctionCategory,
   type FunctionDoc,
 } from "./docs";
+export {
+  conditionalFormatAt,
+  criterionTest,
+  prepareConditionals,
+  scaleBounds,
+  type PreparedConditionals,
+  type ScaleBounds,
+} from "./conditional";
 export { displayRows, type SortColumn, type SortKey, type TableDisplay } from "./display";
 export { chartData, type ChartData, type ChartSeries } from "./charts";
 export { dateFromParts, dateParts, formatDate, isDate, parseDate, type DateValue } from "./dates";

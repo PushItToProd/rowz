@@ -771,6 +771,57 @@ select.cell-control--dropdown {
   padding: 2px 8px;
 }
 
+/* The conditional formats of a table. */
+.conditional-panel {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.conditional-panel__rules {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.conditional-panel__rules li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.conditional-panel__area {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.conditional-panel__empty {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+
+.conditional-panel__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.conditional-panel__add p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.conditional-panel__add fieldset {
+  display: flex;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 /* The choices of a dropdown column. */
 .choices-panel {
   display: flex;

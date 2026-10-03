@@ -7,6 +7,7 @@ import {
   makeColumnsBody,
   moveBlockBody,
   setCellsBody,
+  setConditionalFormatsBody,
   setTableDisplayBody,
   setTableNamesBody,
   structuralEditBody,
@@ -69,6 +70,19 @@ export function tableRoutes(dependencies: ActionDependencies) {
             await c.var.repository.formatCells(c.req.valid("param").tableId, range, format, reset),
           );
         },
+      )
+      // Replaces the formats cells get when their value meets a condition.
+      .put(
+        "/:tableId/conditional-formats",
+        zValidator("param", tableParam, onInvalid),
+        zValidator("json", setConditionalFormatsBody, onInvalid),
+        async (c) =>
+          c.json(
+            await c.var.repository.setConditionalFormats(
+              c.req.valid("param").tableId,
+              c.req.valid("json").rules,
+            ),
+          ),
       )
       // Replaces how a data table's rows are sorted and filtered for display.
       .put(

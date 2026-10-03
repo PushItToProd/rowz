@@ -4,7 +4,7 @@ import { sizedTable } from "../testing";
 import { identifiedAt } from "../testing";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ColumnDefinition } from "@spreadsheet-app/engine";
+import type { ColumnDefinition, ConditionalRule, FormatRule } from "@spreadsheet-app/engine";
 import { computed } from "vue";
 import { api, type Snapshot, type ViewRecord } from "../api/client";
 import { at, clickResult, notifyJournaled, snapshotWith, TABLE, type MockedApi } from "../testing";
@@ -2211,5 +2211,98 @@ describe("dropdown columns", () => {
       choicesFrom: { tableId: "gone", colId: "d1" },
     });
     expect(store.choicesOf("t1", 0)).toEqual([]);
+  });
+});
+
+describe("conditional formats", () => {
+  const rules: ConditionalRule[] = [
+    {
+      startRow: 0,
+      endRow: null,
+      startCol: 0,
+      endCol: 0,
+      kind: "criterion",
+      criterion: ">3",
+      format: { color: "red", bold: true },
+    },
+    { startRow: 0, endRow: 3, startCol: 1, endCol: 1, kind: "scale", low: null, high: "blue" },
+  ];
+  const FORMATS: FormatRule[] = [
+    { startRow: 0, endRow: null, startCol: 0, endCol: 0, format: { fill: "yellow", bold: true } },
+  ];
+
+  async function openRules(inputs: Record<string, string>) {
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith(inputs),
+        tables: [{ ...TABLE, formats: FORMATS, conditionalFormats: rules }],
+      }),
+    );
+    const store = useWorkbookStore();
+    await store.load("s1");
+    return store;
+  }
+
+  it("lays the conditional format over the plain one where the value meets the criterion", async () => {
+    const store = await openRules({ A1: "5", A2: "1", B1: "10", B2: "30" });
+    expect(store.formatOf(at("A1"))).toEqual({ fill: "yellow", bold: true, color: "red" });
+    expect(store.formatOf(at("A2"))).toEqual({ fill: "yellow", bold: true });
+  });
+
+  it("shades a scale by the numbers it covers", async () => {
+    const store = await openRules({ B1: "10", B2: "30", B3: "20" });
+    expect(store.formatOf(at("B1")).shade).toEqual({ low: null, high: "blue", at: 0 });
+    expect(store.formatOf(at("B2")).shade).toEqual({ low: null, high: "blue", at: 1 });
+    expect(store.formatOf(at("B3")).shade).toEqual({ low: null, high: "blue", at: 0.5 });
+    expect(store.formatOf(at("C1"))).toEqual({});
+  });
+
+  it("follows a cell as it changes, including the bounds of a scale", async () => {
+    const store = await openRules({ A1: "1", B1: "10", B2: "30" });
+    expect(store.formatOf(at("A1")).color).toBeUndefined();
+    await store.setCell(at("A1"), "9");
+    expect(store.formatOf(at("A1")).color).toBe("red");
+    await store.setCell(at("B2"), "50");
+    expect(store.formatOf(at("B1")).shade?.at).toBe(0);
+    expect(store.formatOf(at("B2")).shade?.at).toBe(1);
+  });
+
+  it("adds a rule over the selection, after the rules the table has, by ids", async () => {
+    const store = await openRules({});
+    server.setConditionalFormats.mockResolvedValue(changeWith());
+    store.selection = at("C2");
+    store.extendSelection(at("C3"));
+    await store.addConditionalFormat({
+      kind: "criterion",
+      criterion: "Done",
+      format: { fill: "green" },
+    });
+    expect(server.setConditionalFormats).toHaveBeenCalledExactlyOnceWith("t1", [
+      {
+        range: { startRowId: "r0", endRowId: null, startColId: "c1", endColId: "c1" },
+        kind: "criterion",
+        criterion: ">3",
+        format: { color: "red", bold: true },
+      },
+      {
+        range: { startRowId: "r0", endRowId: "r3", startColId: "c2", endColId: "c2" },
+        kind: "scale",
+        low: null,
+        high: "blue",
+      },
+      {
+        range: { startRowId: "r1", endRowId: "r2", startColId: "c3", endColId: "c3" },
+        kind: "criterion",
+        criterion: "Done",
+        format: { fill: "green" },
+      },
+    ]);
+  });
+
+  it("removes a rule by its place in the list", async () => {
+    const store = await openRules({});
+    server.setConditionalFormats.mockResolvedValue(changeWith());
+    await store.removeConditionalFormat("t1", 0);
+    expect(server.setConditionalFormats.mock.calls[0]?.[1]).toMatchObject([{ kind: "scale" }]);
   });
 });

@@ -1,0 +1,134 @@
+import { wireSnapshot, changeWith } from "../testing";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ConditionalRule } from "@spreadsheet-app/engine";
+import { api } from "../api/client";
+import { useWorkbookStore } from "../stores/workbook";
+import { at, snapshotWith, TABLE, type MockedApi } from "../testing";
+import ConditionalFormatsPanel from "./ConditionalFormatsPanel.vue";
+
+vi.mock("../api/client", async () => {
+  const testing = await import("../testing");
+  return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
+});
+const server = api as unknown as MockedApi;
+
+let wrapper: VueWrapper;
+
+const RULES: ConditionalRule[] = [
+  {
+    startRow: 0,
+    endRow: null,
+    startCol: 1,
+    endCol: 1,
+    kind: "criterion",
+    criterion: ">100",
+    format: { fill: "red", bold: true },
+  },
+  { startRow: 0, endRow: 3, startCol: 0, endCol: 0, kind: "scale", low: null, high: "green" },
+];
+
+async function render(
+  conditionalFormats: ConditionalRule[] = [],
+  role = "owner",
+): Promise<ReturnType<typeof useWorkbookStore>> {
+  const table = { ...TABLE, conditionalFormats };
+  server.getSnapshot.mockResolvedValue(
+    wireSnapshot({ ...snapshotWith({}, role), tables: [table] }),
+  );
+  const store = useWorkbookStore();
+  await store.load("s1");
+  wrapper = mount(ConditionalFormatsPanel, { props: { table }, attachTo: document.body });
+  server.setConditionalFormats.mockResolvedValue(changeWith());
+  return store;
+}
+
+beforeEach(() => {
+  setActivePinia(createPinia());
+  vi.clearAllMocks();
+});
+afterEach(() => {
+  wrapper.unmount();
+});
+
+describe("ConditionalFormatsPanel", () => {
+  it("lists the rules with the cells each covers and what it does", async () => {
+    await render(RULES);
+    const items = wrapper.findAll(".conditional-panel__rules li").map((item) => item.text());
+    expect(items[0]).toContain("B1:B");
+    expect(items[0]).toContain("cells matching >100: fill red, bold");
+    expect(items[1]).toContain("A1:A4");
+    expect(items[1]).toContain("color scale, no color to green");
+  });
+
+  it("says so when there are none, and asks for a selection before a rule can be added", async () => {
+    const store = await render();
+    expect(wrapper.text()).toContain("no conditional formats");
+    const add = wrapper.get<HTMLButtonElement>('button[type="submit"]');
+    expect(add.element.disabled).toBe(true);
+    store.selection = at("B2");
+    store.extendSelection(at("B3"));
+    await flushPromises();
+    expect(wrapper.text()).toContain("Applies to B2:B3");
+    expect(add.element.disabled).toBe(false);
+  });
+
+  it("adds a criterion rule over the selection with the chosen style", async () => {
+    const store = await render();
+    store.selection = at("B2");
+    await flushPromises();
+    await wrapper.get('[aria-label="Criterion"]').setValue("<>done");
+    await wrapper.get('[aria-label="Rule fill"]').setValue("yellow");
+    await wrapper.get('[aria-label="Rule text color"]').setValue("blue");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(server.setConditionalFormats).toHaveBeenCalledExactlyOnceWith("t1", [
+      {
+        range: { startRowId: "r1", endRowId: "r1", startColId: "c2", endColId: "c2" },
+        kind: "criterion",
+        criterion: "<>done",
+        format: { fill: "yellow", color: "blue" },
+      },
+    ]);
+  });
+
+  it("adds a color scale with no low color", async () => {
+    const store = await render();
+    store.selection = at("A1");
+    store.extendSelection(at("A4"));
+    await flushPromises();
+    await wrapper.get('input[value="scale"]').setValue(true);
+    await wrapper.get('[aria-label="Scale high color"]').setValue("purple");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(server.setConditionalFormats.mock.calls[0]?.[1]).toEqual([
+      {
+        range: { startRowId: "r0", endRowId: null, startColId: "c1", endColId: "c1" },
+        kind: "scale",
+        low: null,
+        high: "purple",
+      },
+    ]);
+  });
+
+  it("refuses a criterion rule that formats nothing", async () => {
+    const store = await render();
+    store.selection = at("B2");
+    await flushPromises();
+    await wrapper.get('[aria-label="Rule fill"]').setValue("");
+    expect(wrapper.get<HTMLButtonElement>('button[type="submit"]').element.disabled).toBe(true);
+  });
+
+  it("removes a rule, and gives a viewer the list without the controls", async () => {
+    await render(RULES);
+    await wrapper.get('button[aria-label="Remove the rule for B1:B"]').trigger("click");
+    await flushPromises();
+    expect(server.setConditionalFormats.mock.calls[0]?.[1]).toMatchObject([{ kind: "scale" }]);
+    wrapper.unmount();
+    setActivePinia(createPinia());
+    await render(RULES, "viewer");
+    expect(wrapper.find("form").exists()).toBe(false);
+    expect(wrapper.find(".conditional-panel__rules button").exists()).toBe(false);
+  });
+});

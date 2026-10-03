@@ -1,6 +1,9 @@
 import {
   createWorkbook,
+  conditionalFormatAt,
   displayRows,
+  prepareConditionals,
+  type PreparedConditionals,
   formatAddress,
   formatDate,
   formatAt,
@@ -16,7 +19,9 @@ import {
   type ChartType,
   type ColumnDefinition,
   type ColumnType,
+  type ConditionalRule,
   type Evaluated,
+  type FormatColor,
   type FormatPatch,
   type Scalar,
   type SortKey,
@@ -29,6 +34,8 @@ import {
   type IdentifiedCell,
   type IdentityCellInput,
   type IdentifiedStructuralEditBody,
+  type IdentityConditionalRule,
+  type IdentityFormatRange,
   type CellInput,
   type SpreadsheetFile,
   type StructuralEditBody,
@@ -58,6 +65,11 @@ import {
   type GridRange,
   type StoredRow,
 } from "../formula/fill";
+
+/** What a conditional format does where it applies, before a range is chosen for it. */
+export type ConditionalAction =
+  | { kind: "criterion"; criterion: string; format: FormatPatch }
+  | { kind: "scale"; low: FormatColor | null; high: FormatColor };
 
 export interface Notice {
   kind: "success" | "error";
@@ -689,10 +701,35 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return engine.value.getInput(id);
   }
 
-  /** How a cell is shown: the formats its table gives it. */
+  /** The conditional rules of the tables that have any, with what applying them needs, for each state of the engine. */
+  const preparedConditionals = computed(() => {
+    const prepared = new Map<string, PreparedConditionals>();
+    const current = engine.value;
+    for (const table of tables.value) {
+      if (table.conditionalFormats.length === 0) continue;
+      prepared.set(
+        table.id,
+        prepareConditionals(
+          table.conditionalFormats,
+          (row, col) => current.getValue({ tableId: table.id, row, col }),
+          { rows: table.rowCount, cols: table.colCount },
+        ),
+      );
+    }
+    return prepared;
+  });
+
+  /** How a cell is shown: the formats its table gives it, with its conditional formats laid over them. */
   function formatOf(id: CellId): CellFormat {
     const rules = tables.value.find((table) => table.id === id.tableId)?.formats ?? [];
-    return rules.length === 0 ? NO_FORMAT : formatAt(rules, id.row, id.col);
+    const plain = rules.length === 0 ? NO_FORMAT : formatAt(rules, id.row, id.col);
+    const prepared = preparedConditionals.value.get(id.tableId);
+    if (!prepared) return plain;
+    const conditional = conditionalFormatAt(prepared, id.row, id.col, engine.value.getValue(id));
+    if (Object.keys(conditional).length === 0) return plain;
+    const merged: Record<string, unknown> = { ...plain };
+    for (const [key, value] of Object.entries(conditional)) merged[key] = value;
+    return merged;
   }
 
   /**
@@ -701,38 +738,109 @@ export const useWorkbookStore = defineStore("workbook", () => {
    * columns added later are shown the same way.
    */
   function formatSelection(patch: FormatPatch, reset = false): Promise<boolean> {
+    const target = selectedRule("Format");
+    if (!target) return Promise.resolve(false);
+    return attempt(async () => {
+      await receiveChange(await api.formatCells(target.tableId, target.range, patch, reset));
+    }, "The format could not be changed");
+  }
+
+  /**
+   * The range a rule over the selected cells covers, named by id. A selection
+   * that reaches the last row or column is taken to mean the rest of the
+   * table, so rows and columns added later are covered the same way.
+   *
+   * A rule covers a run of stored rows. The rows of a sorted or filtered table
+   * are not a run, unless the rule is one row or the whole column, so other
+   * selections are refused with a notice naming the `action`.
+   */
+  function selectedRule(
+    action: string,
+  ): { tableId: string; range: IdentityFormatRange } | undefined {
     const selected = selectedRange.value;
     const table = tables.value.find((candidate) => candidate.id === selection.value?.tableId);
-    if (!selected || !table || !canEdit.value) return Promise.resolve(false);
+    if (!selected || !table || !canEdit.value) return undefined;
     const view = rowView(table.id);
     const shown = view.rows.length;
     // With rows hidden, every row shown is not every row of the column.
     const wholeRows = selected.startRow === 0 && selected.endRow >= shown - 1 && view.hidden === 0;
     const wholeCols = selected.startCol === 0 && selected.endCol >= table.colCount - 1;
-    // A format rule covers a run of stored rows. The rows of a sorted or filtered
-    // table are not a run, unless the rule is one row or the whole column.
     if (view.reordered && !wholeRows && selected.startRow !== selected.endRow) {
       notice.value = {
         kind: "error",
-        text: "Format one row or whole columns while the table is sorted or filtered",
+        text: `${action} one row or whole columns while the table is sorted or filtered`,
       };
-      return Promise.resolve(false);
+      return undefined;
     }
-    // Whole columns are every stored row, whatever order they are shown in.
     const startRow = wholeRows ? 0 : view.storedRow(selected.startRow);
     const endRow = view.storedRow(selected.endRow);
     const start = identityOf({ tableId: table.id, row: startRow, col: selected.startCol });
     const end = identityOf({ tableId: table.id, row: endRow, col: selected.endCol });
-    if (!start || !end) return Promise.resolve(false);
-    const range = {
-      startRowId: start.rowId,
-      endRowId: wholeRows ? null : end.rowId,
-      startColId: start.colId,
-      endColId: wholeCols ? null : end.colId,
+    if (!start || !end) return undefined;
+    return {
+      tableId: table.id,
+      range: {
+        startRowId: start.rowId,
+        endRowId: wholeRows ? null : end.rowId,
+        startColId: start.colId,
+        endColId: wholeCols ? null : end.colId,
+      },
     };
+  }
+
+  /** The conditional formats a table has, as positions. */
+  function conditionalFormatsOf(tableId: string): readonly ConditionalRule[] {
+    return tables.value.find((table) => table.id === tableId)?.conditionalFormats ?? [];
+  }
+
+  /** The rules of a table as a request names them, by the ids at the corners of each range. */
+  function identityRules(tableId: string): IdentityConditionalRule[] {
+    const layout = layouts.value.get(tableId);
+    if (!layout) return [];
+    return conditionalFormatsOf(tableId).flatMap((rule) => {
+      const rowId = (row: number | null): string | null | undefined =>
+        row === null ? null : layout.rowIds[row];
+      const colId = (col: number | null): string | null | undefined =>
+        col === null ? null : layout.colIds[col];
+      const [startRowId, endRowId] = [layout.rowIds[rule.startRow], rowId(rule.endRow)];
+      const [startColId, endColId] = [layout.colIds[rule.startCol], colId(rule.endCol)];
+      if (!startRowId || endRowId === undefined || !startColId || endColId === undefined) return [];
+      const range = { startRowId, endRowId, startColId, endColId };
+      return [
+        rule.kind === "criterion"
+          ? { range, kind: rule.kind, criterion: rule.criterion, format: rule.format }
+          : { range, kind: rule.kind, low: rule.low, high: rule.high },
+      ];
+    });
+  }
+
+  /** Replaces the conditional formats of a table. */
+  function setConditionalFormats(
+    tableId: string,
+    rules: IdentityConditionalRule[],
+  ): Promise<boolean> {
+    if (!canEdit.value) return Promise.resolve(false);
     return attempt(async () => {
-      await receiveChange(await api.formatCells(table.id, range, patch, reset));
-    }, "The format could not be changed");
+      await receiveChange(await api.setConditionalFormats(tableId, rules));
+    }, "The conditional formats could not be saved");
+  }
+
+  /** Adds a conditional format over the selected cells, after the ones the table has. */
+  function addConditionalFormat(action: ConditionalAction): Promise<boolean> {
+    const target = selectedRule("Add a conditional format to");
+    if (!target) return Promise.resolve(false);
+    return setConditionalFormats(target.tableId, [
+      ...identityRules(target.tableId),
+      { range: target.range, ...action },
+    ]);
+  }
+
+  /** Removes one conditional format of a table, by its place in the list. */
+  function removeConditionalFormat(tableId: string, index: number): Promise<boolean> {
+    return setConditionalFormats(
+      tableId,
+      identityRules(tableId).filter((_, position) => position !== index),
+    );
   }
 
   /**
@@ -1602,6 +1710,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     formatSelection,
     setTableDisplay,
     rowView,
+    conditionalFormatsOf,
+    addConditionalFormat,
+    removeConditionalFormat,
     nameColumns,
     dropColumns,
     updateColumn,

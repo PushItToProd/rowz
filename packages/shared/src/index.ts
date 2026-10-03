@@ -23,6 +23,8 @@ export const LIMITS = {
   tableCols: 100,
   /** Names one plain table holds. */
   tableNames: 200,
+  /** Characters in the criterion of a conditional format. */
+  criterionLength: 255,
   /** Characters in a chart's formula or a text view's template. */
   viewSourceLength: 50_000,
   /** Kept versions of one spreadsheet. Older ones are dropped. */
@@ -160,6 +162,54 @@ const formatRule = z.object({
 
 /** More format rules than a person makes by hand. */
 export const MAX_FORMAT_RULES = 500;
+
+/** More conditional rules than a person makes by hand. */
+export const MAX_CONDITIONAL_RULES = 50;
+
+/** A `COUNTIF` criterion is text such as `>100` or `Done`. */
+const criterionText = z.string().max(LIMITS.criterionLength);
+
+/** What a conditional rule does where it applies: a format for cells that meet a criterion, or a color scale. */
+const conditionalAction = [
+  z.object({
+    kind: z.literal("criterion"),
+    criterion: criterionText,
+    format: formatPatch,
+  }),
+  z.object({
+    kind: z.literal("scale"),
+    low: z.enum(FORMAT_COLORS).nullable(),
+    high: z.enum(FORMAT_COLORS),
+  }),
+] as const;
+
+/** A conditional rule as a file holds it, over positions. */
+const conditionalRule = z.discriminatedUnion("kind", [
+  conditionalAction[0].extend({
+    startRow: cellIndex,
+    endRow: cellIndex.nullable(),
+    startCol: cellIndex,
+    endCol: cellIndex.nullable(),
+  }),
+  conditionalAction[1].extend({
+    startRow: cellIndex,
+    endRow: cellIndex.nullable(),
+    startCol: cellIndex,
+    endCol: cellIndex.nullable(),
+  }),
+]);
+
+/** A conditional rule as a request names it: its range is given by the ids at its corners. */
+export const identityConditionalRule = z.discriminatedUnion("kind", [
+  conditionalAction[0].extend({ range: identityFormatRange }),
+  conditionalAction[1].extend({ range: identityFormatRange }),
+]);
+export type IdentityConditionalRule = z.infer<typeof identityConditionalRule>;
+
+/** The conditional rules of a table, all of them: the list replaces the one the table has. */
+export const setConditionalFormatsBody = z.object({
+  rules: z.array(identityConditionalRule).max(MAX_CONDITIONAL_RULES),
+});
 
 /** Turning a plain table into a data table. With `headerRow`, its first row becomes the column names. */
 /** A name a plain table holds, and the formula that gives it its value. */
@@ -399,6 +449,8 @@ const fileTable = z.object({
   names: z.array(tableName).max(LIMITS.tableNames).optional(),
   /** The sort and filter of a data table. Left out when it has neither. */
   display: fileDisplay.optional(),
+  /** Formats cells get when their value meets a condition. Left out when there are none. */
+  conditionalFormats: z.array(conditionalRule).max(MAX_CONDITIONAL_RULES).optional(),
   /** Cells that hold something. Empty cells and the cells of formula columns are left out. */
   cells: z.array(cellInput).max(FILE_LIMITS.cells),
 });
@@ -472,6 +524,7 @@ interface PlacedTable extends Placed {
   display: { sort: readonly { colId: string; descending: boolean }[]; filter?: string | undefined };
   columns: readonly StoredColumn[] | null;
   formats: NonNullable<FileTable["formats"]>;
+  conditionalFormats: NonNullable<FileTable["conditionalFormats"]>;
   names: NonNullable<FileTable["names"]>;
 }
 interface PlacedView extends Placed {
@@ -535,6 +588,9 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
           ...(table.columns ? { columns: table.columns.map(fileColumnOf) } : {}),
           ...(table.formats.length > 0 ? { formats: table.formats } : {}),
           ...(table.names.length > 0 ? { names: table.names } : {}),
+          ...(table.conditionalFormats.length > 0
+            ? { conditionalFormats: table.conditionalFormats }
+            : {}),
           ...fileDisplayOf(table),
           cells: cellsOf(table),
         } satisfies FileBlock,

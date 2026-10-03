@@ -20,6 +20,7 @@ import type {
   IdentifiedCell,
   SpreadsheetFile,
   IdentifiedStructuralEditBody,
+  IdentityConditionalRule,
   IdentityFormatRange,
 } from "@spreadsheet-app/shared";
 import type {
@@ -275,6 +276,15 @@ export const api = {
           sort: display.sort,
           ...(display.filter === undefined ? {} : { filter: display.filter, revision }),
         },
+      }),
+    ),
+
+  /** Replaces the formats cells get when their value meets a condition. */
+  setConditionalFormats: (tableId: string, rules: IdentityConditionalRule[]): Promise<Change> =>
+    body(
+      routes.tables[":tableId"]["conditional-formats"].$put({
+        param: { tableId },
+        json: { rules },
       }),
     ),
 

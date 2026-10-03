@@ -90,6 +90,8 @@ A unique table name by itself refers to all of its rows. `QUERY(Sales, "select C
 
 The toolbar under the formula bar gives the selected cells bold, italic, an alignment, a number format, a text color, or a fill color. Formats are stored per table as rules over ranges, so a whole column is one rule.
 
+Conditional formats give cells a fill, a text color, or bold when their own value meets a `COUNTIF`-style criterion such as `>100`, or shade a range of numbers with a two-color scale. They are stored per table, follow rows and columns as they are inserted and deleted, and are laid over the plain formats.
+
 Each table also exports to CSV (the values shown) and imports from CSV.
 
 ### Charts

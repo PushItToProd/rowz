@@ -414,6 +414,29 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "set a table's conditional formats",
+    async prepare({ id, tableId }) {
+      const read = await readSnapshot(owner, id);
+      const [colId] = read.tables[0]!.colIds;
+      const [rowId] = rowIds(read, tableId);
+      return {
+        method: "PUT",
+        path: `/tables/${tableId}/conditional-formats`,
+        body: {
+          rules: [
+            {
+              range: { startRowId: rowId, endRowId: null, startColId: colId, endColId: colId },
+              kind: "criterion",
+              criterion: ">3",
+              format: { fill: "green" },
+            },
+          ],
+        },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "set a table's names",
     prepare({ tableId }) {
       return {

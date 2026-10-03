@@ -93,6 +93,7 @@ const SECTIONS = [
   ["actions", "Buttons and actions"],
   ["controls", "Checkboxes and dropdowns"],
   ["formats", "Formats"],
+  ["conditional", "Conditional formats"],
   ["sharing", "Sharing"],
   ["history", "History"],
   ["files", "Files"],
@@ -890,6 +891,30 @@ const OPERATORS = [
         <li>
           For a formatted value as text inside a formula, use
           <code>TEXT(A1, "#,##0.00")</code>.
+        </li>
+      </ul>
+    </section>
+
+    <section id="conditional">
+      <h2>Conditional formats</h2>
+      <p>
+        <strong>Conditional formats</strong>, above a table, lists the rules that format cells by
+        their value. Select cells, choose a kind of rule, and press <strong>Add rule</strong>.
+      </p>
+      <ul>
+        <li>
+          <strong>Format cells that match</strong> takes a criterion as <code>COUNTIF</code> does:
+          <code>&gt;100</code>, <code>Done</code>, <code>&lt;&gt;</code> for any non-empty cell,
+          <code>*late*</code> with wildcards. The rule tests each cell's own value, and gives
+          matching cells a fill, a text color, or bold.
+        </li>
+        <li>
+          <strong>Color scale</strong> shades each number from the color of the smallest number in
+          the cells to the color of the largest. Text and empty cells are left alone.
+        </li>
+        <li>
+          Rules follow their cells when rows and columns are inserted or deleted, and are laid over
+          the formats from the toolbar. Later rules win over earlier ones.
         </li>
       </ul>
     </section>

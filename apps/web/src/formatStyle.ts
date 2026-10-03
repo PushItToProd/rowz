@@ -40,8 +40,45 @@ export function textStyle(format: CellFormat): Record<string, string> {
   };
 }
 
-/** The styles a format gives the cell itself. */
+/** What each named color looks like at the strong end of a color scale: dark enough to tell from the light end, light enough to read text on. */
+const SCALE_COLORS: Record<FormatColor, string> = {
+  red: "#f28b82",
+  orange: "#fbbc73",
+  yellow: "#fde68a",
+  green: "#81c995",
+  blue: "#8ab4f8",
+  purple: "#c58af9",
+  gray: "#bdc1c6",
+};
+
+const PLAIN_BACKGROUND = "#ffffff";
+
+function channels(hex: string): [number, number, number] {
+  return [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16)) as [
+    number,
+    number,
+    number,
+  ];
+}
+
+/** The color a given way from `from` to `to`, as CSS. */
+function blend(from: string, to: string, at: number): string {
+  const [a, b] = [channels(from), channels(to)];
+  const mixed = a.map((channel, index) => Math.round(channel + ((b[index] ?? 0) - channel) * at));
+  return `rgb(${mixed.join(", ")})`;
+}
+
+/**
+ * The styles a format gives the cell itself. A color scale shades from its
+ * low color, or from the cell's own fill where it has none, to its high color.
+ */
 export function cellStyle(format: CellFormat): Record<string, string> {
+  const { shade } = format;
+  if (shade) {
+    const own = format.fill ? FILL_COLORS[format.fill] : PLAIN_BACKGROUND;
+    const low = shade.low ? SCALE_COLORS[shade.low] : own;
+    return { background: blend(low, SCALE_COLORS[shade.high], Math.min(1, Math.max(0, shade.at))) };
+  }
   return format.fill ? { background: FILL_COLORS[format.fill] } : {};
 }
 

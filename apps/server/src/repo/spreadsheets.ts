@@ -3,6 +3,7 @@ import {
   columnFormulasAfterEdit,
   columnFormulasAfterMove,
   columnFormulasAfterRename,
+  criterionTest,
   defaultFunctions,
   filterFormulasAfterEdit,
   filterFormulasAfterMove,
@@ -48,10 +49,12 @@ import {
   FILE_FORMAT,
   FILE_LIMITS,
   LIMITS,
+  MAX_CONDITIONAL_RULES,
   MAX_FORMAT_RULES,
   keysAfter,
   TableLayout,
   type IdentityCellInput,
+  type IdentityConditionalRule,
   type IdentityFormatRange,
   type IdentifiedStructuralEditBody,
   type CellInput,
@@ -372,6 +375,17 @@ function checkFile(file: SpreadsheetFile): void {
         }
         if (new Set(keys).size !== keys.length) {
           invalid(`The sort of ${name} names a column twice`);
+        }
+      }
+      for (const rule of fileTable.conditionalFormats ?? []) {
+        if (
+          (rule.endRow !== null && rule.endRow < rule.startRow) ||
+          (rule.endCol !== null && rule.endCol < rule.startCol)
+        ) {
+          invalid(`A conditional format in ${name} ends before it starts`);
+        }
+        if (rule.kind === "criterion" && criterionTest(rule.criterion) === undefined) {
+          invalid(`${rule.criterion} in ${name} is not a criterion`);
         }
       }
       const seen = new Set<string>();
@@ -827,6 +841,7 @@ export class SpreadsheetRepository {
             colIds,
             columns,
             formats: block.formats ?? [],
+            conditionalFormats: block.conditionalFormats ?? [],
             names: block.names ?? [],
             display: displayFromFile(block.display, colIds),
           })
@@ -1594,6 +1609,47 @@ export class SpreadsheetRepository {
   }
 
   /**
+   * Replaces the conditional formats of a table. Each rule names the rows and
+   * columns at its corners by id, and a stored rule holds their positions as
+   * they are now. A criterion is built once here, so that one that cannot be
+   * built is refused on save and not shown as a rule that never applies.
+   */
+  async setConditionalFormats(tableId: string, rules: IdentityConditionalRule[]): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
+      if (rules.length > MAX_CONDITIONAL_RULES) {
+        throw unprocessable(
+          "too_many_formats",
+          `A table can have at most ${String(MAX_CONDITIONAL_RULES)} conditional formats`,
+        );
+      }
+      const layout = new TableLayout(await orderedRows(tx, tableId), table.colIds);
+      const row = (id: string): number => layout.rowIndex(id) ?? fail(rowDeleted());
+      const col = (id: string): number => layout.colIndex(id) ?? fail(columnDeleted());
+      const stored = rules.map(({ range, ...rest }): ConditionalRule => {
+        const area = {
+          startRow: row(range.startRowId),
+          endRow: range.endRowId === null ? null : row(range.endRowId),
+          startCol: col(range.startColId),
+          endCol: range.endColId === null ? null : col(range.endColId),
+        };
+        if (
+          (area.endRow !== null && area.endRow < area.startRow) ||
+          (area.endCol !== null && area.endCol < area.startCol)
+        ) {
+          throw new ApiFailure(400, "invalid_request", "A range ends at or after where it starts");
+        }
+        if (rest.kind === "criterion" && criterionTest(rest.criterion) === undefined) {
+          throw unprocessable("invalid_criterion", `${rest.criterion} is not a criterion`);
+        }
+        return { ...area, ...rest };
+      });
+      writer.setLabel(`Change the conditional formats of ${table.name}`);
+      await writer.updateTable(tableId, { conditionalFormats: stored });
+    });
+    return change;
+  }
+
+  /**
    * Makes a data table a plain table again. Its formula columns stop
    * computing. A plain table has at least one row, so a table with none
    * gets one.
@@ -2154,14 +2210,16 @@ export class SpreadsheetRepository {
       changed.find((candidate) => candidate.id === table.id)?.columns ?? table.columns;
     // Formats follow the cells they were given to.
     const formats = formatRulesAfterEdit(table.formats, edit);
+    const conditionalFormats = formatRulesAfterEdit(table.conditionalFormats, edit);
     if (rows) {
-      await writer.updateTable(table.id, { formats });
+      await writer.updateTable(table.id, { formats, conditionalFormats });
     } else if (edit.kind === "insert") {
       const added = edit.ids ?? Array.from({ length: edit.count }, () => randomUUID());
       await writer.updateTable(table.id, {
         colIds: table.colIds.toSpliced(edit.index, 0, ...added),
         columns: current && withColumnsInserted(current, edit.index, edit.count),
         formats,
+        conditionalFormats,
       });
     } else {
       const removed = table.colIds.slice(edit.index, edit.index + edit.count);
@@ -2170,6 +2228,7 @@ export class SpreadsheetRepository {
         colIds: table.colIds.toSpliced(edit.index, edit.count),
         columns: current?.toSpliced(edit.index, edit.count) ?? null,
         formats,
+        conditionalFormats,
         display: { ...display, sort: display.sort.filter(({ colId }) => !removed.includes(colId)) },
       });
     }

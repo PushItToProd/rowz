@@ -93,7 +93,7 @@ describe("HelpView", () => {
   it("links each contents entry to a section on the page", () => {
     const wrapper = render();
     const targets = wrapper.findAll(".help__contents a").map((link) => link.attributes("href"));
-    expect(targets).toHaveLength(19);
+    expect(targets).toHaveLength(20);
     for (const target of targets)
       expect(wrapper.find(`section${target ?? ""}`).exists()).toBe(true);
   });
