@@ -214,7 +214,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
         rows,
         reordered: true,
         hidden: table.rowCount - rows.length,
-        filterError: filtered?.error?.message,
+        // Some errors, such as #DIV/0! from QUOTIENT, carry no message.
+        filterError: filtered?.error?.message ?? filtered?.error?.code,
         place: (row) =>
           row >= table.rowCount ? rows.length + row - table.rowCount : places.get(row),
         storedRow: (place) => rows[place] ?? table.rowCount + place - rows.length,
@@ -728,7 +729,11 @@ export const useWorkbookStore = defineStore("workbook", () => {
     const conditional = conditionalFormatAt(prepared, id.row, id.col, engine.value.getValue(id));
     if (Object.keys(conditional).length === 0) return plain;
     const merged: Record<string, unknown> = { ...plain };
-    for (const [key, value] of Object.entries(conditional)) merged[key] = value;
+    for (const [key, value] of Object.entries(conditional)) {
+      // A null means a conditional rule cleared this property, so the cell goes back to the default even if a plain rule set it.
+      if (value === null) Reflect.deleteProperty(merged, key);
+      else merged[key] = value;
+    }
     return merged;
   }
 
@@ -1086,13 +1091,18 @@ export const useWorkbookStore = defineStore("workbook", () => {
     await writeCells(at, pasteWrites(rows, at), revision.value, true);
   }
 
-  /** The values a table shows, row by row, for writing to a file. Rows and columns that are empty at the end are left out. */
-  function shownRows(table: TableRecord): string[][] {
-    const rows = Array.from({ length: table.rowCount }, (_, row) =>
+  /** The values of every stored row, as text. */
+  function cellTexts(table: TableRecord): string[][] {
+    return Array.from({ length: table.rowCount }, (_, row) =>
       Array.from({ length: table.colCount }, (_, col) =>
         formatValue(engine.value.getValue({ tableId: table.id, row, col })),
       ),
     );
+  }
+
+  /** The values a table shows, row by row. Rows and columns that are empty at the end are left out. */
+  function shownRows(table: TableRecord): string[][] {
+    const rows = cellTexts(table);
     const lastRow = rows.findLastIndex((cells) => cells.some((cell) => cell !== ""));
     const lastCol = Math.max(
       -1,

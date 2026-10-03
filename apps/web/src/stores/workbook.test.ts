@@ -2042,6 +2042,11 @@ describe("a sorted and filtered data table", () => {
     expect(broken.rowView("t1").hidden).toBe(0);
   });
 
+  it("reports the code of a filter error that has no message", async () => {
+    const store = await openSorted({ sort: [], filter: "=QUOTIENT(1, 0)" });
+    expect(store.rowView("t1")).toMatchObject({ rows: [0, 1, 2, 3], filterError: "#DIV/0!" });
+  });
+
   it("re-sorts as cells change, and the selection follows its cell", async () => {
     const store = await openSorted(SORTED);
     store.selection = at("A3");
@@ -2246,6 +2251,35 @@ describe("conditional formats", () => {
   it("lays the conditional format over the plain one where the value meets the criterion", async () => {
     const store = await openRules({ A1: "5", A2: "1", B1: "10", B2: "30" });
     expect(store.formatOf(at("A1"))).toEqual({ fill: "yellow", bold: true, color: "red" });
+    expect(store.formatOf(at("A2"))).toEqual({ fill: "yellow", bold: true });
+  });
+
+  it("lets a null conditional format remove what the plain format gave", async () => {
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith({ A1: "5", A2: "1" }),
+        tables: [
+          {
+            ...TABLE,
+            formats: FORMATS,
+            conditionalFormats: [
+              {
+                startRow: 0,
+                endRow: null,
+                startCol: 0,
+                endCol: 0,
+                kind: "criterion",
+                criterion: ">3",
+                format: { fill: null, bold: false },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const store = useWorkbookStore();
+    await store.load("s1");
+    expect(store.formatOf(at("A1"))).toEqual({});
     expect(store.formatOf(at("A2"))).toEqual({ fill: "yellow", bold: true });
   });
 

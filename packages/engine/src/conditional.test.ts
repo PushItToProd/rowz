@@ -85,7 +85,7 @@ describe("criterion rules", () => {
       ],
       0,
     );
-    expect(formats[0]).toEqual({});
+    expect(formats[0]).toEqual({ fill: null });
     const kept = formatsOf([rule("Done", { fill: "green" }), rule("Done", { fill: "red" })], 0);
     expect(kept[0]).toEqual({ fill: "red" });
   });

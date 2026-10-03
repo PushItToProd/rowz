@@ -562,7 +562,7 @@ Together they make a form: inputs, a Save button that appends to a log table and
 - The server refuses a new or changed filter that was written before the last rewrite of references, as it does for any formula. Clearing a filter or changing only the sort carries no new formula and is never refused.
 - Formatting more than one row is refused while the table is sorted or filtered, because a format rule covers a run of stored rows. One row and whole columns work, and a selection is a whole column only while the filter hides no rows.
 - Inserting a row above or below is disabled while the table is sorted or filtered. The strip that adds a row at the end still works.
-- CSV export writes every row in stored order, whatever is shown.
+- CSV export writes the rows in stored order, whatever is shown, and leaves out empty rows and columns at the end.
 - A filter is stored with its leading `=`, and the server adds it when the text lacks one.
 - A filter that names a column that has been deleted keeps its text and shows an error in the filter bar. Rewriting leaves `[Column]` references alone when a column is deleted, as it does for formula columns.
 

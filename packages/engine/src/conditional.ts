@@ -1,6 +1,6 @@
 import { criterion } from "./functions/criteria";
 import { Failure } from "./functions/arguments";
-import type { CellFormat, ConditionalRule, RuleArea } from "./formats";
+import type { CellFormat, ConditionalRule, FormatPatch, RuleArea } from "./formats";
 import { isScalar, type CellValue } from "./values";
 
 /** The smallest and largest number in the area a color scale covers. */
@@ -95,6 +95,12 @@ function positionIn({ min, max }: ScaleBounds, value: number): number {
 }
 
 /**
+ * What conditional rules do to one cell's format. A property that is `null`
+ * was removed by a rule, and removes it from the plain format beneath too.
+ */
+export type ConditionalFormat = FormatPatch & Pick<CellFormat, "shade">;
+
+/**
  * The format the conditional rules give one cell, to lay over the format its
  * table's plain rules give it. Rules apply in order, later over earlier. A
  * criterion rule applies where the cell's own value meets the criterion. A
@@ -107,15 +113,14 @@ export function conditionalFormatAt(
   row: number,
   col: number,
   value: CellValue,
-): CellFormat {
+): ConditionalFormat {
   const format: Record<string, unknown> = {};
   for (const [index, rule] of prepared.rules.entries()) {
     if (!covers(rule, row, col)) continue;
     if (rule.kind === "criterion") {
       if (!prepared.tests[index]?.(isScalar(value) ? value : null)) continue;
       for (const [key, patch] of Object.entries(rule.format)) {
-        if (patch === null || patch === false) Reflect.deleteProperty(format, key);
-        else format[key] = patch;
+        format[key] = patch === false ? null : patch;
       }
       // A fill given after a scale is the one shown.
       if (rule.format.fill !== undefined) Reflect.deleteProperty(format, "shade");
