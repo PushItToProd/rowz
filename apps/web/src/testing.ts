@@ -35,6 +35,7 @@ export const TABLE: TableRecord = {
   rowCount: 4,
   colCount: 3,
   colIds: ["c1", "c2", "c3"],
+  gridSizes: { rows: {}, columns: {} },
   rows: Array.from({ length: 4 }, (_, row) => ({
     id: `r${String(row)}`,
     orderKey: `a${String(row)}`,
@@ -294,6 +295,7 @@ export function mockApi(): MockedApi {
     editTable: vi.fn(),
     formatCells: vi.fn(),
     setTableDisplay: vi.fn(),
+    resizeLines: vi.fn(),
     setConditionalFormats: vi.fn(),
     setTableNames: vi.fn(),
     nameColumns: vi.fn(),

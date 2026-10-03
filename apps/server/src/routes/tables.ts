@@ -6,6 +6,7 @@ import {
   formatCellsBody,
   makeColumnsBody,
   moveBlockBody,
+  resizeLinesBody,
   setCellsBody,
   setConditionalFormatsBody,
   setTableDisplayBody,
@@ -60,6 +61,15 @@ export function tableRoutes(dependencies: ActionDependencies) {
         },
       )
       // Changes how a range of cells is shown.
+      .put(
+        "/:tableId/grid-sizes",
+        zValidator("param", tableParam, onInvalid),
+        zValidator("json", resizeLinesBody, onInvalid),
+        async (c) =>
+          c.json(
+            await c.var.repository.resizeLines(c.req.valid("param").tableId, c.req.valid("json")),
+          ),
+      )
       .post(
         "/:tableId/formats",
         zValidator("param", tableParam, onInvalid),

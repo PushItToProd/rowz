@@ -466,17 +466,21 @@ input.editable-name--editing {
 
 .grid th,
 .grid td {
-  height: 30px;
+  height: var(--row-height, 30px);
   border: 1px solid var(--line);
 }
 
 .grid th {
+  position: relative;
   min-width: 36px;
   padding: 0 8px;
   background: var(--canvas);
   color: var(--muted);
   font-weight: 500;
   user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .grid td {
@@ -485,12 +489,43 @@ input.editable-name--editing {
   /* Room for the pinned toolbar when a cell is scrolled into view. */
   scroll-margin-top: 195px;
   position: relative;
-  width: 120px;
-  min-width: 120px;
-  max-width: 120px;
   padding: 0;
   overflow: hidden;
   cursor: cell;
+}
+
+.grid__resize {
+  position: absolute;
+  z-index: 2;
+}
+
+.grid__resize--col {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+}
+
+.grid__resize--row {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 7px;
+  cursor: row-resize;
+}
+
+.resize-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.resize-lines input {
+  width: 6em;
+  margin-left: 6px;
 }
 
 /* A cell showing a value that an array formula in another cell put there. */
@@ -1344,7 +1379,7 @@ select.cell-control--dropdown {
 @media (pointer: coarse) {
   .grid th,
   .grid td {
-    height: 38px;
+    height: var(--row-height, 38px);
   }
 
   button,

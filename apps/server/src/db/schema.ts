@@ -7,7 +7,7 @@ import type {
   TableDisplay,
   TableName,
 } from "@spreadsheet-app/engine";
-import type { SpreadsheetFile } from "@spreadsheet-app/shared";
+import type { GridSizes, SpreadsheetFile } from "@spreadsheet-app/shared";
 import type { JournalData } from "../repo/journal";
 import { sql } from "drizzle-orm";
 import {
@@ -179,6 +179,7 @@ export const tables = pgTable(
     position: integer("position").notNull(),
     /** The ids of the table's columns, in order. Its rows are in `table_rows`. */
     colIds: jsonb("col_ids").$type<string[]>().notNull().default([]),
+    gridSizes: jsonb("grid_sizes").$type<GridSizes>().notNull().default({ rows: {}, columns: {} }),
     /** The named columns of a data table, one for each column. Null for a plain table. */
     columns: jsonb("columns").$type<ColumnDefinition[]>(),
     /** How cells are shown: rules applied in order, later ones over earlier ones. */

@@ -19,6 +19,8 @@ import type { PageRecord, TableRecord, ViewRecord } from "./spreadsheets";
 /** A row as a change left it or found it: its id, with its order key or `null` for no row. */
 type RowChange = [rowId: string, before: string | null, after: string | null];
 type CellChange = [rowId: string, colId: string, before: string, after: string];
+/** Entries written before grid sizes existed omit that property. */
+type JournalTable = Omit<TableRecord, "gridSizes"> & Partial<Pick<TableRecord, "gridSizes">>;
 
 /**
  * What one change wrote, as it was before and after. Rows, columns, and cells
@@ -28,7 +30,7 @@ type CellChange = [rowId: string, colId: string, before: string, after: string];
 export interface JournalData {
   rows: { tableId: string; changes: RowChange[] }[];
   pages: { id: string; before: PageRecord | null; after: PageRecord | null }[];
-  tables: { id: string; before: TableRecord | null; after: TableRecord | null }[];
+  tables: { id: string; before: JournalTable | null; after: JournalTable | null }[];
   views: { id: string; before: ViewRecord | null; after: ViewRecord | null }[];
   cells: { tableId: string; changes: CellChange[] }[];
 }
@@ -87,6 +89,7 @@ const tableColumns = {
   name: tables.name,
   position: tables.position,
   colIds: tables.colIds,
+  gridSizes: tables.gridSizes,
   columns: tables.columns,
   formats: tables.formats,
   display: tables.display,
@@ -850,7 +853,13 @@ export async function applyRecorded(
   const target = <T>(before: T, after: T): T => (direction === "undo" ? before : after);
   const changed: ChangedContent = {
     pages: data.pages.map(({ id, before, after }) => ({ id, page: target(before, after) })),
-    tables: data.tables.map(({ id, before, after }) => ({ id, table: target(before, after) })),
+    tables: data.tables.map(({ id, before, after }) => {
+      const table = target(before, after);
+      return {
+        id,
+        table: table && { ...table, gridSizes: table.gridSizes ?? { rows: {}, columns: {} } },
+      };
+    }),
     views: data.views.map(({ id, before, after }) => ({ id, view: target(before, after) })),
     rows: [],
     cells: data.cells.flatMap(({ tableId, changes }) =>
@@ -892,6 +901,7 @@ export async function applyRecorded(
           name: table.name,
           position: table.position,
           colIds: table.colIds,
+          gridSizes: table.gridSizes,
           columns: table.columns,
           formats: table.formats,
           display: table.display,

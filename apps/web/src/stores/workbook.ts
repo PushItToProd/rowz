@@ -952,6 +952,19 @@ export const useWorkbookStore = defineStore("workbook", () => {
     );
   }
 
+  /** Saves pixel sizes for the row or column identities captured by the grid or header menu. */
+  function resizeLines(
+    tableId: string,
+    axis: "row" | "col",
+    ids: string[],
+    size: number | null,
+  ): Promise<boolean> {
+    if (!canEdit.value) return Promise.resolve(false);
+    return attempt(async () => {
+      await receiveChange(await api.resizeLines(tableId, { axis, ids, size }));
+    }, "The sizes could not be saved");
+  }
+
   /**
    * Replaces how a data table's rows are shown. The sort and filter are
    * display settings, and the stored rows stay as they are.
@@ -1828,6 +1841,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     formatOf,
     formatSelection,
     setTableDisplay,
+    resizeLines,
     rowView,
     conditionalFormatsOf,
     addConditionalFormat,

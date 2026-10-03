@@ -52,6 +52,10 @@
     {
       "tag": "0012_table_display",
       "sha256": "a2054c803686af2f8f3cc11b2809d1e8172e8b300dfa01f5a06e2c17a1bde609"
+    },
+    {
+      "tag": "0013_conscious_violations",
+      "sha256": "2ab58144a183eb14a416025c3b6cda7f02537bf8bbd39f10542b523a77c12b5b"
     }
   ]
 }

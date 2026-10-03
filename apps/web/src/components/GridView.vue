@@ -7,7 +7,7 @@ import {
   type CellId,
   type ColumnDefinition,
 } from "@spreadsheet-app/engine";
-import { LIMITS, type IdentifiedCell } from "@spreadsheet-app/shared";
+import { GRID_SIZE, LIMITS, type IdentifiedCell } from "@spreadsheet-app/shared";
 import {
   computed,
   nextTick,
@@ -157,6 +157,85 @@ function columnAt(col: number): ColumnDefinition | undefined {
 }
 
 type Axis = "row" | "col";
+
+const resizeDrag = ref<{
+  axis: Axis;
+  id: string;
+  start: number;
+  original: number;
+  size: number;
+} | null>(null);
+
+function lineId(axis: Axis, index: number): string | undefined {
+  return axis === "row" ? props.table.rows[storedRow(index)]?.id : props.table.colIds[index];
+}
+
+function lineSize(axis: Axis, index: number): number {
+  const id = lineId(axis, index);
+  if (resizeDrag.value?.axis === axis && resizeDrag.value.id === id) return resizeDrag.value.size;
+  const sizes = axis === "row" ? props.table.gridSizes.rows : props.table.gridSizes.columns;
+  return (id === undefined ? undefined : sizes[id]) ?? GRID_SIZE[axis].default;
+}
+
+const tableWidth = computed(
+  () => 52 + props.table.colIds.reduce((sum, _, col) => sum + lineSize("col", col), 0),
+);
+
+function startResize(event: MouseEvent, axis: Axis, index: number): void {
+  if (!store.canEdit || event.button !== 0) return;
+  const id = lineId(axis, index);
+  if (!id) return;
+  const original = lineSize(axis, index);
+  commit();
+  resizeDrag.value = {
+    axis,
+    id,
+    start: axis === "row" ? event.clientY : event.clientX,
+    original,
+    size: original,
+  };
+  window.addEventListener("mousemove", moveResize);
+  window.addEventListener("mouseup", finishResize);
+  window.addEventListener("keydown", cancelResize);
+  window.addEventListener("blur", stopResize);
+}
+
+function moveResize(event: MouseEvent): void {
+  const drag = resizeDrag.value;
+  if (!drag) return;
+  const position = drag.axis === "row" ? event.clientY : event.clientX;
+  const limits = GRID_SIZE[drag.axis];
+  drag.size = Math.round(
+    Math.max(limits.min, Math.min(limits.max, drag.original + position - drag.start)),
+  );
+}
+
+function stopResize(): void {
+  resizeDrag.value = null;
+  window.removeEventListener("mousemove", moveResize);
+  window.removeEventListener("mouseup", finishResize);
+  window.removeEventListener("keydown", cancelResize);
+  window.removeEventListener("blur", stopResize);
+}
+
+function finishResize(): void {
+  const drag = resizeDrag.value;
+  if (drag && drag.size !== drag.original)
+    void store.resizeLines(props.table.id, drag.axis, [drag.id], drag.size);
+  stopResize();
+}
+
+function cancelResize(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    stopResize();
+  }
+}
+
+function resetSize(axis: Axis, index: number): void {
+  const id = lineId(axis, index);
+  if (id) void store.resizeLines(props.table.id, axis, [id], null);
+}
 
 /** A press on a column header selects the column, unless it is in the box where the column is being renamed. */
 function onColumnMousedown(event: MouseEvent, col: number): void {
@@ -395,6 +474,7 @@ onMounted(() => {
   document.addEventListener("paste", onPaste);
 });
 onBeforeUnmount(() => {
+  stopResize();
   document.removeEventListener("copy", onCopy);
   document.removeEventListener("cut", onCopy);
   document.removeEventListener("paste", onPaste);
@@ -567,13 +647,21 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
     :aria-label="table.name"
     @keydown="onGridKeydown"
   >
-    <table>
+    <table :style="{ width: `${tableWidth}px` }">
+      <colgroup>
+        <col style="width: 52px" />
+        <col
+          v-for="(id, col) in table.colIds"
+          :key="id"
+          :style="{ width: `${lineSize('col', col)}px` }"
+        />
+      </colgroup>
       <thead>
         <tr>
           <th class="grid__corner"></th>
           <th
             v-for="col in table.colCount"
-            :key="col"
+            :key="table.colIds[col - 1]"
             scope="col"
             :class="{
               'grid__column--named': columnAt(col - 1),
@@ -597,6 +685,13 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               </span>
             </template>
             <template v-else>{{ columnLabel(col - 1) }}</template>
+            <span
+              v-if="store.canEdit"
+              class="grid__resize grid__resize--col"
+              :aria-label="`Resize column ${columnLabel(col - 1)}`"
+              @mousedown.stop.prevent="startResize($event, 'col', col - 1)"
+              @dblclick.stop.prevent="resetSize('col', col - 1)"
+            ></span>
           </th>
         </tr>
       </thead>
@@ -605,6 +700,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
           v-for="row in displayedRows"
           :key="table.rows[storedRow(row - 1)]?.id ?? 'new'"
           role="row"
+          :style="{ '--row-height': `${lineSize('row', row - 1)}px` }"
         >
           <th
             scope="row"
@@ -614,6 +710,13 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             @contextmenu="onHeaderContextMenu($event, 'row', row - 1)"
           >
             {{ row > shownRows ? "+" : storedRow(row - 1) + 1 }}
+            <span
+              v-if="store.canEdit && row <= shownRows"
+              class="grid__resize grid__resize--row"
+              :aria-label="`Resize row ${storedRow(row - 1) + 1}`"
+              @mousedown.stop.prevent="startResize($event, 'row', row - 1)"
+              @dblclick.stop.prevent="resetSize('row', row - 1)"
+            ></span>
           </th>
           <td
             v-for="col in table.colCount"

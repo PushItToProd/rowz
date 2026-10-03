@@ -434,31 +434,82 @@ export const moveBlockBody = z.object({ pageId: z.uuid() });
 
 export const FILE_FORMAT = "spreadsheet-app";
 
+export const GRID_SIZE = {
+  row: { default: 30, min: 30, max: 500 },
+  col: { default: 120, min: 40, max: 1000 },
+} as const;
+
+/** Explicit pixel sizes, keyed by stable row and column IDs. Missing entries use defaults. */
+export interface GridSizes {
+  rows: Record<string, number>;
+  columns: Record<string, number>;
+}
+
+export const resizeLinesBody = z.discriminatedUnion("axis", [
+  z.object({
+    axis: z.literal("row"),
+    ids: z.array(z.uuid()).min(1).max(LIMITS.tableRows),
+    size: z.int().min(GRID_SIZE.row.min).max(GRID_SIZE.row.max).nullable(),
+  }),
+  z.object({
+    axis: z.literal("col"),
+    ids: z.array(z.uuid()).min(1).max(LIMITS.tableCols),
+    size: z.int().min(GRID_SIZE.col.min).max(GRID_SIZE.col.max).nullable(),
+  }),
+]);
+export type ResizeLinesBody = z.infer<typeof resizeLinesBody>;
+
+const fileGridSizes = z.object({
+  rows: z
+    .array(
+      z.object({ index: cellIndex, size: z.int().min(GRID_SIZE.row.min).max(GRID_SIZE.row.max) }),
+    )
+    .max(LIMITS.tableRows),
+  columns: z
+    .array(
+      z.object({ index: cellIndex, size: z.int().min(GRID_SIZE.col.min).max(GRID_SIZE.col.max) }),
+    )
+    .max(LIMITS.tableCols),
+});
+
 /** How a file's table is shown. A file has no ids, so a sort key names its column by position. */
 const fileDisplay = z.object({
   sort: z.array(z.object({ column: cellIndex, descending: z.boolean() })).max(MAX_SORT_KEYS),
   filter: z.string().max(LIMITS.inputLength).optional(),
 });
 
-const fileTable = z.object({
-  type: z.literal("table"),
-  name,
-  /** A data table may have no rows. A plain table has at least one. */
-  rowCount: z.int().min(0).max(LIMITS.tableRows),
-  colCount: z.int().min(1).max(LIMITS.tableCols),
-  /** The named columns of a data table, one for each column. Left out for a plain table. */
-  columns: z.array(fileColumn).max(LIMITS.tableCols).optional(),
-  /** How cells are shown: rules applied in order. Left out when nothing is formatted. */
-  formats: z.array(formatRule).max(MAX_FORMAT_RULES).optional(),
-  /** The names a plain table holds. Left out when it holds none. */
-  names: z.array(tableName).max(LIMITS.tableNames).optional(),
-  /** The sort and filter of a data table. Left out when it has neither. */
-  display: fileDisplay.optional(),
-  /** Formats cells get when their value meets a condition. Left out when there are none. */
-  conditionalFormats: z.array(conditionalRule).max(MAX_CONDITIONAL_RULES).optional(),
-  /** Cells that hold something. Empty cells and the cells of formula columns are left out. */
-  cells: z.array(cellInput).max(FILE_LIMITS.cells),
-});
+const fileTable = z
+  .object({
+    type: z.literal("table"),
+    name,
+    /** A data table may have no rows. A plain table has at least one. */
+    rowCount: z.int().min(0).max(LIMITS.tableRows),
+    colCount: z.int().min(1).max(LIMITS.tableCols),
+    gridSizes: fileGridSizes.optional(),
+    /** The named columns of a data table, one for each column. Left out for a plain table. */
+    columns: z.array(fileColumn).max(LIMITS.tableCols).optional(),
+    /** How cells are shown: rules applied in order. Left out when nothing is formatted. */
+    formats: z.array(formatRule).max(MAX_FORMAT_RULES).optional(),
+    /** The names a plain table holds. Left out when it holds none. */
+    names: z.array(tableName).max(LIMITS.tableNames).optional(),
+    /** The sort and filter of a data table. Left out when it has neither. */
+    display: fileDisplay.optional(),
+    /** Formats cells get when their value meets a condition. Left out when there are none. */
+    conditionalFormats: z.array(conditionalRule).max(MAX_CONDITIONAL_RULES).optional(),
+    /** Cells that hold something. Empty cells and the cells of formula columns are left out. */
+    cells: z.array(cellInput).max(FILE_LIMITS.cells),
+  })
+  .refine(
+    (table) =>
+      !table.gridSizes ||
+      (table.gridSizes.rows.every(({ index }) => index < table.rowCount) &&
+        table.gridSizes.columns.every(({ index }) => index < table.colCount) &&
+        new Set(table.gridSizes.rows.map(({ index }) => index)).size ===
+          table.gridSizes.rows.length &&
+        new Set(table.gridSizes.columns.map(({ index }) => index)).size ===
+          table.gridSizes.columns.length),
+    "Grid sizes must name distinct rows and columns in the table",
+  );
 
 const fileChart = z.object({
   type: z.literal("chart"),
@@ -526,6 +577,8 @@ interface PlacedTable extends Placed {
   colCount: number;
   /** The ids of the table's columns, which a sort key names. */
   colIds: readonly string[];
+  rows: readonly { id: string }[];
+  gridSizes: GridSizes;
   display: { sort: readonly { colId: string; descending: boolean }[]; filter?: string | undefined };
   columns: readonly StoredColumn[] | null;
   formats: NonNullable<FileTable["formats"]>;
@@ -536,6 +589,19 @@ interface PlacedView extends Placed {
   kind: "chart" | "text" | "script";
   source: string;
   chartType: "bar" | "line" | "pie" | "scatter" | null;
+}
+
+/** Only explicit sizes of rows and columns still in the table are exported. */
+function fileGridSizesOf(table: PlacedTable): { gridSizes?: z.infer<typeof fileGridSizes> } {
+  const rows = table.rows.flatMap(({ id }, index) => {
+    const size = table.gridSizes.rows[id];
+    return size === undefined ? [] : [{ index, size }];
+  });
+  const columns = table.colIds.flatMap((id, index) => {
+    const size = table.gridSizes.columns[id];
+    return size === undefined ? [] : [{ index, size }];
+  });
+  return rows.length || columns.length ? { gridSizes: { rows, columns } } : {};
 }
 
 /** The file's form of a table's sort and filter: nothing when the table shows every row in stored order. */
@@ -590,6 +656,7 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
           name: table.name,
           rowCount: table.rowCount,
           colCount: table.colCount,
+          ...fileGridSizesOf(table),
           ...(table.columns ? { columns: table.columns.map(fileColumnOf) } : {}),
           ...(table.formats.length > 0 ? { formats: table.formats } : {}),
           ...(table.names.length > 0 ? { names: table.names } : {}),

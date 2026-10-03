@@ -22,6 +22,7 @@ import type {
   IdentifiedStructuralEditBody,
   IdentityConditionalRule,
   IdentityFormatRange,
+  ResizeLinesBody,
 } from "@spreadsheet-app/shared";
 import type {
   ChartType,
@@ -268,6 +269,9 @@ export const api = {
     ),
 
   /** Replaces how a data table's rows are sorted and filtered for display. */
+  resizeLines: (tableId: string, request: ResizeLinesBody): Promise<Change> =>
+    body(routes.tables[":tableId"]["grid-sizes"].$put({ param: { tableId }, json: request })),
+
   setTableDisplay: (
     tableId: string,
     display: { sort: SortKey[]; filter?: string },

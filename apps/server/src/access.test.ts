@@ -92,6 +92,11 @@ function writeRoutes(): Route[] {
       { range: { startRow: 0, endRow: 0, startCol: 0, endCol: 0 }, format: { bold: true } },
     ],
     ["PUT", `/tables/${table}/conditional-formats`, { rules: [] }],
+    [
+      "PUT",
+      `/tables/${table}/grid-sizes`,
+      { axis: "col", ids: [snapshot.tables[0]!.colIds[0]], size: 180 },
+    ],
     ["POST", `/tables/${table}/columns`, { headerRow: false }],
     ["PATCH", `/tables/${table}/columns/2`, { name: "Renamed", type: "text" }],
     ["PUT", `/tables/${table}/display`, { sort: [] }],
@@ -281,7 +286,7 @@ describe("an editor", () => {
     // added, and each move names the page the block is on. Sharing and deleting are the owner's.
     expect(await statuses(editor, writeRoutes())).toEqual([
       404, 204, 201, 200, 200, 200, 200, 409, 422, 422, 201, 200, 200, 200, 200, 200, 200, 200, 200,
-      200, 200, 200, 200, 201, 200, 200, 200, 200, 403, 403, 403,
+      200, 200, 200, 200, 200, 201, 200, 200, 200, 200, 403, 403, 403,
     ]);
     await owner.json("DELETE", `/spreadsheets/${snapshot.id}`, undefined, 204);
     await editor.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);

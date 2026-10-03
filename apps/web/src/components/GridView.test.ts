@@ -76,6 +76,91 @@ describe("rendering", () => {
   });
 });
 
+describe("resizing headers", () => {
+  it.each([
+    ["col", "column B", "clientX", "c2", 120, 180],
+    ["row", "row 2", "clientY", "r1", 30, 90],
+  ] as const)(
+    "previews a %s drag and saves its stable identity once on release",
+    async (axis, label, coordinate, id, original, size) => {
+      await mountGrid();
+      server.resizeLines.mockResolvedValue(changeWith());
+      await wrapper
+        .get(`[aria-label="Resize ${label}"]`)
+        .trigger("mousedown", { [coordinate]: 100 });
+      window.dispatchEvent(new MouseEvent("mousemove", { [coordinate]: 100 + size - original }));
+      await wrapper.vm.$nextTick();
+      expect(server.resizeLines).not.toHaveBeenCalled();
+      if (axis === "col") expect(wrapper.findAll("col")[2]!.attributes("style")).toContain("180px");
+      else expect(wrapper.findAll("tbody tr")[1]!.attributes("style")).toContain("90px");
+      expect(useWorkbookStore().selection).toBeNull();
+      window.dispatchEvent(new MouseEvent("mouseup"));
+      await flushPromises();
+      expect(server.resizeLines).toHaveBeenCalledExactlyOnceWith("t1", { axis, ids: [id], size });
+    },
+  );
+
+  it("clamps dragging, cancels with Escape, and resets on double-click", async () => {
+    await mountGrid();
+    server.resizeLines.mockResolvedValue(changeWith());
+    const handle = wrapper.get('[aria-label="Resize column A"]');
+    await handle.trigger("mousedown", { clientX: 100 });
+    window.dispatchEvent(new MouseEvent("mousemove", { clientX: 5000 }));
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await flushPromises();
+    expect(server.resizeLines).toHaveBeenLastCalledWith("t1", {
+      axis: "col",
+      ids: ["c1"],
+      size: 1000,
+    });
+    await handle.trigger("mousedown", { clientX: 100 });
+    window.dispatchEvent(new MouseEvent("mousemove", { clientX: -5000 }));
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await flushPromises();
+    expect(server.resizeLines).toHaveBeenLastCalledWith("t1", {
+      axis: "col",
+      ids: ["c1"],
+      size: 40,
+    });
+    server.resizeLines.mockClear();
+    await handle.trigger("mousedown", { clientX: 100 });
+    window.dispatchEvent(new MouseEvent("mousemove", { clientX: 200 }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await flushPromises();
+    expect(server.resizeLines).not.toHaveBeenCalled();
+    await handle.trigger("dblclick");
+    await flushPromises();
+    expect(server.resizeLines).toHaveBeenCalledExactlyOnceWith("t1", {
+      axis: "col",
+      ids: ["c1"],
+      size: null,
+    });
+  });
+
+  it("renders persisted sizes by identity and hides resize handles for viewers", async () => {
+    await mountGrid();
+    await wrapper.setProps({
+      table: { ...TABLE, gridSizes: { rows: { r1: 80 }, columns: { c2: 240 } } },
+    });
+    expect(wrapper.findAll("col")[2]!.attributes("style")).toContain("240px");
+    expect(wrapper.findAll("tbody tr")[1]!.attributes("style")).toContain("80px");
+    wrapper.unmount();
+    setActivePinia(createPinia());
+    await mountGrid({}, "viewer");
+    expect(wrapper.find(".grid__resize").exists()).toBe(false);
+  });
+
+  it("removes drag listeners when unmounted", async () => {
+    await mountGrid();
+    await wrapper.get('[aria-label="Resize row 1"]').trigger("mousedown", { clientY: 100 });
+    wrapper.unmount();
+    window.dispatchEvent(new MouseEvent("mousemove", { clientY: 200 }));
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    expect(server.resizeLines).not.toHaveBeenCalled();
+  });
+});
+
 describe("array results", () => {
   it("shows the values an array formula fills, and marks the filled cells", async () => {
     await mountGrid({ A1: "=SEQUENCE(2, 2)", C3: "=SUM(A1:B2)" });
@@ -1360,6 +1445,20 @@ describe("a sorted and filtered data table", () => {
   }
 
   const SORTED = { sort: [{ colId: "c1", descending: false }] };
+  it("resizes the stored identity of a sorted row and leaves the append row unsized", async () => {
+    await mountShown(SORTED);
+    server.resizeLines.mockResolvedValue(changeWith());
+    await wrapper.get('[aria-label="Resize row 3"]').trigger("mousedown", { clientY: 100 });
+    window.dispatchEvent(new MouseEvent("mousemove", { clientY: 140 }));
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await flushPromises();
+    expect(server.resizeLines).toHaveBeenCalledExactlyOnceWith("t1", {
+      axis: "row",
+      ids: ["r2"],
+      size: 70,
+    });
+    expect(wrapper.findAll("tbody tr").at(-1)!.find(".grid__resize").exists()).toBe(false);
+  });
   const shownAddresses = (): (string | undefined)[] =>
     wrapper.findAll("tbody tr td:first-of-type").map((cell) => cell.attributes("data-cell"));
 

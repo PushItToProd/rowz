@@ -2,6 +2,14 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-03: Grid row and column sizes
+
+Explicit row heights and column widths live in the table's `gridSizes` JSON metadata, keyed by stable IDs. Deleted lines lose their size entries in the same journaled change. Export and version files use sparse position/size entries and imports map them to fresh IDs. Older files omit sizes and use defaults.
+
+Rows default to 30 px and allow 30–500 px; columns default to 120 px and allow 40–1000 px. The minimum row height keeps existing cell controls usable. Dragging previews locally and saves once on release. Escape cancels a drag, and double-click resets the border's line. The header menu opens an inline form that captures the selected IDs when opened and supports applying a size, resetting, or canceling.
+
+To change these choices, edit `GRID_SIZE` in shared, the grid resize handlers, `ResizeLines.vue`, and `resizeLines` in the repository.
+
 ## 2026-10-03: Collect document errors without storing computed state
 
 The editor and document list use the same pure engine collector for evaluated errors in cells, formula columns, names, script statements, filters, charts, and Markdown templates. The document-list request caches `hasErrors` by content revision in memory, shared across request repositories for each database, with at most 256 entries. Access is checked on every list request. Documents mentioning `NOW` or `TODAY` bypass the cache because their results can change without an edit. Cold or evicted entries still require reading and evaluating the document. Computed results remain unpersisted.

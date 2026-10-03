@@ -50,6 +50,8 @@ describe("spreadsheets", () => {
         position: 0,
         ...DEFAULT_TABLE_SIZE,
         colIds: expect.any(Array),
+        rows: expect.any(Array),
+        gridSizes: { rows: {}, columns: {} },
         columns: null,
         formats: [],
         display: { sort: [] },

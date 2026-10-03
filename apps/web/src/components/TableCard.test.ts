@@ -53,6 +53,67 @@ afterEach(() => {
 });
 
 describe("row and column actions", () => {
+  it.each([
+    ["col", "column", "thead th", 2, 3, ["c2", "c3"]],
+    ["row", "row", "tbody th", 1, 2, ["r1", "r2"]],
+  ] as const)(
+    "resizes all selected %s identities from the header menu",
+    async (axis, noun, selector, first, last, ids) => {
+      await render();
+      server.resizeLines.mockResolvedValue(changeWith());
+      const headers = wrapper.findAll(selector);
+      await headers[first]!.trigger("mousedown");
+      await headers[last]!.trigger("mouseenter");
+      window.dispatchEvent(new MouseEvent("mouseup"));
+      await headers[last]!.trigger("contextmenu");
+      await wrapper
+        .findAll('[role="menuitem"]')
+        .find((item) => item.text() === `Resize ${noun}`)!
+        .trigger("click");
+      const form = wrapper.get(`form[aria-label="Resize ${noun}"]`);
+      await form.get("input").setValue("170");
+      await form.trigger("submit");
+      await flushPromises();
+      expect(server.resizeLines).toHaveBeenCalledExactlyOnceWith("t1", {
+        axis,
+        ids: [...ids],
+        size: 170,
+      });
+      expect(wrapper.find(".resize-lines").exists()).toBe(false);
+    },
+  );
+
+  it("validates the size input, cancels without saving, and resets to default", async () => {
+    await render();
+    server.resizeLines.mockResolvedValue(changeWith());
+    async function open() {
+      await wrapper.findAll("thead th")[1]!.trigger("contextmenu");
+      await wrapper
+        .findAll('[role="menuitem"]')
+        .find((item) => item.text() === "Resize column")!
+        .trigger("click");
+      return wrapper.get('form[aria-label="Resize column"]');
+    }
+    let form = await open();
+    await form.get("input").setValue("10");
+    expect(form.get('button[type="submit"]').attributes("disabled")).toBeDefined();
+    await form.trigger("submit");
+    expect(server.resizeLines).not.toHaveBeenCalled();
+    await form.trigger("keydown", { key: "Escape" });
+    expect(wrapper.find(".resize-lines").exists()).toBe(false);
+    form = await open();
+    await form
+      .findAll("button")
+      .find((button) => button.text() === "Reset to default")!
+      .trigger("click");
+    await flushPromises();
+    expect(server.resizeLines).toHaveBeenCalledExactlyOnceWith("t1", {
+      axis: "col",
+      ids: ["c1"],
+      size: null,
+    });
+  });
+
   it("appear only while a cell of the table is selected, and name its row and column", async () => {
     await render();
     expect(wrapper.get(".table-card__lines").text()).toBe(
@@ -353,6 +414,7 @@ describe("the menu of row, column, and cell actions", () => {
     await render();
     await wrapper.findAll("thead th")[2]!.trigger("contextmenu");
     expect(labels()).toEqual([
+      "Resize column",
       "Insert column left",
       "Insert column right",
       "Delete column B",
@@ -362,6 +424,7 @@ describe("the menu of row, column, and cell actions", () => {
 
     await wrapper.findAll("tbody th")[2]!.trigger("contextmenu");
     expect(labels()).toEqual([
+      "Resize row",
       "Insert row above",
       "Insert row below",
       "Delete row 3",
@@ -378,6 +441,7 @@ describe("the menu of row, column, and cell actions", () => {
     await headers[3]!.trigger("contextmenu");
     expect(wrapper.get('[role="menu"]').attributes("aria-label")).toBe("Actions for B1:C4");
     expect(labels()).toEqual([
+      "Resize column",
       "Insert 2 columns left",
       "Insert 2 columns right",
       "Delete columns B-C",
@@ -634,6 +698,29 @@ describe("sorting and filtering a data table", () => {
   }
 
   const bar = () => wrapper.get('[role="group"][aria-label="Sort and filter Table 1"]');
+
+  it("resizes the selected visible rows by stored identity while sorted and filtered", async () => {
+    await renderSorted();
+    server.resizeLines.mockResolvedValue(changeWith());
+    const rows = wrapper.findAll("tbody th");
+    await rows[0]!.trigger("mousedown");
+    await rows[1]!.trigger("mouseenter");
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    await rows[1]!.trigger("contextmenu");
+    await wrapper
+      .findAll('[role="menuitem"]')
+      .find((item) => item.text() === "Resize row")!
+      .trigger("click");
+    const form = wrapper.get('form[aria-label="Resize row"]');
+    await form.get("input").setValue("80");
+    await form.trigger("submit");
+    await flushPromises();
+    expect(server.resizeLines).toHaveBeenCalledExactlyOnceWith("t1", {
+      axis: "row",
+      ids: ["r2", "r1"],
+      size: 80,
+    });
+  });
 
   it("is not offered for a plain table", async () => {
     await render();

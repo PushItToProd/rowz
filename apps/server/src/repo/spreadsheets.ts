@@ -61,6 +61,8 @@ import {
   type IdentifiedStructuralEditBody,
   type CellInput,
   type JournalLimits,
+  type GridSizes,
+  type ResizeLinesBody,
   type RowRecord,
   type SpreadsheetFile,
   type StoredCell,
@@ -163,6 +165,7 @@ export interface TableRecord {
   position: number;
   /** The ids of the table's columns, in order. */
   colIds: string[];
+  gridSizes: GridSizes;
   /** The named columns of a data table, one for each column. `null` for a plain table. */
   columns: ColumnDefinition[] | null;
   /** How cells are shown: rules applied in order, later ones over earlier ones. */
@@ -249,6 +252,7 @@ const tableColumns = {
   name: tables.name,
   position: tables.position,
   colIds: tables.colIds,
+  gridSizes: tables.gridSizes,
   columns: tables.columns,
   formats: tables.formats,
   display: tables.display,
@@ -895,6 +899,29 @@ export class SpreadsheetRepository {
           await tx.insert(tableRows).values(rows.slice(from, from + INSERT_BATCH));
         }
         const layout = new TableLayout(rows, colIds);
+        if (block.gridSizes) {
+          await tx
+            .update(tables)
+            .set({
+              gridSizes: {
+                rows: Object.fromEntries(
+                  block.gridSizes.rows.map(({ index, size }) => {
+                    const row = rows[index];
+                    if (!row) throw new Error("A row size is outside the imported table");
+                    return [row.id, size];
+                  }),
+                ),
+                columns: Object.fromEntries(
+                  block.gridSizes.columns.map(({ index, size }) => {
+                    const id = colIds[index];
+                    if (!id) throw new Error("A column size is outside the imported table");
+                    return [id, size];
+                  }),
+                ),
+              },
+            })
+            .where(eq(tables.id, table.id));
+        }
         const filled = block.cells.flatMap((cell) => {
           const identity = layout.identity(cell);
           // A formula column computes its cells, so none are stored for it.
@@ -1609,6 +1636,30 @@ export class SpreadsheetRepository {
     return change;
   }
 
+  /** Sets or resets pixel sizes for existing row or column identities under the spreadsheet lock. */
+  async resizeLines(tableId: string, request: ResizeLinesBody): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
+      const rows = request.axis === "row";
+      const existing = new Set(
+        rows ? (await orderedRows(tx, tableId)).map(({ id }) => id) : table.colIds,
+      );
+      for (const id of request.ids) {
+        if (!existing.has(id)) {
+          throw rows ? rowDeleted() : columnDeleted();
+        }
+      }
+      const key = rows ? "rows" : "columns";
+      const sizes = { ...table.gridSizes[key] };
+      for (const id of request.ids) {
+        if (request.size === null) Reflect.deleteProperty(sizes, id);
+        else sizes[id] = request.size;
+      }
+      writer.setLabel(`Resize ${rows ? "rows" : "columns"} in ${table.name}`);
+      await writer.updateTable(tableId, { gridSizes: { ...table.gridSizes, [key]: sizes } });
+    });
+    return change;
+  }
+
   /**
    * Changes how a range of cells is shown. The format is added to whatever
    * the cells already have. The range names the rows and columns at its
@@ -2259,7 +2310,15 @@ export class SpreadsheetRepository {
     const formats = formatRulesAfterEdit(table.formats, edit);
     const conditionalFormats = formatRulesAfterEdit(table.conditionalFormats, edit);
     if (rows) {
-      await writer.updateTable(table.id, { formats, conditionalFormats });
+      const removed =
+        edit.kind === "delete" ? layout.rowIds.slice(edit.index, edit.index + edit.count) : [];
+      const heights = { ...table.gridSizes.rows };
+      for (const id of removed) Reflect.deleteProperty(heights, id);
+      await writer.updateTable(table.id, {
+        formats,
+        conditionalFormats,
+        gridSizes: { ...table.gridSizes, rows: heights },
+      });
     } else if (edit.kind === "insert") {
       const added = edit.ids ?? Array.from({ length: edit.count }, () => randomUUID());
       await writer.updateTable(table.id, {
@@ -2270,9 +2329,12 @@ export class SpreadsheetRepository {
       });
     } else {
       const removed = table.colIds.slice(edit.index, edit.index + edit.count);
+      const widths = { ...table.gridSizes.columns };
+      for (const id of removed) Reflect.deleteProperty(widths, id);
       await writer.clearCells(table.id, inArray(cells.colId, removed));
       await writer.updateTable(table.id, {
         colIds: table.colIds.toSpliced(edit.index, edit.count),
+        gridSizes: { ...table.gridSizes, columns: widths },
         columns: current?.toSpliced(edit.index, edit.count) ?? null,
         formats,
         conditionalFormats,
@@ -2541,7 +2603,12 @@ export class SpreadsheetRepository {
         .from(tables)
         .where(eq(tables.id, id))
         .limit(1);
-      if (!sameRecord(current ?? null, expected(before, after))) {
+      const recorded = expected(before, after);
+      const normalized = recorded && {
+        ...recorded,
+        gridSizes: recorded.gridSizes ?? { rows: {}, columns: {} },
+      };
+      if (!sameRecord(current ?? null, normalized)) {
         throw new UndoRefusal("This table has changed since this step");
       }
     }

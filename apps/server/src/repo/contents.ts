@@ -9,7 +9,11 @@ import { columnDeleted, notFound, rowDeleted } from "../errors";
 import type { Snapshot, TableRecord, ViewRecord } from "./spreadsheets";
 
 /** A table with the size its rows and columns give it, as the engine and a file state it. */
-export type SizedTable = TableRecord & { rowCount: number; colCount: number };
+export type SizedTable = TableRecord & {
+  rowCount: number;
+  colCount: number;
+  rows: { id: string }[];
+};
 
 /**
  * One read of a spreadsheet, in both forms the server works with. Storage,
@@ -30,6 +34,7 @@ export class Contents {
         ...table,
         ...(table.display.filter === undefined ? {} : { filter: table.display.filter }),
         rowCount: this.layout(table.id).rowIds.length,
+        rows: this.layout(table.id).rowIds.map((id) => ({ id })),
         colCount: table.colIds.length,
       })),
       views: snapshot.views,

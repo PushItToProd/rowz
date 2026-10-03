@@ -29,6 +29,23 @@ function cell(page: Page, address: string, table = "Table 1"): Locator {
   return page.locator(`[data-table="${table}"] [data-cell="${address}"]`);
 }
 
+/** Collapsed table borders can make the rendered size differ by a fraction of a pixel. */
+async function expectCellSize(
+  page: Page,
+  address: string,
+  dimension: "width" | "height",
+  size: number,
+): Promise<void> {
+  await expect
+    .poll(() =>
+      cell(page, address).evaluate(
+        (element, dimension) => Math.round(element.getBoundingClientRect()[dimension]),
+        dimension,
+      ),
+    )
+    .toBe(size);
+}
+
 /** Types into a cell the way a person does: click it, type, press Enter. */
 async function enter(page: Page, address: string, text: string, table = "Table 1"): Promise<void> {
   await cell(page, address, table).click();
@@ -936,6 +953,62 @@ test("undo reverses a format, a row insertion, and a cell edit", async ({ page }
   await expect(cell(page, "A1")).toHaveText("");
   await expect(cell(page, "A2")).toHaveCount(1);
   await expect(cell(page, "A1").locator(".cell-value")).not.toHaveCSS("font-weight", "700");
+});
+
+test("header border resizing persists and supports reset, undo, and redo", async ({ page }) => {
+  await newSpreadsheet(page);
+  async function drag(label: string, dx: number, dy: number) {
+    const handle = page.getByLabel(label, { exact: true });
+    const box = await handle.boundingBox();
+    if (!box) throw new Error(`No bounds for ${label}`);
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy);
+    await page.mouse.up();
+  }
+  await drag("Resize column A", 80, 0);
+  await expectCellSize(page, "A1", "width", 200);
+  await drag("Resize row 1", 0, 40);
+  await expectCellSize(page, "A1", "height", 70);
+  await reload(page);
+  await expectCellSize(page, "A1", "width", 200);
+  await expectCellSize(page, "A1", "height", 70);
+  await page.getByLabel("Resize column A", { exact: true }).dblclick();
+  await expectCellSize(page, "A1", "width", 120);
+  await cell(page, "A1").click();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expectCellSize(page, "A1", "width", 200);
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expectCellSize(page, "A1", "width", 120);
+});
+
+test("header menus resize selected rows and columns in pixels", async ({ page }) => {
+  await newSpreadsheet(page);
+  const columns = page.locator('[data-table="Table 1"] thead th');
+  await columns.nth(1).click();
+  await columns.nth(2).click({ modifiers: ["Shift"] });
+  await columns.nth(2).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Resize column", exact: true }).click();
+  let form = page.getByRole("form", { name: "Resize column", exact: true });
+  await form.getByRole("spinbutton").fill("175");
+  await form.getByRole("button", { name: "Apply", exact: true }).click();
+  await expectCellSize(page, "A1", "width", 175);
+  await expectCellSize(page, "B1", "width", 175);
+  const rows = page.locator('[data-table="Table 1"] tbody th');
+  await rows.nth(0).click();
+  await rows.nth(1).click({ modifiers: ["Shift"] });
+  await rows.nth(1).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Resize row", exact: true }).click();
+  form = page.getByRole("form", { name: "Resize row", exact: true });
+  await form.getByRole("spinbutton").fill("65");
+  await form.getByRole("button", { name: "Apply", exact: true }).click();
+  await expectCellSize(page, "A1", "height", 65);
+  await expectCellSize(page, "A2", "height", 65);
+  await reload(page);
+  await expectCellSize(page, "A2", "width", 175);
+  await expectCellSize(page, "A2", "height", 65);
 });
 
 test("the header says when a change is on its way to the server", async ({ page }) => {

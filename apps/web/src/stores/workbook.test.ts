@@ -194,6 +194,46 @@ describe("loading", () => {
   });
 });
 
+describe("grid sizes", () => {
+  it("saves identities, applies the returned metadata, exports sizes, and applies undo", async () => {
+    const store = await open();
+    const sized = { ...TABLE, gridSizes: { rows: { r1: 60 }, columns: { c2: 200 } } };
+    server.resizeLines.mockResolvedValue(changeWith(sized));
+    expect(await store.resizeLines("t1", "col", ["c2"], 200)).toBe(true);
+    expect(server.resizeLines).toHaveBeenCalledExactlyOnceWith("t1", {
+      axis: "col",
+      ids: ["c2"],
+      size: 200,
+    });
+    expect(store.tables[0]!.gridSizes).toEqual(sized.gridSizes);
+    expect(store.toFile()?.pages[0]!.blocks[0]).toMatchObject({
+      gridSizes: { rows: [{ index: 1, size: 60 }], columns: [{ index: 1, size: 200 }] },
+    });
+    notifyJournaled();
+    server.undo.mockResolvedValue({
+      outcome: "done",
+      label: "Resize",
+      error: null,
+      change: changeWith(TABLE),
+      undoable: false,
+      redoable: true,
+    });
+    await store.undo();
+    expect(store.tables[0]!.gridSizes).toEqual({ rows: {}, columns: {} });
+  });
+
+  it("refuses viewer writes and reports a failed save without changing sizes", async () => {
+    const viewer = await open({}, "viewer");
+    expect(await viewer.resizeLines("t1", "row", ["r1"], 60)).toBe(false);
+    expect(server.resizeLines).not.toHaveBeenCalled();
+    const store = await open();
+    server.resizeLines.mockRejectedValueOnce(new Error("Row deleted"));
+    expect(await store.resizeLines("t1", "row", ["r1"], 60)).toBe(false);
+    expect(store.tables[0]!.gridSizes).toEqual({ rows: {}, columns: {} });
+    expect(store.notice?.kind).toBe("error");
+  });
+});
+
 describe("setCell", () => {
   it("shows the new value before the save finishes, then saves it", async () => {
     const store = await open({ A1: "1", B1: "=A1+1" });

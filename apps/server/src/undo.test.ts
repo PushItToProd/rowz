@@ -448,6 +448,30 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "resize a table's columns",
+    async prepare({ id, tableId }) {
+      const read = await readSnapshot(owner, id);
+      return {
+        method: "PUT",
+        path: `/tables/${tableId}/grid-sizes`,
+        body: { axis: "col", ids: [read.tables[0]!.colIds[0]], size: 180 },
+        status: 200,
+      };
+    },
+  },
+  {
+    name: "resize a table's rows",
+    async prepare({ id, tableId }) {
+      const read = await readSnapshot(owner, id);
+      return {
+        method: "PUT",
+        path: `/tables/${tableId}/grid-sizes`,
+        body: { axis: "row", ids: rowIds(read, tableId).slice(0, 2), size: 60 },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "name columns",
     prepare({ tableId }) {
       return {

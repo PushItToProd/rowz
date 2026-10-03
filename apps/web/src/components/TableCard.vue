@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { columnLabel, formatAddress, type ColumnType } from "@spreadsheet-app/engine";
-import { LIMITS } from "@spreadsheet-app/shared";
+import { GRID_SIZE, LIMITS } from "@spreadsheet-app/shared";
 import { computed, ref } from "vue";
 import { parseCsv, toCsv } from "../files/csv";
 import { download, fileName } from "../files/download";
@@ -14,6 +14,7 @@ import ErrorWarning from "./ErrorWarning.vue";
 import GridView from "./GridView.vue";
 import NamesPanel from "./NamesPanel.vue";
 import ResizeTable from "./ResizeTable.vue";
+import ResizeLines from "./ResizeLines.vue";
 import TableDisplayBar from "./TableDisplayBar.vue";
 import type { MenuItem, MenuScope } from "./menu";
 
@@ -269,6 +270,32 @@ function columnItems(col: number): MenuItem[] {
 /** Where the menu of row, column, and cell actions is open, if it is, and what it acts on. */
 const menuAt = ref<{ x: number; y: number; scope: MenuScope } | null>(null);
 
+const resizingLines = ref<{ axis: "row" | "col"; ids: string[]; initial: number } | null>(null);
+
+function openLineResize({ axis, first, count }: Lines): void {
+  const ids = Array.from({ length: count }, (_, offset) =>
+    axis === "row"
+      ? props.table.rows[view.value.storedRow(first + offset)]?.id
+      : props.table.colIds[first + offset],
+  ).filter((id): id is string => id !== undefined);
+  if (!ids.length) return;
+  const sizes = axis === "row" ? props.table.gridSizes.rows : props.table.gridSizes.columns;
+  const firstId = ids[0];
+  resizingLines.value = {
+    axis,
+    ids,
+    initial: (firstId === undefined ? undefined : sizes[firstId]) ?? GRID_SIZE[axis].default,
+  };
+}
+
+function applyLineResize(size: number | null): void {
+  const target = resizingLines.value;
+  if (!target) return;
+  void store.resizeLines(props.table.id, target.axis, target.ids, size);
+  resizingLines.value = null;
+  store.focusGrid();
+}
+
 /** The items that insert and delete the selected rows, or the selected columns. */
 function lineItems(lines: Lines): MenuItem[] {
   const { axis, first, count } = lines;
@@ -326,6 +353,16 @@ const menuItems = computed((): MenuItem[] => {
     count: range.endCol - range.startCol + 1,
   };
   const groups: MenuItem[][] = [
+    scope === "cells"
+      ? []
+      : [
+          {
+            label: `Resize ${scope === "row" ? "row" : "column"}`,
+            run: () => {
+              openLineResize(scope === "row" ? rows : cols);
+            },
+          },
+        ],
     scope === "col" ? [] : lineItems(rows),
     scope === "row" ? [] : lineItems(cols),
     // What a column holds is set one column at a time.
@@ -501,6 +538,17 @@ const menuLabel = computed(() => {
         </button>
       </template>
     </div>
+    <ResizeLines
+      v-if="resizingLines && store.canEdit"
+      :key="resizingLines.axis + resizingLines.ids.join(',')"
+      :axis="resizingLines.axis"
+      :initial="resizingLines.initial"
+      @resize="applyLineResize"
+      @close="
+        resizingLines = null;
+        store.focusGrid();
+      "
+    />
     <ContextMenu
       v-if="namingAt"
       :x="namingAt.x"

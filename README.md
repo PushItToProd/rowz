@@ -32,7 +32,7 @@ The aim is to do what a traditional spreadsheet does, and do it better. I build 
 
 ### Features of other spreadsheets
 
-- **Layout:** merged cells, borders, resizing rows and columns, wrapping text in a cell, hiding rows and columns, and freezing header rows.
+- **Layout:** merged cells, borders, wrapping text in a cell, hiding rows and columns, and freezing header rows.
 - **Working with data:** sorting and filtering a table in place, pivot tables (`QUERY` has a `pivot` clause), find and replace, conditional formats, and validation of what a cell accepts.
 - **Functions:** coverage follows what I use. Less common financial, statistical, and scientific functions are missing or lightly tested. There are no regular expressions, no random numbers, and no `INDIRECT` or `OFFSET`.
 - **Charts:** four kinds, with no axis titles, colors, or stacking.
@@ -82,6 +82,8 @@ A document holds pages, and a page holds blocks: tables, charts, and text views.
 ### Tables
 
 A table is a grid of cells with its own column letters and row numbers.
+
+Drag a column header's right border to change its width, or a row header's bottom border to change its height. Double-click the border to reset its size. A header's context menu offers **Resize column** or **Resize row** with a size in pixels; it applies to all selected columns or rows. Sizes follow the rows and columns through structural edits, persist with the document, and support undo and redo.
 
 A table can have named columns, which makes it a data table. `[Price]` is the cell of that column in the formula's own row, and `Sales[Price]` is the whole column of the table Sales. A column can be typed (text, number, date, checkbox), be a dropdown whose choices are a list or the values of a column of another data table, or be a formula column, which computes one formula in every stored row. A data table holds the rows added to it, including rows whose values were later cleared, and can have no rows. An empty line below its last row adds a row when you type into it. Naming columns removes trailing empty rows.
 

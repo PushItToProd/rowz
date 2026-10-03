@@ -1,0 +1,1 @@
+ALTER TABLE "tables" ADD COLUMN "grid_sizes" jsonb DEFAULT '{"rows":{},"columns":{}}'::jsonb NOT NULL;
