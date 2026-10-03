@@ -124,7 +124,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P4** show cell errors in a popover on hover instead of using a native browser tooltip
 - [ ] **P4** (Claude) clicking a cell or dragging over a range while a formula is being typed writes its reference at the caret, as Excel and Sheets do. A formula's references are typed by hand today
 - [ ] **P4** (Claude) color each reference in the formula being edited, and outline the cells it names in the same color
-- [ ] **P7** when a spill error occurs, the popover should have a button to resize the table to fit
+- [ ] **P7** when a spill error is caused by table dimensions, show a “Resize table to fit” button in its popover
+- [ ] **P6** Clearly explain why an array result cannot spill: when the table is too small, say e.g. “The result needs 12 rows and 26 columns, but the table is only 11 rows and 15 columns”; when existing values block it, say e.g. “but one or more cells in A1:P26 already have values.” Do not name a target cell when the table dimensions are the reason it cannot fit.
 
 - [ ] **P4** implement the handy tab+enter workflow from Excel and Sheets -- if you select a certain cell with the mouse or arrow keys, use tab to traverse multiple cells (optionally entering values into any or none of them), then input a value into a cell and submit that value by hitting enter, it'll drop to the next row in the column where you started
   - example: in a table, select C3. hit tab 3 times (optionally entering values in any cells in C3:E3 along the way) - now you're in F3. hit enter to focus the cell input (or just start typing), type anything (or nothing), and hit enter to submit. the selection should move to C4.
@@ -189,6 +190,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [x] `QUERY` shows named columns in its output, including for ranges such as `Sales!A:C`
   - [x] sort and filter a data table in place (`plans/data-tables.md`, stage 1)
   - [x] dropdown columns (`plans/data-tables.md`, stage 2)
+- [ ] add a way to save multiple sort and filter view presets for each data table
+- [ ] explore adding a generated, dynamically sized data table block type defined by the output of a formula, so changing the result's row or column count does not require manually managing table dimensions; the implementation approach is open and needs to consider conditional formatting and other proprrties as well (may also be addressed by the proposal to support conditional formatting and sorting when rendering data tables in markdown)
 - [ ] (Claude) consider deleting a data table's row when its last cell is cleared. `plans/persistent-row-identity.md` keeps such a row, so that its id stays valid for a relation that points at it, and deletes empty rows only at the end of a table when its columns are named
 - [ ] **P6** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable
 - [ ] **P4** when updating a formula column's formula, use an in-page editor with proper formula support (modal or popover or maybe just hijack the formula bar), not a browser `input` popup
@@ -204,6 +207,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P6** when a chart has dates on one axis, they should be spaced out like numeric data, not categorical -- right now if I have a plot with `2018-08-22`, `2019-03-04`, `2019-12-03`, `2020-03-01`, `2021-08-25` on the X-axis, those points all appear equally horizontally spaced, but they should have variable width gaps proportional to the number of days between them just like they would if they were ordinary numbers and the X-axis should have dates at regular intervals covering the time period
 - [ ] **P10** show labels on charts on hover
 - [x] allow editing markdown views by just double clicking on the text (instead of clicking "Edit"). save and exit edit mode when the user unfocuses the input (instead of requiring user to hit "Done") (keep the "Edit" and "Done" buttons for user convenience)
+- [ ] support conditional formatting and sorting when rendering a data table in Markdown, or allow embedding an existing table/sheet in a Markdown view so its conditional formatting is applied
 - [ ] **P6** duplicate the "Add table", "Add chart", "Add text" buttons at the top and between each item so you can insert them anywhere
 - [ ] **P3** add a new type of block (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side
 - [x] **P1** add an `assert` function that can be used for testing. if a sheet has any failing assertions, show a visible warning in the menu bar with a link the user can click to see the failing assertions
@@ -226,6 +230,21 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] more formatting: 
   - [ ] **P8** borders
   - [x] basic conditional formatting (`plans/data-tables.md`, stage 3)
+  - [ ] conditional formatting followups:
+    - [ ] allow a criterion formula to refer to the current cell with a placeholder such as `X` or `X()`, e.g. `X>10`
+    - [ ] support relative references in criterion formulas, e.g. `X()>X(0,+1)` for “this cell is greater than the value to its right”
+    - [ ] calculate color range values with a formula, e.g. `CLAMP(X(), -5, 5)`, and use those results to choose colors
+    - [ ] allow HTML color names and hex RGB codes for conditional formatting colors
+      - [ ] make color dropdowns comboboxes that show current options on click, suggest valid HTML color names while typing, and accept hex codes beginning with `#`
+    - [ ] allow a formula to return a conditional formatting color, including HTML color names such as `red` or `purple` and numeric values, so a user-defined function can control coloring
+    - [ ] advanced color range settings:
+      - [ ] choose arbitrary colors for minimum, midpoint, and maximum points
+      - [ ] choose each point's value as the range minimum/maximum as appropriate, a fixed number, a percent, or a percentile
+    - [ ] support more conditional formatting types, including text decoration (bold, italics, etc.) and cell borders
+      - Formula-based formatting may initially need a separate formula for each formatting type; revisit the design when struct types are supported
+    - [ ] explore user-configurable ways to combine multiple conditional formatting rules:
+      - [ ] mix colors applied by multiple rules
+      - [ ] split a cell background into segments colored by each applicable rule
   - [ ] **P8** carrying formats through copy, fill, and paste
   - [ ] (Claude) wrap long text within a cell
 
