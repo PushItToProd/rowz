@@ -599,3 +599,11 @@ Together they make a form: inputs, a Save button that appends to a log table and
 - Conditional rules follow inserted and deleted rows and columns as plain format rules do.
 
 **To change.** `packages/engine/src/conditional.ts`, `setConditionalFormats` in `apps/server/src/repo/spreadsheets.ts`, and `formatOf` in the workbook store.
+
+## 2026-10-03: The Gran Turismo 7 sample uses representative data
+
+**Decision.** `samples/gt7-grind-comparison.json` holds five invented races with round payouts and run times of 6 to 9 minutes. It is built from the description in `plans/data-tables.md`, not from the author's sheet.
+
+**Why.** The Google Drive read of the sheet was denied, and the xlsx export the plan names as the fallback is not in the checkout. Inventing the data keeps the document usable as the acceptance test of the data-table features. The `todo.md` entry asks for a comparison with the real sheet.
+
+**To change.** Replace the cells of the Races table. The formula columns and the report follow the data.

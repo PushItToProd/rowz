@@ -1,0 +1,390 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "GT7 grind comparison",
+  "pages": [
+    {
+      "name": "Data",
+      "blocks": [
+        {
+          "type": "table",
+          "name": "Races",
+          "rowCount": 5,
+          "colCount": 4,
+          "columns": [
+            {
+              "name": "Race Name",
+              "type": "text"
+            },
+            {
+              "name": "Payout with bonus",
+              "type": "number"
+            },
+            {
+              "name": "Min Duration",
+              "type": "number"
+            },
+            {
+              "name": "Max Duration",
+              "type": "number"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "#,##0"
+              }
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Tokyo Expressway East, 3 laps"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "92000"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "6"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "8"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Deep Forest Raceway, 5 laps"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "115000"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "7"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "9"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Autodromo Lago Maggiore GP"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "78000"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "6"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "7"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Dragon Trail Seaside"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "66000"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "7"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "8"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "Special Stage Route 5"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "104000"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "8"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "9"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Runs",
+          "rowCount": 10,
+          "colCount": 7,
+          "columns": [
+            {
+              "name": "Race",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Data",
+                "table": "Races",
+                "column": "Race Name"
+              }
+            },
+            {
+              "name": "Duration",
+              "type": "number"
+            },
+            {
+              "name": "Payout per minute",
+              "type": "formula",
+              "formula": "=IFERROR(INDEX(Races[Payout with bonus], MATCH([Race], Races[Race Name], 0)) / [Duration], \"\")"
+            },
+            {
+              "name": "Races per hour",
+              "type": "formula",
+              "formula": "=IFERROR(60 / [Duration], \"\")"
+            },
+            {
+              "name": "Races in 8 hours",
+              "type": "formula",
+              "formula": "=IFERROR(8 * 60 / [Duration], \"\")"
+            },
+            {
+              "name": "Races in 5 days",
+              "type": "formula",
+              "formula": "=IFERROR(5 * 8 * 60 / [Duration], \"\")"
+            },
+            {
+              "name": "Payout over 40 hours",
+              "type": "formula",
+              "formula": "=IFERROR([Payout per minute] * 40 * 60, \"\")"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 2,
+              "format": {
+                "numberFormat": "#,##0"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 3,
+              "endCol": 5,
+              "format": {
+                "numberFormat": "0.0"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 6,
+              "endCol": 6,
+              "format": {
+                "numberFormat": "#,##0"
+              }
+            }
+          ],
+          "conditionalFormats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 2,
+              "kind": "scale",
+              "low": "red",
+              "high": "green"
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 2,
+                "descending": true
+              }
+            ]
+          },
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Tokyo Expressway East, 3 laps"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "6"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Tokyo Expressway East, 3 laps"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "8"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Deep Forest Raceway, 5 laps"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "7"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Deep Forest Raceway, 5 laps"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "9"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "Autodromo Lago Maggiore GP"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "6"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "Autodromo Lago Maggiore GP"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "7"
+            },
+            {
+              "row": 6,
+              "col": 0,
+              "input": "Dragon Trail Seaside"
+            },
+            {
+              "row": 6,
+              "col": 1,
+              "input": "7"
+            },
+            {
+              "row": 7,
+              "col": 0,
+              "input": "Dragon Trail Seaside"
+            },
+            {
+              "row": 7,
+              "col": 1,
+              "input": "8"
+            },
+            {
+              "row": 8,
+              "col": 0,
+              "input": "Special Stage Route 5"
+            },
+            {
+              "row": 8,
+              "col": 1,
+              "input": "8"
+            },
+            {
+              "row": 9,
+              "col": 0,
+              "input": "Special Stage Route 5"
+            },
+            {
+              "row": 9,
+              "col": 1,
+              "input": "9"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Report",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Summary",
+          "source": "# Grinding credits in Gran Turismo 7\n\nWhich race pays the most for the time it takes? **Races** lists each race with its payout, bonus included, and the shortest and longest time a run takes in minutes. **Runs** records a run of each race at those times. Choose the race from the dropdown and enter the duration in minutes: the columns to the right work out the payout per minute and what a long grind adds up to.\n\n{% let best = MAX(Data!Runs[Payout per minute]) %}\nThe best run pays **{{ TEXT(best, \"#,##0\") }}** credits a minute, in {{ INDEX(Data!Runs[Race], MATCH(best, Data!Runs[Payout per minute], 0)) }}. At that rate 40 hours of racing pays **{{ TEXT(best * 40 * 60, \"#,##0\") }}** credits.\n\nThe races and payouts here are representative examples. Replace them with the ones you can run.\n"
+        },
+        {
+          "type": "table",
+          "name": "Payout over 40 hours",
+          "rowCount": 8,
+          "colCount": 6,
+          "formats": [
+            {
+              "startRow": 1,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": null,
+              "format": {
+                "numberFormat": "#,##0"
+              }
+            }
+          ],
+          "conditionalFormats": [
+            {
+              "startRow": 1,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": null,
+              "kind": "scale",
+              "low": null,
+              "high": "green"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "=QUERY(Runs, \"select Race, sum(`Payout over 40 hours`) group by Race pivot Duration\")"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -823,6 +823,52 @@ test("a conditional format fills the cells that meet a criterion and follows the
   await expect(cell(page, "A2")).toHaveCSS("background-color", "rgb(253, 226, 223)");
 });
 
+test("the Gran Turismo sample imports sorted, with dropdowns and color scales, and survives an export", async ({
+  page,
+}, testInfo) => {
+  await signUp(page);
+  await page.getByLabel("Import").setInputFiles("samples/gt7-grind-comparison.json");
+  // The n-th row shown and the column, whichever stored row they are.
+  const shown = (row: number, col: number): Locator =>
+    page.locator(
+      `[data-table="Runs"] tbody tr:nth-child(${String(row)}) td:nth-child(${String(col + 2)})`,
+    );
+
+  // The runs are shown by payout per minute, highest first, and the best is shaded the most.
+  const expectSampleSettings = async (): Promise<void> => {
+    await expect(shown(1, 0).getByRole("combobox")).toHaveValue("Deep Forest Raceway, 5 laps");
+    await expect(shown(1, 2)).toHaveText("16,429");
+    const best = await shown(1, 2).evaluate((element) => getComputedStyle(element).backgroundColor);
+    const worst = await shown(10, 2).evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    );
+    expect(best).not.toBe(worst);
+    // The dropdown offers the races of the Races table, and an empty choice.
+    await expect(shown(1, 0).getByRole("option")).toHaveCount(6);
+  };
+  await expectSampleSettings();
+
+  // The sort, dropdowns, and scales travel in the file.
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const file = await download;
+  const filePath = testInfo.outputPath(file.suggestedFilename());
+  await file.saveAs(filePath);
+  await page.getByRole("link", { name: "← Spreadsheets" }).click();
+  await page.getByLabel("Import").setInputFiles(filePath);
+  await expectSampleSettings();
+
+  // Picking another race changes what the row earns, and the row moves to its place in the sort.
+  await shown(1, 0).getByRole("combobox").selectOption("Dragon Trail Seaside");
+  await expect(shown(1, 2)).not.toHaveText("16,429");
+  await expect(shown(1, 0).getByRole("combobox")).not.toHaveValue("Dragon Trail Seaside");
+
+  // The report page pivots the payout by race and duration, shaded by a scale.
+  await page.getByText("Report", { exact: true }).click();
+  await expect(cell(page, "A1", "Payout over 40 hours")).toHaveText("Race");
+  await expect(cell(page, "B1", "Payout over 40 hours")).toHaveText("6");
+});
+
 test("cells are formatted from the toolbar, and the formats follow their cells", async ({
   page,
 }) => {

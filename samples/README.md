@@ -4,4 +4,5 @@ Import a JSON file from the **Import** button on the spreadsheets list. The reco
 
 - [Household inventory and warranties](household-inventory.json) tracks item locations, purchase dates, warranty dates, receipt references, and computed warranty status. The receipt paths are examples, not files included here.
 - [One-hour fix queue](one-hour-fix-queue.json) checks task time, tools, and materials against editable settings. It suggests the eligible task with the smallest priority number; it evaluates each task independently instead of packing a set of tasks into the hour.
+- [Gran Turismo 7 grind comparison](gt7-grind-comparison.json) compares races by payout per minute and by what a long grind adds up to. Pick each run's race from a dropdown fed by the races table, and read the runs sorted by payout with a color scale. The races and payouts are representative examples, not figures from the game.
 - [Monthly budget](monthly-budget.json) compares planned categories with a September 2026 transaction ledger and charts planned versus actual spending by category. Update the date ranges in its formulas when reusing it for another month.

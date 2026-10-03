@@ -27,6 +27,7 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 ## Plans
 
 - [x] **P1** implement [persistent row identity](plans/persistent-row-identity.md)
+- [x] implement [data tables](plans/data-tables.md): sort and filter, dropdown columns, conditional formats, and the Gran Turismo 7 sample
 
 ## Bugs
 
@@ -181,7 +182,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] (Claude) reorder the tables, charts, and text views on a page (arrows beside each one)
 - [x] **P1** (Claude) give rows and columns persistent identities in storage, snapshots, and editor requests. All implementation steps of `plans/persistent-row-identity.md` are implemented
 - [x] **P1** finish steps 4–11 of `plans/persistent-row-identity.md`: ID-keyed cells and journal entries, narrower undo conflicts, appended rows, revisioned content events, stale-formula refusals, and OVERWRITE row deletion
-- [ ] **P2** data tables: sort and filter in place, dropdown columns, and `QUERY(Sales, ...)` over a whole table with its column names as headers
+- [x] data tables: sort and filter in place, dropdown columns, and `QUERY(Sales, ...)` over a whole table with its column names as headers
   - (Claude) after row identity, which sorting and hiding rows depend on
   - (author) sorting and filtering are display settings of a table. They leave the stored row order alone, so `A2` keeps its meaning
   - [x] reference an entire data table by its unique name; `QUERY(Sales, ...)` uses the table's column names as headers
@@ -261,7 +262,11 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - build reference documents in rowz as far as its features allow, at the end of each theme
   - [x] **P1** a [monthly budget example](docs/reference/monthly-budget.json): a data table of inflows and outflows, each with a category and an account, and reports of the month's amounts grouped by category and by account
     - (Codex) `_scratch/google-sheets` was absent from this checkout, so the example uses representative October transactions instead of source-sheet data.
-  - [ ] **P2** a comparison of high-payout races in Gran Turismo 7, after https://docs.google.com/spreadsheets/d/1rZxgfay0Gjq7MuSmOkioZC4srW5yerPfiYR0XAXcE3c
+  - [x] a comparison of high-payout races in Gran Turismo 7, after https://docs.google.com/spreadsheets/d/1rZxgfay0Gjq7MuSmOkioZC4srW5yerPfiYR0XAXcE3c ([sample](samples/gt7-grind-comparison.json))
+    - (Claude) the source sheet could not be read: the Google Drive read was denied and `_scratch/google-sheets-exported-to-xlsx` is absent from this checkout. The races, payouts, and durations are representative, and the columns follow `plans/data-tables.md`. Compare it with the real sheet and replace the data.
+    - (Claude) `Runs[Race]` written on another page than the table is `#REF!`, though `QUERY(Runs, ...)` with the bare name works. A column reference needs the page, as in `Data!Runs[Race]`. Decide whether a unique bare table name should work as the table of a column reference too.
+    - (Claude) `QUERY ... pivot Duration` writes the pivoted numbers as text headers (`"6"`, not `6`), so a header cannot be compared as a number.
+    - (Claude) each run is entered by hand with a race picked from the dropdown, so one race at one duration appears once. A way to build the grid of every race at every duration from `Races` would remove the hand-entered rows.
   - [ ] **P3** a video game quest tracker, after https://docs.google.com/spreadsheets/d/1cwsRONdpXMJAvjpamauZ391NrTXX1gEdeTrx1Rf324o
   - [ ] **P4** a few standard templates in the style of Sheets and Excel (invoice, contacts list, to-do list), and one or two in the style of Access and FileMaker
   - [ ] **P10** revise/augment the samples after we've added formatting, conditional formatting, etc.
