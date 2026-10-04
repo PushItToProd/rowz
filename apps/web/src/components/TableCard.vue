@@ -27,7 +27,6 @@ const selected = computed(() =>
 );
 /** The rows the table shows, which are what a selection of rows names. */
 const view = computed(() => store.rowView(props.table.id));
-const rowsFull = computed(() => props.table.rowCount >= LIMITS.tableRows);
 const colsFull = computed(() => props.table.colCount >= LIMITS.tableCols);
 
 function remove(): void {
@@ -287,6 +286,7 @@ function growthAvailable(axis: Axis): number {
   );
 }
 
+const rowsFull = computed(() => growthAvailable("row") === 0);
 const growLimit = computed(() => (growMenu.value ? growthAvailable(growMenu.value.axis) : 0));
 const growNoun = computed(() => (growMenu.value?.axis === "row" ? "rows" : "columns"));
 

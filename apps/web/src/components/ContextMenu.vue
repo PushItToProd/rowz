@@ -106,7 +106,9 @@ onMounted(async () => {
   positioned.value = true;
   await nextTick();
   if (mounting !== lifecycle) return;
-  buttons().at(0)?.focus({ preventScroll: true });
+  const firstButton = buttons().at(0);
+  if (firstButton) firstButton.focus({ preventScroll: true });
+  else element.focus({ preventScroll: true });
   if (typeof ResizeObserver !== "undefined") {
     resizeObserver = new ResizeObserver(reposition);
     resizeObserver.observe(element);
@@ -135,6 +137,7 @@ onBeforeUnmount(() => {
     ref="menu"
     class="context-menu"
     role="menu"
+    tabindex="-1"
     :aria-label="label"
     :style="{
       left: `${position.left}px`,

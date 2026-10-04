@@ -2,6 +2,7 @@ import { wireSnapshot, changeWith } from "../testing";
 import { expectedEdit } from "../testing";
 import { sizedTable } from "../testing";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import { LIMITS } from "@spreadsheet-app/shared";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
@@ -672,6 +673,24 @@ it("sends distinct row insertions for rapid clicks on Add row", async () => {
   expect(requests[0]).toMatchObject({ kind: "insert", beforeId: null });
   expect(requests[1]).toMatchObject({ kind: "insert", beforeId: null });
   expect(requests[0]?.ids[0]).not.toBe(requests[1]?.ids[0]);
+});
+
+it("disables Add row when the spreadsheet-wide row limit is reached", async () => {
+  await render();
+  const store = useWorkbookStore();
+  store.tables = [
+    ...store.tables,
+    {
+      ...TABLE,
+      id: "t2",
+      rowCount: LIMITS.spreadsheetRows - TABLE.rowCount,
+      rows: [],
+    },
+  ];
+  await wrapper.vm.$nextTick();
+
+  expect(wrapper.get('button[aria-label="Add row"]').attributes("disabled")).toBeDefined();
+  expect(server.editTable).not.toHaveBeenCalled();
 });
 
 it.each([

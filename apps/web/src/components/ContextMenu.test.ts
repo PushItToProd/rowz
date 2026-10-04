@@ -45,6 +45,16 @@ describe("ContextMenu", () => {
     expect(focused()).toBe("First");
   });
 
+  it("focuses the menu when all its items are disabled, so Escape closes it", async () => {
+    const menu = render([{ label: "Unavailable", disabled: true, run: vi.fn() }]);
+    await flushPromises();
+
+    expect(menu.attributes("tabindex")).toBe("-1");
+    expect(document.activeElement).toBe(menu.element);
+    await menu.trigger("keydown", { key: "Escape" });
+    expect(menu.emitted("close")).toHaveLength(1);
+  });
+
   it("does not close during its initial positioning and focus", async () => {
     const menu = render(items().all);
     expect(menu.isVisible()).toBe(false);

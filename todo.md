@@ -142,8 +142,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 
 - [x] add a long thin "+" button along the full width/height of the bottom/right side of each table for adding rows/cols. this way I can just click anywhere along the range
 - [x] right-clicking the row and column "+" strips opens a context menu to add 5, 10, or 15 rows or columns, or enter a custom count
-  - [ ] **P8** (Claude) a growth menu with every item disabled (the spreadsheet is at its row limit) cannot be dismissed with Escape from the keyboard, because no button takes focus and the menu has no `tabindex`. [ContextMenu.vue](apps/web/src/components/ContextMenu.vue)
-  - [ ] **P8** (Claude) the row "+" strip's left click ignores the spreadsheet-wide row limit: `rowsFull` in [TableCard.vue](apps/web/src/components/TableCard.vue) checks only the table's own limit, so at the spreadsheet limit the strip stays enabled and the server rejects the click
+  - [x] **P8** (Claude) a growth menu with every item disabled (the spreadsheet is at its row limit) cannot be dismissed with Escape from the keyboard, because no button takes focus and the menu has no `tabindex`. [ContextMenu.vue](apps/web/src/components/ContextMenu.vue)
+  - [x] **P8** (Claude) the row "+" strip's left click ignores the spreadsheet-wide row limit: `rowsFull` in [TableCard.vue](apps/web/src/components/TableCard.vue) checks only the table's own limit, so at the spreadsheet limit the strip stays enabled and the server rejects the click
 - [x] support resizing a whole table by just setting its width and height in cols/rows (warn the user and show a confirmation prompt if resizing will delete data)
 - [x] dragging over col/row headers should select multiple full columns/rows
 - [x] when multiple rows/columns are selected (either via row/col selection or by selecting specific cells), the context menu's "insert [row/column]" actions should become "insert N [rows/columns]", where `N` is the number of selected rows and cols as appropriate
@@ -451,3 +451,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - (Claude) numbers and dates shown in the reader's locale
 
 - allow table cells to contain structs/arrays/nested tables
+
+- [ ] `ContextMenu.vue` moves focus to the menu only on mount. If the focused item becomes disabled while the menu stays open (for example another tab uses the last row capacity), focus can leave the menu and Escape stops working. Keep focus on the menu when its focused item is disabled, and test it.
