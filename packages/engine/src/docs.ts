@@ -87,6 +87,14 @@ const ENTRIES: readonly FunctionDoc[] = [
     example: "COUNTA(A1:A5)",
   },
   {
+    name: "SUBTOTAL",
+    category: "Math",
+    syntax: "SUBTOTAL(function_code, range, ...)",
+    summary:
+      "Codes 1–11 select AVERAGE, COUNT, COUNTA, MAX, MIN, PRODUCT, STDEV, STDEVP, SUM, VAR_S, or VAR_P. Codes 101–111 do the same; all rows count because filtering and hiding only change the display.",
+    example: "SUBTOTAL(9, A1:A3)",
+  },
+  {
     name: "ROUND",
     category: "Math",
     syntax: "ROUND(number, [digits])",
@@ -306,6 +314,14 @@ const ENTRIES: readonly FunctionDoc[] = [
     summary:
       "The position of the key in a row or column, counting from 1. Type 0 is an exact match. Type 1, the default, is the nearest value at or below the key in ascending data, and -1 the nearest at or above it in descending data.",
     example: 'MATCH("banana", B1:B3, 0)',
+  },
+  {
+    name: "RANGE_CONTAINS",
+    category: "Lookup",
+    syntax: "RANGE_CONTAINS(range, value)",
+    summary:
+      "TRUE when the range has an exact match for the value. It uses MATCH's comparison: text ignores letter case, and values of different kinds do not match.",
+    example: 'RANGE_CONTAINS(B1:B3, "BANANA")',
   },
   {
     name: "INDEX",
@@ -659,6 +675,14 @@ const ENTRIES: readonly FunctionDoc[] = [
     example: "FILTER(B1:B3, A1:A3 > 1)",
   },
   {
+    name: "FILTER_COLUMNS",
+    category: "Arrays",
+    syntax: "FILTER_COLUMNS(range, condition_row, ...)",
+    summary:
+      "Keeps the columns where every condition row is true. Each condition must be one row as wide as the range.",
+    example: "FILTER_COLUMNS(A1:B3, A1:B1 <> 1)",
+  },
+  {
     name: "SORT",
     category: "Arrays",
     syntax: "SORT(range, [column], [ascending], ...)",
@@ -695,6 +719,14 @@ const ENTRIES: readonly FunctionDoc[] = [
     summary:
       "The first rows of the range, or the last rows when the count is negative. A third value does the same for columns.",
     example: "TAKE(SORT(A1:B3, 1, FALSE), 2)",
+  },
+  {
+    name: "ARRAY_CONSTRAIN",
+    category: "Arrays",
+    syntax: "ARRAY_CONSTRAIN(input_range, num_rows, num_cols)",
+    summary:
+      "Takes the requested rows and columns from a range, using the same count rules as TAKE.",
+    example: "ARRAY_CONSTRAIN(A1:B3, 2, 1)",
   },
   {
     name: "DROP",

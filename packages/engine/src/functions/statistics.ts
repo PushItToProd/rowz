@@ -1,6 +1,21 @@
 import { identityOf, type Evaluated } from "../values";
-import { boolean, eager, fail, grid, items, number, numbers, scalar } from "./arguments";
+import { boolean, eager, fail, grid, items, lazy, number, numbers, scalar } from "./arguments";
+import { mathFunctions } from "./math";
 import type { FunctionDefinition } from "./registry";
+
+const SUBTOTAL_FUNCTIONS: Readonly<Record<number, string>> = {
+  1: "AVERAGE",
+  2: "COUNT",
+  3: "COUNTA",
+  4: "MAX",
+  5: "MIN",
+  6: "PRODUCT",
+  7: "STDEV",
+  8: "STDEVP",
+  9: "SUM",
+  10: "VAR_S",
+  11: "VAR_P",
+};
 
 function mean(values: readonly number[]): number {
   return values.reduce((total, value) => total + value, 0) / values.length;
@@ -76,6 +91,23 @@ function fit(ys: Evaluated, xs: Evaluated): { slope: number; intercept: number }
 }
 
 export const statisticsFunctions: Record<string, FunctionDefinition> = {
+  /**
+   * Runs one of the standard aggregate functions. Codes 101–111 use the same
+   * functions as 1–11 because row visibility only changes the display.
+   */
+  SUBTOTAL: lazy(2, Infinity, (args, context) => {
+    const code = number(args[0]?.() ?? null);
+    const normalizedCode = code >= 101 && code <= 111 ? code - 100 : code;
+    const name = Number.isInteger(code) ? SUBTOTAL_FUNCTIONS[normalizedCode] : undefined;
+    if (name === undefined) {
+      fail("#VALUE!", "The function code must be an integer from 1 to 11 or 101 to 111");
+    }
+    const aggregate = mathFunctions[name] ?? statisticsFunctions[name];
+    if (aggregate?.kind !== "pure")
+      return fail("#ERROR!", "The subtotal function is not available");
+    return aggregate.call(args.slice(1), context);
+  }),
+
   /** The number that occurs most often. Of several that tie, the one that appears first. */
   MODE: eager(1, Infinity, (...values) => {
     const counts = new Map<number, number>();

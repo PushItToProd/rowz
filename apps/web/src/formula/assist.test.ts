@@ -34,7 +34,7 @@ describe("suggestionsAt", () => {
   it("offers functions that start with the typed letters, ignoring case, in alphabetical order", () => {
     expect(labels("=round")).toEqual(["ROUND", "ROUNDDOWN", "ROUNDUP"]);
     expect(labels("=1+ROUNDD")).toEqual(["ROUNDDOWN"]);
-    expect(suggest("=su").items[1]).toEqual({
+    expect(suggest("=su").items.find((item) => item.label === "SUM")).toEqual({
       kind: "function",
       label: "SUM",
       insert: "SUM(",

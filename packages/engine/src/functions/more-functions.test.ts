@@ -573,3 +573,57 @@ describe("MARKDOWN", () => {
     expect(evaluateFormula("=MARKDOWN(12)")).toEqual({ kind: "markdown", text: "12" });
   });
 });
+
+describe("SUBTOTAL", () => {
+  const values = { A1: "1", A2: "2", A3: "3" };
+  const expected: readonly [number, number][] = [
+    [1, 2],
+    [2, 3],
+    [3, 3],
+    [4, 3],
+    [5, 1],
+    [6, 6],
+    [7, 1],
+    [8, Math.sqrt(2 / 3)],
+    [9, 6],
+    [10, 1],
+    [11, 2 / 3],
+  ];
+
+  it.each(expected)("uses function code %i", (code, result) => {
+    expect(evaluateFormula(`=SUBTOTAL(${String(code)}, A1:A3)`, values)).toBeCloseTo(result, 10);
+    expect(evaluateFormula(`=SUBTOTAL(${String(code + 100)}, A1:A3)`, values)).toBeCloseTo(
+      result,
+      10,
+    );
+  });
+
+  it("keeps the aggregate functions' handling of text, blanks, and errors", () => {
+    const cells = { A1: "1", A2: "word", A3: "=1/0", A4: "" };
+    expect(evaluateFormula("=SUBTOTAL(2, A1:A4)", cells)).toBe(1);
+    expect(evaluateFormula("=SUBTOTAL(3, A1:A4)", cells)).toBe(3);
+    expect(evaluateFormula("=SUBTOTAL(9, A1:A4)", cells)).toMatchObject({
+      kind: "error",
+      code: "#DIV/0!",
+    });
+  });
+
+  it.each([0, 12, 100, 112, 1.5])("rejects unsupported function code %s", (code) => {
+    expectError(`=SUBTOTAL(${String(code)}, A1:A3)`, "#VALUE!", values);
+  });
+});
+
+describe("RANGE_CONTAINS", () => {
+  const cells = { A1: "apple", A2: "1", A3: "'1", A4: "=1/0", A5: "" };
+
+  it.each<[string, CellValue]>([
+    ['=RANGE_CONTAINS(A1:A4, "APPLE")', true],
+    ["=RANGE_CONTAINS(A1:A4, 1)", true],
+    ['=RANGE_CONTAINS(A1:A4, "1")', true],
+    ['=RANGE_CONTAINS(A2:A2, "1")', false],
+    ['=RANGE_CONTAINS(A1:A4, "missing")', false],
+    ["=RANGE_CONTAINS(A1:A5, A5)", false],
+  ])("%s is %j", (formula, expected) => {
+    expect(evaluateFormula(formula, cells)).toBe(expected);
+  });
+});

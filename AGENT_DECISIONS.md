@@ -2,6 +2,14 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-04: Aggregate and range helper semantics
+
+`SUBTOTAL` maps codes 1–11 to AVERAGE, COUNT, COUNTA, MAX, MIN, PRODUCT, STDEV, STDEVP, SUM, VAR_S, and VAR_P. Codes 101–111 use the same mapping and include all rows because filtering and hiding affect display only. It delegates to the existing aggregate functions, so their handling of text, blanks, dates, and errors applies. Nested `SUBTOTAL` results are included because evaluated range cells do not retain their source formulas.
+
+`ARRAY_CONSTRAIN` delegates to the same slicing logic as `TAKE`, including support for negative counts that take rows or columns from the end. `FILTER_COLUMNS` requires each condition argument to be a single row as wide as the range and combines those conditions with AND. `RANGE_CONTAINS` uses exact `MATCH` comparison: text ignores case, different value types do not match, blank cells do not match, and errors in the searched range are skipped.
+
+To change these choices, edit `SUBTOTAL` in `packages/engine/src/functions/statistics.ts`, the array helpers in `packages/engine/src/functions/arrays.ts`, or the equality helper used by `RANGE_CONTAINS` in `packages/engine/src/functions/lookup.ts`.
+
 ## 2026-10-04: Resize tables from dimension-caused spill errors
 
 `ErrorValue` keeps its existing code and message and gains optional spill metadata only when a result exceeds the table dimensions. The metadata names the minimum full table size required at the formula's position, so the web app does not parse the message or recalculate the position. The popover uses the store's existing table-resize request once for both dimensions, after checking table and spreadsheet row limits. A spill blocked by existing cell content carries no resize metadata.

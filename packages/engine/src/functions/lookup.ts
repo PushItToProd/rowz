@@ -66,6 +66,9 @@ function horizontal(rows: CellValue[][]): boolean {
 }
 
 export const lookupFunctions: Record<string, FunctionDefinition> = {
+  /** Whether a row or column contains a value equal to the key. Text comparison ignores letter case. */
+  RANGE_CONTAINS: eager(2, 2, (range, key) => exact(scalar(key), grid(range).flat()) !== -1),
+
   /**
    * The 1-based position of a value in a row or column. The match type is 0
    * for an exact match, 1 (the default) for the nearest value at or below

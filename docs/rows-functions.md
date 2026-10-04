@@ -6,18 +6,18 @@ The list was read from the Rows documentation index on 2026-09-30. Signatures fo
 
 ## Present
 
-| Area        | Functions                                                                                                                                                                                                                                                     |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Math        | `SUM AVERAGE MIN MAX PRODUCT MEDIAN COUNT COUNTA SUMPRODUCT SUMIF SUMIFS COUNTIF COUNTIFS MAXIFS MINIFS MOD POWER SQRT EXP LN LOG PI SIN COS TAN ASIN ACOS ATAN SINH COSH TANH DEGREES RADIANS SIGN TRUNC MROUND QUOTIENT EVEN ODD ISEVEN ISODD GCD LCM FACT` |
-| Statistics  | `MODE STDEV STDEVP VAR_S VAR_P PERCENTILE QUARTILE RANK CORREL COVARIANCE_S COVARIANCE_P SLOPE INTERCEPT FORECAST COUNTUNIQUE COUNTBLANK`                                                                                                                     |
-| Financial   | `PMT PV FV NPV IRR RATE NPER`                                                                                                                                                                                                                                 |
-| Text        | `CONCATENATE CONCAT TEXTJOIN JOIN SPLIT SUBSTITUTE TRIM PROPER UPPER LOWER LEN LEFT RIGHT MID FIND SEARCH REPT CHAR CODE ENCODEURL DECODEURL BASE64 BASE64DECODE DOMAIN RELATIVE_URL SLICE SLUGIFY TEXT FIXED VALUE`                                          |
-| Lookup      | `LOOKUP VLOOKUP HLOOKUP XLOOKUP XYLOOKUP INDEX MATCH ROW COLUMN`                                                                                                                                                                                              |
-| Arrays      | `FILTER SORT UNIQUE SEQUENCE TRANSPOSE FLATTEN QUERY`                                                                                                                                                                                                         |
-| Dates       | `DATE TIME DATEVALUE TIMEVALUE TO_DATE ISDATE DAYS DATEDIF EDATE EOMONTH YEAR YEARFRAC MONTH DAY WEEKDAY WEEKNUM ISOWEEKNUM HOUR MINUTE SECOND WORKDAY NETWORKDAYS TODAY NOW UNIXTIME UNIX2DATE LASTXDAYS LASTXWEEKS LASTXMONTHS DATEINTERVAL`                |
-| Logic       | `IF IFS SWITCH IFERROR IFNA AND OR NOT`                                                                                                                                                                                                                       |
-| Type checks | `ISTEXT ISNUMBER ISBLANK ISLOGICAL ISERROR ISERR ISNA ISNONTEXT`                                                                                                                                                                                              |
-| Actions     | `BUTTON EXECUTE SEND_EMAIL CLEAR INSERT UPDATE OVERWRITE`                                                                                                                                                                                                     |
+| Area        | Functions                                                                                                                                                                                                                                                              |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Math        | `SUM AVERAGE MIN MAX PRODUCT MEDIAN COUNT COUNTA SUBTOTAL SUMPRODUCT SUMIF SUMIFS COUNTIF COUNTIFS MAXIFS MINIFS MOD POWER SQRT EXP LN LOG PI SIN COS TAN ASIN ACOS ATAN SINH COSH TANH DEGREES RADIANS SIGN TRUNC MROUND QUOTIENT EVEN ODD ISEVEN ISODD GCD LCM FACT` |
+| Statistics  | `MODE STDEV STDEVP VAR_S VAR_P PERCENTILE QUARTILE RANK CORREL COVARIANCE_S COVARIANCE_P SLOPE INTERCEPT FORECAST COUNTUNIQUE COUNTBLANK`                                                                                                                              |
+| Financial   | `PMT PV FV NPV IRR RATE NPER`                                                                                                                                                                                                                                          |
+| Text        | `CONCATENATE CONCAT TEXTJOIN JOIN SPLIT SUBSTITUTE TRIM PROPER UPPER LOWER LEN LEFT RIGHT MID FIND SEARCH REPT CHAR CODE ENCODEURL DECODEURL BASE64 BASE64DECODE DOMAIN RELATIVE_URL SLICE SLUGIFY TEXT FIXED VALUE`                                                   |
+| Lookup      | `LOOKUP VLOOKUP HLOOKUP XLOOKUP XYLOOKUP INDEX MATCH RANGE_CONTAINS ROW COLUMN`                                                                                                                                                                                        |
+| Arrays      | `FILTER FILTER_COLUMNS SORT UNIQUE SEQUENCE TRANSPOSE ARRAY_CONSTRAIN FLATTEN QUERY`                                                                                                                                                                                   |
+| Dates       | `DATE TIME DATEVALUE TIMEVALUE TO_DATE ISDATE DAYS DATEDIF EDATE EOMONTH YEAR YEARFRAC MONTH DAY WEEKDAY WEEKNUM ISOWEEKNUM HOUR MINUTE SECOND WORKDAY NETWORKDAYS TODAY NOW UNIXTIME UNIX2DATE LASTXDAYS LASTXWEEKS LASTXMONTHS DATEINTERVAL`                         |
+| Logic       | `IF IFS SWITCH IFERROR IFNA AND OR NOT`                                                                                                                                                                                                                                |
+| Type checks | `ISTEXT ISNUMBER ISBLANK ISLOGICAL ISERROR ISERR ISNA ISNONTEXT`                                                                                                                                                                                                       |
+| Actions     | `BUTTON EXECUTE SEND_EMAIL CLEAR INSERT UPDATE OVERWRITE`                                                                                                                                                                                                              |
 
 `QUERY` follows the language Rows documented, with the differences recorded in AGENT_DECISIONS.md. Rows' `APPEND` stacks tables; here that is `VSTACK`. `INSERT`, `UPDATE`, and `OVERWRITE` take a range as their data. Rows also took JSON from an integration, and named `UPDATE`'s keys as JSON keys. Here the keys are column positions counted from 1. `APPEND_ROW(range, value, ...)` is this app's own, for one row of separate values.
 
@@ -30,7 +30,6 @@ The list was read from the Rows documentation index on 2026-09-30. Signatures fo
 5. **`TO_TIMEZONE`.** Needs a decision first, because dates here carry no time zone.
 6. **More statistics: `SKEW RANK_AVG RANK_EQ PEARSON`.** Small. `PEARSON` is `CORREL` under another name.
 7. **`FLOOKUP`.** A fuzzy match.
-8. **`SUBTOTAL`, `ARRAY_CONSTRAIN`, `FILTER_COLUMNS`, `RANGE_CONTAINS`.** `TAKE` covers `ARRAY_CONSTRAIN`.
 
 ## Not planned
 

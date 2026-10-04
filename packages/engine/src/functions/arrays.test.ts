@@ -29,8 +29,13 @@ function run(formula: string, data: Record<string, string> = DATA): CellValue[][
   return workbook.getArray(at("A1", "t2"));
 }
 
-function expectError(formula: string, code: string, message?: string): void {
-  const [[value]] = run(formula) as [[CellValue]];
+function expectError(
+  formula: string,
+  code: string,
+  message?: string,
+  data: Record<string, string> = DATA,
+): void {
+  const [[value]] = run(formula, data) as [[CellValue]];
   expect(value, formula).toMatchObject({ kind: "error", code });
   if (message !== undefined) expect(value).toMatchObject({ message });
 }
@@ -70,6 +75,40 @@ describe("FILTER", () => {
     ["=FILTER(A1:A5, 1/0)", "#DIV/0!", undefined],
   ])("%s is %s", (formula, code, message) => {
     expectError(formula, code, message);
+  });
+});
+
+describe("FILTER_COLUMNS", () => {
+  it("keeps the columns where every condition row is true", () => {
+    expect(
+      run("=FILTER_COLUMNS(A1:C3, A8:C8, A9:C9)", {
+        ...DATA,
+        A8: "TRUE",
+        B8: "TRUE",
+        C8: "FALSE",
+        A9: "TRUE",
+        B9: "FALSE",
+        C9: "TRUE",
+      }),
+    ).toEqual([["banana"], ["apple"], ["cherry"]]);
+  });
+
+  it.each<[string, string, string?, Record<string, string>?]>([
+    [
+      "=FILTER_COLUMNS(A1:C5, A9:B9)",
+      "#VALUE!",
+      "A condition must be one row as wide as the range",
+    ],
+    ["=FILTER_COLUMNS(A1:C5, A9:C9)", "#N/A", "Nothing matches"],
+    ["=FILTER_COLUMNS(A1:C5, A9:C9)", "#VALUE!", '"no" is not TRUE or FALSE', { A9: "no" }],
+  ])("%s is %s", (formula, code, message, extra = {}) => {
+    expectError(formula, code, message, {
+      ...DATA,
+      A9: "FALSE",
+      B9: "FALSE",
+      C9: "FALSE",
+      ...extra,
+    });
   });
 });
 
@@ -184,6 +223,14 @@ describe("SEQUENCE, TRANSPOSE, TAKE, DROP, ROWS, COLUMNS", () => {
     ["=TAKE(SEQUENCE(5), -2)", [[4], [5]]],
     ["=TAKE(SEQUENCE(5), 99)", [[1], [2], [3], [4], [5]]],
     ["=TAKE(SEQUENCE(3, 3), 2, -1)", [[3], [6]]],
+    [
+      "=ARRAY_CONSTRAIN(A1:C5, 2, 2)",
+      [
+        ["banana", "yellow"],
+        ["apple", "red"],
+      ],
+    ],
+    ["=ARRAY_CONSTRAIN(A1:C5, -2, -1)", [[8], [5]]],
     ["=DROP(SEQUENCE(5), 2)", [[3], [4], [5]]],
     ["=DROP(SEQUENCE(5), -4)", [[1]]],
     [
@@ -247,6 +294,7 @@ describe("SEQUENCE, TRANSPOSE, TAKE, DROP, ROWS, COLUMNS", () => {
     ["=SEQUENCE(0)", "#VALUE!"],
     ["=SEQUENCE(1000, 1000)", "#VALUE!"],
     ["=TAKE(SEQUENCE(3), 0)", "#VALUE!"],
+    ["=ARRAY_CONSTRAIN(A1:C5, 0, 2)", "#VALUE!"],
     ["=DROP(SEQUENCE(3), 3)", "#N/A"],
     ["=DROP(SEQUENCE(3), 99)", "#N/A"],
   ])("%s is %s", (formula, code) => {

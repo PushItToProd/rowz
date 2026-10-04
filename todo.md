@@ -109,7 +109,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] **P6** date helpers except for `TO_TIMEZONE` since we don't use time zones here
 - [x] other text - `SLICE`, `SLUGIFY`, `DECODEURL`, `BASE64`, `BASE64DECODE`, `DOMAIN`, `RELATIVE_URL`
 - [x] **P7** `LOOKUP`, `HLOOKUP`, `XYLOOKUP` (skip `FLOOKUP` for now)
-- [ ] **P6** `SUBTOTAL`, `ARRAY_CONSTRAIN`, `FILTER_COLUMNS`, `RANGE_CONTAINS`
+- [x] **P6** `SUBTOTAL`, `ARRAY_CONSTRAIN`, `FILTER_COLUMNS`, `RANGE_CONTAINS`
 - [ ] consider resolving an ambiguous bare word by nearness: a name in the formula's own table or script first, then names and tables on the formula's page. The author considers this dangerous and has not decided to do it. If it is done, every use of a word with more than one meaning in the document is marked with a yellow wavy underline. See [DECISIONS.md](DECISIONS.md), "An ambiguous name is an error"
 - [ ] consider having a rename qualify the bare words it would make ambiguous. Renaming the name `Y` to `X` while a table `X` exists would first rewrite each bare `X` to `'Page 1'!X`
 - [ ] (Claude) consider Excel's structured references for parts of a data table: `Sales[#Data]`, `Sales[#Headers]`, and `Sales[#All]`. The bare table name already means the data rows (see [plans/names-and-scripts.md](plans/names-and-scripts.md))
@@ -461,3 +461,6 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] Add tests for `LOOKUP` and `XYLOOKUP` with empty search ranges, empty or single-row `XYLOOKUP` ranges, and mismatched key types.
 
 - [ ] Add tests for the date range helpers (`LASTXDAYS`, `LASTXWEEKS`, `LASTXMONTHS`, `DATEINTERVAL`) at the year 0 and 9999 boundaries, with negative and fractional counts, and for `LASTXMONTHS` clamping around February and month ends. Add `TIMEVALUE` with fractional seconds and more `YEARFRAC` day-count edge cases.
+
+- [ ] `FILTER_COLUMNS` and `FILTER` skip the error check on later conditions for a column that an earlier condition already rejected (`keep[col] &&= boolean(flag)` short-circuits), so a later `#DIV/0!` is hidden by an earlier `FALSE`. `AND` propagates it. Decide whether to check every condition cell, and test it.
+- [ ] The `SUBTOTAL` tests for codes 7/107 and 10/110 use values 1, 2, 3, where `STDEV` and `VAR_S` are both 1, so swapped mappings would pass. Use a fixture such as 1, 2, 4.

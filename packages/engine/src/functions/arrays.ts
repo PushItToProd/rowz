@@ -46,8 +46,8 @@ function slice<T>(items: readonly T[], count: number, keep: boolean): T[] {
 }
 
 /** Defines `TAKE` (keep) or `DROP` (remove): rows first, then optionally columns. */
-function takeOrDrop(keep: boolean): FunctionDefinition {
-  return lazy(2, 3, ([source, rowCount, colCount]) => {
+function takeOrDrop(keep: boolean, minArgs = 2, maxArgs = 3): FunctionDefinition {
+  return lazy(minArgs, maxArgs, ([source, rowCount, colCount]) => {
     let rows = slice(grid(source?.() ?? null), integer(rowCount?.() ?? null), keep);
     if (colCount) {
       const count = integer(colCount());
@@ -81,6 +81,24 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
       .filter((_, row) => keepRow[row])
       .map((cells) => cells.filter((_, col) => keepCol[col]));
     return result(kept, "Nothing matches");
+  }),
+
+  /** Keeps columns where every condition row is true. Each condition must be one row as wide as the range. */
+  FILTER_COLUMNS: eager(2, Infinity, (source, ...conditions) => {
+    const rows = grid(source);
+    const columns = width(rows);
+    const keep = Array.from({ length: columns }, () => true);
+    for (const condition of conditions) {
+      const flags = grid(condition);
+      if (flags.length !== 1 || width(flags) !== columns) {
+        fail("#VALUE!", "A condition must be one row as wide as the range");
+      }
+      flags[0]?.forEach((flag, col) => (keep[col] &&= boolean(flag)));
+    }
+    return result(
+      rows.map((cells) => cells.filter((_, col) => keep[col])),
+      "Nothing matches",
+    );
   }),
 
   /**
@@ -148,6 +166,8 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
 
   /** The first rows of a range, or the last with a negative count. A third argument does the same for columns. */
   TAKE: takeOrDrop(true),
+  /** Takes the requested number of rows and columns, using the same count rules as TAKE. */
+  ARRAY_CONSTRAIN: takeOrDrop(true, 3, 3),
   /** A range without its first rows, or without its last with a negative count. */
   DROP: takeOrDrop(false),
 

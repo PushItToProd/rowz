@@ -42,6 +42,7 @@ describe("functionDocs", () => {
     ["AVERAGE", 2],
     ["COUNT", 3],
     ["COUNTA", 3],
+    ["SUBTOTAL", 6],
     ["ROUND", 3.14],
     ["IF", "small"],
     ["IFERROR", "no result"],
@@ -61,6 +62,7 @@ describe("functionDocs", () => {
     ["XYLOOKUP", "banana"],
     ["HLOOKUP", "banana"],
     ["MATCH", 2],
+    ["RANGE_CONTAINS", true],
     ["INDEX", "cherry"],
     ["TEXTJOIN", "apple, banana, cherry"],
     ["SWITCH", "two"],
@@ -77,6 +79,7 @@ describe("functionDocs", () => {
 describe("array examples", () => {
   it.each([
     ["FILTER", [["banana"], ["cherry"]]],
+    ["FILTER_COLUMNS", [["apple"], ["banana"], ["cherry"]]],
     [
       "SORT",
       [
@@ -101,6 +104,7 @@ describe("array examples", () => {
         [2, "banana"],
       ],
     ],
+    ["ARRAY_CONSTRAIN", [[1], [2]]],
     ["DROP", [["banana"], ["cherry"]]],
     ["MAP", [["1 apple"], ["2 banana"], ["3 cherry"]]],
     ["REDUCE", [[14]]],
