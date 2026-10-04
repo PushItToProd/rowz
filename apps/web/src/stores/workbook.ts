@@ -1639,8 +1639,22 @@ export const useWorkbookStore = defineStore("workbook", () => {
     tableId: string,
     size: { rowCount: number; colCount: number },
   ): Promise<boolean> {
-    if (!canResizeTableTo(tableId, size)) return Promise.resolve(false);
-    return updateTable(tableId, size);
+    const queuedSaves = saves;
+    return enqueueWrite(async () => {
+      await queuedSaves;
+      const table = tables.value.find((candidate) => candidate.id === tableId);
+      if (!table) return false;
+      const target = {
+        rowCount: Math.max(table.rowCount, size.rowCount),
+        colCount: Math.max(table.colCount, size.colCount),
+      };
+      if (!canResizeTableTo(tableId, target)) return false;
+      await receiveChange(await api.updateTable(tableId, { ...target, grow: true }));
+      return true;
+    }).catch((cause: unknown) => {
+      fail(cause, "The table could not be changed");
+      return false;
+    });
   }
 
   /** Names a table's columns, which makes it a data table. With `headerRow`, its first row gives the names. */

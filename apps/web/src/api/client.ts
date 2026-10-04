@@ -23,6 +23,7 @@ import type {
   IdentityConditionalRule,
   IdentityFormatRange,
   ResizeLinesBody,
+  UpdateTableBody,
 } from "@spreadsheet-app/shared";
 import type {
   ChartType,
@@ -240,11 +241,7 @@ export const api = {
   ): Promise<{ table: StoredTable; change: Change }> =>
     body(routes.pages[":pageId"].tables.$post({ param: { pageId }, json: { position } })),
 
-  updateTable: (
-    tableId: string,
-    changes: { name?: string; rowCount?: number; colCount?: number },
-    stepId?: string,
-  ): Promise<Change> =>
+  updateTable: (tableId: string, changes: UpdateTableBody, stepId?: string): Promise<Change> =>
     body(
       routes.tables[":tableId"].$patch({
         param: { tableId },

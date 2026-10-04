@@ -234,6 +234,17 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "grow a table without shrinking it",
+    prepare({ tableId }) {
+      return {
+        method: "PATCH",
+        path: `/tables/${tableId}`,
+        body: { rowCount: 21, grow: true },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "write cells",
     prepare({ tableId }) {
       return {

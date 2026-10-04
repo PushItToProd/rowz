@@ -135,6 +135,7 @@ describe("rendering", () => {
     expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
       rowCount: 6,
       colCount: 4,
+      grow: true,
     });
     const store = useWorkbookStore();
     expect(store.valueOf(at("A1"))).toBe(1);

@@ -77,10 +77,16 @@ export const updateTableBody = z
     /** A data table may have no rows. A plain table needs one, which the server checks. */
     rowCount: z.int().min(0).max(LIMITS.tableRows).optional(),
     colCount: z.int().min(1).max(LIMITS.tableCols).optional(),
+    /** Never reduce either dimension below its current size. */
+    grow: z.boolean().optional(),
   })
-  .refine((body) => Object.keys(body).length > 0, {
-    message: "Give at least one of name, rowCount, colCount",
-  });
+  .refine(
+    (body) => body.name !== undefined || body.rowCount !== undefined || body.colCount !== undefined,
+    {
+      message: "Give at least one of name, rowCount, colCount",
+    },
+  );
+export type UpdateTableBody = z.infer<typeof updateTableBody>;
 
 const cellIndex = z.int().min(0);
 

@@ -5,7 +5,7 @@ import { identifiedAt } from "../testing";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ColumnDefinition, ConditionalRule, FormatRule } from "@spreadsheet-app/engine";
-import { LIMITS } from "@spreadsheet-app/shared";
+import { keysAfter, LIMITS } from "@spreadsheet-app/shared";
 import { computed } from "vue";
 import { api, type Snapshot, type ViewRecord } from "../api/client";
 import { at, clickResult, notifyJournaled, snapshotWith, TABLE, type MockedApi } from "../testing";
@@ -877,9 +877,83 @@ describe("structure", () => {
     expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
       rowCount: 6,
       colCount: 4,
+      grow: true,
     });
     expect(store.tables[0]).toMatchObject({ rowCount: 6, colCount: 4 });
   });
+
+  it.each([
+    {
+      requested: { rowCount: 6, colCount: 3 },
+      expected: null,
+    },
+    {
+      requested: { rowCount: 6, colCount: 4 },
+      expected: { rowCount: 8, colCount: 4, grow: true },
+    },
+  ])(
+    "rechecks a queued spill resize after an earlier row insertion ($requested.rowCount x $requested.colCount)",
+    async ({ requested, expected }) => {
+      const store = await open({ A1: "=SEQUENCE(6)", B4: "keep" });
+      const insertion = deferred();
+      let insertedTable: ReturnType<typeof sizedTable> | undefined;
+      server.editTable.mockImplementation(async (_tableId, edit) => {
+        await insertion.promise;
+        if (edit.axis !== "row" || edit.kind !== "insert") {
+          throw new Error("Expected inserted rows");
+        }
+        const ids = [...edit.ids, ...TABLE.rows.map((row) => row.id)];
+        const orderKeys = keysAfter(null, ids.length);
+        insertedTable = {
+          ...TABLE,
+          rowCount: ids.length,
+          rows: ids.map((id, index) => ({ id, orderKey: orderKeys[index]! })),
+        };
+        return changeWith({ table: insertedTable, cells: [], views: [], tables: [] });
+      });
+      server.updateTable.mockImplementation((_tableId, changes) => {
+        if (!insertedTable) throw new Error("Expected the insertion to finish first");
+        const colCount = changes.colCount ?? insertedTable.colCount;
+        return Promise.resolve(
+          changeWith({
+            table: {
+              ...insertedTable,
+              rowCount: changes.rowCount ?? insertedTable.rowCount,
+              colCount,
+              colIds: Array.from({ length: colCount }, (_, col) => `c${String(col + 1)}`),
+            },
+            cells: [],
+            views: [],
+            tables: [],
+          }),
+        );
+      });
+
+      const editing = store.editTable("t1", {
+        axis: "row",
+        kind: "insert",
+        index: 0,
+        count: 4,
+      });
+      const resizing = store.resizeTableTo("t1", requested);
+      await idle();
+      expect(server.editTable).toHaveBeenCalledOnce();
+      expect(server.updateTable).not.toHaveBeenCalled();
+
+      insertion.resolve();
+      expect(await editing).toBe(true);
+      expect(await resizing).toBe(expected !== null);
+      expect(store.inputOf(at("B8"))).toBe("keep");
+      expect(store.tables[0]).toMatchObject({ rowCount: 8 });
+      if (expected) {
+        expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", expected);
+        expect(store.tables[0]).toMatchObject({ colCount: 4 });
+      } else {
+        expect(server.updateTable).not.toHaveBeenCalled();
+        expect(store.tables[0]).toMatchObject({ colCount: 3 });
+      }
+    },
+  );
 
   it("refuses table growth past the table or spreadsheet limits", async () => {
     const store = await open();

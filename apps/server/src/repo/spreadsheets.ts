@@ -65,6 +65,7 @@ import {
   type ResizeLinesBody,
   type RowRecord,
   type SpreadsheetFile,
+  type UpdateTableBody,
   type StoredCell,
   toSpreadsheetFile,
 } from "@spreadsheet-app/shared";
@@ -1490,23 +1491,26 @@ export class SpreadsheetRepository {
    * are added at its end, and making it smaller deletes the ones past the new
    * size as any others are deleted, so formulas, views, and formats follow.
    */
-  async updateTable(
-    tableId: string,
-    changes: {
-      name?: string | undefined;
-      rowCount?: number | undefined;
-      colCount?: number | undefined;
-    },
-  ): Promise<Change> {
+  async updateTable(tableId: string, changes: UpdateTableBody): Promise<Change> {
     const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
       const { spreadsheetId } = table;
       writer.setLabel(
         changes.name !== undefined ? `Rename table ${table.name}` : `Resize table ${table.name}`,
       );
       const rows = await orderedRows(tx, tableId);
+      const requestedRows = changes.rowCount ?? rows.length;
+      const requestedCols = changes.colCount ?? table.colIds.length;
       const sizes = [
-        { axis: "row", from: rows.length, to: changes.rowCount ?? rows.length },
-        { axis: "col", from: table.colIds.length, to: changes.colCount ?? table.colIds.length },
+        {
+          axis: "row",
+          from: rows.length,
+          to: changes.grow ? Math.max(rows.length, requestedRows) : requestedRows,
+        },
+        {
+          axis: "col",
+          from: table.colIds.length,
+          to: changes.grow ? Math.max(table.colIds.length, requestedCols) : requestedCols,
+        },
       ] as const;
       const [height, width] = sizes;
       if (height.to === 0 && !table.columns) {

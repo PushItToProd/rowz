@@ -334,6 +334,31 @@ describe("tables", () => {
     expect(await storedInputs(user, snapshot.id, table.id)).toHaveProperty("0:0", "keep");
   });
 
+  it("does not shrink either dimension in growth-only mode", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { table } = first(snapshot);
+    await user.json("PATCH", `/tables/${table.id}`, { rowCount: 8, colCount: 4 });
+    await user.json(
+      "PUT",
+      `/tables/${table.id}/cells`,
+      cellsBody({ B8: "keep row", D1: "keep column" }),
+      200,
+    );
+
+    await user.json("PATCH", `/tables/${table.id}`, {
+      rowCount: 6,
+      colCount: 2,
+      grow: true,
+    });
+
+    const current = await readSnapshot(user, snapshot.id);
+    expect(current.tables[0]).toMatchObject({ rowCount: 8, colCount: 4 });
+    expect(await storedInputs(user, snapshot.id, table.id)).toEqual({
+      "0:3": "keep column",
+      "7:1": "keep row",
+    });
+  });
+
   it("refuses to leave a plain table with no rows", async () => {
     const snapshot = await createSpreadsheet(user);
     expect(
