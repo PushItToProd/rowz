@@ -415,10 +415,15 @@ describe("renaming rewrites formulas", () => {
 
     const renamed = await user.json<Change>("PATCH", `/tables/${sales.id}`, { name: "Sales" });
     expect(renamed.changed?.tables).toMatchObject([{ id: sales.id, table: { name: "Sales" } }]);
-    expect(await changedCells(user, snapshot.id, renamed)).toEqual([
-      { tableId: table.id, row: 0, col: 0, input: "=SUM(Sales!A1:A3) + 1" },
-      { tableId: other.table.id, row: 1, col: 1, input: "='page 1'!Sales!A1" },
-    ]);
+    // Changed cells have no ordering contract, including across tables.
+    const written = await changedCells(user, snapshot.id, renamed);
+    expect(written).toHaveLength(2);
+    expect(written).toEqual(
+      expect.arrayContaining([
+        { tableId: table.id, row: 0, col: 0, input: "=SUM(Sales!A1:A3) + 1" },
+        { tableId: other.table.id, row: 1, col: 1, input: "='page 1'!Sales!A1" },
+      ]),
+    );
     expect(await storedInputs(user, snapshot.id, table.id)).toEqual({
       "0:0": "=SUM(Sales!A1:A3) + 1",
       "1:0": "=A1",
