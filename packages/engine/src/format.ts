@@ -45,6 +45,19 @@ function group(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+$)/g, ",");
 }
 
+/** Writes a number in fixed decimal notation without exponent notation. */
+function fixed(value: number, decimals: number): string {
+  if (!Number.isInteger(value)) return value.toFixed(decimals);
+
+  // Large integers may be unsafe to represent exactly, so preserve JavaScript's
+  // shortest round-tripping decimal form instead of exposing binary digits.
+  const shown = value.toString();
+  const match = /^(\d+)(?:\.(\d+))?e\+(\d+)$/.exec(shown);
+  const [, whole = "", fraction = "", exponent = "0"] = match ?? [];
+  const digits = match ? (whole + fraction).padEnd(whole.length + Number(exponent), "0") : shown;
+  return decimals === 0 ? digits : `${digits}.${"0".repeat(decimals)}`;
+}
+
 export function formatNumber(value: number, format: string): string {
   // Quoted text is set aside first, so a digit or `%` inside it is not read as
   // part of the format. Each piece is held by one private-use character.
@@ -70,12 +83,15 @@ export function formatNumber(value: number, format: string): string {
   const scaled = (before + after).includes("%") ? value * 100 : value;
   if (!Number.isFinite(scaled))
     throw new FormatError("The number is too large to show as a percentage");
-  const shifted = Math.abs(scaled) * 10 ** maxDecimals;
+  const magnitude = Math.abs(scaled);
+  const shifted = magnitude * 10 ** maxDecimals;
   // Half away from zero, as ROUND does. A number too large to shift has no decimals to round.
-  const rounded = Number.isFinite(shifted)
-    ? Math.round(shifted) / 10 ** maxDecimals
-    : Math.abs(scaled);
-  const [digits = "0", decimals = ""] = rounded.toFixed(maxDecimals).split(".");
+  const rounded = Number.isInteger(magnitude)
+    ? magnitude
+    : Number.isFinite(shifted)
+      ? Math.round(shifted) / 10 ** maxDecimals
+      : magnitude;
+  const [digits = "0", decimals = ""] = fixed(rounded, maxDecimals).split(".");
 
   const trimmed = decimals.replace(/0+$/, "").padEnd(minDecimals, "0");
   const padded = (digits === "0" ? "" : digits).padStart(minWhole, "0");
