@@ -26,16 +26,16 @@ Actions remain descriptions of effects. Recalculation never executes them. Actio
 
 ### 3.1 Value kinds
 
-| Kind | Meaning | Example |
-| --- | --- | --- |
-| Scalar | Number, text, Boolean, date, or blank | `42`, `"hello"`, `TRUE`, `blank` |
-| Record | Ordered named fields | `{estimate: 12, error: 0.5}` |
-| List | Ordered sequence of values | `[1, 2, 3]` |
-| Table | Ordered columns and ordered rows with rectangular storage | `TABLE([{Name: "Ada", Amount: 12}])` |
-| Function | Parameters and lexical environment | `x => x * 2` |
-| Action | Deferred description of effects | Existing action functions |
-| Presentation value | Chart, Markdown, button, or input control | Existing presentation functions |
-| Error | Failure with a code and diagnostic context | Existing spreadsheet errors |
+| Kind               | Meaning                                                   | Example                              |
+| ------------------ | --------------------------------------------------------- | ------------------------------------ |
+| Scalar             | Number, text, Boolean, date, or blank                     | `42`, `"hello"`, `TRUE`, `blank`     |
+| Record             | Ordered named fields                                      | `{estimate: 12, error: 0.5}`         |
+| List               | Ordered sequence of values                                | `[1, 2, 3]`                          |
+| Table              | Ordered columns and ordered rows with rectangular storage | `TABLE([{Name: "Ada", Amount: 12}])` |
+| Function           | Parameters and lexical environment                        | `x => x * 2`                         |
+| Action             | Deferred description of effects                           | Existing action functions            |
+| Presentation value | Chart, Markdown, button, or input control                 | Existing presentation functions      |
+| Error              | Failure with a code and diagnostic context                | Existing spreadsheet errors          |
 
 Records and lists can contain nested values. Tables can contain structured values, although legacy numeric and text functions reject incompatible cells. Presentation values expose documented read-only fields through the same field-access protocol as records; they do not expose evaluator internals.
 
@@ -49,16 +49,16 @@ A plain grid is a table with positional columns and no user-supplied field names
 
 The following operations dispatch on value kind, with explicit behavior rather than implicit conversions:
 
-| Operation | Record | List | Table |
-| --- | --- | --- | --- |
-| `value.name` | Named field | Error | Named column as a list |
-| `value[key]` | Field by text key | Element or slice | Row record or row slice |
-| `value[rows, columns]` | Error | Error | Rectangular selection |
-| `MAP(value, fn)` | Error; use `FIELDS` | Map elements to a list | Map row records to a list |
-| `FILTER(value, fn)` | Error | Keep matching elements | Keep matching rows; retain schema |
-| `ROWS(value)` | Error | Error | List-compatible read-only row sequence |
-| `COLUMNS(value)` | Error | Error | Ordered list of column names or positional descriptors |
-| `FIELDS(value)` | Ordered field-name list | Error | Error |
+| Operation              | Record                  | List                   | Table                                                  |
+| ---------------------- | ----------------------- | ---------------------- | ------------------------------------------------------ |
+| `value.name`           | Named field             | Error                  | Named column as a list                                 |
+| `value[key]`           | Field by text key       | Element or slice       | Row record or row slice                                |
+| `value[rows, columns]` | Error                   | Error                  | Rectangular selection                                  |
+| `MAP(value, fn)`       | Error; use `FIELDS`     | Map elements to a list | Map row records to a list                              |
+| `FILTER(value, fn)`    | Error                   | Keep matching elements | Keep matching rows; retain schema                      |
+| `ROWS(value)`          | Error                   | Error                  | List-compatible read-only row sequence                 |
+| `COLUMNS(value)`       | Error                   | Error                  | Ordered list of column names or positional descriptors |
+| `FIELDS(value)`        | Ordered field-name list | Error                  | Error                                                  |
 
 These signatures describe the new collection API. Existing `MAP`, `FILTER`, `ROWS`, and `COLUMNS` have different spreadsheet meanings. Use distinct initial names such as `MAP_ROWS`, `FILTER_ROWS`, `ROW_RECORDS`, and `COLUMN_NAMES`, or gate the new meanings by language version. Never dispatch between conflicting meanings solely on whether a range happens to have headers.
 
@@ -80,12 +80,12 @@ BLOCK("Sales").name
 
 `BLOCK` resolves a unique block in the current workbook using existing qualification rules; ambiguous names fail. Its result is a read-only record with stable `id`, `kind`, `name`, and documented kind-specific fields:
 
-| Block kind | Additional fields |
-| --- | --- |
-| Table | `data` |
-| Chart | `data`, `title`, `chartType` |
-| Text view | `source`, `rendered` |
-| Script | `exports` |
+| Block kind | Additional fields            |
+| ---------- | ---------------------------- |
+| Table      | `data`                       |
+| Chart      | `data`, `title`, `chartType` |
+| Text view  | `source`, `rendered`         |
+| Script     | `exports`                    |
 
 `BLOCK(...).data` for a table is the same value as the bare table name. Chart data is the evaluated chart source. Text fields are text, not trusted HTML. Script exports form a namespace with the same lookup operations as a record, but may evaluate individual exports lazily.
 
@@ -230,16 +230,16 @@ Sales
 
 Initial stages:
 
-| Stage | Result |
-| --- | --- |
-| `where predicate` | Matching rows, same schema |
-| `derive name = expression, ...` | Add or replace columns |
-| `select name, expression as name, ...` | Project and reorder columns |
-| `summarize name = aggregate, ... by key, ...` | One row per group |
-| `order by expression asc/desc, ...` | Stable ordering |
-| `take count` | First count rows |
-| `drop count` | Skip first count rows |
-| `distinct field, ...` | Unique projected combinations in first-seen order |
+| Stage                                         | Result                                            |
+| --------------------------------------------- | ------------------------------------------------- |
+| `where predicate`                             | Matching rows, same schema                        |
+| `derive name = expression, ...`               | Add or replace columns                            |
+| `select name, expression as name, ...`        | Project and reorder columns                       |
+| `summarize name = aggregate, ... by key, ...` | One row per group                                 |
+| `order by expression asc/desc, ...`           | Stable ordering                                   |
+| `take count`                                  | First count rows                                  |
+| `drop count`                                  | Skip first count rows                             |
+| `distinct field, ...`                         | Unique projected combinations in first-seen order |
 
 Stage expressions resolve unqualified fields against the incoming row before outer lexical names. `row` explicitly names that row; `outer.name` accesses the enclosing lexical environment. These contextual bindings cannot be redeclared in a stage. Outside queries, ordinary lexical lookup applies.
 
