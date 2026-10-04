@@ -73,6 +73,14 @@ const ENTRIES: readonly FunctionDoc[] = [
     example: "MAX(A1:A3, 10)",
   },
   {
+    name: "CLAMP",
+    category: "Math",
+    syntax: "CLAMP(value, min, max)",
+    summary:
+      "Equivalent to IFS(value < min, min, value > max, max, 1=1, value), using type-aware comparisons and returning the selected input unchanged.",
+    example: "CLAMP(12, 0, 10)",
+  },
+  {
     name: "COUNT",
     category: "Math",
     syntax: "COUNT(value, ...)",

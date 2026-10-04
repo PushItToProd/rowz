@@ -44,6 +44,7 @@ describe("functionDocs", () => {
     ["COUNTA", 3],
     ["SUBTOTAL", 6],
     ["ROUND", 3.14],
+    ["CLAMP", 10],
     ["IF", "small"],
     ["IFERROR", "no result"],
     ["AND", false],

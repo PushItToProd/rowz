@@ -30,6 +30,10 @@ describe("rewriteReferences", () => {
     );
   });
 
+  it("rewrites references around a not-equals operator and keeps its spelling", () => {
+    expect(rewriteReferences("=Old!A1 != Old!B2", renameTables)).toBe("=Renamed!A1 != Renamed!B2");
+  });
+
   it("handles several references whose replacements change the text's length", () => {
     expect(rewriteReferences("=T!A1+'A long name'!A1+T!B2", renameTables)).toBe(
       "=Renamed!A1+Renamed!A1+Renamed!B2",

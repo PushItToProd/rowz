@@ -14,6 +14,7 @@ import {
 const BINARY_PRECEDENCE: Record<Operator, number> = {
   "=": 1,
   "<>": 1,
+  "!=": 1,
   "<": 1,
   ">": 1,
   "<=": 1,

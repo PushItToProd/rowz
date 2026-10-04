@@ -108,6 +108,7 @@ function binary(operator: BinaryOperator, left: Scalar, right: Scalar): Scalar {
     case "=":
       return compare(left, right) === 0;
     case "<>":
+    case "!=":
       return compare(left, right) !== 0;
     case "<":
       return compare(left, right) < 0;

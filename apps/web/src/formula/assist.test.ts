@@ -42,6 +42,15 @@ describe("suggestionsAt", () => {
     });
   });
 
+  it("offers function completion after the != operator", () => {
+    expect(suggest("=A1 != cla").items).toContainEqual({
+      kind: "function",
+      label: "CLAMP",
+      insert: "CLAMP(",
+      detail: "CLAMP(value, min, max)",
+    });
+  });
+
   it("lists functions before tables and pages", () => {
     expect(labels("=sum")).toEqual(["SUM", "SUMIF", "SUMIFS", "SUMPRODUCT", "Summary"]);
   });

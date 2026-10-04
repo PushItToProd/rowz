@@ -40,10 +40,11 @@ describe("tokenize", () => {
   });
 
   it("reads two-character operators before one-character ones", () => {
-    expect(summarize("<= >= <> < > =")).toEqual([
+    expect(summarize("<= >= <> != < > =")).toEqual([
       ["operator", "<="],
       ["operator", ">="],
       ["operator", "<>"],
+      ["operator", "!="],
       ["operator", "<"],
       ["operator", ">"],
       ["operator", "="],

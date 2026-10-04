@@ -23,7 +23,8 @@ export type Token = Span &
     | { type: "end" }
   );
 
-export type Operator = "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | ">" | "<=" | ">=";
+export type Operator =
+  "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "!=" | "<" | ">" | "<=" | ">=";
 export type Punctuation = "(" | ")" | "," | ":" | "!";
 
 export class FormulaSyntaxError extends Error {
@@ -44,6 +45,7 @@ const IDENTIFIER = /[$A-Za-z_][$A-Za-z0-9_.]*/y;
 // Longest operators first so `<=` is not read as `<` then `=`.
 const OPERATORS: readonly Operator[] = [
   "<>",
+  "!=",
   "<=",
   ">=",
   "+",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateFormula } from "../testing";
+import { at, evaluateFormula, workbookWith } from "../testing";
 import type { CellValue } from "../values";
 
 // A column of mixed content: numbers, text, a boolean, a blank (A5), and a numeric string.
@@ -35,6 +35,11 @@ describe("math functions", () => {
     ["=ROUND(3.14159, 2)", 3.14],
     ["=ROUND(1234, -2)", 1200],
     ['=ROUND("2.4")', 2],
+    ["=CLAMP(12, 0, 10)", 10],
+    ["=CLAMP(-2, 0, 10)", 0],
+    ["=CLAMP(5, 0, 10)", 5],
+    ["=CLAMP(5, 10, 0)", 10],
+    ['=CLAMP("5", 0, 10)', 10],
     ["=ABS(-4)", 4],
     ["=ABS(4)", 4],
   ])("%s is %j", (formula, expected) => {
@@ -48,6 +53,9 @@ describe("math functions", () => {
     ["=MIN(A1:A2)", "#DIV/0!"],
     ["=ROUND(A2)", "#DIV/0!"],
     ["=ROUND(1, A2)", "#DIV/0!"],
+    ["=CLAMP(A2, 0, 2)", "#DIV/0!"],
+    ["=CLAMP(0, A2, 2)", "#DIV/0!"],
+    ["=CLAMP(0, -1, A2)", "#DIV/0!"],
     ["=ABS(A2)", "#DIV/0!"],
     ['=SUM("abc")', "#VALUE!"],
     ['=ABS("abc")', "#VALUE!"],
@@ -62,6 +70,96 @@ describe("math functions", () => {
   it("COUNT skips errors and COUNTA counts them", () => {
     expect(evaluateFormula("=COUNT(A1:A2)", WITH_ERROR)).toBe(1);
     expect(evaluateFormula("=COUNTA(A1:A2)", WITH_ERROR)).toBe(2);
+  });
+
+  it("clamps array arguments cell by cell", () => {
+    const oneArray = workbookWith({
+      t1: { A1: "-1", A2: "1", A3: "3", Z99: "=CLAMP(A1:A3, 0, 2)" },
+    });
+    expect(oneArray.getArray(at("Z99"))).toEqual([[0], [1], [2]]);
+
+    const threeArrays = workbookWith({
+      t1: {
+        A1: "1",
+        A2: "3",
+        A3: "5",
+        B1: "0",
+        B2: "2",
+        B3: "0",
+        C1: "2",
+        C2: "4",
+        C3: "4",
+        Z99: "=CLAMP(A1:A3, B1:B3, C1:C3)",
+      },
+    });
+    expect(threeArrays.getArray(at("Z99"))).toEqual([[1], [3], [4]]);
+
+    const withCellError = workbookWith({
+      t1: { A1: "=1/0", A2: "1", Z99: "=CLAMP(A1:A2, 0, 2)" },
+    });
+    expect(withCellError.getArray(at("Z99"))).toMatchObject([
+      [{ kind: "error", code: "#DIV/0!" }],
+      [1],
+    ]);
+  });
+
+  it("returns a blank unchanged when it falls inside the bounds", () => {
+    expect(evaluateFormula("=CLAMP(A1, -1, 1)", { A1: "" })).toBe(null);
+  });
+
+  it("skips an unused max argument, including for array results", () => {
+    expect(evaluateFormula("=CLAMP(-1, 0, 1/0)")).toBe(0);
+
+    const allBelowMinimum = workbookWith({
+      t1: { A1: "-1", A2: "-2", Z99: "=CLAMP(A1:A2, 0, 1/0)" },
+    });
+    expect(allBelowMinimum.getArray(at("Z99"))).toEqual([[0], [0]]);
+
+    const partlyNeedsMaximum = workbookWith({
+      t1: { A1: "-1", A2: "1", Z99: "=CLAMP(A1:A2, 0, 1/0)" },
+    });
+    expect(partlyNeedsMaximum.getArray(at("Z99"))).toMatchObject([
+      [0],
+      [{ kind: "error", code: "#DIV/0!" }],
+    ]);
+  });
+
+  it("broadcasts row and column arguments and marks missing cells with #N/A", () => {
+    const broadcast = workbookWith({
+      t1: {
+        A1: "-1",
+        A2: "3",
+        B1: "0",
+        B2: "0",
+        C1: "1",
+        D1: "2",
+        Z99: "=CLAMP(A1:A2, B1:B2, C1:D1)",
+      },
+    });
+    expect(broadcast.getArray(at("Z99"))).toEqual([
+      [0, 0],
+      [1, 2],
+    ]);
+
+    const mismatched = workbookWith({
+      t1: {
+        A1: "1",
+        A2: "2",
+        C1: "10",
+        C2: "10",
+        C3: "10",
+        Z99: "=CLAMP(A1:A2, 0, C1:C3)",
+      },
+    });
+    expect(mismatched.getArray(at("Z99"))).toMatchObject([
+      [1],
+      [2],
+      [{ kind: "error", code: "#N/A" }],
+    ]);
+  });
+
+  it("limits the size of a broadcast result before building it", () => {
+    expectError(evaluateFormula("=CLAMP(SEQUENCE(100), SEQUENCE(1, 1001), 2000)"), "#VALUE!");
   });
 });
 
@@ -147,6 +245,7 @@ describe("argument counts", () => {
     ["=ABS(1, 2)", "ABS takes 1 argument"],
     ["=IF(TRUE)", "IF takes 2 to 3 arguments"],
     ["=ROUND(1, 2, 3)", "ROUND takes 1 to 2 arguments"],
+    ["=CLAMP(1, 2)", "CLAMP takes 3 arguments"],
     ['=SEND_EMAIL("a@b.co")', "SEND_EMAIL takes 3 to 4 arguments"],
   ])("%s reports %j", (formula, message) => {
     expect(evaluateFormula(formula)).toEqual({ kind: "error", code: "#ERROR!", message });

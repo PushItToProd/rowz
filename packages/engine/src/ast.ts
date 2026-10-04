@@ -2,7 +2,7 @@ import { columnLabel } from "./address";
 import type { ErrorCode } from "./values";
 
 export type BinaryOperator =
-  "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | ">" | "<=" | ">=";
+  "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "!=" | "<" | ">" | "<=" | ">=";
 export type UnaryOperator = "+" | "-";
 
 /**

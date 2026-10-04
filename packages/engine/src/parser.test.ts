@@ -48,6 +48,12 @@ describe("operators", () => {
     );
   });
 
+  it.each(["<>", "!="] as const)("parses and prints %s as a comparison operator", (operator) => {
+    const expression = parseFormula(`1${operator}2`);
+    expect(expression).toEqual(binary(operator, number(1), number(2)));
+    expect(printNode(expression)).toBe(`(1${operator}2)`);
+  });
+
   it.each<BinaryOperator>(["-", "/", "^", "&"])("makes %s left-associative", (operator) => {
     expect(parseFormula(`1${operator}2${operator}3`)).toEqual(
       binary(operator, binary(operator, number(1), number(2)), number(3)),
@@ -321,6 +327,7 @@ describe("printNode", () => {
             "&",
             "=",
             "<>",
+            "!=",
             "<",
             ">",
             "<=",

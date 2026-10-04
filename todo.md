@@ -95,13 +95,13 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P99** user-defined formula functions, evaluated client-side in a sandbox (maybe something like QuickJS or Pyodide)
 - [ ] **P4** support better operators: 
   - [ ] infix `and`/`or`/`not` for boolean operations (`A and (not B or C)`)
-  - [ ] `!=` in addition to `<>`
+  - [x] `!=` in addition to `<>`
 - [x] make the help page's navigation sticky so it stays visible as the user scrolls. update it to reflect the section they're currently looking at, too (e.g. by making the currently visible section bold)
 - [x] **P7** add `start` and `step` args to `SEQUENCE`
 
 ### Additional formula functions
 
-- [ ] add `CLAMP(val, min, max)`, equivalent to `IFS(val < min, min, val > max, max, default=val)` once the default case exists
+- [x] add `CLAMP(val, min, max)`, equivalent to `IFS(val < min, min, val > max, max, 1=1, val)`
 
 - [/] (Claude) for the author: review the smaller candidates left in docs/rows-functions.md and determine which to include
 - [ ] **P6** the reference functions `OFFSET`, `INDIRECT`, `ADDRESS`, `ISFORMULA`, `ISREF`

@@ -250,7 +250,7 @@ const OPERATORS = [
   ["* /", "Multiply, divide", "A1 * A2 / 4"],
   ["+ -", "Add, subtract", "A1 + A2 - 1"],
   ["&", "Join as text", 'A1 & " items"'],
-  ["= <> < > <= >=", "Compare. The result is TRUE or FALSE.", "A1 >= A2"],
+  ["= <> != < > <= >=", "Compare. The result is TRUE or FALSE.", "A1 != A2"],
 ] as const;
 </script>
 
