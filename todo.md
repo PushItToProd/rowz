@@ -31,7 +31,7 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 
 ## Bugs
 
-- [ ] `QUERY` treats single quotes as delimiting string literals which contradicts the outer formula languge syntax. this isn't exactly a bug but I consider it a severe enough misfeature I'm classing it as one - we should probably have single quotes delimit identifiers in `QUERY` syntax instead so you can write queries like `=QUERY(People, "select 'Favorite food', count(*) group by 'Favorite food'")`
+- [ ] `QUERY` treats single quotes as delimiting string literals which contradicts the outer formula languge syntax. this isn't exactly a bug but I consider it a severe enough misfeature I'm classing it as one - we should probably have single quotes delimit identifiers in `QUERY` syntax instead so you can write queries like `=QUERY(People, "select 'Favorite food', count(*) group by 'Favorite food'")`. (as this is a pre-production app I don't care if this breaks anything)
 
 - [x] Wildcard criteria can stall synchronous formula evaluation. [criteria.ts](packages/engine/src/functions/criteria.ts:28) turns `*` and `?` into a backtracking regular expression, then tests cell text at [line 56](packages/engine/src/functions/criteria.ts:56). A crafted criterion and long near-matching text can trigger catastrophic backtracking. Formula evaluation has no time limit, and the server evaluates workbook formulas while handling action clicks. Use a matcher with bounded runtime.
 
@@ -93,7 +93,9 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P10** `TEXT` writes a number of 1e21 or more as `1e+21` followed by the format's decimals
 - [ ] **P10** the web app's fill and chart axis build dates without `dateFromMs`, so they skip the year 0 to 9999 check.
 - [ ] **P99** user-defined formula functions, evaluated client-side in a sandbox (maybe something like QuickJS or Pyodide)
-- [ ] **P4** support better operators: `&&`/`||`/`!` (or, even better, `and`/`or`/`not`) for boolean operations, `!=` in addition to `<>`
+- [ ] **P4** support better operators: 
+  - [ ] infix `and`/`or`/`not` for boolean operations (`A and (not B or C)`)
+  - [ ] `!=` in addition to `<>`
 - [x] make the help page's navigation sticky so it stays visible as the user scrolls. update it to reflect the section they're currently looking at, too (e.g. by making the currently visible section bold)
 - [ ] **P7** add `start` and `step` args to `SEQUENCE`
 
@@ -161,10 +163,10 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P8** merge cells across selection - support merging multiple cells across one or more rows and one or more columns
 - [ ] **P5** (Claude) draw only the rows and columns in view. `GridView` makes a cell component for every row and column of a table, 100,000 of them for a table of 1,000 rows and 100 columns, and a page shows every table on it. Each edit also triggers the one ref that holds the engine, so everything that read a value through it is computed again. Do this before raising `tableRows`
 - [ ] find and replace within a block, page, or document
-  - [ ] standalone find without replace - search just the current document
-    - [ ] allow filtering by just the current page or block
-  - [ ] find and replace within a document
-  - [ ] cross-document search
+  - [ ] **P4** standalone find without replace - search just the current document
+    - [ ] **P4** allow filtering by just the current page or block
+  - [ ] **P4** find and replace within a document
+  - [ ] **P5** cross-document search
   - don't implement cross-document find and replace -- too risky
 - [ ] support hiding rows and columns
 - [ ] support hiding pages
@@ -273,10 +275,10 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 ## Actions and automation
 
 - [ ] more actions:
-  - [ ] **P7** delete a row that matches a condition
+  - [ ] **P7** delete a row (or rows) that matches a condition
   - [ ] **P7** targeted update of rows matching a condition as an alternative to the full replacement
     - [ ] **P99** typed (or at least column-name-aware) updates of data tables: s.t. like `MUTATE(Products, [Category] = "GPU", [Price] = [Price] * 2)` (i.e. double the value of `Price` for all rows in `Products` where `Category` == "GPU")
-  - [ ] open a URL
+  - [ ] fetch CSV/JSON/etc. from a URL
   - [ ] call a webhook
     - (Claude) needs the outbox under Before sharing with others, and a rule for which addresses a server may call, so a formula cannot reach the server's own network
 - [ ] (Claude) scheduled actions: Rows' `SCHEDULE`, `REPEAT`, `REFRESH`. Needs a server scheduler and a rule for whose permissions a scheduled run uses
@@ -319,7 +321,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [x] a comparison of high-payout races in Gran Turismo 7, after https://docs.google.com/spreadsheets/d/1rZxgfay0Gjq7MuSmOkioZC4srW5yerPfiYR0XAXcE3c ([sample](samples/gt7-grind-comparison.json))
     - (Claude) the source sheet could not be read: the Google Drive read was denied and `_scratch/google-sheets-exported-to-xlsx` is absent from this checkout. The races, payouts, and durations are representative, and the columns follow `plans/data-tables.md`. Compare it with the real sheet and replace the data.
     - (Claude) `Runs[Race]` written on another page than the table is `#REF!`, though `QUERY(Runs, ...)` with the bare name works. A column reference needs the page, as in `Data!Runs[Race]`. Decide whether a unique bare table name should work as the table of a column reference too.
-    - (Claude) `QUERY ... pivot Duration` writes the pivoted numbers as text headers (`"6"`, not `6`), so a header cannot be compared as a number.
+    - [ ] (Claude) `QUERY ... pivot Duration` writes the pivoted numbers as text headers (`"6"`, not `6`), so a header cannot be compared as a number.
     - (Claude) each run is entered by hand with a race picked from the dropdown, so one race at one duration appears once. A way to build the grid of every race at every duration from `Races` would remove the hand-entered rows.
   - [ ] **P3** a video game quest tracker, after https://docs.google.com/spreadsheets/d/1cwsRONdpXMJAvjpamauZ391NrTXX1gEdeTrx1Rf324o
   - [ ] **P4** a few standard templates in the style of Sheets and Excel (invoice, contacts list, to-do list), and one or two in the style of Access and FileMaker
