@@ -134,6 +134,10 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] show cell errors in a popover on hover instead of using a native browser tooltip
 - [ ] **P4** (Claude) clicking a cell or dragging over a range while a formula is being typed writes its reference at the caret, as Excel and Sheets do. A formula's references are typed by hand today
 - [ ] **P4** (Claude) color each reference in the formula being edited, and outline the cells it names in the same color
+- [ ] (GPT) Support reference picking by dragging across multiple named-column headers. Deferred from [the shared formula editor](plans/formula-editing.md); choose how a range of named columns is represented before implementing.
+- [ ] (GPT) Add nested-language editing assistance inside formula strings, such as the query text passed to `QUERY`. Deferred from [the shared formula editor](plans/formula-editing.md).
+- [ ] (GPT) Add automatic bracket insertion to the shared formula editor. Deferred from [the initial implementation](plans/formula-editing.md).
+- [ ] (GPT) Add comprehensive inline diagnostics to the shared formula editor. Deferred from [the initial implementation](plans/formula-editing.md).
 - [x] **P7** when a spill error is caused by table dimensions, show a “Resize table to fit” button in its popover
 - [x] **P6** Clearly explain why an array result cannot spill: when the table is too small, say e.g. “The result needs 12 rows and 26 columns, but the table is only 11 rows and 15 columns”; when existing values block it, say e.g. “but one or more cells in A1:P26 already have values.” Do not name a target cell when the table dimensions are the reason it cannot fit.
 
@@ -386,6 +390,9 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 ## Before sharing with others
 
 These items harden rowz for several users, hostile input, or a deployed server. They are parked while one person uses rowz on their own machine. Review findings of that kind go here.
+
+- [ ] **P10** (GPT) Notify the user during editing if the cell being edited has been edited or deleted elsewhere. The shared formula editor initially reports a deleted target only on submission, with a Vue error modal containing the draft in a read-only editor for copying. See [the formula-editing plan](plans/formula-editing.md).
+- [ ] **P10** (GPT) Add activity indicators showing other sessions' editing targets to help people coordinate parallel edits. Deferred from [the shared formula editor](plans/formula-editing.md). Follow the author's FAFO policy: indicators do not lock targets or block saves.
 
 - [ ] **P10** (Claude) `personalWorkspace()` in [spreadsheets.ts](apps/server/src/repo/spreadsheets.ts) puts a new spreadsheet, an import, and a copy into the caller's oldest workspace membership whatever the role. Once a user can belong to a shared workspace, a new spreadsheet or "Save a copy" can land in a workspace that other members read, and the caller may not own it. Choose a workspace where the caller is an owner, or one made for the caller.
 

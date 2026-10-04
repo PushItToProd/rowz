@@ -2,6 +2,72 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-04: Formula-column editing uses a visibly labeled column session
+
+**Decision.** Formula-column edits target the table ID and column ID and share one session across the inline editor, formula bar, and column popover. Every editor visibly identifies the whole-column effect before submission, with a label such as **Editing formula for every row in Sales[Amount]**. Deleting the originating row leaves the column session intact; deleting the column uses the agreed submit-time error dialog.
+
+**Why.** The current cell editor looks like an edit to one cell until saving applies the formula to every row. The user should see that effect before typing or saving.
+
+**What would reopen it.** A change to how formula columns are edited.
+
+## 2026-10-04: Header picks reference stored columns
+
+**Decision.** Named-column header clicks insert structured references; ordinary column header clicks insert positional whole-column references. Both include filtered-out rows. Ordinary header drags produce whole-row or whole-column ranges. Defer dragging across multiple named-column headers and track it in `todo.md`. Cell drags include exactly the picked cells and are accepted only when those cells form one stored rectangle. Cross-page references qualify the table with its page.
+
+**Why.** Header picks request whole columns. Cell picks request the displayed cells the user actually picked.
+
+**What would reopen it.** A future design for picking ranges of named columns.
+
+## 2026-10-04: Reference picking preserves ordinary caret movement
+
+**Decision.** Explicit Pick reference replaces selected formula text, otherwise the complete reference under the caret, otherwise inserts at the caret. It adds no operators and does not repair surrounding syntax. Further picks replace that insertion until typing or caret movement resumes. Arrow keys move the caret or navigate completion suggestions while editing; they never pick grid references or commit the draft.
+
+**Why.** The author finds Google Sheets' arrow-key reference picking intrusive when correcting earlier text in an incomplete formula. Its observed behavior is recorded in [the plan](plans/formula-editing.md) for reference.
+
+**Absolute markers.** Picked positional references are always relative, even when replacing a reference containing `$`. Selecting `$A1` and picking B2:D4 inserts `B2:D4`. The user types any desired absolute markers explicitly.
+
+**What would reopen it.** Experience using reference picking in rowz.
+
+## 2026-10-04: Single-formula fields save on Enter and focus changes
+
+**Decision.** Existing named formulas, filters, chart sources, and formula-column popovers save on Enter, Tab, or clicking outside, subject to completion and formula-editing exceptions. Tab saves before moving focus. Escape or Cancel discards. Apply explicitly saves a formula-column definition. A new name is one unfinished entry containing its identifier and formula: only Add name or Enter submits it. Tab moves between its controls without creating the name; clicking outside retains the unfinished entry.
+
+**Why.** Existing formulas follow the ordinary save-on-focus-change behavior. A new name needs an explicit submission of both fields.
+
+**What would reopen it.** Experience using these controls.
+
+## 2026-10-04: Named-formula editors identify targets by table and name
+
+**Decision.** Identify an existing named formula by its table ID and case-insensitive name captured when editing starts. On submission, find it in the current name list and update its formula while preserving other entries. If it is absent, use the deleted-target dialog. Add no stable name IDs or schema changes.
+
+**Why.** This gives the editor a target independent of the name's list index with the current storage model.
+
+**What would reopen it.** A feature requiring a named-formula editing session to follow a rename.
+
+## 2026-10-04: Parallel editing uses last submitter wins
+
+**Decision.** Parallel editing follows the author's **FAFO** policy. Accept the last submitted edit without locks, conflict resolution, or blocking a formula save because its references may have changed. Stable target IDs keep the write attached to its target after moves; the draft's formula text is saved literally against the current document. For example, `=B2` entered in B7 saves as `=B2` in B8 if a row was inserted above the target during editing. Saved formulas continue to follow the existing structural-rewrite rules. Deleted targets use the submit-time recovery dialog.
+
+**Why.** rowz is a proof of concept with one user. Coordination between future simultaneous editors should come from activity indicators. Blocking saves in an attempt to prevent conflicting edits can harm the editing experience.
+
+**Implementation scope.** The shared-editor plan removes existing revision-based stale-reference rejection from its write paths and adds no such check to names. Activity indicators remain deferred.
+
+**What would reopen it.** An explicit author decision to provide stronger conflict handling. Concurrent editing alone does not justify adding it.
+
+## 2026-10-04: Formula drafts save on ordinary focus changes
+
+**Decision.** Switching editing targets or interacting with ordinary page controls saves the current draft. Escape discards a single-line draft; it does not discard a multiline script or Markdown draft. Multiline editors provide an explicit Cancel button. Leaving the spreadsheet with an unsaved draft prompts for confirmation; confirming departure discards the draft without saving.
+
+**Why.** Ordinary interaction should preserve the user's work. Escape, Cancel, and confirmed departure express a choice to discard it. Concurrent editing is not a priority during the proof of concept.
+
+**Formula-editing exceptions.** Reference picks, page browsing to find references, completion clicks, and transfers between the inline editor and formula bar for the same target keep the draft open without saving. Page changes save literal cell drafts; formula cell drafts, including just `=`, remain open in a dock labeled with their original target. The current draft determines which behavior applies.
+
+**Save failures.** A transition that requires saving waits for success. If saving fails, stop the transition, keep the draft open with editor focus, and show the error so the user can retry or cancel. Keep recovery in the active editor without a separate background draft.
+
+**Deleted targets.** Wait until submission to report that an editing target was deleted. Show a Vue modal dialog with the save error and exact entered text in a read-only shared editor so the user can copy it. Preserve the draft until submission even if the original editor component unmounts. Proactive notices of edits or deletion during editing are deferred under **Before sharing with others** in `todo.md`.
+
+**What would reopen it.** Experience using the shared editor. Parallel editing follows the separate policy above.
+
 ## 2026-10-03: Errors are always visible
 
 **Decision.** Error visibility is a core product principle. rowz puts errors front and center throughout a document, including errors on inactive pages and in filtered-out rows. A prominent header indicator opens a list of errors with links to their locations. Blocks, pages, and documents in the document list carry warning triangles when they contain errors. Cell errors show explanations in an in-app popover.
