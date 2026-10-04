@@ -1,6 +1,6 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
-import type { CellValue, ChartType } from "@spreadsheet-app/engine";
+import { dateFromParts, parseDate, type CellValue, type ChartType } from "@spreadsheet-app/engine";
 import ChartView from "./ChartView.vue";
 
 const ROWS: CellValue[][] = [
@@ -48,6 +48,23 @@ describe("ChartView", () => {
     ]);
     expect(wrapper.findAll(".chart__point")).toHaveLength(2);
     expect(wrapper.findAll(".chart__line")).toHaveLength(0);
+  });
+
+  it.each([
+    ["year 0", dateFromParts(0, 1, 1), dateFromParts(0, 1, 2)],
+    ["year 9999", dateFromParts(9999, 12, 30), dateFromParts(9999, 12, 31)],
+  ])("skips date axis labels outside %s through 9999", (_boundary, first, second) => {
+    const wrapper = render("scatter", [
+      [first, 1],
+      [second, 2],
+    ]);
+    const dateLabels = wrapper
+      .findAll(".chart__axis text")
+      .map((label) => label.text())
+      .filter((label) => label.includes("-"));
+
+    expect(dateLabels.length).toBeGreaterThan(0);
+    expect(dateLabels.every((label) => parseDate(label) !== undefined)).toBe(true);
   });
 
   it("says what a scatter chart needs when its first column holds no numbers", () => {

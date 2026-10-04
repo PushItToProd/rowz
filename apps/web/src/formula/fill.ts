@@ -1,4 +1,11 @@
-import { formatDate, parseDate, translateInput, type CellAddress } from "@spreadsheet-app/engine";
+import {
+  dateFromMs,
+  Failure,
+  formatDate,
+  parseDate,
+  translateInput,
+  type CellAddress,
+} from "@spreadsheet-app/engine";
 import type { CellInput } from "@spreadsheet-app/shared";
 
 /** An inclusive rectangle of cells within one table. */
@@ -74,7 +81,9 @@ function constantStep(values: readonly number[]): number | undefined {
  * date continues a day at a time. Text ending in a number, such as `Week 1`,
  * counts up. Anything else is not a series.
  */
-export function seriesOf(inputs: readonly string[]): ((position: number) => string) | undefined {
+export function seriesOf(
+  inputs: readonly string[],
+): ((position: number) => string | undefined) | undefined {
   // A formula is copied with its references moved, however its text ends.
   if (inputs.length === 0 || inputs.some((input) => input.startsWith("="))) return undefined;
 
@@ -90,7 +99,14 @@ export function seriesOf(inputs: readonly string[]): ((position: number) => stri
   if (dates.every((date) => date !== undefined)) {
     const step = dates.length === 1 ? DAY_MS : constantStep(dates.map((date) => date.ms));
     if (step === undefined) return undefined;
-    return (position) => formatDate({ kind: "date", ms: (dates[0]?.ms ?? 0) + step * position });
+    return (position) => {
+      try {
+        return formatDate(dateFromMs((dates[0]?.ms ?? 0) + step * position));
+      } catch (cause) {
+        if (cause instanceof Failure) return undefined;
+        throw cause;
+      }
+    };
   }
 
   const numbered = inputs.map((input) => NUMBERED_TEXT.exec(input));
@@ -163,11 +179,12 @@ export function fillWrites(
 
   return cellsOf(target)
     .filter((cell) => !contains(source, cell))
-    .map(({ row, col }) => {
+    .flatMap(({ row, col }) => {
       const continued = seriesAt({ row, col });
       if (continued) {
         const position = vertical ? row - source.startRow : col - source.startCol;
-        return { row: storedRow(row), col, input: continued(position) };
+        const input = continued(position);
+        return input === undefined ? [] : [{ row: storedRow(row), col, input }];
       }
       const from = {
         row: source.startRow + wrap(row - source.startRow, height),

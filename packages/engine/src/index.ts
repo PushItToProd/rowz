@@ -52,7 +52,16 @@ export {
 } from "./conditional";
 export { displayRows, type SortColumn, type SortKey, type TableDisplay } from "./display";
 export { chartData, type ChartData, type ChartSeries } from "./charts";
-export { dateFromParts, dateParts, formatDate, isDate, parseDate, type DateValue } from "./dates";
+export {
+  dateFromMs,
+  dateFromParts,
+  dateParts,
+  formatDate,
+  isDate,
+  parseDate,
+  type DateValue,
+} from "./dates";
+export { Failure } from "./errors";
 export type {
   DeleteRowsEffect,
   Effect,

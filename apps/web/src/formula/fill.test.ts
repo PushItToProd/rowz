@@ -269,6 +269,11 @@ describe("continuing a series", () => {
     expect(values(source, target, cells)).toEqual(expected);
   });
 
+  it("stops a date series at the supported calendar limits", () => {
+    expect(values("A1", "A1:A3", { A1: "9999-12-30" })).toEqual(["9999-12-31"]);
+    expect(values("A2", "A1:A3", { A2: "0000-01-01" })).toEqual(["0000-01-02"]);
+  });
+
   it.each<[string, Record<string, string>, string, string, string[]]>([
     ["one number", { A1: "5" }, "A1", "A1:A3", ["5", "5"]],
     ["numbers an uneven step apart", { A1: "1", A2: "2", A3: "4" }, "A1:A3", "A1:A5", ["1", "2"]],

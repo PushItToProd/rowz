@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { chartData, formatValue, type CellValue, type ChartType } from "@spreadsheet-app/engine";
+import {
+  chartData,
+  dateFromMs,
+  Failure,
+  formatValue,
+  type CellValue,
+  type ChartType,
+} from "@spreadsheet-app/engine";
 import { computed } from "vue";
 import {
   linePaths,
@@ -37,6 +44,15 @@ const MAX_AXIS_LABELS = 10;
 const LABEL_LENGTH = 12;
 const DAY_MS = 86_400_000;
 
+function dateTickLabel(tick: number): string | undefined {
+  try {
+    return formatValue(dateFromMs(Math.round(tick) * DAY_MS));
+  } catch (cause) {
+    if (cause instanceof Failure) return undefined;
+    throw cause;
+  }
+}
+
 const data = computed(() => chartData(props.rows));
 const color = (index: number): string => COLORS[index % COLORS.length] ?? "#000";
 const plotted = computed(() =>
@@ -69,13 +85,11 @@ function short(label: string): string {
 const xLabels = computed(() => {
   if (props.chart === "scatter") {
     const position = linear([xScale.value.min, xScale.value.max], [PLOT.left, PLOT.right]);
-    return xScale.value.ticks.map((tick) => ({
-      x: position(tick),
+    return xScale.value.ticks.flatMap((tick) => {
       // A scatter over dates counts days along its axis, and labels the ticks as dates.
-      text: data.value.xIsDate
-        ? formatValue({ kind: "date", ms: Math.round(tick) * DAY_MS })
-        : formatValue(tick),
-    }));
+      const text = data.value.xIsDate ? dateTickLabel(tick) : formatValue(tick);
+      return text === undefined ? [] : [{ x: position(tick), text }];
+    });
   }
   const shown = visibleLabels(data.value.labels.length, MAX_AXIS_LABELS);
   return data.value.labels.flatMap((label, index) =>
