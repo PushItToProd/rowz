@@ -61,7 +61,7 @@ describe("HelpView", () => {
       "gives 1, 2, 3 across a row",
     );
     expect(wrapper.get('[data-function="SEQUENCE"]').text()).toContain(
-      "gives 2 rows: 1, 2, 3 / 4, 5, 6",
+      "gives 2 rows: 10, 10.5, 11 / 11.5, 12, 12.5",
     );
   });
 

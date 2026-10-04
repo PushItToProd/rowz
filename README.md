@@ -164,6 +164,8 @@ Typing a formula offers the functions and names that match, with what each funct
 | Names       | `LET LAMBDA`. A function kept in a cell is called by the cell's address: `=D1(21)`                                                                                                                                                                                                                                    |
 | Errors      | `#DIV/0! #VALUE! #REF! #NAME? #N/A #SPILL! #CYCLE! #ERROR!`                                                                                                                                                                                                                                                           |
 
+`SEQUENCE(rows, [columns], [start], [step])` fills a grid row by row. It defaults to a start and step of 1; the step can be negative or fractional.
+
 Page, table, and column names in references ignore case. Names with spaces need single quotes.
 
 ### Actions

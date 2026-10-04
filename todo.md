@@ -97,7 +97,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] infix `and`/`or`/`not` for boolean operations (`A and (not B or C)`)
   - [ ] `!=` in addition to `<>`
 - [x] make the help page's navigation sticky so it stays visible as the user scrolls. update it to reflect the section they're currently looking at, too (e.g. by making the currently visible section bold)
-- [ ] **P7** add `start` and `step` args to `SEQUENCE`
+- [x] **P7** add `start` and `step` args to `SEQUENCE`
 
 ### Additional formula functions
 
@@ -455,3 +455,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] `ContextMenu.vue` moves focus to the menu only on mount. If the focused item becomes disabled while the menu stays open (for example another tab uses the last row capacity), focus can leave the menu and Escape stops working. Keep focus on the menu when its focused item is disabled, and test it.
 
 - [ ] Add tests for `BASE64DECODE` with malformed padding or trailing bits made of valid alphabet characters (`"A==="`, `"AA=A"`, `"AB=="`), and for `SLICE("abcdef", -4, -1)` (negative end index).
+
+- [ ] The `SEQUENCE` help summary in `packages/engine/src/docs.ts` reads as if giving either start or step overrides both defaults. Say that start and step each default to 1.
