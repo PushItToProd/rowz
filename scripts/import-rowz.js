@@ -3,6 +3,11 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import {
+  createSecureContext,
+  getCACertificates,
+  setDefaultCACertificates,
+} from "node:tls";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -43,12 +48,108 @@ async function credentials(explicitPath) {
       throw new Error("Credentials need username (the account email) and password strings.");
     }
     if (!account.password) throw new Error("Credential password must not be empty.");
-    return { email: email.trim(), password: account.password, url: account.url };
+    if (
+      account.tls !== undefined &&
+      (account.tls === null || typeof account.tls !== "object" || Array.isArray(account.tls))
+    ) {
+      throw new Error('Credential field "tls" must be an object.');
+    }
+    if (
+      account.tls?.rejectUnauthorized !== undefined &&
+      typeof account.tls.rejectUnauthorized !== "boolean"
+    ) {
+      throw new Error('Credential field "tls.rejectUnauthorized" must be a boolean.');
+    }
+    if (
+      account.tls?.caFile !== undefined &&
+      (typeof account.tls.caFile !== "string" || !account.tls.caFile.trim())
+    ) {
+      throw new Error('Credential field "tls.caFile" must be a non-empty PEM file path.');
+    }
+    let tlsCa;
+    if (account.tls?.caFile && account.tls.rejectUnauthorized !== false) {
+      const caFile = resolve(dirname(candidate), account.tls.caFile);
+      try {
+        tlsCa = { file: caFile, certificate: await readFile(caFile, "utf8") };
+      } catch (error) {
+        throw new Error(`Cannot read TLS certificate file: ${caFile}`, { cause: error });
+      }
+      if (!tlsCa.certificate.trim()) {
+        throw new Error(`TLS certificate file is empty: ${caFile}`);
+      }
+    }
+    return {
+      email: email.trim(),
+      password: account.password,
+      url: account.url,
+      tlsCa,
+      insecureTls: account.tls?.rejectUnauthorized === false,
+    };
   }
   throw new Error(
     explicitPath
       ? `Credential file not found: ${resolve(explicitPath)}`
       : `No ${credentialName} found in the current directory, Git root, or home.`,
+  );
+}
+
+function requestFailure(path, error) {
+  const causes = [];
+  for (let cause = error; cause && !causes.includes(cause); cause = cause.cause) {
+    causes.push(cause);
+  }
+  const code = causes.find((cause) => cause.code)?.code;
+  let detail;
+  switch (code) {
+    case "DEPTH_ZERO_SELF_SIGNED_CERT":
+    case "SELF_SIGNED_CERT_IN_CHAIN":
+    case "UNABLE_TO_VERIFY_LEAF_SIGNATURE":
+    case "UNABLE_TO_GET_ISSUER_CERT_LOCALLY":
+    case "CERT_UNTRUSTED":
+      detail =
+        `TLS rejected an untrusted certificate (${code}). Add its PEM file to the credentials JSON as ` +
+        '"tls": { "caFile": "/path/to/server-cert.pem" }. The helper will trust that certificate and still check the URL hostname.';
+      break;
+    case "ERR_TLS_CERT_ALTNAME_INVALID":
+      detail =
+        "The TLS certificate does not match the hostname in the app URL. Use the hostname listed in the certificate or fix the server certificate.";
+      break;
+    case "CERT_HAS_EXPIRED":
+      detail = "The app's TLS certificate has expired. Renew or replace it on the server.";
+      break;
+    case "ENOTFOUND":
+    case "EAI_AGAIN":
+      detail = `DNS could not resolve the app hostname (${code}). Check the hostname and DNS configuration.`;
+      break;
+    case "ECONNREFUSED":
+      detail =
+        "The app refused the connection. Check that it is running and that the URL has the right host and port.";
+      break;
+    case "ETIMEDOUT":
+    case "UND_ERR_CONNECT_TIMEOUT":
+      detail =
+        "The connection timed out. Check that the app is reachable at this URL and that network policy allows the connection.";
+      break;
+    case "ECONNRESET":
+      detail =
+        "The connection closed unexpectedly. Check the app server and any reverse proxy in front of it.";
+      break;
+    case "EPERM":
+    case "EACCES":
+      detail = `The network connection was denied (${code}) by the current environment or local policy.`;
+      break;
+    default: {
+      const cause = causes.find((item) => item !== error) ?? error;
+      const reason = cause.code ? `${cause.code}: ${cause.message}` : cause.message;
+      detail = reason ? `Underlying error: ${reason}` : "The network request failed.";
+    }
+  }
+  return new Error(
+    `Request to ${path} failed. ${detail} ` +
+      (path === "/spreadsheets/import"
+        ? "Import outcome is unknown; inspect the document list before trying again."
+        : "No automatic retry was made."),
+    { cause: error },
   );
 }
 
@@ -66,7 +167,8 @@ export async function main(args = process.argv.slice(2)) {
   if (values.help) {
     console.log(
       "Usage: node scripts/import-rowz.js <document.json> [--url APP_URL] [--credentials FILE]\n" +
-        'Credentials: {"username":"you@example.com","password":"...","url":"http://localhost:5173"}\n' +
+        'Credentials: {"username":"you@example.com","password":"...","url":"https://rowz.example.com","tls":{"rejectUnauthorized":false}}\n' +
+        "Set tls.rejectUnauthorized to false to disable all TLS certificate checks. Optional tls.caFile trusts a PEM certificate; relative paths resolve from the credentials file.\n" +
         "Search order: current directory, current Git root, home. URL order: --url, credential url, BASE_URL, localhost:5173.\n" +
         "Creates one document, reports its URL and engine errors, and leaves it for UI review. Exit: 0 clean, 2 document errors, 1 failure.",
     );
@@ -84,6 +186,20 @@ export async function main(args = process.argv.slice(2)) {
     );
     const file = spreadsheetFile.parse(JSON.parse(await readFile(resolve(positionals[0]), "utf8")));
     const account = await credentials(values.credentials);
+    if (account.insecureTls) {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+      console.warn("Warning: TLS certificate validation is disabled for requests from this process.");
+    } else if (account.tlsCa) {
+      try {
+        createSecureContext({ ca: account.tlsCa.certificate });
+        setDefaultCACertificates([...getCACertificates(), account.tlsCa.certificate]);
+      } catch (error) {
+        throw new Error(
+          `Cannot trust TLS certificate file ${account.tlsCa.file}: ${error.message}`,
+          { cause: error },
+        );
+      }
+    }
     const base = new URL(
       values.url ?? account.url ?? process.env.BASE_URL ?? "http://localhost:5173",
     );
@@ -108,13 +224,8 @@ export async function main(args = process.argv.slice(2)) {
           redirect: "error",
           signal: AbortSignal.timeout(30_000),
         });
-      } catch {
-        throw new Error(
-          `Request to ${path} failed. Check app availability, URL, and TLS trust. ` +
-            (path === "/spreadsheets/import"
-              ? "Import outcome is unknown; inspect the document list before trying again."
-              : "No automatic retry was made."),
-        );
+      } catch (error) {
+        throw requestFailure(path, error);
       }
       if (!response.ok) {
         if (signingIn) throw new Error(`Sign-in failed (HTTP ${response.status}).`);

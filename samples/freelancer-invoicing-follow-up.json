@@ -1,0 +1,952 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "Freelancer Invoicing & Payment Follow-up",
+  "pages": [
+    {
+      "name": "Invoice desk",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Invoice instructions",
+          "source": "# Invoice desk\n\nChoose a client with unbilled work, enter an invoice ID and dates, and review the line-item preview. **Issue invoice** copies each matching work entry with its hours and agreed rate, then stores the invoice header. New entries for that client remain available for a later invoice.\n\nThe example has both an overdue partial payment and a newer open balance. Try issuing invoice **INV-2026-104** for Lantern Studio to freeze its October accessibility review. Then open the Invoices page to see the captured total."
+        },
+        {
+          "type": "table",
+          "name": "InvoiceForm",
+          "rowCount": 6,
+          "colCount": 3,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Client"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "=DROPDOWN('Records'!Clients[Client],B1)"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Invoice ID"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "INV-2026-104"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Issue date"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "2026-10-04"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Due date"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "2026-10-18"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "Issue selected work"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "=IF(OR(B1=\"\",B2=\"\",B3=\"\",B4=\"\",COUNTIFS('Records'!WorkLog[Client],B1,'Records'!WorkLog[InvoiceStatus],\"Unbilled\")=0),\"Select a client with unbilled work and complete the invoice fields\",BUTTON(\"Issue invoice\",DO(INSERT(FILTER(HSTACK('Records'!WorkLog[WorkID],'Records'!WorkLog[Date],'Records'!WorkLog[Description],'Records'!WorkLog[Hours],'Records'!WorkLog[Rate],'Records'!WorkLog[LineTotal],MAP('Records'!WorkLog[WorkID],LAMBDA(work,B2))),('Records'!WorkLog[Client]=B1)*('Records'!WorkLog[InvoiceStatus]=\"Unbilled\")),'Records'!InvoiceLines!A:G),APPEND_ROW('Records'!Invoices!A:D,B2,B1,B3,B4),CLEAR(B1),CLEAR(B2))))"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "Invoice preview",
+          "source": "## Unbilled work for the selected client\n\n{% if InvoiceForm!B1 = \"\" %}\nChoose a client to preview unbilled work.\n{% else %}\n{% let unbilled = COUNTIFS('Records'!WorkLog[Client],InvoiceForm!B1,'Records'!WorkLog[InvoiceStatus],\"Unbilled\") %}\n{% if unbilled = 0 %}\nThis client has no unbilled work.\n{% else %}\n{{ FILTER(HSTACK('Records'!WorkLog[Date],'Records'!WorkLog[Description],'Records'!WorkLog[Hours],'Records'!WorkLog[Rate],'Records'!WorkLog[LineTotal]),('Records'!WorkLog[Client]=InvoiceForm!B1)*('Records'!WorkLog[InvoiceStatus]=\"Unbilled\")) }}\n\n**Preview total:** {{ TEXT(SUMIFS('Records'!WorkLog[LineTotal],'Records'!WorkLog[Client],InvoiceForm!B1,'Records'!WorkLog[InvoiceStatus],\"Unbilled\"), \"$#,##0.00\") }}.\n{% end %}\n{% end %}"
+        },
+        {
+          "type": "table",
+          "name": "Settings",
+          "rowCount": 1,
+          "colCount": 2,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Reference date"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "2026-10-04"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": 0,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Records",
+      "blocks": [
+        {
+          "type": "table",
+          "name": "Clients",
+          "rowCount": 2,
+          "colCount": 3,
+          "columns": [
+            {
+              "name": "Client",
+              "type": "text"
+            },
+            {
+              "name": "BillingContact",
+              "type": "text"
+            },
+            {
+              "name": "TermsDays",
+              "type": "number"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Lantern Studio"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Nora Wells"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "14"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Pine & Reed Design"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "Caleb Ortiz"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "14"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "WorkLog",
+          "rowCount": 6,
+          "colCount": 8,
+          "columns": [
+            {
+              "name": "WorkID",
+              "type": "text"
+            },
+            {
+              "name": "Client",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Records",
+                "table": "Clients",
+                "column": "Client"
+              }
+            },
+            {
+              "name": "Date",
+              "type": "date"
+            },
+            {
+              "name": "Description",
+              "type": "text"
+            },
+            {
+              "name": "Hours",
+              "type": "number"
+            },
+            {
+              "name": "Rate",
+              "type": "number"
+            },
+            {
+              "name": "LineTotal",
+              "type": "formula",
+              "formula": "=[Hours]*[Rate]"
+            },
+            {
+              "name": "InvoiceStatus",
+              "type": "formula",
+              "formula": "=IF(COUNTIF(InvoiceLines[WorkID],[WorkID])>0,\"Billed\",\"Unbilled\")"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "W-001"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Lantern Studio"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "2026-08-28"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "Discovery and flow map"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "4"
+            },
+            {
+              "row": 0,
+              "col": 5,
+              "input": "100"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "W-002"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "Lantern Studio"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "2026-09-01"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "Prototype revisions"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "2"
+            },
+            {
+              "row": 1,
+              "col": 5,
+              "input": "100"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "W-003"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "Pine & Reed Design"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "2026-09-15"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "Service blueprint"
+            },
+            {
+              "row": 2,
+              "col": 4,
+              "input": "5"
+            },
+            {
+              "row": 2,
+              "col": 5,
+              "input": "125"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "W-004"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "Lantern Studio"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "2026-09-24"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "Dashboard calculations"
+            },
+            {
+              "row": 3,
+              "col": 4,
+              "input": "3"
+            },
+            {
+              "row": 3,
+              "col": 5,
+              "input": "110"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "W-005"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "Lantern Studio"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "2026-10-01"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "Accessibility review"
+            },
+            {
+              "row": 4,
+              "col": 4,
+              "input": "2.5"
+            },
+            {
+              "row": 4,
+              "col": 5,
+              "input": "110"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "W-006"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "Pine & Reed Design"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "2026-09-29"
+            },
+            {
+              "row": 5,
+              "col": 3,
+              "input": "Workshop follow-up"
+            },
+            {
+              "row": 5,
+              "col": 4,
+              "input": "1.5"
+            },
+            {
+              "row": 5,
+              "col": 5,
+              "input": "125"
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 1,
+                "descending": false
+              },
+              {
+                "column": 2,
+                "descending": true
+              }
+            ]
+          },
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 2,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 4,
+              "endCol": 4,
+              "format": {
+                "numberFormat": "0.##"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 5,
+              "endCol": 6,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "InvoiceLines",
+          "rowCount": 4,
+          "colCount": 7,
+          "columns": [
+            {
+              "name": "WorkID",
+              "type": "text"
+            },
+            {
+              "name": "WorkDate",
+              "type": "date"
+            },
+            {
+              "name": "Description",
+              "type": "text"
+            },
+            {
+              "name": "Hours",
+              "type": "number"
+            },
+            {
+              "name": "Rate",
+              "type": "number"
+            },
+            {
+              "name": "LineTotal",
+              "type": "number"
+            },
+            {
+              "name": "InvoiceID",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "W-001"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "2026-08-28"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "Discovery and flow map"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "4"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "100"
+            },
+            {
+              "row": 0,
+              "col": 5,
+              "input": "400"
+            },
+            {
+              "row": 0,
+              "col": 6,
+              "input": "INV-2026-101"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "W-002"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "2026-09-01"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Prototype revisions"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "2"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "100"
+            },
+            {
+              "row": 1,
+              "col": 5,
+              "input": "200"
+            },
+            {
+              "row": 1,
+              "col": 6,
+              "input": "INV-2026-101"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "W-003"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "2026-09-15"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "Service blueprint"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "5"
+            },
+            {
+              "row": 2,
+              "col": 4,
+              "input": "125"
+            },
+            {
+              "row": 2,
+              "col": 5,
+              "input": "625"
+            },
+            {
+              "row": 2,
+              "col": 6,
+              "input": "INV-2026-102"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "W-004"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "2026-09-24"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "Dashboard calculations"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "3"
+            },
+            {
+              "row": 3,
+              "col": 4,
+              "input": "110"
+            },
+            {
+              "row": 3,
+              "col": 5,
+              "input": "330"
+            },
+            {
+              "row": 3,
+              "col": 6,
+              "input": "INV-2026-103"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 3,
+              "endCol": 3,
+              "format": {
+                "numberFormat": "0.##"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 4,
+              "endCol": 5,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Invoices",
+          "rowCount": 3,
+          "colCount": 8,
+          "columns": [
+            {
+              "name": "InvoiceID",
+              "type": "text"
+            },
+            {
+              "name": "Client",
+              "type": "text"
+            },
+            {
+              "name": "IssueDate",
+              "type": "date"
+            },
+            {
+              "name": "DueDate",
+              "type": "date"
+            },
+            {
+              "name": "Total",
+              "type": "formula",
+              "formula": "=SUMIFS(InvoiceLines[LineTotal],InvoiceLines[InvoiceID],[InvoiceID])"
+            },
+            {
+              "name": "Paid",
+              "type": "formula",
+              "formula": "=SUMIFS(Payments[Amount],Payments[InvoiceID],[InvoiceID])"
+            },
+            {
+              "name": "Balance",
+              "type": "formula",
+              "formula": "=MAX(0,[Total]-[Paid])"
+            },
+            {
+              "name": "Status",
+              "type": "formula",
+              "formula": "=IF([Balance]=0,\"Paid\",IF([DueDate]<'Invoice desk'!Settings!B1,\"Overdue\",\"Open\"))"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "INV-2026-101"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Lantern Studio"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "2026-09-03"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "2026-09-17"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "INV-2026-102"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "Pine & Reed Design"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "2026-09-25"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "2026-10-09"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "INV-2026-103"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "Lantern Studio"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "2026-09-27"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "2026-10-11"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 3,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 4,
+              "endCol": 6,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ],
+          "conditionalFormats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 7,
+              "endCol": 7,
+              "kind": "criterion",
+              "criterion": "Overdue",
+              "format": {
+                "fill": "red",
+                "bold": true
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Payments",
+          "rowCount": 2,
+          "colCount": 4,
+          "columns": [
+            {
+              "name": "InvoiceID",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Records",
+                "table": "Invoices",
+                "column": "InvoiceID"
+              }
+            },
+            {
+              "name": "Date",
+              "type": "date"
+            },
+            {
+              "name": "Amount",
+              "type": "number"
+            },
+            {
+              "name": "Note",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "INV-2026-101"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "2026-09-20"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "300"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "First installment; $300 remains"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "INV-2026-102"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "2026-10-01"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "200"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "Partial payment; follow up after due date"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 2,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Follow-up",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Accounts receivable",
+          "source": "# Payment follow-up\n\n{% let open = SUM('Records'!Invoices[Balance]) %}\n**Open receivables:** {{ TEXT(open, \"$#,##0.00\") }}. Review overdue invoices first, then contact the client before the next due date.\n\n{{ FILTER(HSTACK('Records'!Invoices[InvoiceID],'Records'!Invoices[Client],'Records'!Invoices[DueDate],'Records'!Invoices[Balance],'Records'!Invoices[Status]),'Records'!Invoices[Balance]>0) }}\n\nUse the payment form to record a received installment. The invoice balance and status update from the payment ledger."
+        },
+        {
+          "type": "table",
+          "name": "PaymentForm",
+          "rowCount": 6,
+          "colCount": 3,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Invoice ID"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "=DROPDOWN('Records'!Invoices[InvoiceID],B1)"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Payment date"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "2026-10-04"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Amount"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Note"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "Record payment"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "=IF(OR(B1=\"\",B2=\"\",B3=\"\"),\"Choose an invoice, date, and amount\",BUTTON(\"Record payment\",DO(APPEND_ROW('Records'!Payments!A:D,B1,B2,B3,B4),CLEAR(B3),CLEAR(B4))))"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 1,
+              "endRow": 1,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 2,
+              "endRow": 2,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

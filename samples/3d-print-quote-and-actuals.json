@@ -1,0 +1,867 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "3D Print Quote & Actual Cost Tracker",
+  "pages": [
+    {
+      "name": "Quote desk",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Quote summary",
+          "source": "# 3D-print quote desk\n\nEstimate material, electricity, machine wear, finishing labor, and a failure allowance. The quote price adds the editable markup. **Accept and save quote** records the current inputs and totals as values, so future rate changes do not rewrite an accepted price.\n\nThe example quote is for a small PETG cable guide. Try raising **PrintHours** from 3.5 to 5; energy, wear, failure allowance, and quote price update together. Accept it to add a frozen record to **Quote records**."
+        },
+        {
+          "type": "script",
+          "name": "Cost function",
+          "source": "PrintCost(material, energy, wear, labor) = material + energy + wear + labor"
+        },
+        {
+          "type": "table",
+          "name": "RateCard",
+          "rowCount": 6,
+          "colCount": 2,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Printer power (watts)"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "200"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Electricity ($/kWh)"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "0.18"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Machine wear ($/hour)"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "1.4"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Finishing labor ($/hour)"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "32"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "Failure allowance"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "0.12"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "Markup"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "0.35"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": 3,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            },
+            {
+              "startRow": 4,
+              "endRow": 5,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "0%"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Materials",
+          "rowCount": 3,
+          "colCount": 3,
+          "columns": [
+            {
+              "name": "Material",
+              "type": "text"
+            },
+            {
+              "name": "PricePerKg",
+              "type": "number"
+            },
+            {
+              "name": "SpoolKg",
+              "type": "number"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "PLA"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "24"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "1"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "PETG"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "28"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "1"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "TPU"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "31"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "0.75"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 2,
+              "format": {
+                "numberFormat": "0.##"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "QuoteInput",
+          "rowCount": 1,
+          "colCount": 14,
+          "columns": [
+            {
+              "name": "Customer",
+              "type": "text"
+            },
+            {
+              "name": "Part",
+              "type": "text"
+            },
+            {
+              "name": "Material",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Quote desk",
+                "table": "Materials",
+                "column": "Material"
+              }
+            },
+            {
+              "name": "Grams",
+              "type": "number"
+            },
+            {
+              "name": "PrintHours",
+              "type": "number"
+            },
+            {
+              "name": "FinishHours",
+              "type": "number"
+            },
+            {
+              "name": "MaterialCost",
+              "type": "formula",
+              "formula": "=[Grams]/1000*XLOOKUP([Material],Materials[Material],Materials[PricePerKg])"
+            },
+            {
+              "name": "EnergyCost",
+              "type": "formula",
+              "formula": "=[PrintHours]*RateCard!B1/1000*RateCard!B2"
+            },
+            {
+              "name": "MachineWear",
+              "type": "formula",
+              "formula": "=[PrintHours]*RateCard!B3"
+            },
+            {
+              "name": "FinishLabor",
+              "type": "formula",
+              "formula": "=[FinishHours]*RateCard!B4"
+            },
+            {
+              "name": "DirectCost",
+              "type": "formula",
+              "formula": "=PrintCost([MaterialCost],[EnergyCost],[MachineWear],[FinishLabor])"
+            },
+            {
+              "name": "FailureAllowance",
+              "type": "formula",
+              "formula": "=[DirectCost]*RateCard!B5"
+            },
+            {
+              "name": "Markup",
+              "type": "formula",
+              "formula": "=RateCard!B6"
+            },
+            {
+              "name": "QuotePrice",
+              "type": "formula",
+              "formula": "=ROUND(([DirectCost]+[FailureAllowance])*(1+[Markup]),2)"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Mira Chen"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Cable guide"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "PETG"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "180"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "3.5"
+            },
+            {
+              "row": 0,
+              "col": 5,
+              "input": "0.5"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 3,
+              "endCol": 5,
+              "format": {
+                "numberFormat": "0.##"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 6,
+              "endCol": 11,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 12,
+              "endCol": 12,
+              "format": {
+                "numberFormat": "0%"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 13,
+              "endCol": 13,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Quote actions",
+          "rowCount": 1,
+          "colCount": 2,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Accept current quote"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "=BUTTON(\"Accept and save quote\",APPEND_ROW('Quote records'!IssuedQuotes!A:I,TODAY(),QuoteInput!A1,QuoteInput!B1,QuoteInput!C1,QuoteInput!D1,QuoteInput!E1,QuoteInput!F1,QuoteInput!K1,QuoteInput!N1))"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Quote records",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Accepted quote notes",
+          "source": "# Accepted quotes\n\nEach row stores the inputs, estimated direct cost, and customer price as they were when the quote was accepted. Change the rate card on the Quote desk to price new work; old offers retain their original numbers."
+        },
+        {
+          "type": "table",
+          "name": "IssuedQuotes",
+          "rowCount": 2,
+          "colCount": 9,
+          "columns": [
+            {
+              "name": "IssueDate",
+              "type": "date"
+            },
+            {
+              "name": "Customer",
+              "type": "text"
+            },
+            {
+              "name": "Part",
+              "type": "text"
+            },
+            {
+              "name": "Material",
+              "type": "text"
+            },
+            {
+              "name": "Grams",
+              "type": "number"
+            },
+            {
+              "name": "PrintHours",
+              "type": "number"
+            },
+            {
+              "name": "FinishHours",
+              "type": "number"
+            },
+            {
+              "name": "EstimatedCost",
+              "type": "number"
+            },
+            {
+              "name": "QuotePrice",
+              "type": "number"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "2026-09-14"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Mira Chen"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "Cable guide"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "PETG"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "180"
+            },
+            {
+              "row": 0,
+              "col": 5,
+              "input": "3.2"
+            },
+            {
+              "row": 0,
+              "col": 6,
+              "input": "0.5"
+            },
+            {
+              "row": 0,
+              "col": 7,
+              "input": "28.4"
+            },
+            {
+              "row": 0,
+              "col": 8,
+              "input": "43.49"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "2026-09-22"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "North Pier Robotics"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Sensor bracket set"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "PLA"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "420"
+            },
+            {
+              "row": 1,
+              "col": 5,
+              "input": "7.8"
+            },
+            {
+              "row": 1,
+              "col": 6,
+              "input": "1.2"
+            },
+            {
+              "row": 1,
+              "col": 7,
+              "input": "77.8"
+            },
+            {
+              "row": 1,
+              "col": 8,
+              "input": "119.13"
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 0,
+                "descending": true
+              }
+            ]
+          },
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 0,
+              "endCol": 0,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 4,
+              "endCol": 5,
+              "format": {
+                "numberFormat": "0.##"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 6,
+              "endCol": 8,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Actuals",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Actual cost review",
+          "source": "# Actual cost review\n\nCompleted jobs use current material and machine rates to estimate their direct cost. Compare that cost with the estimate frozen when the customer accepted the quote. A positive difference means the job cost more than expected.\n\n{% let over = COUNTIF(CompletedJobs[Difference], \">0\") %}\n**{{ over }}** seeded jobs exceeded their original direct-cost estimate. The failed calibration print is included in actual grams and print hours; keep failed attempts in the job record so their cost does not disappear."
+        },
+        {
+          "type": "table",
+          "name": "CompletedJobs",
+          "rowCount": 3,
+          "colCount": 17,
+          "columns": [
+            {
+              "name": "Job",
+              "type": "text"
+            },
+            {
+              "name": "Date",
+              "type": "date"
+            },
+            {
+              "name": "QuoteID",
+              "type": "text"
+            },
+            {
+              "name": "EstimatedCost",
+              "type": "number"
+            },
+            {
+              "name": "QuotePrice",
+              "type": "number"
+            },
+            {
+              "name": "Material",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Quote desk",
+                "table": "Materials",
+                "column": "Material"
+              }
+            },
+            {
+              "name": "ActualGrams",
+              "type": "number"
+            },
+            {
+              "name": "PrintHours",
+              "type": "number"
+            },
+            {
+              "name": "FinishHours",
+              "type": "number"
+            },
+            {
+              "name": "FailedAttempts",
+              "type": "number"
+            },
+            {
+              "name": "MaterialCost",
+              "type": "formula",
+              "formula": "=[ActualGrams]/1000*XLOOKUP([Material],'Quote desk'!Materials[Material],'Quote desk'!Materials[PricePerKg])"
+            },
+            {
+              "name": "EnergyCost",
+              "type": "formula",
+              "formula": "=[PrintHours]*'Quote desk'!RateCard!B1/1000*'Quote desk'!RateCard!B2"
+            },
+            {
+              "name": "MachineWear",
+              "type": "formula",
+              "formula": "=[PrintHours]*'Quote desk'!RateCard!B3"
+            },
+            {
+              "name": "FinishLabor",
+              "type": "formula",
+              "formula": "=[FinishHours]*'Quote desk'!RateCard!B4"
+            },
+            {
+              "name": "ActualCost",
+              "type": "formula",
+              "formula": "=PrintCost([MaterialCost],[EnergyCost],[MachineWear],[FinishLabor])"
+            },
+            {
+              "name": "Difference",
+              "type": "formula",
+              "formula": "=[ActualCost]-[EstimatedCost]"
+            },
+            {
+              "name": "ResultNote",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Cable guide run 1"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "2026-09-16"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "Q-101"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "28.4"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "43.49"
+            },
+            {
+              "row": 0,
+              "col": 5,
+              "input": "PETG"
+            },
+            {
+              "row": 0,
+              "col": 6,
+              "input": "195"
+            },
+            {
+              "row": 0,
+              "col": 7,
+              "input": "3.4"
+            },
+            {
+              "row": 0,
+              "col": 8,
+              "input": "0.6"
+            },
+            {
+              "row": 0,
+              "col": 9,
+              "input": "0"
+            },
+            {
+              "row": 0,
+              "col": 16,
+              "input": "Extra brim and cleanup"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Sensor brackets"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "2026-09-25"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Q-102"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "77.8"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "119.13"
+            },
+            {
+              "row": 1,
+              "col": 5,
+              "input": "PLA"
+            },
+            {
+              "row": 1,
+              "col": 6,
+              "input": "470"
+            },
+            {
+              "row": 1,
+              "col": 7,
+              "input": "8.6"
+            },
+            {
+              "row": 1,
+              "col": 8,
+              "input": "1.5"
+            },
+            {
+              "row": 1,
+              "col": 9,
+              "input": "1"
+            },
+            {
+              "row": 1,
+              "col": 16,
+              "input": "One bracket warped; second run included"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Cable guide run 2"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "2026-10-01"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "Q-103"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "31"
+            },
+            {
+              "row": 2,
+              "col": 4,
+              "input": "48"
+            },
+            {
+              "row": 2,
+              "col": 5,
+              "input": "PETG"
+            },
+            {
+              "row": 2,
+              "col": 6,
+              "input": "205"
+            },
+            {
+              "row": 2,
+              "col": 7,
+              "input": "3.8"
+            },
+            {
+              "row": 2,
+              "col": 8,
+              "input": "0.4"
+            },
+            {
+              "row": 2,
+              "col": 9,
+              "input": "0"
+            },
+            {
+              "row": 2,
+              "col": 16,
+              "input": "Nozzle change added setup time"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 3,
+              "endCol": 4,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 6,
+              "endCol": 9,
+              "format": {
+                "numberFormat": "0.##"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 10,
+              "endCol": 15,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ],
+          "conditionalFormats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 15,
+              "endCol": 15,
+              "kind": "criterion",
+              "criterion": ">0",
+              "format": {
+                "fill": "red",
+                "bold": true
+              }
+            }
+          ]
+        },
+        {
+          "type": "chart",
+          "name": "Estimate and actual cost",
+          "source": "HSTACK(CompletedJobs[Job],CompletedJobs[EstimatedCost],CompletedJobs[ActualCost])",
+          "chartType": "bar"
+        }
+      ]
+    }
+  ]
+}

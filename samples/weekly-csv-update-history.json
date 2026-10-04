@@ -1,0 +1,676 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "Weekly CSV Update, History & Notes",
+  "pages": [
+    {
+      "name": "Weekly update",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Import instructions",
+          "source": "# Weekly CSV update\n\nPaste the new export into **Staging** with its stable RecordID. The validation column flags duplicate IDs, missing services, and unmapped services. **Apply update** refuses a batch with a flagged row. It updates the current service fields while leaving AnalystNote alone.\n\n{% let ready = COUNTIF(Staging[Validation], \"Ready\") %}\nThe staging batch has **{{ ready }} ready records**. The sample includes one new service and changed monthly costs. Try changing api-gateway from 295 to 310, then apply the update and inspect the row-level changes on **Current records**.\n\nSelect week of October 5 and click **Save weekly snapshot** after applying the batch. Saving again for the same week updates those week-and-record keys instead of adding duplicates."
+        },
+        {
+          "type": "table",
+          "name": "Settings",
+          "rowCount": 2,
+          "colCount": 2,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "WeekOf"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "2026-10-05"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "PreviousWeek"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "2026-09-28"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": 1,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "AllocationMap",
+          "rowCount": 5,
+          "colCount": 2,
+          "columns": [
+            {
+              "name": "Service",
+              "type": "text"
+            },
+            {
+              "name": "CostCenter",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "api-gateway"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Core platform"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "auth-service"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "Security"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "batch-worker"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "Analytics"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "search-index"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "Search"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "metrics-exporter"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "Observability"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Staging",
+          "rowCount": 5,
+          "colCount": 5,
+          "columns": [
+            {
+              "name": "RecordID",
+              "type": "text"
+            },
+            {
+              "name": "Service",
+              "type": "text"
+            },
+            {
+              "name": "Owner",
+              "type": "text"
+            },
+            {
+              "name": "MonthlyCost",
+              "type": "number"
+            },
+            {
+              "name": "Validation",
+              "type": "formula",
+              "formula": "=IF([RecordID]=\"\",\"Missing ID\",IF(COUNTIF(Staging[RecordID],[RecordID])>1,\"Duplicate ID\",IF([Service]=\"\",\"Missing service\",IF(COUNTIF(AllocationMap[Service],[Service])=0,\"Unmapped service\",\"Ready\"))))"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "svc-api"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "api-gateway"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "Priya"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "295"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "svc-auth"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "auth-service"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Mateo"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "180"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "batch-01"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "batch-worker"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "Priya"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "120"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "search-01"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "search-index"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "Noah"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "95"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "metrics-01"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "metrics-exporter"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "Noah"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "70"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 3,
+              "endCol": 3,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ],
+          "conditionalFormats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 4,
+              "endCol": 4,
+              "kind": "criterion",
+              "criterion": "Ready",
+              "format": {
+                "fill": "green"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 4,
+              "endCol": 4,
+              "kind": "criterion",
+              "criterion": "Unmapped service",
+              "format": {
+                "fill": "red",
+                "bold": true
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Update actions",
+          "rowCount": 2,
+          "colCount": 2,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Apply staging update"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "=IF(COUNTIF(Staging[Validation],\"<>Ready\")>0,\"Fix staging errors before applying\",BUTTON(\"Apply weekly update\",UPDATE(Staging!A:D,1,'Current records'!CurrentRecords!A:D)))"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Save weekly snapshot"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "=IF(COUNTIF(Staging[Validation],\"<>Ready\")>0,\"Fix staging errors before saving\",BUTTON(\"Save weekly snapshot\",UPDATE(HSTACK(MAP('Current records'!CurrentRecords[RecordID],LAMBDA(id,Settings!B1)),'Current records'!CurrentRecords[RecordID],'Current records'!CurrentRecords[Service],'Current records'!CurrentRecords[Owner],'Current records'!CurrentRecords[MonthlyCost]),VSTACK(1,2),'History'!Snapshots!A:E)))"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Current records",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Current data review",
+          "source": "# Current records\n\nThe update writes only RecordID, Service, Owner, and MonthlyCost. AnalystNote stays with its stable key when a staged row changes. PreviousCost reads the selected prior-week snapshot, so new records show a zero prior cost.\n\nThe bar chart compares last week's saved cost with the current import. Review the row-level Change column before saving this week's snapshot."
+        },
+        {
+          "type": "table",
+          "name": "CurrentRecords",
+          "rowCount": 4,
+          "colCount": 8,
+          "columns": [
+            {
+              "name": "RecordID",
+              "type": "text"
+            },
+            {
+              "name": "Service",
+              "type": "text"
+            },
+            {
+              "name": "Owner",
+              "type": "text"
+            },
+            {
+              "name": "MonthlyCost",
+              "type": "number"
+            },
+            {
+              "name": "PreviousCost",
+              "type": "formula",
+              "formula": "=SUMIFS('History'!Snapshots[MonthlyCost],'History'!Snapshots[RecordID],[RecordID],'History'!Snapshots[Week],'Weekly update'!Settings!B2)"
+            },
+            {
+              "name": "Change",
+              "type": "formula",
+              "formula": "=[MonthlyCost]-[PreviousCost]"
+            },
+            {
+              "name": "ChangeStatus",
+              "type": "formula",
+              "formula": "=IF([PreviousCost]=0,\"New\",IF([Change]=0,\"Unchanged\",\"Changed\"))"
+            },
+            {
+              "name": "AnalystNote",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "svc-api"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "api-gateway"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "Priya"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "260"
+            },
+            {
+              "row": 0,
+              "col": 7,
+              "input": "Check gateway traffic tier after rollout"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "svc-auth"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "auth-service"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Mateo"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "180"
+            },
+            {
+              "row": 1,
+              "col": 7,
+              "input": "Annual certificate is billed here"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "batch-01"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "batch-worker"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "Priya"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "90"
+            },
+            {
+              "row": 2,
+              "col": 7,
+              "input": "Quarter-end export may cause a one-time spike"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "search-01"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "search-index"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "Noah"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "110"
+            },
+            {
+              "row": 3,
+              "col": 7,
+              "input": "Revisit retention policy in November"
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 3,
+                "descending": true
+              }
+            ]
+          },
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 3,
+              "endCol": 5,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        },
+        {
+          "type": "chart",
+          "name": "Prior and current monthly cost",
+          "source": "HSTACK(CurrentRecords[Service],CurrentRecords[PreviousCost],CurrentRecords[MonthlyCost])",
+          "chartType": "bar"
+        }
+      ]
+    },
+    {
+      "name": "History",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Snapshot history",
+          "source": "# Weekly snapshots\n\nEach record is keyed by both Week and RecordID. The update action replaces matching pairs and appends new pairs, so clicking Save twice for the same week does not duplicate a record."
+        },
+        {
+          "type": "table",
+          "name": "Snapshots",
+          "rowCount": 4,
+          "colCount": 5,
+          "columns": [
+            {
+              "name": "Week",
+              "type": "date"
+            },
+            {
+              "name": "RecordID",
+              "type": "text"
+            },
+            {
+              "name": "Service",
+              "type": "text"
+            },
+            {
+              "name": "Owner",
+              "type": "text"
+            },
+            {
+              "name": "MonthlyCost",
+              "type": "number"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "2026-09-28"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "svc-api"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "api-gateway"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "Priya"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "260"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "2026-09-28"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "svc-auth"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "auth-service"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "Mateo"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "180"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "2026-09-28"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "batch-01"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "batch-worker"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "Priya"
+            },
+            {
+              "row": 2,
+              "col": 4,
+              "input": "90"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "2026-09-28"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "search-01"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "search-index"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "Noah"
+            },
+            {
+              "row": 3,
+              "col": 4,
+              "input": "110"
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 0,
+                "descending": true
+              },
+              {
+                "column": 1,
+                "descending": false
+              }
+            ]
+          },
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 0,
+              "endCol": 0,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 4,
+              "endCol": 4,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "Week over week",
+          "source": "## Week-over-week report\n\n{% let previous = SUMIFS(Snapshots[MonthlyCost],Snapshots[Week],'Weekly update'!Settings!B2) %}\n{% let current = SUM('Current records'!CurrentRecords[MonthlyCost]) %}\n**Prior week:** {{ TEXT(previous, \"$#,##0.00\") }} · **Current:** {{ TEXT(current, \"$#,##0.00\") }} · **Change:** {{ TEXT(current-previous, \"$#,##0.00;-$#,##0.00\") }}\n\nCurrent rows include per-service cost changes and the new metrics-exporter record. Once saved, this week's snapshot becomes a dated baseline for next week's report."
+        }
+      ]
+    }
+  ]
+}

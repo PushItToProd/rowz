@@ -1,0 +1,977 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "Inventory Movements & Reorder Desk",
+  "pages": [
+    {
+      "name": "Inventory",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Stock overview",
+          "source": "# Inventory and reorder desk\n\nStock comes from receipts, usage, and signed count adjustments. Open reservations reduce what is available to promise. The count-check table keeps physical counts beside the movement-derived balance so discrepancies stay visible.\n\n{% let reorder = COUNTIF(Inventory[ReorderStatus], \"Reorder\") %}\n**{{ reorder }}** items need a purchase review. The gloves and M3 bolts have open reservations; the carton count is two below the movement ledger.\n\nUse the form to record a receipt or usage. Quantity is positive for those movements. A count adjustment may be positive or negative. Item choices come from the inventory list."
+        },
+        {
+          "type": "table",
+          "name": "Inventory",
+          "rowCount": 4,
+          "colCount": 9,
+          "columns": [
+            {
+              "name": "ItemID",
+              "type": "text"
+            },
+            {
+              "name": "Item",
+              "type": "text"
+            },
+            {
+              "name": "Supplier",
+              "type": "text"
+            },
+            {
+              "name": "ReorderAt",
+              "type": "number"
+            },
+            {
+              "name": "Unit",
+              "type": "text"
+            },
+            {
+              "name": "OnHand",
+              "type": "formula",
+              "formula": "=SUMIFS('Movement history'!Movements[NetQty],'Movement history'!Movements[ItemID],[ItemID])"
+            },
+            {
+              "name": "Reserved",
+              "type": "formula",
+              "formula": "=SUMIFS('Movement history'!Reservations[Quantity],'Movement history'!Reservations[ItemID],[ItemID],'Movement history'!Reservations[Status],\"Open\")"
+            },
+            {
+              "name": "Available",
+              "type": "formula",
+              "formula": "=[OnHand]-[Reserved]"
+            },
+            {
+              "name": "ReorderStatus",
+              "type": "formula",
+              "formula": "=IF([Available]<[ReorderAt],\"Reorder\",\"OK\")"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "P-440"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Nitrile gloves"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "MedSupply Co."
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "24"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "boxes"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "F-120"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "PLA filament, 3 mm"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Layer House"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "6"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "spools"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "A-220"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "M3 bolts"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "Fastener Depot"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "100"
+            },
+            {
+              "row": 2,
+              "col": 4,
+              "input": "each"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "C-550"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "Packing cartons"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "BoxWorks"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "18"
+            },
+            {
+              "row": 3,
+              "col": 4,
+              "input": "each"
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 7,
+                "descending": false
+              }
+            ]
+          },
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 3,
+              "endCol": 7,
+              "format": {
+                "numberFormat": "#,##0.##"
+              }
+            }
+          ],
+          "conditionalFormats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 8,
+              "endCol": 8,
+              "kind": "criterion",
+              "criterion": "Reorder",
+              "format": {
+                "fill": "orange",
+                "bold": true
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "MovementForm",
+          "rowCount": 7,
+          "colCount": 3,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Item ID"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "=DROPDOWN(Inventory[ItemID],B1)"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Movement type"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "=DROPDOWN(VSTACK(\"Receipt\",\"Usage\",\"Adjustment\"),B2)"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Quantity"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Date"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "2026-10-04"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "Reference or reason"
+            },
+            {
+              "row": 6,
+              "col": 0,
+              "input": "Record movement"
+            },
+            {
+              "row": 6,
+              "col": 1,
+              "input": "=IF(OR(B1=\"\",B2=\"\",B3=\"\",B3=0),\"Choose an item and type and enter a nonzero quantity\",BUTTON(\"Record movement\",DO(APPEND_ROW('Movement history'!Movements!A:E,B4,B1,B2,B3,B5),CLEAR(B3),CLEAR(B5))))"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 3,
+              "endRow": 3,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 2,
+              "endRow": 2,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "#,##0.##"
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "Reorder list",
+          "source": "## Items below their reorder point\n\n{{ FILTER(HSTACK(Inventory[Item],Inventory[Supplier],Inventory[Available],Inventory[ReorderAt]),Inventory[Available]<Inventory[ReorderAt]) }}"
+        }
+      ]
+    },
+    {
+      "name": "Movement history",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Movement notes",
+          "source": "# Movement history\n\nUse a positive quantity for receipts and usage. The NetQty formula reverses usage; adjustment rows retain their entered sign. The MappingCheck column flags a movement whose item ID is missing from Inventory."
+        },
+        {
+          "type": "table",
+          "name": "Movements",
+          "rowCount": 12,
+          "colCount": 7,
+          "columns": [
+            {
+              "name": "Date",
+              "type": "date"
+            },
+            {
+              "name": "ItemID",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Inventory",
+                "table": "Inventory",
+                "column": "ItemID"
+              }
+            },
+            {
+              "name": "Kind",
+              "type": "choice",
+              "choices": [
+                "Receipt",
+                "Usage",
+                "Adjustment"
+              ]
+            },
+            {
+              "name": "Quantity",
+              "type": "number"
+            },
+            {
+              "name": "Reference",
+              "type": "text"
+            },
+            {
+              "name": "NetQty",
+              "type": "formula",
+              "formula": "=IF([Kind]=\"Usage\",-[Quantity],[Quantity])"
+            },
+            {
+              "name": "MappingCheck",
+              "type": "formula",
+              "formula": "=IF(COUNTIF('Inventory'!Inventory[ItemID],[ItemID])=0,\"Unknown item\",\"Mapped\")"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "2026-09-01"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "P-440"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "Receipt"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "40"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "PO-771"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "2026-09-12"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "P-440"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Usage"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "5"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "Clinic restock"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "2026-09-25"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "P-440"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "Usage"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "3"
+            },
+            {
+              "row": 2,
+              "col": 4,
+              "input": "Clinic restock"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "2026-08-29"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "F-120"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "Receipt"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "20"
+            },
+            {
+              "row": 3,
+              "col": 4,
+              "input": "PO-744"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "2026-09-08"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "F-120"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "Usage"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "4"
+            },
+            {
+              "row": 4,
+              "col": 4,
+              "input": "Prototype lab"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "2026-09-29"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "F-120"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "Usage"
+            },
+            {
+              "row": 5,
+              "col": 3,
+              "input": "2"
+            },
+            {
+              "row": 5,
+              "col": 4,
+              "input": "Print room"
+            },
+            {
+              "row": 6,
+              "col": 0,
+              "input": "2026-09-03"
+            },
+            {
+              "row": 6,
+              "col": 1,
+              "input": "A-220"
+            },
+            {
+              "row": 6,
+              "col": 2,
+              "input": "Receipt"
+            },
+            {
+              "row": 6,
+              "col": 3,
+              "input": "150"
+            },
+            {
+              "row": 6,
+              "col": 4,
+              "input": "PO-780"
+            },
+            {
+              "row": 7,
+              "col": 0,
+              "input": "2026-09-18"
+            },
+            {
+              "row": 7,
+              "col": 1,
+              "input": "A-220"
+            },
+            {
+              "row": 7,
+              "col": 2,
+              "input": "Usage"
+            },
+            {
+              "row": 7,
+              "col": 3,
+              "input": "18"
+            },
+            {
+              "row": 7,
+              "col": 4,
+              "input": "Repair batch"
+            },
+            {
+              "row": 8,
+              "col": 0,
+              "input": "2026-09-30"
+            },
+            {
+              "row": 8,
+              "col": 1,
+              "input": "A-220"
+            },
+            {
+              "row": 8,
+              "col": 2,
+              "input": "Usage"
+            },
+            {
+              "row": 8,
+              "col": 3,
+              "input": "12"
+            },
+            {
+              "row": 8,
+              "col": 4,
+              "input": "Assembly line"
+            },
+            {
+              "row": 9,
+              "col": 0,
+              "input": "2026-08-20"
+            },
+            {
+              "row": 9,
+              "col": 1,
+              "input": "C-550"
+            },
+            {
+              "row": 9,
+              "col": 2,
+              "input": "Receipt"
+            },
+            {
+              "row": 9,
+              "col": 3,
+              "input": "50"
+            },
+            {
+              "row": 9,
+              "col": 4,
+              "input": "PO-721"
+            },
+            {
+              "row": 10,
+              "col": 0,
+              "input": "2026-09-14"
+            },
+            {
+              "row": 10,
+              "col": 1,
+              "input": "C-550"
+            },
+            {
+              "row": 10,
+              "col": 2,
+              "input": "Usage"
+            },
+            {
+              "row": 10,
+              "col": 3,
+              "input": "5"
+            },
+            {
+              "row": 10,
+              "col": 4,
+              "input": "Outbound orders"
+            },
+            {
+              "row": 11,
+              "col": 0,
+              "input": "2026-09-30"
+            },
+            {
+              "row": 11,
+              "col": 1,
+              "input": "C-550"
+            },
+            {
+              "row": 11,
+              "col": 2,
+              "input": "Usage"
+            },
+            {
+              "row": 11,
+              "col": 3,
+              "input": "3"
+            },
+            {
+              "row": 11,
+              "col": 4,
+              "input": "Outbound orders"
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 0,
+                "descending": true
+              }
+            ]
+          },
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 0,
+              "endCol": 0,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 3,
+              "endCol": 5,
+              "format": {
+                "numberFormat": "#,##0.##"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Reservations",
+          "rowCount": 4,
+          "colCount": 5,
+          "columns": [
+            {
+              "name": "OrderID",
+              "type": "text"
+            },
+            {
+              "name": "ItemID",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Inventory",
+                "table": "Inventory",
+                "column": "ItemID"
+              }
+            },
+            {
+              "name": "Quantity",
+              "type": "number"
+            },
+            {
+              "name": "Status",
+              "type": "choice",
+              "choices": [
+                "Open",
+                "Fulfilled",
+                "Cancelled"
+              ]
+            },
+            {
+              "name": "NeedBy",
+              "type": "date"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "SO-180"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "P-440"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "12"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "Open"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "2026-10-09"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "SO-181"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "A-220"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "40"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "Open"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "2026-10-07"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "SO-182"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "C-550"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "10"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "Open"
+            },
+            {
+              "row": 2,
+              "col": 4,
+              "input": "2026-10-06"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "SO-179"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "F-120"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "4"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "Open"
+            },
+            {
+              "row": 3,
+              "col": 4,
+              "input": "2026-10-08"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 2,
+              "format": {
+                "numberFormat": "#,##0.##"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 4,
+              "endCol": 4,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Count checks",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Count review",
+          "source": "# Physical count review\n\nCountCheck compares a physical count with movements through the count date. A nonzero variance is a follow-up item; post an adjustment only after confirming the count and the movement history.\n\n{% let open = COUNTIF(CountCheck[FollowUp], \"Investigate\") %}\nThere are **{{ open }}** count discrepancies to review. The carton record is short by two units."
+        },
+        {
+          "type": "table",
+          "name": "CountCheck",
+          "rowCount": 4,
+          "colCount": 6,
+          "columns": [
+            {
+              "name": "CountDate",
+              "type": "date"
+            },
+            {
+              "name": "ItemID",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Inventory",
+                "table": "Inventory",
+                "column": "ItemID"
+              }
+            },
+            {
+              "name": "PhysicalCount",
+              "type": "number"
+            },
+            {
+              "name": "SystemCount",
+              "type": "formula",
+              "formula": "=SUMIFS('Movement history'!Movements[NetQty],'Movement history'!Movements[ItemID],[ItemID],'Movement history'!Movements[Date],\"<=\"&[CountDate])"
+            },
+            {
+              "name": "Variance",
+              "type": "formula",
+              "formula": "=[PhysicalCount]-[SystemCount]"
+            },
+            {
+              "name": "FollowUp",
+              "type": "formula",
+              "formula": "=IF([Variance]=0,\"OK\",\"Investigate\")"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "2026-10-01"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "P-440"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "31"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "2026-10-01"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "F-120"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "14"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "2026-10-01"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "A-220"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "119"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "2026-10-01"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "C-550"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "40"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 0,
+              "endCol": 0,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 4,
+              "format": {
+                "numberFormat": "#,##0.##"
+              }
+            }
+          ],
+          "conditionalFormats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 5,
+              "endCol": 5,
+              "kind": "criterion",
+              "criterion": "Investigate",
+              "format": {
+                "fill": "orange",
+                "bold": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

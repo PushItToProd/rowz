@@ -1,0 +1,500 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "Home Maintenance & Service History",
+  "pages": [
+    {
+      "name": "Due now",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Maintenance summary",
+          "source": "# Home maintenance\n\nThe reference date is editable in **Settings** so this example remains reproducible. Change it to review another day. **Due now** tasks need attention; the next 30 days are shown separately.\n\n{% let due = COUNTIF(Equipment[Status], \"Due now\") %}\nThere {% if due = 1 %}is{% else %}are{% end %} **{{ due }}** task{% if due = 1 %}{% else %}s{% end %} due now. Start with the furnace filter, last changed July 2.\n\nTry recording completion for **HVAC-01** in the form below. The service log gains a dated record, and the equipment table recalculates its next due date."
+        },
+        {
+          "type": "table",
+          "name": "Equipment",
+          "rowCount": 6,
+          "colCount": 7,
+          "columns": [
+            {
+              "name": "EquipmentID",
+              "type": "text"
+            },
+            {
+              "name": "Equipment",
+              "type": "text"
+            },
+            {
+              "name": "Room",
+              "type": "text"
+            },
+            {
+              "name": "IntervalDays",
+              "type": "number"
+            },
+            {
+              "name": "LastCompleted",
+              "type": "formula",
+              "formula": "=MAXIFS('Service history'!ServiceLog[Date], 'Service history'!ServiceLog[EquipmentID], [EquipmentID])"
+            },
+            {
+              "name": "NextDue",
+              "type": "formula",
+              "formula": "=[LastCompleted]+[IntervalDays]"
+            },
+            {
+              "name": "Status",
+              "type": "formula",
+              "formula": "=IF([NextDue]<=Settings!B1,\"Due now\",IF([NextDue]<=Settings!B1+30,\"Due within 30 days\",\"Scheduled\"))"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "HVAC-01"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Furnace filter"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "Utility closet"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "90"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "WH-01"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "Water heater flush"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Garage"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "365"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "DR-01"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "Dryer vent cleaning"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "Laundry"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "365"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "SA-01"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "Smoke alarm batteries"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "Hallway"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "365"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "RF-01"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "Refrigerator coils"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "Kitchen"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "180"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "GD-01"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "Garage door lubrication"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "Garage"
+            },
+            {
+              "row": 5,
+              "col": 3,
+              "input": "180"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 4,
+              "endCol": 5,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            }
+          ],
+          "conditionalFormats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 6,
+              "endCol": 6,
+              "kind": "criterion",
+              "criterion": "Due now",
+              "format": {
+                "fill": "red",
+                "bold": true
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 6,
+              "endCol": 6,
+              "kind": "criterion",
+              "criterion": "Due within 30 days",
+              "format": {
+                "fill": "yellow"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Settings",
+          "rowCount": 1,
+          "colCount": 2,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Reference date"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "2026-10-04"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": 0,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Completion form",
+          "rowCount": 6,
+          "colCount": 3,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Equipment ID"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "=DROPDOWN(Equipment[EquipmentID],B1)"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Completed date"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "2026-10-04"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Cost"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "0"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Notes"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "Record service"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "=IF(OR(B1=\"\",B2=\"\"),\"Choose equipment and date\",BUTTON(\"Record completed task\",DO(APPEND_ROW('Service history'!ServiceLog!A:D,B1,B2,B3,B4),CLEAR(B1),CLEAR(B3),CLEAR(B4))))"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 1,
+              "endRow": 1,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 2,
+              "endRow": 2,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Service history",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "History notes",
+          "source": "# Service history\n\nThis log is the source of the last-completed and next-due dates on the **Due now** page. Add records through the form so the schedule updates automatically."
+        },
+        {
+          "type": "table",
+          "name": "ServiceLog",
+          "rowCount": 6,
+          "colCount": 4,
+          "columns": [
+            {
+              "name": "EquipmentID",
+              "type": "text"
+            },
+            {
+              "name": "Date",
+              "type": "date"
+            },
+            {
+              "name": "Cost",
+              "type": "number"
+            },
+            {
+              "name": "Notes",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "HVAC-01"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "2026-07-02"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "28"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "Replaced 16 × 25 filter"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "WH-01"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "2025-11-02"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "0"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "Annual flush"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "DR-01"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "2025-12-10"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "145"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "Cleaned exterior vent and duct"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "SA-01"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "2025-10-30"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "36"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "Replaced hallway and bedroom batteries"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "RF-01"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "2026-05-01"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "0"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "Vacuumed condenser coils"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "GD-01"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "2026-07-19"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "12"
+            },
+            {
+              "row": 5,
+              "col": 3,
+              "input": "Lubricated hinges and rollers"
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 1,
+                "descending": true
+              }
+            ]
+          },
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 2,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
