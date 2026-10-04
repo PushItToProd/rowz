@@ -82,7 +82,7 @@ describe("suggestionsAt", () => {
   });
 
   it("offers names the formula already uses, before functions", () => {
-    expect(labels("=LET(total, SUM(A1:A3), rate, 2, to")).toEqual(["total", "TODAY"]);
+    expect(labels("=LET(total, SUM(A1:A3), rate, 2, to")).toEqual(["total", "TO_DATE", "TODAY"]);
     expect(labels("=LAMBDA(price, qty, pr")).toEqual(["price", "PRODUCT", "PROPER"]);
   });
 

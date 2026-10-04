@@ -452,6 +452,76 @@ const ENTRIES: readonly FunctionDoc[] = [
     example: 'DATEVALUE("2026-09-30") + 1',
   },
   {
+    name: "YEARFRAC",
+    category: "Dates",
+    syntax: "YEARFRAC(start_date, end_date, [basis])",
+    summary:
+      "The fraction of a year between two dates. Basis 0 is US 30/360 (the default), 1 is Actual/Actual, 2 is Actual/360, 3 is Actual/365, and 4 is European 30/360. Times are ignored.",
+    example: "YEARFRAC(DATE(2026, 1, 1), DATE(2026, 7, 1), 3)",
+  },
+  {
+    name: "TIMEVALUE",
+    category: "Dates",
+    syntax: "TIMEVALUE(time_text)",
+    summary:
+      'Reads a 24-hour time such as "14:05:09" or an AM/PM time such as "2:05 PM" as a fraction of a day.',
+    example: 'TIMEVALUE("14:05:09")',
+  },
+  {
+    name: "TO_DATE",
+    category: "Dates",
+    syntax: "TO_DATE(serial)",
+    summary:
+      "Converts a Google Sheets date serial to a date. Serial 0 is 1899-12-30, and a fractional day gives the time.",
+    example: "TO_DATE(1)",
+  },
+  {
+    name: "UNIXTIME",
+    category: "Dates",
+    syntax: "UNIXTIME(date)",
+    summary: "The Unix timestamp of a date, in seconds since 1970-01-01 00:00:00.",
+    example: "UNIXTIME(DATE(1970, 1, 2))",
+  },
+  {
+    name: "UNIX2DATE",
+    category: "Dates",
+    syntax: "UNIX2DATE(timestamp)",
+    summary: "Converts a Unix timestamp in seconds to a date.",
+    example: "UNIX2DATE(0)",
+  },
+  {
+    name: "LASTXDAYS",
+    category: "Dates",
+    syntax: "LASTXDAYS(days)",
+    summary:
+      "A one-row range with the inclusive start and end dates for the last number of days, ending today.",
+    example: "LASTXDAYS(7)",
+  },
+  {
+    name: "LASTXWEEKS",
+    category: "Dates",
+    syntax: "LASTXWEEKS(weeks)",
+    summary:
+      "A one-row range with the inclusive start and end dates for the last number of seven-day periods, ending today.",
+    example: "LASTXWEEKS(2)",
+  },
+  {
+    name: "LASTXMONTHS",
+    category: "Dates",
+    syntax: "LASTXMONTHS(months)",
+    summary:
+      "A one-row range from one day after the date the given number of calendar months before today through today, inclusive.",
+    example: "LASTXMONTHS(3)",
+  },
+  {
+    name: "DATEINTERVAL",
+    category: "Dates",
+    syntax: "DATEINTERVAL(start_date, end_date)",
+    summary:
+      "A one-row, two-cell range containing the inclusive start and end dates in that order.",
+    example: "DATEINTERVAL(DATE(2026, 9, 1), DATE(2026, 9, 30))",
+  },
+  {
     name: "YEAR",
     category: "Dates",
     syntax: "YEAR(date)",

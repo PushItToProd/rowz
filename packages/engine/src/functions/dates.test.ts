@@ -19,6 +19,13 @@ function shown(formula: string, cells: Record<string, string> = {}): string {
   return formatValue(evaluate(formula, cells));
 }
 
+function shownArray(formula: string): string[][] {
+  const workbook = new Workbook({ now: () => NOW });
+  workbook.setStructure(STRUCTURE);
+  workbook.setCell(at("Z99"), formula);
+  return workbook.getArray(at("Z99")).map((row) => row.map(formatValue));
+}
+
 describe("typed dates", () => {
   it("reads a typed date as a date, and keeps other text as text", () => {
     expect(evaluate("=ISDATE(A1)", { A1: "2026-09-30" })).toBe(true);
@@ -158,6 +165,56 @@ describe("date functions", () => {
     workbook.setStructure(STRUCTURE);
     workbook.setCell(at("A1"), "=YEAR(TODAY())");
     expect(workbook.getValue(at("A1"))).toBe(new Date().getFullYear());
+  });
+
+  it("computes year fractions with spreadsheet day-count conventions", () => {
+    expect(evaluate("=YEARFRAC(DATE(2026, 1, 1), DATE(2026, 7, 1))")).toBe(0.5);
+    expect(evaluate("=YEARFRAC(DATE(2024, 1, 1), DATE(2025, 1, 1), 1)")).toBe(1);
+    expect(evaluate("=YEARFRAC(DATE(2024, 1, 1), DATE(2025, 1, 1), 2)")).toBe(366 / 360);
+    expect(evaluate("=YEARFRAC(DATE(2024, 1, 1), DATE(2025, 1, 1), 3)")).toBe(366 / 365);
+    expect(evaluate("=YEARFRAC(DATE(2026, 1, 30), DATE(2026, 2, 28), 4)")).toBe(28 / 360);
+    expect(evaluate("=YEARFRAC(DATE(2026, 7, 1), DATE(2026, 1, 1))")).toBe(-0.5);
+    expect(evaluate('=YEARFRAC("2026-01-01", "2026-01-01 23:00")')).toBe(0);
+    expect(evaluate("=YEARFRAC(DATE(2026, 1, 1), DATE(2026, 2, 1), 5)")).toMatchObject({
+      kind: "error",
+      code: "#VALUE!",
+    });
+  });
+
+  it("reads time text as a fraction of a day", () => {
+    expect(evaluate('=TIMEVALUE("14:05:09")')).toBe((14 * 3600 + 5 * 60 + 9) / 86400);
+    expect(evaluate('=TIMEVALUE("2:05 PM")')).toBe((14 * 3600 + 5 * 60) / 86400);
+    expect(evaluate('=TIMEVALUE("12:00 AM")')).toBe(0);
+    expect(evaluate('=TIMEVALUE("12:00 PM")')).toBe(0.5);
+    expect(evaluate('=TIMEVALUE("25:00")')).toMatchObject({ kind: "error", code: "#VALUE!" });
+  });
+
+  it("converts spreadsheet serial dates and Unix timestamps", () => {
+    expect(shown("=TO_DATE(0)")).toBe("1899-12-30");
+    expect(shown("=TO_DATE(1.5)")).toBe("1899-12-31 12:00");
+    expect(evaluate('=UNIXTIME("1970-01-01 00:01:30")')).toBe(90);
+    expect(shown("=UNIX2DATE(0)")).toBe("1970-01-01");
+    expect(shown("=UNIX2DATE(86400)")).toBe("1970-01-02");
+    expect(shown("=UNIX2DATE(-1)")).toBe("1969-12-31 23:59:59");
+  });
+
+  it("returns date intervals as inclusive start and end cells", () => {
+    expect(shownArray("=DATEINTERVAL(DATE(2026, 9, 1), DATE(2026, 9, 30))")).toEqual([
+      ["2026-09-01", "2026-09-30"],
+    ]);
+    expect(shownArray("=LASTXDAYS(7)")).toEqual([["2026-09-24", "2026-09-30"]]);
+    expect(shownArray("=LASTXWEEKS(2)")).toEqual([["2026-09-17", "2026-09-30"]]);
+    expect(shownArray("=LASTXMONTHS(1)")).toEqual([["2026-08-31", "2026-09-30"]]);
+    expect(evaluate("=LASTXDAYS(0)")).toMatchObject({ kind: "error", code: "#VALUE!" });
+  });
+
+  it("uses the workbook clock for relative date ranges", () => {
+    const workbook = new Workbook({ now: () => Date.UTC(2027, 0, 1, 23) });
+    workbook.setStructure(STRUCTURE);
+    workbook.setCell(at("A1"), "=LASTXDAYS(2)");
+    expect(workbook.getArray(at("A1")).map((row) => row.map(formatValue))).toEqual([
+      ["2026-12-31", "2027-01-01"],
+    ]);
   });
 });
 

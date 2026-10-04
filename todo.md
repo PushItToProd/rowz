@@ -106,7 +106,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [/] (Claude) for the author: review the smaller candidates left in docs/rows-functions.md and determine which to include
 - [ ] **P6** the reference functions `OFFSET`, `INDIRECT`, `ADDRESS`, `ISFORMULA`, `ISREF`
 - [ ] **P7** random numbers
-- [ ] **P6** date helpers except for `TO_TIMEZONE` since we don't use time zones here
+- [x] **P6** date helpers except for `TO_TIMEZONE` since we don't use time zones here
 - [x] other text - `SLICE`, `SLUGIFY`, `DECODEURL`, `BASE64`, `BASE64DECODE`, `DOMAIN`, `RELATIVE_URL`
 - [x] **P7** `LOOKUP`, `HLOOKUP`, `XYLOOKUP` (skip `FLOOKUP` for now)
 - [ ] **P6** `SUBTOTAL`, `ARRAY_CONSTRAIN`, `FILTER_COLUMNS`, `RANGE_CONTAINS`
@@ -459,3 +459,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] The `SEQUENCE` help summary in `packages/engine/src/docs.ts` reads as if giving either start or step overrides both defaults. Say that start and step each default to 1.
 
 - [ ] Add tests for `LOOKUP` and `XYLOOKUP` with empty search ranges, empty or single-row `XYLOOKUP` ranges, and mismatched key types.
+
+- [ ] Add tests for the date range helpers (`LASTXDAYS`, `LASTXWEEKS`, `LASTXMONTHS`, `DATEINTERVAL`) at the year 0 and 9999 boundaries, with negative and fractional counts, and for `LASTXMONTHS` clamping around February and month ends. Add `TIMEVALUE` with fractional seconds and more `YEARFRAC` day-count edge cases.

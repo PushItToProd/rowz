@@ -9,10 +9,24 @@ import {
 } from "../dates";
 import { isDate } from "../dates";
 import type { Evaluated } from "../values";
-import { dateOf, eager, fail, grid, integer, lazy, text } from "./arguments";
-import type { FunctionDefinition } from "./registry";
+import {
+  array,
+  dateOf,
+  eager,
+  fail,
+  grid,
+  integer,
+  lazy,
+  limitCells,
+  number,
+  text,
+} from "./arguments";
+import type { Argument, FunctionDefinition } from "./registry";
 
 const SECOND_MS = 1000;
+const SECONDS_PER_DAY = DAY_MS / SECOND_MS;
+const UNIX_EPOCH_MS = dateFromParts(1970, 1, 1).ms;
+const SHEETS_EPOCH_MS = dateFromParts(1899, 12, 30).ms;
 
 /** Defines a function that gives one calendar part of a date. */
 function part(name: keyof DateParts): FunctionDefinition {
@@ -60,6 +74,108 @@ function isoWeek(value: DateValue): number {
   const thursday = dateFromMs((day - sinceMonday + 3) * DAY_MS);
   const newYear = dayNumber(dateFromParts(dateParts(thursday).year, 1, 1));
   return Math.floor((dayNumber(thursday) - newYear) / 7) + 1;
+}
+
+/** The year fraction under the Actual/Actual day-count convention. */
+function actualActual(startDay: number, endDay: number): number {
+  let fraction = 0;
+  let day = startDay;
+  while (day < endDay) {
+    const year = dateParts(dateFromMs(day * DAY_MS)).year;
+    const endOfYear = year === 9999 ? endDay : dayNumber(dateFromParts(year + 1, 1, 1));
+    const next = Math.min(endDay, endOfYear);
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    fraction += (next - day) / (leap ? 366 : 365);
+    day = next;
+  }
+  return fraction;
+}
+
+function lastDayOfFebruary({ year, month, day }: DateParts): boolean {
+  if (month !== 2) return false;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  return day === (leap ? 29 : 28);
+}
+
+/** The US (NASD) 30/360 convention, returned as a non-negative fraction. */
+function usThirty360(start: DateValue, end: DateValue): number {
+  const from = dateParts(start);
+  const to = dateParts(end);
+  let startDay = from.day;
+  let endDay = to.day;
+  const startIsFebruaryEnd = lastDayOfFebruary(from);
+  const endIsFebruaryEnd = lastDayOfFebruary(to);
+  if (startDay === 31 || startIsFebruaryEnd) startDay = 30;
+  if (endDay === 31 && startDay === 30) endDay = 30;
+  if (endIsFebruaryEnd && startIsFebruaryEnd) endDay = 30;
+  return ((to.year - from.year) * 360 + (to.month - from.month) * 30 + endDay - startDay) / 360;
+}
+
+/** A year fraction using the spreadsheet day-count conventions 0 through 4. */
+function yearFraction(start: DateValue, end: DateValue, basis: number): number {
+  const first = dayNumber(start);
+  const last = dayNumber(end);
+  if (first === last) return 0;
+  const sign = first < last ? 1 : -1;
+  const [from, to] = sign > 0 ? [start, end] : [end, start];
+  const [fromDay, toDay] = sign > 0 ? [first, last] : [last, first];
+  switch (basis) {
+    case 0:
+      return sign * usThirty360(from, to);
+    case 1:
+      return sign * actualActual(fromDay, toDay);
+    case 2:
+      return (sign * (toDay - fromDay)) / 360;
+    case 3:
+      return (sign * (toDay - fromDay)) / 365;
+    case 4: {
+      const startParts = dateParts(from);
+      const endParts = dateParts(to);
+      const days =
+        (endParts.year - startParts.year) * 360 +
+        (endParts.month - startParts.month) * 30 +
+        Math.min(endParts.day, 30) -
+        Math.min(startParts.day, 30);
+      return (sign * days) / 360;
+    }
+    default:
+      return fail("#VALUE!", "The basis must be between 0 and 4");
+  }
+}
+
+/** Converts time text in 24-hour or 12-hour clock form to a fraction of a day. */
+function timeValue(value: Evaluated): number {
+  const input = text(value).trim();
+  const match = /^(\d{1,2}):([0-5]\d)(?::([0-5]\d)(?:\.(\d+))?)?\s*(AM|PM)?$/i.exec(input);
+  if (!match) return fail("#VALUE!", `${input || "An empty cell"} is not a time`);
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = Number(match[3] ?? 0) + Number(match[4] ? `0.${match[4]}` : 0);
+  const meridiem = match[5]?.toUpperCase();
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return fail("#VALUE!", `${input} is not a time`);
+    hour = (hour % 12) + (meridiem === "PM" ? 12 : 0);
+  } else if (hour > 23) {
+    return fail("#VALUE!", `${input} is not a time`);
+  }
+  return (hour * 3600 + minute * 60 + second) / SECONDS_PER_DAY;
+}
+
+/** A range with inclusive start and end dates, stored as one row of two cells. */
+function dateInterval(start: DateValue, end: DateValue): Evaluated {
+  limitCells(2);
+  return array([[start, end]]);
+}
+
+function positiveCount(value: Evaluated, unit: string): number {
+  const count = integer(value);
+  if (count < 1) return fail("#VALUE!", `The number of ${unit} must be at least 1`);
+  return count;
+}
+
+function requiredArgument(argument: Argument | undefined): Evaluated {
+  if (argument === undefined) return fail("#ERROR!", "A required argument is missing");
+  return argument();
 }
 
 export const dateFunctions: Record<string, FunctionDefinition> = {
@@ -144,6 +260,41 @@ export const dateFunctions: Record<string, FunctionDefinition> = {
   ),
   /** Reads text written as a date, such as `"2026-09-30"`. */
   DATEVALUE: eager(1, 1, (value) => dateOf(value)),
+  /** A year fraction under one of the spreadsheet day-count conventions. */
+  YEARFRAC: eager(2, 3, (startValue, endValue, basisValue = 0) =>
+    yearFraction(dateOf(startValue), dateOf(endValue), integer(basisValue)),
+  ),
+  /** A time of day written in 24-hour or AM/PM form, as a fraction of a day. */
+  TIMEVALUE: eager(1, 1, timeValue),
+  /** A Google Sheets date serial: days from 1899-12-30, including a fractional time. */
+  TO_DATE: eager(1, 1, (value) => dateFromMs(SHEETS_EPOCH_MS + number(value) * DAY_MS)),
+  /** The Unix timestamp of a date, in seconds. */
+  UNIXTIME: eager(1, 1, (value) => (dateOf(value).ms - UNIX_EPOCH_MS) / SECOND_MS),
+  /** A date from a Unix timestamp in seconds. */
+  UNIX2DATE: eager(1, 1, (value) => dateFromMs(UNIX_EPOCH_MS + number(value) * SECOND_MS)),
+  /** A range from the date `days - 1` days ago through today, inclusive. */
+  LASTXDAYS: lazy(1, 1, ([countArg], context) => {
+    const today = startOfDay(dateFromMs(context.now?.() ?? Date.now()));
+    const days = positiveCount(requiredArgument(countArg), "days");
+    return dateInterval(dateFromMs(today.ms - (days - 1) * DAY_MS), today);
+  }),
+  /** A range of the last `weeks` seven-day periods through today, inclusive. */
+  LASTXWEEKS: lazy(1, 1, ([countArg], context) => {
+    const today = startOfDay(dateFromMs(context.now?.() ?? Date.now()));
+    const days = positiveCount(requiredArgument(countArg), "weeks") * 7;
+    return dateInterval(dateFromMs(today.ms - (days - 1) * DAY_MS), today);
+  }),
+  /** A range from one day after the date `months` calendar months ago through today, inclusive. */
+  LASTXMONTHS: lazy(1, 1, ([countArg], context) => {
+    const today = startOfDay(dateFromMs(context.now?.() ?? Date.now()));
+    const months = positiveCount(requiredArgument(countArg), "months");
+    const start = addMonths(today, -months);
+    return dateInterval(dateFromMs(start.ms + DAY_MS), today);
+  }),
+  /** An inclusive range from the given start date through the end date. */
+  DATEINTERVAL: eager(2, 2, (startValue, endValue) =>
+    dateInterval(dateOf(startValue), dateOf(endValue)),
+  ),
 
   YEAR: part("year"),
   MONTH: part("month"),

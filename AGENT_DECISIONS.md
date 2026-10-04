@@ -633,3 +633,19 @@ Together they make a form: inputs, a Save button that appends to a log table and
 **Why.** The Rows catalog describes `XYLOOKUP` as finding a cell by row and column keys but gives no signature or range layout. Using the first row and column as key vectors gives the three-argument function a compact, spreadsheet-like table layout. The requested 2-D `LOOKUP` behavior leaves the orientation details open, so a wider range searches horizontally and a taller or square range searches vertically; the opposite edge supplies the result when no result vector is given.
 
 **To change.** The implementation and help entries are in `packages/engine/src/functions/lookup.ts` and `packages/engine/src/docs.ts`.
+
+## 2026-10-04: Date helper functions
+
+**Decision.** The date helper item in `docs/rows-functions.md` names these functions without signatures or behavior, so the engine uses spreadsheet conventions with the following choices:
+
+- `YEARFRAC(start, end, [basis])` defaults to basis 0 (US 30/360). Bases 1 through 4 mean Actual/Actual, Actual/360, Actual/365, and European 30/360. Times are ignored, reversed dates give a negative fraction, and an invalid basis gives `#VALUE!` because this engine has no `#NUM!` error code.
+- `TIMEVALUE(text)` accepts `H:MM`, optional seconds and fractional seconds, or those forms with an AM/PM suffix. It returns a fraction of a day and does not parse a date or locale-specific time spelling.
+- `TO_DATE(serial)` uses the Google Sheets epoch, 1899-12-30, and preserves the serial's fractional day as the time.
+- `UNIXTIME(date)` returns seconds since 1970-01-01. `UNIX2DATE(seconds)` reads the same unit.
+- `DATEINTERVAL(start, end)` returns one row with the inclusive start and end dates in two cells, in the order given. It keeps the times on its endpoints.
+- `LASTXDAYS(n)` returns the two inclusive endpoints for the last `n` calendar dates, ending today. `LASTXWEEKS(n)` returns `7*n` consecutive dates ending today; weeks do not align to a weekday. `LASTXMONTHS(n)` starts one day after the date `n` calendar months before today and ends today, inclusive. All three use the workbook's injected clock through the same mechanism as `TODAY`.
+- The `LASTX...` counts are truncated toward zero like other spreadsheet count arguments and must be at least 1. Interval results are one-row, two-cell ranges.
+
+**Why.** The functions are listed in the Rows catalog, but the local reference does not give their signatures or explain their results. Spreadsheet-compatible defaults make the helpers useful while keeping date serials and intervals consistent with this engine's time-zone-free date values.
+
+**To change.** `packages/engine/src/functions/dates.ts`, `packages/engine/src/functions/dates.test.ts`, and the help entries in `packages/engine/src/docs.ts` hold these behaviors.
