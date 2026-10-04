@@ -243,6 +243,23 @@ describe("lookups", () => {
     F2: "20",
     G2: "10",
   };
+  const lookupCells = {
+    ...cells,
+    I1: "10",
+    J1: "20",
+    K1: "30",
+    I2: "one",
+    J2: "two",
+    K2: "three",
+    L1: "10",
+    M1: "20",
+    L2: "30",
+    M2: "40",
+    L3: "50",
+    M3: "60",
+    N1: "first",
+    O1: "second",
+  };
 
   it.each<[string, CellValue]>([
     ["=MATCH(20, A1:A3, 0)", 2],
@@ -257,18 +274,43 @@ describe("lookups", () => {
     ["=INDEX(A1:C3, 3)", 30],
     ["=INDEX(A1:C3, 1, 1)", 10],
     ["=INDEX(B1:B3, MATCH(30, A1:A3, 0))", "thirty"],
+    ["=LOOKUP(25, A1:A3, B1:B3)", "twenty"],
+    ["=LOOKUP(25, A1:A3)", 20],
+    ["=LOOKUP(25, A1:C3)", 2.5],
+    ["=LOOKUP(25, I1:K1, I2:K2)", "two"],
+    ["=LOOKUP(25, I1:K2)", "two"],
+    ["=LOOKUP(35, L1:M3)", 40],
+    ["=LOOKUP(25, L1:M3, N1:O1)", "second"],
     ["=VLOOKUP(20, A1:C3, 2, FALSE)", "twenty"],
     ["=VLOOKUP(20, A1:C3, 3, FALSE)", 2.5],
     ["=VLOOKUP(25, A1:C3, 2)", "twenty"],
     ["=VLOOKUP(25, A1:C3, 2, TRUE)", "twenty"],
     ["=VLOOKUP(99, A1:C3, 1)", 30],
+    ["=HLOOKUP(20, TRANSPOSE(A1:C3), 2, FALSE)", "twenty"],
+    ["=HLOOKUP(25, TRANSPOSE(A1:C3), 2)", "twenty"],
     ["=XLOOKUP(30, A1:A3, B1:B3)", "thirty"],
     ['=XLOOKUP("fig", E1:G1, E2:G2)', 10],
     ['=XLOOKUP(99, A1:A3, B1:B3, "none")', "none"],
     ["=XLOOKUP(10, A1:A3, B1:B3, 1/0)", "ten"],
     ["=XLOOKUP(20, A1:A3, D1:D3)", null],
   ])("%s is %j", (formula, expected) => {
-    expect(evaluateFormula(formula, cells)).toBe(expected);
+    expect(evaluateFormula(formula, lookupCells)).toBe(expected);
+  });
+
+  it("finds the intersection of exact row and column keys with XYLOOKUP", () => {
+    const xyCells = {
+      A1: "",
+      B1: "Q1",
+      C1: "Q2",
+      A2: "East",
+      B2: "10",
+      C2: "20",
+      A3: "West",
+      B3: "30",
+      C3: "40",
+    };
+    expect(evaluateFormula('=XYLOOKUP("West", "Q2", A1:C3)', xyCells)).toBe(40);
+    expect(evaluateFormula('=XYLOOKUP("WEST", "q1", A1:C3)', xyCells)).toBe(30);
   });
 
   it("takes a whole row or column with INDEX when a position is left out or 0", () => {
@@ -297,6 +339,9 @@ describe("lookups", () => {
     ["=MATCH(5, A1:A3)", "#N/A"],
     ['=MATCH("20", A1:A3, 0)', "#N/A"],
     ["=MATCH(20, A1:C3, 0)", "#VALUE!"],
+    ["=LOOKUP(5, A1:A3)", "#N/A"],
+    ["=LOOKUP(25, A1:A3, B1:B2)", "#VALUE!"],
+    ["=LOOKUP(25, A1:A3, B1:C3)", "#VALUE!"],
     ["=INDEX(A1:C3, 4, 1)", "#REF!"],
     ["=INDEX(A1:C3, 1, 4)", "#REF!"],
     ["=INDEX(A1:C3, -1, 1)", "#VALUE!"],
@@ -304,12 +349,33 @@ describe("lookups", () => {
     ["=VLOOKUP(5, A1:C3, 2)", "#N/A"],
     ["=VLOOKUP(20, A1:C3, 4, FALSE)", "#REF!"],
     ["=VLOOKUP(20, A1:C3, 0, FALSE)", "#VALUE!"],
+    ["=HLOOKUP(20, TRANSPOSE(A1:C3), 0, FALSE)", "#VALUE!"],
+    ["=HLOOKUP(20, TRANSPOSE(A1:C3), 4, FALSE)", "#REF!"],
+    ["=HLOOKUP(5, TRANSPOSE(A1:C3), 2)", "#N/A"],
     ["=XLOOKUP(99, A1:A3, B1:B3)", "#N/A"],
     ["=XLOOKUP(10, A1:A3, B1:B2)", "#VALUE!"],
     ["=XLOOKUP(10, A1:C3, B1:B3)", "#VALUE!"],
     ["=XLOOKUP(99, A1:A3, B1:B3, 1/0)", "#DIV/0!"],
   ])("%s is %s", (formula, code) => {
-    expectError(formula, code, cells);
+    expectError(formula, code, lookupCells);
+  });
+
+  it.each([
+    ['=XYLOOKUP("missing", "Q1", A1:C3)', "#N/A"],
+    ['=XYLOOKUP("East", "missing", A1:C3)', "#N/A"],
+    ['=XYLOOKUP("East", "Q1", A1:A3)', "#VALUE!"],
+  ])("%s is %s", (formula, code) => {
+    expectError(formula, code, {
+      A1: "",
+      B1: "Q1",
+      C1: "Q2",
+      A2: "East",
+      B2: "10",
+      C2: "20",
+      A3: "West",
+      B3: "30",
+      C3: "40",
+    });
   });
 });
 

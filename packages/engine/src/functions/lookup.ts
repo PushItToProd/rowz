@@ -54,6 +54,17 @@ function found(index: number): number {
   return index === -1 ? fail("#N/A", "No match was found") : index;
 }
 
+function isVertical(rows: CellValue[][]): boolean {
+  return rows.length > 1 && rows.every((row) => row.length === 1);
+}
+
+function horizontal(rows: CellValue[][]): boolean {
+  if (rows.length === 1) return true;
+  if (isVertical(rows)) return false;
+  const width = rows.reduce((widest, row) => Math.max(widest, row.length), 0);
+  return width > rows.length;
+}
+
 export const lookupFunctions: Record<string, FunctionDefinition> = {
   /**
    * The 1-based position of a value in a row or column. The match type is 0
@@ -66,6 +77,54 @@ export const lookupFunctions: Record<string, FunctionDefinition> = {
     const mode = integer(type);
     const wanted = scalar(key);
     return found(mode === 0 ? exact(wanted, cells) : nearest(wanted, cells, mode < 0)) + 1;
+  }),
+
+  /**
+   * Finds the nearest value at or below the key in sorted ascending data. A
+   * row or column is searched as a vector. A wider 2-D range searches its
+   * first row and returns from its last row; a taller or square range searches
+   * its first column and returns from its last column. With a result vector,
+   * its orientation chooses the direction for a 2-D search. A result vector
+   * must have the same length as the searched vector.
+   */
+  LOOKUP: lazy(2, 3, ([key, search, result]) => {
+    const rows = grid(search?.() ?? null);
+    const twoDimensional = rows.length > 1 && !rows.every((row) => row.length === 1);
+    const resultRows = result === undefined ? undefined : grid(result());
+    const results = resultRows === undefined ? undefined : line(resultRows, "The result range");
+    const isHorizontal =
+      twoDimensional && resultRows !== undefined ? horizontal(resultRows) : horizontal(rows);
+    const keys = isHorizontal ? (rows[0] ?? []) : rows.map((row) => row[0] ?? null);
+    if (results !== undefined && results.length !== keys.length) {
+      fail("#VALUE!", "The search and result ranges must have the same size");
+    }
+    const wanted = scalar(key?.() ?? null);
+    const index = found(nearest(wanted, keys));
+
+    if (results !== undefined) {
+      return results[index] ?? null;
+    }
+
+    if (!twoDimensional) return keys[index] ?? null;
+    return isHorizontal ? (rows.at(-1)?.[index] ?? null) : (rows[index]?.at(-1) ?? null);
+  }),
+
+  /**
+   * Finds a row key in the first column and a column key in the first row,
+   * then gives the cell where that row and column meet. The top-left cell is
+   * ignored. Both keys must match exactly.
+   */
+  XYLOOKUP: eager(3, 3, (rowKey, columnKey, range) => {
+    const rows = grid(range);
+    const width = rows[0]?.length ?? 0;
+    if (rows.length < 2 || width < 2 || rows.some((row) => row.length !== width)) {
+      fail("#VALUE!", "The range must have a header row and a header column");
+    }
+    const rowKeys = rows.slice(1).map((row) => row[0] ?? null);
+    const columnKeys = (rows[0] ?? []).slice(1);
+    const row = found(exact(scalar(rowKey), rowKeys));
+    const column = found(exact(scalar(columnKey), columnKeys));
+    return rows[row + 1]?.[column + 1] ?? null;
   }),
 
   /**

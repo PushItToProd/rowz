@@ -268,6 +268,14 @@ const ENTRIES: readonly FunctionDoc[] = [
     example: 'SWITCH(A2, 1, "one", 2, "two", "many")',
   },
   {
+    name: "LOOKUP",
+    category: "Lookup",
+    syntax: "LOOKUP(key, search_range, [result_range])",
+    summary:
+      "Finds the nearest value at or below the key in ascending data. A row or column is searched as a vector. For a 2-D range, a wider range searches its first row and returns from its last row; a taller or square range searches its first column and returns from its last column. A result vector sets the direction for a 2-D search and must have the same length as the searched vector.",
+    example: "LOOKUP(2.5, A1:A3, B1:B3)",
+  },
+  {
     name: "VLOOKUP",
     category: "Lookup",
     syntax: "VLOOKUP(key, range, column, [sorted])",
@@ -282,6 +290,14 @@ const ENTRIES: readonly FunctionDoc[] = [
     summary:
       "Finds the key in one row or column and gives the cell at the same position of another. The match is exact. When the range of results is wider than the keys, it gives the whole matching row or column.",
     example: 'XLOOKUP("cherry", B1:B3, A1:A3, 0)',
+  },
+  {
+    name: "XYLOOKUP",
+    category: "Lookup",
+    syntax: "XYLOOKUP(row_key, column_key, range)",
+    summary:
+      "Finds a row key in the first column and a column key in the first row, then gives the cell where they meet. The top-left cell is ignored, and both keys match exactly.",
+    example: 'XYLOOKUP(2, "apple", A1:C3)',
   },
   {
     name: "MATCH",
@@ -988,7 +1004,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Lookup",
     syntax: "HLOOKUP(key, range, row, [sorted])",
     summary:
-      "`VLOOKUP` on its side: finds the key in the first row of the range and gives the cell of that column in another row. Pass FALSE as `sorted` for an exact match.",
+      "Finds the key in the first row of the range and gives the cell of that column in the numbered row. With `sorted` FALSE the match is exact. Otherwise the range must be sorted by its first row, and the nearest key at or below the given one is used.",
     example: "HLOOKUP(2, TRANSPOSE(A1:B3), 2, FALSE)",
   },
   {

@@ -619,3 +619,11 @@ Together they make a form: inputs, a Save button that appends to a log table and
 **To change.** `packages/engine/src/conditional.ts`, `setConditionalFormats` in `apps/server/src/repo/spreadsheets.ts`, and `formatOf` in the workbook store.
 
 - The text functions `SLICE`, `SLUGIFY`, `DECODEURL`, `BASE64`, `BASE64DECODE`, `DOMAIN`, and `RELATIVE_URL` have inferred semantics because `docs/rows-functions.md` gave none: `SLICE` is zero-based and end-exclusive with negative indices from the end, `DOMAIN` returns the hostname without a port, and `RELATIVE_URL` returns path, query, and fragment. Please check them against Rows.
+
+## 2026-10-04: LOOKUP and XYLOOKUP
+
+**Decision.** `LOOKUP(key, search_range, [result_range])` searches ascending data for the nearest key at or below the given key. A 2-D range searches its first row when it is wider than tall; otherwise it searches its first column. Without a result range it returns from the opposite edge of that 2-D range. An explicit result vector sets the search direction. `XYLOOKUP(row_key, column_key, range)` finds the row key in the first column and the column key in the first row, ignores the top-left cell, and returns their intersection. Both `XYLOOKUP` keys match exactly.
+
+**Why.** The Rows catalog describes `XYLOOKUP` as finding a cell by row and column keys but gives no signature or range layout. Using the first row and column as key vectors gives the three-argument function a compact, spreadsheet-like table layout. The requested 2-D `LOOKUP` behavior leaves the orientation details open, so a wider range searches horizontally and a taller or square range searches vertically; the opposite edge supplies the result when no result vector is given.
+
+**To change.** The implementation and help entries are in `packages/engine/src/functions/lookup.ts` and `packages/engine/src/docs.ts`.

@@ -12,7 +12,7 @@ The list was read from the Rows documentation index on 2026-09-30. Signatures fo
 | Statistics  | `MODE STDEV STDEVP VAR_S VAR_P PERCENTILE QUARTILE RANK CORREL COVARIANCE_S COVARIANCE_P SLOPE INTERCEPT FORECAST COUNTUNIQUE COUNTBLANK`                                                                                                                     |
 | Financial   | `PMT PV FV NPV IRR RATE NPER`                                                                                                                                                                                                                                 |
 | Text        | `CONCATENATE CONCAT TEXTJOIN JOIN SPLIT SUBSTITUTE TRIM PROPER UPPER LOWER LEN LEFT RIGHT MID FIND SEARCH REPT CHAR CODE ENCODEURL DECODEURL BASE64 BASE64DECODE DOMAIN RELATIVE_URL SLICE SLUGIFY TEXT FIXED VALUE`                                          |
-| Lookup      | `VLOOKUP HLOOKUP XLOOKUP INDEX MATCH ROW COLUMN`                                                                                                                                                                                                              |
+| Lookup      | `LOOKUP VLOOKUP HLOOKUP XLOOKUP XYLOOKUP INDEX MATCH ROW COLUMN`                                                                                                                                                                                              |
 | Arrays      | `FILTER SORT UNIQUE SEQUENCE TRANSPOSE FLATTEN QUERY`                                                                                                                                                                                                         |
 | Dates       | `DATE TIME DATEVALUE ISDATE DAYS DATEDIF EDATE EOMONTH YEAR MONTH DAY WEEKDAY WEEKNUM ISOWEEKNUM HOUR MINUTE SECOND WORKDAY NETWORKDAYS TODAY NOW`                                                                                                            |
 | Logic       | `IF IFS SWITCH IFERROR IFNA AND OR NOT`                                                                                                                                                                                                                       |
@@ -29,7 +29,7 @@ The list was read from the Rows documentation index on 2026-09-30. Signatures fo
 4. **Random numbers: `RAND`, `RANDBETWEEN`, `RANDARRAY`.** Each client and the server evaluate formulas separately, so each would see a different number. A button that used one would act on a number the user never saw. They need a seed stored with the spreadsheet and shared across all clients.
 5. **Date helpers: `YEARFRAC`, `TIMEVALUE`, `TO_DATE`, `UNIXTIME`, `UNIX2DATE`, `TO_TIMEZONE`, and the ranges `LASTXDAYS`, `LASTXWEEKS`, `LASTXMONTHS`, `DATEINTERVAL`.** Small. `TO_TIMEZONE` needs a decision first, because dates here carry no time zone.
 6. **More statistics: `SKEW RANK_AVG RANK_EQ PEARSON`.** Small. `PEARSON` is `CORREL` under another name.
-7. **`LOOKUP`, `XYLOOKUP`, `FLOOKUP`.** `XYLOOKUP` finds a cell by a row key and a column key. `FLOOKUP` is a fuzzy match.
+7. **`FLOOKUP`.** A fuzzy match.
 8. **`SUBTOTAL`, `ARRAY_CONSTRAIN`, `FILTER_COLUMNS`, `RANGE_CONTAINS`.** `TAKE` covers `ARRAY_CONSTRAIN`.
 
 ## Not planned
