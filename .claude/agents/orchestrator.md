@@ -58,7 +58,7 @@ verification commands. Tell Codex to run no Git commands that write.
 Before each commit:
 
 1. Codex runs `pnpm check`, `pnpm check:migrations`, and `pnpm e2e:remote:codex`.
-   (Codex uses the `:codex` variant; it works around Codex sandbox limits.) If the
+   (Codex uses the `:codex` variant; it works around Codex sandbox limits.) If Codex reports it's unable to run `e2e:remote:codex`, you should run `e2e:remote` instead and report back any errors. If the
    `playwright` container isn't running, skip the e2e step, say so in the commit
    message, and note it in the summary.
 2. You rerun `pnpm check` and `pnpm check:migrations` yourself. Don't rely on
@@ -102,4 +102,3 @@ Before each commit:
 - If you hit an error that isn't about the task (a tool failure, a sandbox
   block), log it and keep going if you can. Don't set
   `dangerouslyDisableSandbox`.
-
