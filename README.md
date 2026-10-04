@@ -16,7 +16,7 @@ Expect bugs and breaking changes, and don't keep anything in it that you can't a
 
 ## How it differs from a traditional spreadsheet
 
-- **Errors stay visible.** Error visibility is a core product principle. A header indicator lists errors across the entire document and links to their locations, including other pages and filtered-out rows. Warning triangles mark affected blocks, pages, and documents in the document list. Cell errors explain themselves in a popover. Errors should never disappear into a remote corner of a document.
+- **Errors stay visible.** Error visibility is a core product principle. A header indicator lists errors across the entire document and links to their locations, including other pages and filtered-out rows. Warning triangles mark affected blocks, pages, and documents in the document list. Cell errors explain themselves in a popover, which can resize a table when its dimensions prevent an array result from spilling. Errors should never disappear into a remote corner of a document.
 - **A page holds blocks.** A traditional sheet is one unbounded grid with charts and text boxes floating over it. A rowz page is a stack of blocks in an order you choose.
 - **Each table is its own grid.** Every table has its own cell A1 and only the rows and columns it was given. A formula reads another table by name: `Orders!A1`, or `'Page 1'!Orders!A1` from another page.
 - **Columns can have names and types.** `[Price]` is the cell of the Price column in the formula's own row. A formula column computes one formula in every row.

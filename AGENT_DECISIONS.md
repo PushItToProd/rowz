@@ -2,6 +2,12 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-04: Resize tables from dimension-caused spill errors
+
+`ErrorValue` keeps its existing code and message and gains optional spill metadata only when a result exceeds the table dimensions. The metadata names the minimum full table size required at the formula's position, so the web app does not parse the message or recalculate the position. The popover uses the store's existing table-resize request once for both dimensions, after checking table and spreadsheet row limits. A spill blocked by existing cell content carries no resize metadata.
+
+**To change.** `SpillErrorDetails` in `packages/engine/src/errors.ts`, the spill branch in `Workbook.place`, and the resize handler in the workbook store.
+
 ## 2026-10-03: Grid row and column sizes
 
 Explicit row heights and column widths live in the table's `gridSizes` JSON metadata, keyed by stable IDs. Deleted lines lose their size entries in the same journaled change. Export and version files use sparse position/size entries and imports map them to fresh IDs. Older files omit sizes and use defaults.

@@ -5,6 +5,7 @@ import { identifiedAt } from "../testing";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ColumnDefinition, ConditionalRule, FormatRule } from "@spreadsheet-app/engine";
+import { LIMITS } from "@spreadsheet-app/shared";
 import { computed } from "vue";
 import { api, type Snapshot, type ViewRecord } from "../api/client";
 import { at, clickResult, notifyJournaled, snapshotWith, TABLE, type MockedApi } from "../testing";
@@ -864,6 +865,44 @@ describe("structure", () => {
     );
     await store.updateTable("t1", { rowCount: 1 });
     expect(store.selection).toBeNull();
+  });
+
+  it("grows to a requested size in one table resize", async () => {
+    const store = await open();
+    const table = sizedTable({ rowCount: 6, colCount: 4 });
+    server.updateTable.mockResolvedValue(changeWith({ table, cells: [], views: [], tables: [] }));
+
+    expect(store.canResizeTableTo("t1", { rowCount: 6, colCount: 4 })).toBe(true);
+    expect(await store.resizeTableTo("t1", { rowCount: 6, colCount: 4 })).toBe(true);
+    expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
+      rowCount: 6,
+      colCount: 4,
+    });
+    expect(store.tables[0]).toMatchObject({ rowCount: 6, colCount: 4 });
+  });
+
+  it("refuses table growth past the table or spreadsheet limits", async () => {
+    const store = await open();
+    expect(store.canResizeTableTo("t1", { rowCount: LIMITS.tableRows + 1, colCount: 3 })).toBe(
+      false,
+    );
+    expect(store.canResizeTableTo("t1", { rowCount: 4, colCount: LIMITS.tableCols + 1 })).toBe(
+      false,
+    );
+
+    store.tables = [
+      ...store.tables,
+      { ...TABLE, id: "t2", rowCount: LIMITS.spreadsheetRows, rows: [] },
+    ];
+    expect(store.canResizeTableTo("t1", { rowCount: 5, colCount: 3 })).toBe(false);
+    expect(server.updateTable).not.toHaveBeenCalled();
+  });
+
+  it("does not offer table growth to a viewer", async () => {
+    const store = await open({}, "viewer");
+    expect(store.canResizeTableTo("t1", { rowCount: 5, colCount: 4 })).toBe(false);
+    expect(await store.resizeTableTo("t1", { rowCount: 5, colCount: 4 })).toBe(false);
+    expect(server.updateTable).not.toHaveBeenCalled();
   });
 
   it("stores pending cell edits before asking the server to move cells", async () => {

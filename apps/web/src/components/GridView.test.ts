@@ -1,11 +1,20 @@
-import { wireSnapshot, changeWith } from "../testing";
-import { identifiedAt } from "../testing";
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, clickResult, notifyJournaled, snapshotWith, TABLE, type MockedApi } from "../testing";
+import {
+  at,
+  changeWith,
+  clickResult,
+  identifiedAt,
+  notifyJournaled,
+  sizedTable,
+  snapshotWith,
+  TABLE,
+  type MockedApi,
+  wireSnapshot,
+} from "../testing";
 import GridView from "./GridView.vue";
 
 vi.mock("../api/client", async () => {
@@ -107,6 +116,77 @@ describe("rendering", () => {
     expect(cellAt("C1").text()).toBe("#DIV/0!");
     expect(cellAt("A2").text()).toBe("hello");
     expect(cellAt("C4").text()).toBe("");
+  });
+
+  it("resizes the table for a dimension spill and recalculates the formula", async () => {
+    const resized = sizedTable({ rowCount: 6, colCount: 4 });
+    server.updateTable.mockResolvedValue(
+      changeWith({ table: resized, cells: [], views: [], tables: [] }),
+    );
+    await mountGrid({ A1: "=SEQUENCE(6, 4)" });
+    expect(cellAt("A1").text()).toBe("#SPILL!");
+
+    await cellAt("A1").find(".cell-value--error").trigger("mouseenter");
+    const button = document.querySelector<HTMLButtonElement>(".cell-error-popover__action");
+    if (!button) throw new Error("Expected the spill resize button");
+    await new DOMWrapper(button).trigger("click");
+    await flushPromises();
+
+    expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
+      rowCount: 6,
+      colCount: 4,
+    });
+    const store = useWorkbookStore();
+    expect(store.valueOf(at("A1"))).toBe(1);
+    expect(store.valueOf(at("D6"))).toBe(24);
+    expect(document.querySelector(".cell-error-popover__action")).toBeNull();
+  });
+
+  it("does not offer table resizing when another cell blocks the spill", async () => {
+    await mountGrid({ A1: "=SEQUENCE(2)", A2: "occupied" });
+    await cellAt("A1").find(".cell-value--error").trigger("mouseenter");
+    expect(document.querySelector(".cell-error-popover__action")).toBeNull();
+  });
+
+  it("does not offer resizing for a spill error propagated from another table", async () => {
+    const source = sizedTable({ name: "Table1", rowCount: 2 });
+    const destination = sizedTable({
+      id: "t2",
+      name: "Other Table",
+      position: 1,
+      rowCount: 4,
+    });
+    const snapshot = wireSnapshot({
+      ...snapshotWith(),
+      tables: [source, destination],
+      cells: [
+        { ...identifiedAt("A1", source.id), input: "=SEQUENCE(3)" },
+        { ...identifiedAt("A1", destination.id), input: "=Table1!A1" },
+      ],
+    });
+    server.getSnapshot.mockResolvedValue(snapshot);
+    await useWorkbookStore().load("s1");
+    wrapper = mount(GridView, { props: { table: destination }, attachTo: document.body });
+
+    expect(useWorkbookStore().valueOf(at("A1", destination.id))).toMatchObject({
+      kind: "error",
+      spill: { tableId: source.id, reason: "table-size" },
+    });
+    await cellAt("A1").find(".cell-value--error").trigger("mouseenter");
+    expect(document.querySelector(".cell-error-popover__action")).toBeNull();
+  });
+
+  it("does not offer resizing when both table dimensions and an occupied cell block the spill", async () => {
+    await mountGrid({ A1: "=SEQUENCE(6)", A2: "occupied" });
+    expect(useWorkbookStore().valueOf(at("A1"))).not.toHaveProperty("spill");
+    await cellAt("A1").find(".cell-value--error").trigger("mouseenter");
+    expect(document.querySelector(".cell-error-popover__action")).toBeNull();
+  });
+
+  it("hides the resize button when the required table size exceeds a limit", async () => {
+    await mountGrid({ A1: "=SEQUENCE(1001)" });
+    await cellAt("A1").find(".cell-value--error").trigger("mouseenter");
+    expect(document.querySelector(".cell-error-popover__action")).toBeNull();
   });
 });
 

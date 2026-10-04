@@ -12,10 +12,22 @@ export const ERROR_CODES = [
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
+/** A spill the table can resolve by growing to include the formula's result. */
+export interface SpillErrorDetails {
+  /** Table whose array result is too large for its current dimensions. */
+  tableId: string;
+  reason: "table-size";
+  /** Full table dimensions needed to fit the result at its anchor. */
+  requiredRowCount: number;
+  requiredColumnCount: number;
+}
+
 export interface ErrorValue {
   kind: "error";
   code: ErrorCode;
   message?: string;
+  /** Present only when a spill cannot fit within the current table dimensions. */
+  spill?: SpillErrorDetails;
 }
 
 export function error(code: ErrorCode, message?: string): ErrorValue {

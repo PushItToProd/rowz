@@ -1615,6 +1615,34 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }, "The table could not be changed");
   }
 
+  /** Whether the table can grow to these dimensions under the shared limits. */
+  function canResizeTableTo(
+    tableId: string,
+    size: { rowCount: number; colCount: number },
+  ): boolean {
+    const table = tables.value.find((candidate) => candidate.id === tableId);
+    if (!canEdit.value || !table) return false;
+    if (size.rowCount < table.rowCount || size.colCount < table.colCount) return false;
+    if (size.rowCount === table.rowCount && size.colCount === table.colCount) return false;
+    const otherRows = tables.value.reduce(
+      (total, candidate) => total + (candidate.id === tableId ? 0 : candidate.rowCount),
+      0,
+    );
+    return (
+      size.rowCount <= Math.min(LIMITS.tableRows, LIMITS.spreadsheetRows - otherRows) &&
+      size.colCount <= LIMITS.tableCols
+    );
+  }
+
+  /** Grows a table through its existing resize endpoint after checking its row and column limits. */
+  function resizeTableTo(
+    tableId: string,
+    size: { rowCount: number; colCount: number },
+  ): Promise<boolean> {
+    if (!canResizeTableTo(tableId, size)) return Promise.resolve(false);
+    return updateTable(tableId, size);
+  }
+
   /** Names a table's columns, which makes it a data table. With `headerRow`, its first row gives the names. */
   function nameColumns(tableId: string, headerRow: boolean): Promise<boolean> {
     const queuedSaves = saves;
@@ -1823,6 +1851,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     deletePage,
     addTable,
     updateTable,
+    canResizeTableTo,
+    resizeTableTo,
     editTable,
     deleteLines,
     deleteTable,

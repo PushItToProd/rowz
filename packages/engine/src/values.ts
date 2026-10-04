@@ -4,7 +4,13 @@ import { DAY_MS, formatDate, isDate, parseDate, type DateValue } from "./dates";
 import type { EvaluationContext } from "./evaluate";
 import { error, type ErrorValue } from "./errors";
 
-export { ERROR_CODES, error, type ErrorCode, type ErrorValue } from "./errors";
+export {
+  ERROR_CODES,
+  error,
+  type ErrorCode,
+  type ErrorValue,
+  type SpillErrorDetails,
+} from "./errors";
 
 /**
  * A side effect described as data. Evaluating an action function such as

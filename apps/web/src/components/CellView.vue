@@ -20,6 +20,8 @@ import CellError from "./CellError.vue";
 
 const props = defineProps<{
   value: CellValue;
+  /** A table size that resolves a table-dimension spill, when it fits the shared limits. */
+  spillResizeTo?: { rowCount: number; colCount: number };
   /** Whether this cell's button is waiting for the server. */
   running: boolean;
   /** Whether the viewer may run buttons. */
@@ -36,6 +38,7 @@ const emit = defineEmits<{
   choose: [value: Scalar];
   toggle: [checked: boolean];
   pick: [text: string];
+  resizeTable: [size: { rowCount: number; colCount: number }];
 }>();
 
 /** Whether the cell shows a dropdown column's choices: it holds a plain value, not an error or a control. */
@@ -83,6 +86,10 @@ const chosen = computed(() => {
   const current = control.value;
   return current ? current.options.findIndex((option) => option === current.value) : -1;
 });
+
+function resizeTable(): void {
+  if (props.spillResizeTo) emit("resizeTable", props.spillResizeTo);
+}
 
 function onChoice(event: Event): void {
   const index = Number((event.target as HTMLSelectElement).value);
@@ -177,6 +184,12 @@ function onChoice(event: Event): void {
     v-html="formatted"
   ></span>
   <!-- eslint-enable vue/no-v-html -->
-  <CellError v-else-if="isError(value)" :error="value" :text-style="style" />
+  <CellError
+    v-else-if="isError(value)"
+    :error="value"
+    :text-style="style"
+    :resize-to="spillResizeTo"
+    @resize="resizeTable"
+  />
   <span v-else class="cell-value" :class="`cell-value--${kind}`" :style="style">{{ text }}</span>
 </template>

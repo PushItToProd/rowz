@@ -1169,6 +1169,9 @@ export class Workbook {
       ({ id }) =>
         id.row >= (table?.rowCount ?? Infinity) || id.col >= (table?.colCount ?? Infinity),
     );
+    const taken = targets.find(
+      ({ id }) => this.record(id) !== undefined || this.spilled.has(cellKey(id)),
+    );
     if (outside) {
       this.blocked.set(cellKey(anchor), anchor);
       const rows =
@@ -1179,15 +1182,23 @@ export class Workbook {
         table?.colCount === undefined
           ? "an unknown number of columns"
           : countWithUnit(table.colCount, "column");
-      return error(
+      const spill = error(
         "#SPILL!",
         `The result needs ${size}, but the table is only ${rows} and ${cols}.`,
       );
+      return table && !taken
+        ? {
+            ...spill,
+            spill: {
+              tableId: anchor.tableId,
+              reason: "table-size",
+              requiredRowCount: anchor.row + rowCount,
+              requiredColumnCount: anchor.col + colCount,
+            },
+          }
+        : spill;
     }
 
-    const taken = targets.find(
-      ({ id }) => this.record(id) !== undefined || this.spilled.has(cellKey(id)),
-    );
     if (taken) {
       this.blocked.set(cellKey(anchor), anchor);
       const range = `${formatAddress(anchor)}:${formatAddress({

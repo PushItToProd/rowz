@@ -1848,6 +1848,23 @@ select.cell-control--dropdown {
   margin: 0.35rem 0 0;
 }
 
+.cell-error-popover__action {
+  margin-top: 0.65rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #fda29b;
+  border-radius: 0.3rem;
+  color: #b42318;
+  background: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cell-error-popover__action:focus-visible {
+  outline: 2px solid #b42318;
+  outline-offset: 2px;
+}
+
 .errors .assertions__list li + li {
   margin-top: 0.5rem;
 }

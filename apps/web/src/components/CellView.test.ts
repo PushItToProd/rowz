@@ -10,7 +10,14 @@ const action: ActionValue = {
   origin: { tableId: "t1", row: 0, col: 0 },
 };
 
-function render(value: CellValue, props: { running?: boolean; canRun?: boolean } = {}): VueWrapper {
+function render(
+  value: CellValue,
+  props: {
+    running?: boolean;
+    canRun?: boolean;
+    spillResizeTo?: { rowCount: number; colCount: number };
+  } = {},
+): VueWrapper {
   return mount(CellView, { props: { value, running: false, canRun: true, ...props } });
 }
 
@@ -128,6 +135,33 @@ describe("CellView", () => {
     window.dispatchEvent(new Event("scroll"));
     await wrapper.vm.$nextTick();
     expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    wrapper.unmount();
+  });
+
+  it("shows and emits the requested table size for a table-dimension spill", async () => {
+    const size = { rowCount: 12, colCount: 26 };
+    const wrapper = render(
+      {
+        kind: "error",
+        code: "#SPILL!",
+        message: "The table is too small.",
+        spill: {
+          tableId: "t1",
+          reason: "table-size",
+          requiredRowCount: 12,
+          requiredColumnCount: 26,
+        },
+      },
+      { spillResizeTo: size },
+    );
+    await wrapper.get("span").trigger("mouseenter");
+    const button = document.querySelector<HTMLButtonElement>(".cell-error-popover__action");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      "The table is too small.",
+    );
+    expect(button?.textContent).toContain("Resize table to fit");
+    button?.click();
+    expect(wrapper.emitted("resizeTable")).toEqual([[size]]);
     wrapper.unmount();
   });
 

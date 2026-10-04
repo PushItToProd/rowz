@@ -3,6 +3,7 @@ import {
   columnLabel,
   literalInput,
   formatAddress,
+  isError,
   type CellAddress,
   type CellId,
   type ColumnDefinition,
@@ -99,6 +100,28 @@ const selected = computed(() =>
 
 function cell(row: number, col: number): CellId {
   return { tableId: props.table.id, row, col };
+}
+
+/** The smallest permitted table size that includes this error's array result. */
+function spillResizeTo(id: CellId): { rowCount: number; colCount: number } | undefined {
+  const value = store.valueOf(id);
+  const table = store.tables.find((candidate) => candidate.id === id.tableId);
+  if (
+    !table ||
+    !isError(value) ||
+    value.spill?.reason !== "table-size" ||
+    value.spill.tableId !== id.tableId
+  )
+    return undefined;
+  const size = {
+    rowCount: Math.max(table.rowCount, value.spill.requiredRowCount),
+    colCount: Math.max(table.colCount, value.spill.requiredColumnCount),
+  };
+  return store.canResizeTableTo(id.tableId, size) ? size : undefined;
+}
+
+function resizeForSpill(size: { rowCount: number; colCount: number }): void {
+  void store.resizeTableTo(props.table.id, size);
 }
 
 function isSelected(place: number, col: number): boolean {
@@ -774,6 +797,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             <CellView
               v-else
               :value="store.valueOf(cellAt(row - 1, col - 1))"
+              :spill-resize-to="spillResizeTo(cellAt(row - 1, col - 1))"
               :running="store.isRunning(cellAt(row - 1, col - 1))"
               :can-run="store.canEdit"
               :checkbox="columnAt(col - 1)?.type === 'checkbox'"
@@ -783,6 +807,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               @pick="store.setCell(cellAt(row - 1, col - 1), literalInput($event))"
               @run="run(row - 1, col - 1)"
               @choose="store.input(cellAt(row - 1, col - 1), $event)"
+              @resize-table="resizeForSpill"
             />
             <span
               v-if="store.canEdit && draft === null && isHandleCell(row - 1, col - 1)"

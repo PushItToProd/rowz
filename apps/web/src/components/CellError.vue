@@ -2,7 +2,12 @@
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type { ErrorValue } from "@spreadsheet-app/engine";
 
-const props = defineProps<{ error: ErrorValue; textStyle?: Record<string, string> }>();
+const props = defineProps<{
+  error: ErrorValue;
+  textStyle?: Record<string, string>;
+  resizeTo?: { rowCount: number; colCount: number };
+}>();
+const emit = defineEmits<{ resize: [] }>();
 const explanation = computed(
   () =>
     props.error.message ??
@@ -22,6 +27,7 @@ const explanation = computed(
 const anchor = ref<HTMLElement>();
 const open = ref(false);
 const id = useId();
+const titleId = `${id}-title`;
 const popover = ref<HTMLElement>();
 const position = computed(() => {
   if (!open.value) return {};
@@ -44,6 +50,12 @@ function onScroll(event: Event): void {
 }
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === "Escape") close();
+}
+function onFocusout(event: FocusEvent): void {
+  const next = event.relatedTarget;
+  if (next instanceof Node && (popover.value?.contains(next) || anchor.value?.contains(next)))
+    return;
+  close();
 }
 watch(open, (visible, _, cleanup) => {
   if (!visible) return;
@@ -75,11 +87,13 @@ onBeforeUnmount(() => {
     class="cell-value cell-value--error"
     :style="textStyle"
     tabindex="0"
+    :aria-haspopup="resizeTo ? 'dialog' : undefined"
+    :aria-expanded="resizeTo ? open : undefined"
     :aria-describedby="open ? id : undefined"
     @mouseenter="show"
     @mouseleave="leave"
     @focus="open = true"
-    @blur="close"
+    @blur="onFocusout"
     @keydown.esc.stop="close"
   >
     {{ error.code }}
@@ -89,14 +103,24 @@ onBeforeUnmount(() => {
       v-if="open"
       :id="id"
       ref="popover"
-      role="tooltip"
+      :role="resizeTo ? 'dialog' : 'tooltip'"
+      :aria-labelledby="resizeTo ? titleId : undefined"
       class="cell-error-popover"
       :style="position"
       @mouseenter="show"
       @mouseleave="leave"
+      @focusout="onFocusout"
     >
-      <strong>{{ error.code }}</strong>
+      <strong :id="titleId">{{ error.code }}</strong>
       <p>{{ explanation }}</p>
+      <button
+        v-if="resizeTo"
+        type="button"
+        class="cell-error-popover__action"
+        @click="emit('resize')"
+      >
+        Resize table to fit
+      </button>
     </div>
   </Teleport>
 </template>

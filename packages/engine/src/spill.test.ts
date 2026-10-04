@@ -101,11 +101,13 @@ describe("a formula whose result is an array", () => {
 describe("#SPILL!", () => {
   it("shows when cells in the result range already have values", () => {
     const workbook = workbookWith({ t1: { A1: "=SEQUENCE(3)", A3: "in the way" } });
+    const spill = workbook.getValue(at("A1"));
     expectError(
-      workbook.getValue(at("A1")),
+      spill,
       "#SPILL!",
       "The result needs 3 rows and 1 column, but one or more cells in A1:A3 already have values.",
     );
+    expect(spill).not.toHaveProperty("spill");
     expect(values(workbook, ["A2", "A3"])).toEqual([null, "in the way"]);
     expect(workbook.spillAnchor(at("A2"))).toBeUndefined();
   });
@@ -139,7 +141,31 @@ describe("#SPILL!", () => {
     expect(values(workbook, ["A2", "B2", "C2"])).toEqual([10, 11, 12]);
   });
 
-  it("reports total table dimensions before occupied cells when both block the result", () => {
+  it("keeps the originating table ID when a table-size spill propagates through a reference", () => {
+    const workbook = workbookWith({
+      t1: { A1: "=SEQUENCE(12)" },
+      t2: { A1: "=Table1!A1" },
+    });
+    workbook.setStructure({
+      ...STRUCTURE,
+      tables: STRUCTURE.tables.map((table) =>
+        table.id === "t1" ? { ...table, rowCount: 11, colCount: 3 } : table,
+      ),
+    });
+
+    expect(workbook.getValue(at("A1", "t2"))).toMatchObject({
+      kind: "error",
+      code: "#SPILL!",
+      spill: {
+        tableId: "t1",
+        reason: "table-size",
+        requiredRowCount: 12,
+        requiredColumnCount: 1,
+      },
+    });
+  });
+
+  it("reports table dimensions without resize metadata when occupied cells also block the result", () => {
     const workbook = workbookWith({ t1: { A1: "=SEQUENCE(12, 26)", A2: "in the way" } });
     workbook.setStructure({
       ...STRUCTURE,
@@ -147,22 +173,33 @@ describe("#SPILL!", () => {
         table.id === "t1" ? { ...table, rowCount: 11, colCount: 15 } : table,
       ),
     });
+    const tooSmall = workbook.getValue(at("A1"));
     expectError(
-      workbook.getValue(at("A1")),
+      tooSmall,
       "#SPILL!",
       "The result needs 12 rows and 26 columns, but the table is only 11 rows and 15 columns.",
     );
+    expect(tooSmall).not.toHaveProperty("spill");
 
     const small = workbookWith({ t1: { A2: "=SEQUENCE(3)" } });
     small.setStructure({
       ...STRUCTURE,
       tables: STRUCTURE.tables.map((table) => ({ ...table, rowCount: 3, colCount: 2 })),
     });
+    const offset = small.getValue(at("A2"));
     expectError(
-      small.getValue(at("A2")),
+      offset,
       "#SPILL!",
       "The result needs 3 rows and 1 column, but the table is only 3 rows and 2 columns.",
     );
+    expect(offset).toMatchObject({
+      spill: {
+        tableId: "t1",
+        reason: "table-size",
+        requiredRowCount: 4,
+        requiredColumnCount: 1,
+      },
+    });
     small.setCell(at("A2"), "=SEQUENCE(2, 2)");
     expect(small.getArray(at("A2"))).toEqual([
       [1, 2],

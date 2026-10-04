@@ -111,6 +111,7 @@ export {
   type ControlValue,
   type ErrorCode,
   type ErrorValue,
+  type SpillErrorDetails,
   type Evaluated,
   type LambdaValue,
   type Scalar,
