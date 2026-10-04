@@ -91,6 +91,15 @@ export {
   type StructuralEdit,
 } from "./rewrite";
 export { FormulaSyntaxError } from "./tokenizer";
+export { tokenizeForEditing, type EditingToken } from "./tokenizer";
+export {
+  analyzeFormula,
+  bindingsAt,
+  expectsOperand,
+  type EditingSpan,
+  type EditingBinding,
+  type FormulaAnalysis,
+} from "./editing";
 export {
   formatValue,
   isAction,

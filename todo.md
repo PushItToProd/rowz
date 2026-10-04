@@ -127,7 +127,9 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] bug: the formula bar doesn't save changes when it loses focus
 - [x] hitting enter with the formula bar focused should return focus to the cell -- you can type input and try to hit enter and it'll just stay focused instead of acting like you hit enter in the cell input (I suspect possibly b/c of a conflict with the suggestion behavior)
 - [ ] **P4** one formula editor for every place a formula is typed: cells, the formula bar, formula columns, names, filters, chart sources, scripts, and Markdown templates
-  - [ ] plan shared editing support across single-formula inputs, multiline scripts, and formulas embedded in Markdown; evaluate CodeMirror or a similar editor before choosing an implementation
+  - [x] plan shared editing support across single-formula inputs, multiline scripts, and formulas embedded in Markdown; use CodeMirror as specified in [the implementation plan](plans/formula-editing.md)
+  - [x] implement tolerant formula-fragment analysis, a shared single-line CodeMirror component, and persistent session primitives with retained editor history and failed-save handling
+  - [ ] connect the shared session to page transitions and migrate single-formula fields, including deleted-target recovery and removal of revision-based save restrictions
   - [ ] syntax highlighting for formulas in scripts and Markdown
   - Coordinate completion, reference picking, reference colors, and keyboard behavior across these editors. The formula-column prompt replacement below is part of this work.
 - [x] hitting tab with the formula bar focused should have the same effect as hitting tab with the cell itself selected

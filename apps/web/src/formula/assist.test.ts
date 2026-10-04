@@ -187,6 +187,47 @@ describe("applySuggestion", () => {
   it("does not double a parenthesis that already follows", () => {
     expect(accept("=su|(A1)", "SUM")).toBe("=SUM|(A1)");
   });
+
+  it("replaces the suffix of the complete token under the caret", () => {
+    expect(accept("=ROUND|UP(A1)", "ROUNDDOWN")).toBe("=ROUNDDOWN|(A1)");
+    expect(accept("=sal|es", "Sales Targets")).toBe("='Sales Targets'!|");
+    expect(accept("=SUM('sales t|argets'", "Sales Targets")).toBe("=SUM('Sales Targets'!|");
+  });
+});
+
+describe("formula fragments and lexical bindings", () => {
+  it("lets lexical bindings override document names", () => {
+    const source = "LET(Total, 1, To";
+    expect(
+      suggestionsAt(
+        source,
+        source.length,
+        { ...context, names: [{ name: "total", holder: "Rates", pageId: "p1" }] },
+        "formula",
+      ).items[0],
+    ).toEqual({ kind: "name", label: "Total", insert: "Total", detail: "name" });
+  });
+  it("assists formula fields without a leading equals sign", () => {
+    expect(suggestionsAt("rou", 3, context, "formula").items.map((item) => item.label)).toEqual([
+      "ROUND",
+      "ROUNDDOWN",
+      "ROUNDUP",
+    ]);
+    expect(signatureAt("SUM(", 4, "formula")?.name).toBe("SUM");
+    expect(suggestionsAt("rou", 3, context).items).toEqual([]);
+  });
+
+  it("does not suggest names outside their scope or inside strings", () => {
+    const outside = "LET(total, 1, total) + to";
+    expect(
+      suggestionsAt(outside, outside.length, context, "formula").items.map((item) => item.label),
+    ).not.toContain("total");
+    const free = '"total" + total + to';
+    expect(
+      suggestionsAt(free, free.length, context, "formula").items.map((item) => item.label),
+    ).not.toContain("total");
+    expect(suggestionsAt('SUM("rou', 8, context, "formula").items).toEqual([]);
+  });
 });
 
 describe("column names", () => {

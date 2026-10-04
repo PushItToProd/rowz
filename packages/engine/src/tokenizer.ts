@@ -27,6 +27,9 @@ export type Operator =
   "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "!=" | "<" | ">" | "<=" | ">=";
 export type Punctuation = "(" | ")" | "," | ":" | "!";
 
+/** Editor tokens retain unfinished literals and invalid characters without changing evaluation. */
+export type EditingToken = Token | (Span & { type: "invalid"; value: string });
+
 export class FormulaSyntaxError extends Error {
   constructor(
     message: string,
@@ -69,7 +72,12 @@ function matchAt(pattern: RegExp, text: string, position: number): string | unde
  * Reads a quoted literal starting at `position`. The quote character is
  * escaped by doubling it.
  */
-function readQuoted(text: string, position: number, quote: string): { value: string; end: number } {
+function readQuoted(
+  text: string,
+  position: number,
+  quote: string,
+  tolerant = false,
+): { value: string; end: number } {
   let value = "";
   let index = position + 1;
   while (index < text.length) {
@@ -83,12 +91,22 @@ function readQuoted(text: string, position: number, quote: string): { value: str
       return { value, end: index + 1 };
     }
   }
+  if (tolerant) return { value, end: text.length };
   throw new FormulaSyntaxError(`Missing closing ${quote}`, position);
 }
 
 /** Splits formula text (without the leading `=`) into tokens, ending with an `end` token. */
 export function tokenize(text: string): Token[] {
-  const tokens: Token[] = [];
+  return scanTokens(text, false) as Token[];
+}
+
+/** Reads formula fragments for editing, including text after an invalid character. */
+export function tokenizeForEditing(text: string): EditingToken[] {
+  return scanTokens(text, true);
+}
+
+function scanTokens(text: string, tolerant: boolean): EditingToken[] {
+  const tokens: EditingToken[] = [];
   let position = 0;
 
   while (position < text.length) {
@@ -100,7 +118,7 @@ export function tokenize(text: string): Token[] {
 
     const char = text.charAt(position);
     if (char === '"' || char === "'") {
-      const { value, end } = readQuoted(text, position, char);
+      const { value, end } = readQuoted(text, position, char, tolerant);
       tokens.push({ type: char === '"' ? "string" : "quotedName", value, position, end });
       position = end;
       continue;
@@ -108,13 +126,15 @@ export function tokenize(text: string): Token[] {
 
     if (char === "[") {
       const close = text.indexOf("]", position);
-      const name = close === -1 ? "" : text.slice(position + 1, close).trim();
-      if (close === -1) throw new FormulaSyntaxError("Missing closing ]", position);
+      const end = close === -1 ? text.length : close + 1;
+      const name = text.slice(position + 1, close === -1 ? text.length : close).trim();
+      if (close === -1 && !tolerant) throw new FormulaSyntaxError("Missing closing ]", position);
       if (name === "" || name.includes("[")) {
-        throw new FormulaSyntaxError("Expected a column name between [ and ]", position);
+        if (!tolerant)
+          throw new FormulaSyntaxError("Expected a column name between [ and ]", position);
       }
-      tokens.push({ type: "column", value: name, position, end: close + 1 });
-      position = close + 1;
+      tokens.push({ type: "column", value: name, position, end });
+      position = end;
       continue;
     }
 
@@ -128,7 +148,7 @@ export function tokenize(text: string): Token[] {
     const number = matchAt(NUMBER, text, position);
     if (number !== undefined) {
       const value = Number(number);
-      if (!Number.isFinite(value)) {
+      if (!Number.isFinite(value) && !tolerant) {
         throw new FormulaSyntaxError(`Number out of range: ${number}`, position);
       }
       tokens.push({ type: "number", value, position, end: position + number.length });
@@ -162,7 +182,9 @@ export function tokenize(text: string): Token[] {
       continue;
     }
 
-    throw new FormulaSyntaxError(`Unexpected character ${char}`, position);
+    if (!tolerant) throw new FormulaSyntaxError(`Unexpected character ${char}`, position);
+    tokens.push({ type: "invalid", value: char, position, end: position + 1 });
+    position += 1;
   }
 
   tokens.push({ type: "end", position, end: position });

@@ -2,6 +2,16 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-04: Shared formula editor state and initial implementation
+
+**Decision.** Keep a CodeMirror `EditorState` in a dedicated Pinia store. The shared editor receives that state and emits updated states; transferring or unmounting an editor retains the document, selection, and local history. The store identifies editing targets separately from their original formula-resolution context. Submission takes a save callback, awaits its result, and retains the session on an error or a deleted-target result. The component emits commit, cancel, and blur events so each input can apply its specified submission rules.
+
+**Why.** Keeping CodeMirror state avoids maintaining duplicate caret and undo models. A store owned independently of page components gives subsequent input migrations and the cross-page dock the same session model. The initial implementation provides tested primitives before migrating existing inputs and page transitions; the plan records the remaining work.
+
+**Analysis.** Formula-fragment analysis shares the tokenizer's scanning implementation with strict evaluation and parses isolated direct-reference candidates with the existing parser. Lexical bindings come from tolerant call argument spans. Script and template regions remain a follow-up within step 1.
+
+**To change.** `apps/web/src/formula/session.ts`, `apps/web/src/components/FormulaEditor.vue`, and `packages/engine/src/editing.ts`.
+
 ## 2026-10-04: Aggregate and range helper semantics
 
 `SUBTOTAL` maps codes 1–11 to AVERAGE, COUNT, COUNTA, MAX, MIN, PRODUCT, STDEV, STDEVP, SUM, VAR_S, and VAR_P. Codes 101–111 use the same mapping and include all rows because filtering and hiding affect display only. It delegates to the existing aggregate functions, so their handling of text, blanks, dates, and errors applies. Nested `SUBTOTAL` results are included because evaluated range cells do not retain their source formulas.

@@ -1,4 +1,11 @@
-import { functionDocs, isFormulaInput, quoteName, type FunctionDoc } from "@spreadsheet-app/engine";
+import {
+  analyzeFormula,
+  bindingsAt,
+  functionDocs,
+  isFormulaInput,
+  quoteName,
+  type FunctionDoc,
+} from "@spreadsheet-app/engine";
 
 export interface Suggestion {
   kind: "function" | "table" | "page" | "name" | "column";
@@ -11,7 +18,7 @@ export interface Suggestion {
 }
 
 export interface Suggestions {
-  /** Where the word being typed starts. The suggestion replaces the text from here to the caret. */
+  /** Where the token being completed starts. Acceptance replaces its suffix too. */
   from: number;
   items: Suggestion[];
 }
@@ -38,10 +45,6 @@ const WORD_AT_END = /[A-Za-z_][A-Za-z0-9_.]*$/;
 const QUALIFIER_AT_END = /(?:'((?:[^']|'')*)'|([A-Za-z_][A-Za-z0-9_]*))!$/;
 // An open `[` with a table name before it, or none: `Sales[Pr`, `'Table 1'[`, `[Pr`.
 const COLUMN_AT_END = /(?:'((?:[^']|'')*)'|([A-Za-z_][A-Za-z0-9_]*))?\[([^[\]]*)$/;
-const CELL_LIKE = /^\$?[A-Za-z]{1,3}\$?[0-9]*$/;
-const WORD = /[A-Za-z_][A-Za-z0-9_.]*/g;
-
-const functionNames = new Set(functionDocs.map((doc) => doc.name));
 
 interface Scan {
   /** The index after the quote that opened the string or quoted name the caret is in. */
@@ -82,31 +85,19 @@ function qualifier(name: string, kind: "table" | "page", detail: string): Sugges
   return { kind, label: name, insert: `${quoteName(name)}!`, detail };
 }
 
-/** The words a formula already uses as names, such as those bound by LET, other than the one being typed. */
-function namesIn(text: string, typedFrom: number): string[] {
-  const names = new Set<string>();
-  for (const match of text.matchAll(WORD)) {
-    const [word] = match;
-    const next = text.slice(match.index + word.length).trimStart()[0];
-    const isName =
-      match.index !== typedFrom &&
-      next !== "(" &&
-      next !== "!" &&
-      !CELL_LIKE.test(word) &&
-      !["TRUE", "FALSE"].includes(word.toUpperCase());
-    if (isName) names.add(word);
-  }
-  return [...names];
-}
-
 /**
  * What could complete the word being typed at the caret: function names,
  * the names of tables and pages, and names the formula already uses.
  * Nothing is offered outside a formula, inside quoted text, or after a number.
  */
-export function suggestionsAt(text: string, caret: number, context: NamingContext): Suggestions {
+export function suggestionsAt(
+  text: string,
+  caret: number,
+  context: NamingContext,
+  mode: "cell" | "formula" = "cell",
+): Suggestions {
   const none = { from: caret, items: [] };
-  if (!isFormulaInput(text) && text !== "=") return none;
+  if (mode === "cell" && !isFormulaInput(text) && text !== "=") return none;
   const before = text.slice(0, caret);
   const { quote, quoteStart } = scan(text, caret);
   if (quote === '"') return none;
@@ -200,25 +191,24 @@ export function suggestionsAt(text: string, caret: number, context: NamingContex
       detail: doc.syntax,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
+  const bound = bindingsAt(
+    analyzeFormula(text, { from: mode === "cell" ? 1 : 0, to: text.length }),
+    caret,
+  );
+  const boundNames = new Set(bound.map((name) => name.toLowerCase()));
   const defined = (context.names ?? [])
-    .filter((named) => startsWith(named.name, typed))
+    .filter((named) => startsWith(named.name, typed) && !boundNames.has(named.name.toLowerCase()))
     .map((named): Suggestion => ({
       kind: "name",
       label: named.name,
       insert: quoteName(named.name),
       detail: `name in ${named.holder}`,
     }));
-  const known = new Set(defined.map((item) => item.label.toLowerCase()));
   const names = [
-    ...defined,
-    ...namesIn(text, from)
-      .filter(
-        (name) =>
-          startsWith(name, typed) &&
-          !functionNames.has(name.toUpperCase()) &&
-          !known.has(name.toLowerCase()),
-      )
+    ...bound
+      .filter((name) => startsWith(name, typed))
       .map((name): Suggestion => ({ kind: "name", label: name, insert: name, detail: "name" })),
+    ...defined,
   ];
   const places = [
     ...tablesOn(context.pageId),
@@ -237,8 +227,12 @@ function pageNamed(context: NamingContext, name: string): { id: string; name: st
 }
 
 /** The function whose parentheses the caret is inside, for showing what it expects. */
-export function signatureAt(text: string, caret: number): FunctionDoc | undefined {
-  if (!isFormulaInput(text)) return undefined;
+export function signatureAt(
+  text: string,
+  caret: number,
+  mode: "cell" | "formula" = "cell",
+): FunctionDoc | undefined {
+  if (mode === "cell" && !isFormulaInput(text)) return undefined;
   const { quote, calls } = scan(text, caret);
   if (quote === '"') return undefined;
   // Plain parentheses, as in `ROUND((1 + 2) * 3`, are skipped to reach the call around them.
@@ -255,10 +249,17 @@ export function applySuggestion(
 ): { text: string; caret: number } {
   // Typing `SUM` then accepting `SUM(` must not leave `SUM((` when a parenthesis already follows.
   // Accepting `[Price]` after typing `[Pr` must not leave `[Price]]` when the bracket is already closed.
-  const after =
-    suggestion.kind === "column" && text.slice(caret).startsWith("]")
-      ? text.slice(caret + 1)
-      : text.slice(caret);
+  let end = caret;
+  if (text[from] === "[") {
+    const close = text.indexOf("]", caret);
+    if (close !== -1 && !/[()[\]]/.test(text.slice(caret, close))) end = close + 1;
+  } else if (text[from] === "'") {
+    const token = analyzeFormula(text).tokens.find((token) => token.position === from);
+    if (token?.type === "quotedName") end = token.end;
+  } else {
+    end += /^[A-Za-z0-9_.]*/.exec(text.slice(caret))?.[0].length ?? 0;
+  }
+  const after = text.slice(end);
   const insert =
     suggestion.insert.endsWith("(") && after.startsWith("(")
       ? suggestion.insert.slice(0, -1)

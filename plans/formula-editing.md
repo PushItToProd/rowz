@@ -92,6 +92,16 @@ An existing named formula's editing target is its table ID and case-insensitive 
 
 ## Validation and assumptions
 
+### Implementation progress
+
+Step 1 has started. `packages/engine/src/editing.ts` analyzes formula fragments tolerantly with original-source token and direct-reference offsets, lexical `LET`/`LAMBDA` bindings, and operand-position checks. Existing completion uses those bindings and replaces token suffixes; formula-fragment completion no longer requires `=`.
+
+`FormulaEditor.vue` supplies the shared single-line CodeMirror integration. `formula/session.ts` owns editor state in Pinia independently of page components, including caret and history, stable target identity, transfers without saving, deduplicated submission, and draft retention after failed saves or deleted-target results. These primitives have unit and component tests but are not yet connected to existing input locations or page transitions.
+
+Remaining step 1 work includes script/template scanning for tolerant regions, qualified-name completion, input migrations, focus restoration and blocked page-control transitions, deleted-target recovery UI, formula-column labels and popovers, departure confirmation, and server/client revision-check removal. Steps 2 and 3 remain unimplemented; browser feasibility and bundle impact need validation after migration.
+
+### Required validation
+
 - Unit-test incomplete syntax, region offsets, lexical scope, comments, quoting, token replacement, qualified names, and reference generation.
 - Test every input’s commit/cancel behavior, limits, read-only handling, save failures, and moved or deleted targets.
 - Test that structural changes during editing do not reject submission or rewrite the draft, including the `=B2` in B7 moving to B8 example. Test that an intervening edit to the same target is overwritten on submission.
