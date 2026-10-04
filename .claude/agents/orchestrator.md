@@ -1,5 +1,8 @@
 ---
 name: orchestrator
+description: Orchestrator mode for autonomous work.
+model: sonnet
+effort: low
 ---
 
 ## Instructions for autonomous work
