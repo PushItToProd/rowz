@@ -83,7 +83,7 @@ function dispatchPointer(
 
 async function press(
   key: string,
-  options: { shiftKey?: boolean; ctrlKey?: boolean } = {},
+  options: { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean } = {},
 ): Promise<void> {
   const editor = wrapper.find(".grid__editor");
   await (editor.exists() ? editor : wrapper.get(".grid")).trigger("keydown", { key, ...options });
@@ -142,6 +142,53 @@ describe("rendering", () => {
     expect(store.valueOf(at("D6"))).toBe(24);
     expect(document.querySelector(".cell-error-popover__action")).toBeNull();
   });
+
+  it("focuses the spill resize button with Alt+Enter and returns to the grid on Escape", async () => {
+    await mountGrid({ A1: "=SEQUENCE(6, 4)" });
+    await select("A1");
+
+    await press("Enter", { altKey: true });
+    const button = document.querySelector<HTMLButtonElement>(".cell-error-popover__action");
+    if (!button) throw new Error("Expected the spill resize button");
+    expect(document.activeElement).toBe(button);
+    expect(document.querySelector(".cell-error-popover__hint")?.textContent).toContain("Alt+Enter");
+
+    await new DOMWrapper(button).trigger("mouseleave");
+    expect(document.querySelector(".cell-error-popover__action")).toBe(button);
+
+    await new DOMWrapper(button).trigger("keydown", { key: "Escape" });
+    expect(document.querySelector(".cell-error-popover__action")).toBeNull();
+    expect(document.activeElement).toBe(wrapper.get(".grid").element);
+  });
+
+  it.each(["Enter", " "])(
+    "resizes the table with %s after Alt+Enter focuses the action",
+    async (key) => {
+      const resized = sizedTable({ rowCount: 6, colCount: 4 });
+      server.updateTable.mockResolvedValue(
+        changeWith({ table: resized, cells: [], views: [], tables: [] }),
+      );
+      await mountGrid({ A1: "=SEQUENCE(6, 4)" });
+      await select("A1");
+      await press("Enter", { altKey: true });
+
+      const button = document.querySelector<HTMLButtonElement>(".cell-error-popover__action");
+      if (!button) throw new Error("Expected the spill resize button");
+      expect(document.activeElement).toBe(button);
+      const action = new DOMWrapper(button);
+      await action.trigger("keydown", { key });
+      if (key === " ") await action.trigger("keyup", { key });
+
+      await vi.waitFor(() => {
+        expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
+          rowCount: 6,
+          colCount: 4,
+          grow: true,
+        });
+      });
+      expect(document.activeElement).toBe(wrapper.get(".grid").element);
+    },
+  );
 
   it("does not offer table resizing when another cell blocks the spill", async () => {
     await mountGrid({ A1: "=SEQUENCE(2)", A2: "occupied" });

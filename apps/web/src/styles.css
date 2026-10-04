@@ -1865,6 +1865,11 @@ select.cell-control--dropdown {
   outline-offset: 2px;
 }
 
+.cell-error-popover__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.875em;
+}
+
 .errors .assertions__list li + li {
   margin-top: 0.5rem;
 }

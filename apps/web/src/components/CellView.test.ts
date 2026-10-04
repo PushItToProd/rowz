@@ -1,5 +1,6 @@
 import { createWorkbook, type ActionValue, type CellValue } from "@spreadsheet-app/engine";
 import { mount, type VueWrapper } from "@vue/test-utils";
+import { nextTick } from "vue";
 import { describe, expect, it } from "vitest";
 import CellView from "./CellView.vue";
 
@@ -19,6 +20,21 @@ function render(
   } = {},
 ): VueWrapper {
   return mount(CellView, { props: { value, running: false, canRun: true, ...props } });
+}
+
+function renderInGrid(
+  value: CellValue,
+  props: { spillResizeTo?: { rowCount: number; colCount: number } } = {},
+): { wrapper: VueWrapper; grid: HTMLDivElement } {
+  const grid = document.createElement("div");
+  grid.className = "grid";
+  grid.tabIndex = -1;
+  document.body.append(grid);
+  const wrapper = mount(CellView, {
+    props: { value, running: false, canRun: true, ...props },
+    attachTo: grid,
+  });
+  return { wrapper, grid };
 }
 
 describe("CellView", () => {
@@ -155,14 +171,85 @@ describe("CellView", () => {
       { spillResizeTo: size },
     );
     await wrapper.get("span").trigger("mouseenter");
+    const trigger = wrapper.get<HTMLElement>(".cell-value--error");
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
     const button = document.querySelector<HTMLButtonElement>(".cell-error-popover__action");
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-      "The table is too small.",
-    );
+    const descriptionId = trigger.attributes("aria-describedby");
+    const description = document.getElementById(descriptionId ?? "");
+    expect(trigger.attributes("aria-haspopup")).toBe("dialog");
+    expect(trigger.attributes("aria-controls")).toBe(dialog?.id);
+    expect(descriptionId).not.toBe(dialog?.id);
+    expect(description?.tagName).toBe("P");
+    expect(description?.textContent).toContain("The table is too small.");
+    expect(dialog?.textContent).toContain("The table is too small.");
     expect(button?.textContent).toContain("Resize table to fit");
     button?.click();
     expect(wrapper.emitted("resizeTable")).toEqual([[size]]);
     wrapper.unmount();
+  });
+
+  it("returns focus to the grid when Escape closes the error popover from its trigger", async () => {
+    const { wrapper, grid } = renderInGrid(
+      {
+        kind: "error",
+        code: "#SPILL!",
+        message: "The table is too small.",
+        spill: {
+          tableId: "t1",
+          reason: "table-size",
+          requiredRowCount: 12,
+          requiredColumnCount: 26,
+        },
+      },
+      { spillResizeTo: { rowCount: 12, colCount: 26 } },
+    );
+    const trigger = wrapper.get<HTMLElement>(".cell-value--error");
+    try {
+      trigger.element.focus();
+      await nextTick();
+      expect(document.activeElement).toBe(trigger.element);
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+
+      await trigger.trigger("keydown", { key: "Escape" });
+
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(document.activeElement).toBe(grid);
+    } finally {
+      wrapper.unmount();
+      grid.remove();
+    }
+  });
+
+  it("returns focus to the grid when an error unmounts while its popover button is focused", async () => {
+    const { wrapper, grid } = renderInGrid(
+      {
+        kind: "error",
+        code: "#SPILL!",
+        message: "The table is too small.",
+        spill: {
+          tableId: "t1",
+          reason: "table-size",
+          requiredRowCount: 12,
+          requiredColumnCount: 26,
+        },
+      },
+      { spillResizeTo: { rowCount: 12, colCount: 26 } },
+    );
+    await wrapper.get(".cell-value--error").trigger("mouseenter");
+    const button = document.querySelector<HTMLButtonElement>(".cell-error-popover__action");
+    if (!button) throw new Error("Expected the spill resize button");
+    try {
+      button.focus();
+      expect(document.activeElement).toBe(button);
+
+      await wrapper.setProps({ value: 42 });
+
+      expect(document.querySelector(".cell-error-popover__action")).toBeNull();
+      expect(document.activeElement).toBe(grid);
+    } finally {
+      wrapper.unmount();
+      grid.remove();
+    }
   });
 
   it("shows a button with its label and emits run when clicked", async () => {

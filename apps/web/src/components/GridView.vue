@@ -121,6 +121,7 @@ function spillResizeTo(id: CellId): { rowCount: number; colCount: number } | und
 }
 
 function resizeForSpill(size: { rowCount: number; colCount: number }): void {
+  focusGrid();
   void store.resizeTableTo(props.table.id, size);
 }
 
@@ -549,6 +550,28 @@ function focusGrid(): void {
   grid.value?.focus({ preventScroll: true });
 }
 
+/** Focuses the resize action for a selected table-size spill error. */
+function focusSpillResizeAction(): boolean {
+  if (!selected.value) return false;
+  const cellElement = grid.value?.querySelector<HTMLElement>(
+    `[data-cell="${formatAddress(selected.value)}"]`,
+  );
+  const error = cellElement?.querySelector<HTMLElement>(
+    '.cell-value--error[aria-haspopup="dialog"]',
+  );
+  if (!error) return false;
+  error.focus({ preventScroll: true });
+  void nextTick(() => {
+    const popoverId = error.getAttribute("aria-controls");
+    if (!popoverId) return;
+    document
+      .getElementById(popoverId)
+      ?.querySelector<HTMLButtonElement>(".cell-error-popover__action")
+      ?.focus({ preventScroll: true });
+  });
+  return true;
+}
+
 // The formula bar hands the keyboard back when it is done with the selected cell.
 watch(
   () => store.gridFocusRequests,
@@ -639,7 +662,9 @@ function onGridKeydown(event: KeyboardEvent): void {
   const { key } = event;
   const step = MOVES[key];
   const command = event.ctrlKey || event.metaKey;
-  if (step && event.shiftKey) extend(...step);
+  if (key === "Enter" && event.altKey && !command && focusSpillResizeAction())
+    event.preventDefault();
+  else if (step && event.shiftKey) extend(...step);
   else if (step) move(...step);
   else if (key === "Tab") store.prepareCellMove("Tab", event.shiftKey)();
   else if (key === "Enter" || key === "F2") edit();

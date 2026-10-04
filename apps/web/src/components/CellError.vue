@@ -28,6 +28,7 @@ const anchor = ref<HTMLElement>();
 const open = ref(false);
 const id = useId();
 const titleId = `${id}-title`;
+const descriptionId = `${id}-description`;
 const popover = ref<HTMLElement>();
 const position = computed(() => {
   if (!open.value) return {};
@@ -40,9 +41,15 @@ const position = computed(() => {
     left: `${String(Math.max(8, Math.min(rect.left, window.innerWidth - 328)))}px`,
   };
 });
+function focusGrid(): void {
+  anchor.value?.closest<HTMLElement>(".grid")?.focus({ preventScroll: true });
+}
 function close(): void {
   clearTimeout(leaveTimer);
+  const focusIsInAnchor = anchor.value?.contains(document.activeElement) ?? false;
+  const focusIsInPopover = popover.value?.contains(document.activeElement) ?? false;
   open.value = false;
+  if (focusIsInAnchor || focusIsInPopover) focusGrid();
 }
 function onScroll(event: Event): void {
   if (event.target instanceof Node && popover.value?.contains(event.target)) return;
@@ -74,10 +81,32 @@ function show(): void {
   open.value = true;
 }
 function leave(): void {
+  if (
+    anchor.value?.contains(document.activeElement) ||
+    popover.value?.contains(document.activeElement)
+  )
+    return;
   leaveTimer = setTimeout(close, 150);
+}
+let spacePressed = false;
+function onActionKeydown(event: KeyboardEvent): void {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (!event.repeat) emit("resize");
+  } else if (event.key === " ") {
+    event.preventDefault();
+    if (!event.repeat) spacePressed = true;
+  }
+}
+function onActionKeyup(event: KeyboardEvent): void {
+  if (event.key !== " " || !spacePressed) return;
+  event.preventDefault();
+  spacePressed = false;
+  emit("resize");
 }
 onBeforeUnmount(() => {
   clearTimeout(leaveTimer);
+  if (popover.value?.contains(document.activeElement)) focusGrid();
 });
 </script>
 
@@ -89,10 +118,11 @@ onBeforeUnmount(() => {
     tabindex="0"
     :aria-haspopup="resizeTo ? 'dialog' : undefined"
     :aria-expanded="resizeTo ? open : undefined"
-    :aria-describedby="open ? id : undefined"
+    :aria-controls="resizeTo && open ? id : undefined"
+    :aria-describedby="open ? descriptionId : undefined"
     @mouseenter="show"
     @mouseleave="leave"
-    @focus="open = true"
+    @focus="show"
     @blur="onFocusout"
     @keydown.esc.stop="close"
   >
@@ -112,15 +142,21 @@ onBeforeUnmount(() => {
       @focusout="onFocusout"
     >
       <strong :id="titleId">{{ error.code }}</strong>
-      <p>{{ explanation }}</p>
+      <p :id="descriptionId">{{ explanation }}</p>
       <button
         v-if="resizeTo"
         type="button"
         class="cell-error-popover__action"
         @click="emit('resize')"
+        @keydown="onActionKeydown"
+        @keyup="onActionKeyup"
+        @blur="spacePressed = false"
       >
         Resize table to fit
       </button>
+      <p v-if="resizeTo" class="cell-error-popover__hint">
+        Alt+Enter focuses this button; Enter or Space resizes the table.
+      </p>
     </div>
   </Teleport>
 </template>
