@@ -497,6 +497,7 @@ input.editable-name--editing {
 .grid__resize {
   position: absolute;
   z-index: 2;
+  touch-action: none;
 }
 
 .grid__resize--col {

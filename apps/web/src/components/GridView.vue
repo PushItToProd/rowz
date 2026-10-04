@@ -161,6 +161,8 @@ type Axis = "row" | "col";
 const resizeDrag = ref<{
   axis: Axis;
   id: string;
+  pointerId: number;
+  handle: HTMLElement;
   start: number;
   original: number;
   size: number;
@@ -181,28 +183,35 @@ const tableWidth = computed(
   () => 52 + props.table.colIds.reduce((sum, _, col) => sum + lineSize("col", col), 0),
 );
 
-function startResize(event: MouseEvent, axis: Axis, index: number): void {
-  if (!store.canEdit || event.button !== 0) return;
+function startResize(event: PointerEvent, axis: Axis, index: number): void {
+  if (!store.canEdit || !event.isPrimary || event.button !== 0 || resizeDrag.value) return;
   const id = lineId(axis, index);
   if (!id) return;
+  const handle = event.currentTarget;
+  if (!(handle instanceof HTMLElement)) return;
   const original = lineSize(axis, index);
   commit();
   resizeDrag.value = {
     axis,
     id,
+    pointerId: event.pointerId,
+    handle,
     start: axis === "row" ? event.clientY : event.clientX,
     original,
     size: original,
   };
-  window.addEventListener("mousemove", moveResize);
-  window.addEventListener("mouseup", finishResize);
+  handle.setPointerCapture(event.pointerId);
+  handle.addEventListener("lostpointercapture", stopResize);
+  window.addEventListener("pointermove", moveResize);
+  window.addEventListener("pointerup", finishResize);
+  window.addEventListener("pointercancel", cancelResizePointer);
   window.addEventListener("keydown", cancelResize);
   window.addEventListener("blur", stopResize);
 }
 
-function moveResize(event: MouseEvent): void {
+function moveResize(event: PointerEvent): void {
   const drag = resizeDrag.value;
-  if (!drag) return;
+  if (drag?.pointerId !== event.pointerId) return;
   const position = drag.axis === "row" ? event.clientY : event.clientX;
   const limits = GRID_SIZE[drag.axis];
   drag.size = Math.round(
@@ -211,18 +220,28 @@ function moveResize(event: MouseEvent): void {
 }
 
 function stopResize(): void {
+  const drag = resizeDrag.value;
   resizeDrag.value = null;
-  window.removeEventListener("mousemove", moveResize);
-  window.removeEventListener("mouseup", finishResize);
+  window.removeEventListener("pointermove", moveResize);
+  window.removeEventListener("pointerup", finishResize);
+  window.removeEventListener("pointercancel", cancelResizePointer);
   window.removeEventListener("keydown", cancelResize);
   window.removeEventListener("blur", stopResize);
+  if (drag) drag.handle.removeEventListener("lostpointercapture", stopResize);
+  if (drag?.handle.hasPointerCapture(drag.pointerId))
+    drag.handle.releasePointerCapture(drag.pointerId);
 }
 
-function finishResize(): void {
+function finishResize(event: PointerEvent): void {
   const drag = resizeDrag.value;
-  if (drag && drag.size !== drag.original)
+  if (drag?.pointerId !== event.pointerId) return;
+  if (drag.size !== drag.original)
     void store.resizeLines(props.table.id, drag.axis, [drag.id], drag.size);
   stopResize();
+}
+
+function cancelResizePointer(event: PointerEvent): void {
+  if (resizeDrag.value?.pointerId === event.pointerId) stopResize();
 }
 
 function cancelResize(event: KeyboardEvent): void {
@@ -689,7 +708,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               v-if="store.canEdit"
               class="grid__resize grid__resize--col"
               :aria-label="`Resize column ${columnLabel(col - 1)}`"
-              @mousedown.stop.prevent="startResize($event, 'col', col - 1)"
+              @pointerdown.stop.prevent="startResize($event, 'col', col - 1)"
               @dblclick.stop.prevent="resetSize('col', col - 1)"
             ></span>
           </th>
@@ -714,7 +733,7 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
               v-if="store.canEdit && row <= shownRows"
               class="grid__resize grid__resize--row"
               :aria-label="`Resize row ${storedRow(row - 1) + 1}`"
-              @mousedown.stop.prevent="startResize($event, 'row', row - 1)"
+              @pointerdown.stop.prevent="startResize($event, 'row', row - 1)"
               @dblclick.stop.prevent="resetSize('row', row - 1)"
             ></span>
           </th>

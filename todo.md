@@ -156,7 +156,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] **P4** allow resizing rows heights and column widths
   - [x] by clicking and dragging on the borders of the row/col headers
   - [x] by a "resize [row/column]" ctx menu item shown when right clicking on row/col headers
-  - [ ] **P8** (Claude) dragging a header border to resize does not work by touch. [GridView.vue](apps/web/src/components/GridView.vue) starts the drag from `mousedown`/`mousemove`/`mouseup`. Use pointer events with `touch-action: none` on the handles. The context-menu item works by touch
+  - [x] **P8** (Claude) dragging a header border to resize did not work by touch. [GridView.vue](apps/web/src/components/GridView.vue) now uses pointer events with pointer capture and `touch-action: none` on the handles.
 - [x] when multiple cells/cols/rows are selected, allow deleting the columns or rows containing them from the context menu
   - [x] if I select C:E, give me a "Delete columns C-E" option. likewise for rows.
   - [x] if I select C3:E6 and right click on the selected range, show me both "Delete columns C-E" and "Delete rows 3-6"

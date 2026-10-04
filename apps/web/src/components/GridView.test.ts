@@ -38,6 +38,40 @@ function selectedAddress(): string | undefined {
   return selected.exists() ? selected.attributes("data-cell") : undefined;
 }
 
+function mockPointerCapture(element: Element): void {
+  const captured = new Set<number>();
+  element.setPointerCapture = vi.fn((pointerId: number): void => {
+    captured.add(pointerId);
+  });
+  element.hasPointerCapture = vi.fn((pointerId: number) => captured.has(pointerId));
+  element.releasePointerCapture = vi.fn((pointerId: number): void => {
+    captured.delete(pointerId);
+  });
+}
+
+function dispatchPointer(
+  target: EventTarget,
+  type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "lostpointercapture",
+  fields: {
+    pointerId?: number;
+    pointerType?: string;
+    isPrimary?: boolean;
+    button?: number;
+    clientX?: number;
+    clientY?: number;
+  } = {},
+): void {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.assign(event, {
+    pointerId: 1,
+    pointerType: "mouse",
+    isPrimary: true,
+    button: 0,
+    ...fields,
+  });
+  target.dispatchEvent(event);
+}
+
 async function press(
   key: string,
   options: { shiftKey?: boolean; ctrlKey?: boolean } = {},
@@ -85,16 +119,20 @@ describe("resizing headers", () => {
     async (axis, label, coordinate, id, original, size) => {
       await mountGrid();
       server.resizeLines.mockResolvedValue(changeWith());
-      await wrapper
-        .get(`[aria-label="Resize ${label}"]`)
-        .trigger("mousedown", { [coordinate]: 100 });
-      window.dispatchEvent(new MouseEvent("mousemove", { [coordinate]: 100 + size - original }));
+      const handle = wrapper.get(`[aria-label="Resize ${label}"]`);
+      mockPointerCapture(handle.element);
+      dispatchPointer(handle.element, "pointerdown", {
+        pointerType: "touch",
+        [coordinate]: 100,
+      });
+      expect(handle.element.setPointerCapture).toHaveBeenCalledExactlyOnceWith(1);
+      dispatchPointer(window, "pointermove", { pointerId: 1, [coordinate]: 100 + size - original });
       await wrapper.vm.$nextTick();
       expect(server.resizeLines).not.toHaveBeenCalled();
       if (axis === "col") expect(wrapper.findAll("col")[2]!.attributes("style")).toContain("180px");
       else expect(wrapper.findAll("tbody tr")[1]!.attributes("style")).toContain("90px");
       expect(useWorkbookStore().selection).toBeNull();
-      window.dispatchEvent(new MouseEvent("mouseup"));
+      dispatchPointer(window, "pointerup");
       await flushPromises();
       expect(server.resizeLines).toHaveBeenCalledExactlyOnceWith("t1", { axis, ids: [id], size });
     },
@@ -104,18 +142,19 @@ describe("resizing headers", () => {
     await mountGrid();
     server.resizeLines.mockResolvedValue(changeWith());
     const handle = wrapper.get('[aria-label="Resize column A"]');
-    await handle.trigger("mousedown", { clientX: 100 });
-    window.dispatchEvent(new MouseEvent("mousemove", { clientX: 5000 }));
-    window.dispatchEvent(new MouseEvent("mouseup"));
+    mockPointerCapture(handle.element);
+    dispatchPointer(handle.element, "pointerdown", { clientX: 100 });
+    dispatchPointer(window, "pointermove", { clientX: 5000 });
+    dispatchPointer(window, "pointerup");
     await flushPromises();
     expect(server.resizeLines).toHaveBeenLastCalledWith("t1", {
       axis: "col",
       ids: ["c1"],
       size: 1000,
     });
-    await handle.trigger("mousedown", { clientX: 100 });
-    window.dispatchEvent(new MouseEvent("mousemove", { clientX: -5000 }));
-    window.dispatchEvent(new MouseEvent("mouseup"));
+    dispatchPointer(handle.element, "pointerdown", { clientX: 100 });
+    dispatchPointer(window, "pointermove", { clientX: -5000 });
+    dispatchPointer(window, "pointerup");
     await flushPromises();
     expect(server.resizeLines).toHaveBeenLastCalledWith("t1", {
       axis: "col",
@@ -123,10 +162,10 @@ describe("resizing headers", () => {
       size: 40,
     });
     server.resizeLines.mockClear();
-    await handle.trigger("mousedown", { clientX: 100 });
-    window.dispatchEvent(new MouseEvent("mousemove", { clientX: 200 }));
+    dispatchPointer(handle.element, "pointerdown", { clientX: 100 });
+    dispatchPointer(window, "pointermove", { clientX: 200 });
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-    window.dispatchEvent(new MouseEvent("mouseup"));
+    dispatchPointer(window, "pointerup");
     await flushPromises();
     expect(server.resizeLines).not.toHaveBeenCalled();
     await handle.trigger("dblclick");
@@ -136,6 +175,60 @@ describe("resizing headers", () => {
       ids: ["c1"],
       size: null,
     });
+  });
+
+  it("cancels a touch resize when the pointer is canceled", async () => {
+    await mountGrid();
+    const handle = wrapper.get('[aria-label="Resize column A"]');
+    mockPointerCapture(handle.element);
+    dispatchPointer(handle.element, "pointerdown", {
+      pointerId: 7,
+      pointerType: "touch",
+      clientX: 100,
+    });
+    dispatchPointer(window, "pointermove", { pointerId: 7, clientX: 200 });
+    dispatchPointer(window, "pointercancel", { pointerId: 7 });
+    dispatchPointer(window, "pointerup", { pointerId: 7 });
+    await flushPromises();
+    expect(server.resizeLines).not.toHaveBeenCalled();
+    expect(handle.element.releasePointerCapture).toHaveBeenCalledExactlyOnceWith(7);
+  });
+
+  it("stops resizing when a removed handle loses pointer capture", async () => {
+    await mountGrid();
+    const handle = wrapper.get('[aria-label="Resize column A"]');
+    mockPointerCapture(handle.element);
+    dispatchPointer(handle.element, "pointerdown", { pointerId: 9, clientX: 100 });
+    dispatchPointer(window, "pointermove", { pointerId: 9, clientX: 200 });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.findAll("col")[1]!.attributes("style")).toContain("220px");
+
+    handle.element.remove();
+    dispatchPointer(handle.element, "lostpointercapture", { pointerId: 9 });
+    dispatchPointer(window, "pointermove", { pointerId: 9, clientX: 300 });
+    dispatchPointer(window, "pointerup", { pointerId: 9 });
+    await flushPromises();
+
+    expect(server.resizeLines).not.toHaveBeenCalled();
+    expect(wrapper.findAll("col")[1]!.attributes("style")).not.toContain("220px");
+  });
+
+  it("ignores a secondary pointer when starting a resize", async () => {
+    await mountGrid();
+    const handle = wrapper.get('[aria-label="Resize column A"]');
+    mockPointerCapture(handle.element);
+    dispatchPointer(handle.element, "pointerdown", {
+      pointerId: 2,
+      pointerType: "touch",
+      isPrimary: false,
+      clientX: 100,
+    });
+    dispatchPointer(window, "pointermove", { pointerId: 2, clientX: 200 });
+    dispatchPointer(window, "pointerup", { pointerId: 2 });
+    await flushPromises();
+
+    expect(handle.element.setPointerCapture).not.toHaveBeenCalled();
+    expect(server.resizeLines).not.toHaveBeenCalled();
   });
 
   it("renders persisted sizes by identity and hides resize handles for viewers", async () => {
@@ -153,10 +246,12 @@ describe("resizing headers", () => {
 
   it("removes drag listeners when unmounted", async () => {
     await mountGrid();
-    await wrapper.get('[aria-label="Resize row 1"]').trigger("mousedown", { clientY: 100 });
+    const handle = wrapper.get('[aria-label="Resize row 1"]');
+    mockPointerCapture(handle.element);
+    dispatchPointer(handle.element, "pointerdown", { clientY: 100 });
     wrapper.unmount();
-    window.dispatchEvent(new MouseEvent("mousemove", { clientY: 200 }));
-    window.dispatchEvent(new MouseEvent("mouseup"));
+    dispatchPointer(window, "pointermove", { clientY: 200 });
+    dispatchPointer(window, "pointerup");
     expect(server.resizeLines).not.toHaveBeenCalled();
   });
 });
@@ -1448,9 +1543,11 @@ describe("a sorted and filtered data table", () => {
   it("resizes the stored identity of a sorted row and leaves the append row unsized", async () => {
     await mountShown(SORTED);
     server.resizeLines.mockResolvedValue(changeWith());
-    await wrapper.get('[aria-label="Resize row 3"]').trigger("mousedown", { clientY: 100 });
-    window.dispatchEvent(new MouseEvent("mousemove", { clientY: 140 }));
-    window.dispatchEvent(new MouseEvent("mouseup"));
+    const handle = wrapper.get('[aria-label="Resize row 3"]');
+    mockPointerCapture(handle.element);
+    dispatchPointer(handle.element, "pointerdown", { clientY: 100 });
+    dispatchPointer(window, "pointermove", { clientY: 140 });
+    dispatchPointer(window, "pointerup");
     await flushPromises();
     expect(server.resizeLines).toHaveBeenCalledExactlyOnceWith("t1", {
       axis: "row",
