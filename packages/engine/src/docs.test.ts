@@ -106,9 +106,9 @@ describe("array examples", () => {
     ],
     ["ARRAY_CONSTRAIN", [[1], [2]]],
     ["DROP", [["banana"], ["cherry"]]],
-    ["MAP", [["1 apple"], ["2 banana"], ["3 cherry"]]],
-    ["REDUCE", [[14]]],
-    ["BYROW", [["1-apple"], ["2-banana"], ["3-cherry"]]],
+    ["MAP", [["APPLE"], ["BANANA"], ["CHERRY"]]],
+    ["REDUCE", [[6]]],
+    ["BYROW", [[1], [2], [3]]],
     ["BYCOL", [[3, 3]]],
   ])("the %s example gives %j", (name, expected) => {
     const doc = functionDocs.find((candidate) => candidate.name === name);

@@ -168,6 +168,8 @@ Typing a formula offers the functions and names that match, with what each funct
 
 `SUBTOTAL` codes 1–11 select AVERAGE, COUNT, COUNTA, MAX, MIN, PRODUCT, STDEV, STDEVP, SUM, VAR_S, and VAR_P. Codes 101–111 select the same functions; filtered and hidden rows still count because row visibility only changes the display.
 
+`LAMBDA` makes a function value for `MAP`, `REDUCE`, `BYROW`, or `BYCOL`. These functions also accept a pure built-in function name: `MAP(B1:B3, UPPER)` applies `UPPER` to each cell, and `BYROW(A1:C3, SUM)` sums each row. A `LET` binding or a document name with that spelling takes precedence.
+
 Page, table, and column names in references ignore case. Names with spaces need single quotes.
 
 ### Actions

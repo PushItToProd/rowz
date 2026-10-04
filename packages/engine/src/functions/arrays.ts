@@ -1,4 +1,4 @@
-import { callLambda } from "../evaluate";
+import { callFunction } from "../evaluate";
 import {
   cellOrder,
   identityOf,
@@ -15,7 +15,7 @@ import {
   fail,
   grid,
   integer,
-  lambda,
+  functionValue,
   lazy,
   limitCells,
   number,
@@ -215,7 +215,7 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
    * each.
    */
   MAP: lazy(2, Infinity, (args, context) => {
-    const convert = lambda(args.at(-1)?.() ?? null);
+    const convert = functionValue(args.at(-1)?.() ?? null);
     const grids = args.slice(0, -1).map((arg) => grid(arg()));
     const [first = []] = grids;
     if (grids.some((rows) => rows.length !== first.length || width(rows) !== width(first))) {
@@ -225,7 +225,7 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
       first.map((cells, row) =>
         cells.map((_, col) =>
           element(() =>
-            callLambda(
+            callFunction(
               convert,
               grids.map((rows) => rows[row]?.[col] ?? null),
               context,
@@ -241,33 +241,33 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
    * cell in reading order, replaces it with `function(value so far, cell)`.
    */
   REDUCE: lazy(3, 3, ([initial, source, combine], context) => {
-    const step = lambda(combine?.() ?? null);
+    const step = functionValue(combine?.() ?? null);
     return grid(source?.() ?? null)
       .flat()
       .reduce<Evaluated>(
-        (soFar, cell) => callLambda(step, [soFar, cell], context),
+        (soFar, cell) => callFunction(step, [soFar, cell], context),
         initial?.() ?? null,
       );
   }),
 
   /** Calls a function on each row of a range and gives a column of the results. */
   BYROW: lazy(2, 2, ([source, convert], context) => {
-    const each = lambda(convert?.() ?? null);
+    const each = functionValue(convert?.() ?? null);
     return array(
       grid(source?.() ?? null).map((cells) => [
-        element(() => callLambda(each, [array([cells])], context)),
+        element(() => callFunction(each, [array([cells])], context)),
       ]),
     );
   }),
 
   /** Calls a function on each column of a range and gives a row of the results. */
   BYCOL: lazy(2, 2, ([source, convert], context) => {
-    const each = lambda(convert?.() ?? null);
+    const each = functionValue(convert?.() ?? null);
     const rows = grid(source?.() ?? null);
     return array([
       Array.from({ length: width(rows) }, (_, col) =>
         element(() =>
-          callLambda(each, [array(rows.map((cells) => [cells[col] ?? null]))], context),
+          callFunction(each, [array(rows.map((cells) => [cells[col] ?? null]))], context),
         ),
       ),
     ]);

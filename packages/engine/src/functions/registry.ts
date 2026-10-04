@@ -17,6 +17,8 @@ export interface PureFunction {
   kind: "pure";
   minArgs: number;
   maxArgs: number;
+  /** Whether applying a function value may evaluate all arguments before the call. */
+  callableAsValue: boolean;
   /** `context` is for the few functions that call a function passed to them, such as `MAP`. */
   call(args: readonly Argument[], context: EvaluationContext): Evaluated;
 }

@@ -14,12 +14,13 @@ import type { FunctionRegistry } from "./functions/registry";
 import {
   compare,
   isError,
+  isFunction,
   isLambda,
   isRange,
   toText,
   type CellValue,
   type Evaluated,
-  type LambdaValue,
+  type FunctionValue,
   type Scalar,
 } from "./values";
 
@@ -66,6 +67,10 @@ function arity(name: string, min: number, max: number): string {
   if (max === Infinity) return `${name} takes at least ${count(min)}`;
   if (min === max) return `${name} takes ${count(min)}`;
   return `${name} takes ${String(min)} to ${count(max)}`;
+}
+
+function checkArity(name: string, count: number, min: number, max: number): void {
+  if (count < min || count > max) fail("#ERROR!", arity(name, min, max));
 }
 
 /**
@@ -244,34 +249,48 @@ function elementwise(
 }
 
 /**
- * Calls a function made by `LAMBDA` with values for its parameters. The body
- * runs in the context the function was made in, with the parameters bound.
+ * Calls a function with evaluated arguments. A `LAMBDA` body or built-in call
+ * runs in the context where that function value was made.
  */
-export function callLambda(
-  lambda: LambdaValue,
+export function callFunction(
+  fn: FunctionValue,
   values: readonly Evaluated[],
   caller: EvaluationContext,
 ): Evaluated {
-  if (values.length !== lambda.params.length) {
-    fail("#ERROR!", arity("The function", lambda.params.length, lambda.params.length));
-  }
   const depth = (caller.depth ?? 0) + 1;
   if (depth > MAX_CALL_DEPTH) fail("#ERROR!", "Function calls are nested too deeply");
 
-  const names = new Map(lambda.context.names);
-  lambda.params.forEach((param, index) => names.set(param.toLowerCase(), values[index] ?? null));
-  return compute(lambda.body, { ...lambda.context, names, depth });
+  if (isLambda(fn)) {
+    if (values.length !== fn.params.length) {
+      fail("#ERROR!", arity("The function", fn.params.length, fn.params.length));
+    }
+    const names = new Map(fn.context.names);
+    fn.params.forEach((param, index) => names.set(param.toLowerCase(), values[index] ?? null));
+    return compute(fn.body, { ...fn.context, names, depth });
+  }
+
+  const definition = fn.context.functions.get(fn.name);
+  if (definition?.kind !== "pure" || !definition.callableAsValue) {
+    fail("#VALUE!", "This built-in function cannot be used as a value");
+  }
+  checkArity(fn.name, values.length, definition.minArgs, definition.maxArgs);
+  return returned(
+    definition.call(
+      values.map((value) => () => value),
+      { ...fn.context, depth },
+    ),
+  );
 }
 
-/** Calls whatever a value is, which must be a function made by `LAMBDA`. */
+/** Calls a function value with arguments read in the context of the call. */
 function applyValue(
   target: Evaluated,
   args: readonly Node[],
   context: EvaluationContext,
 ): Evaluated {
   if (isError(target)) throw new Failure(target);
-  if (!isLambda(target)) fail("#VALUE!", "Only a function made with LAMBDA can be called");
-  return callLambda(
+  if (!isFunction(target)) fail("#VALUE!", "Only a LAMBDA or built-in function can be called");
+  return callFunction(
     target,
     args.map((arg) => evaluate(arg, context)),
     context,
@@ -302,9 +321,7 @@ function call(name: string, args: readonly Node[], context: EvaluationContext): 
     if (named !== undefined) return applyValue(named, args, context);
     fail("#NAME?", `Unknown function ${name}`);
   }
-  if (args.length < definition.minArgs || args.length > definition.maxArgs) {
-    fail("#ERROR!", arity(name, definition.minArgs, definition.maxArgs));
-  }
+  checkArity(name, args.length, definition.minArgs, definition.maxArgs);
   switch (definition.kind) {
     case "action":
       return { kind: "action", name, args: [...args], origin: context.origin };
@@ -336,8 +353,20 @@ function compute(node: Node, context: EvaluationContext): Evaluated {
       const key = node.name.toLowerCase();
       if (context.names?.has(key)) return context.names.get(key) ?? null;
       const named = context.document?.bare(node.name);
-      if (named === undefined) fail("#NAME?", `Unknown name '${node.name}'`);
-      return named;
+      if (named !== undefined) return named;
+      const name = node.name.toUpperCase();
+      const definition = context.functions.get(name);
+      if (definition?.kind === "pure" && definition.callableAsValue) {
+        return { kind: "builtin", name, context };
+      }
+      if (definition?.kind === "pure") return fail("#NAME?", `Unknown name '${node.name}'`);
+      if (definition?.kind === "action") {
+        return fail("#VALUE!", "Action functions cannot be used as values");
+      }
+      if (definition?.kind === "special") {
+        return fail("#VALUE!", "Special forms cannot be used as values");
+      }
+      return fail("#NAME?", `Unknown name '${node.name}'`);
     }
     case "qualified":
       if (!context.document) fail("#NAME?", `Unknown name '${node.name}'`);

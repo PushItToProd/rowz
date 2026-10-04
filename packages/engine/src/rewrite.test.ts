@@ -238,6 +238,7 @@ describe("inputsAfterRename", () => {
       kind: "pure",
       minArgs: 0,
       maxArgs: 0,
+      callableAsValue: true,
       call: () => 7,
     };
     const functions: FunctionRegistry = new Map([...defaultFunctions, ["FOO", customFunction]]);

@@ -657,3 +657,13 @@ Together they make a form: inputs, a Save button that appends to a log table and
 **Why.** The functions are listed in the Rows catalog, but the local reference does not give their signatures or explain their results. Spreadsheet-compatible defaults make the helpers useful while keeping date serials and intervals consistent with this engine's time-zone-free date values.
 
 **To change.** `packages/engine/src/functions/dates.ts`, `packages/engine/src/functions/dates.test.ts`, and the help entries in `packages/engine/src/docs.ts` hold these behaviors.
+
+## 2026-10-04: Built-in functions as values
+
+**Decision.** A bare built-in function name evaluates to a function value when it is not bound by `LET` or `LAMBDA` and does not resolve to a document name or table. Only pure built-ins marked safe for eager argument evaluation are values. The `eager` helper marks them callable as values; `lazy` definitions and syntax-driven forms are not callable as values. The registered minimum and maximum arity is checked each time a higher-order function or an applied function calls one. A built-in function value keeps the evaluation context where its name was read.
+
+Action functions stay calls in the formula syntax and cannot be passed as function values. `LET` and `LAMBDA` stay syntax-driven special forms; higher-order functions receive evaluated values, which cannot preserve their name-binding behavior. Document name resolution runs before the built-in fallback, preserving tables and existing ambiguity errors when a table shares a built-in's spelling.
+
+**Why.** This lets `MAP`, `REDUCE`, `BYROW`, and `BYCOL` reuse the normal implementation and arity rules of pure functions while recalculation continues to describe actions without running them.
+
+**To change.** The `callableAsValue` flag on `PureFunction` in `packages/engine/src/functions/registry.ts`, its constructors in `packages/engine/src/functions/arguments.ts`, and `compute` and `callFunction` in `packages/engine/src/evaluate.ts` control which built-ins can be values. The function value types are in `packages/engine/src/values.ts`, and the higher-order functions are in `packages/engine/src/functions/arrays.ts`.

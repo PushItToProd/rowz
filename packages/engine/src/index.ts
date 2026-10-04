@@ -99,6 +99,7 @@ export {
   isRange,
   isControl,
   isError,
+  isFunction,
   isLambda,
   isMarkdown,
   isFormulaInput,
@@ -113,6 +114,8 @@ export {
   type ErrorValue,
   type SpillErrorDetails,
   type Evaluated,
+  type BuiltinFunctionValue,
+  type FunctionValue,
   type LambdaValue,
   type Scalar,
 } from "./values";

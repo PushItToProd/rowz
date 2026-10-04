@@ -305,6 +305,9 @@ describe("SEQUENCE, TRANSPOSE, TAKE, DROP, ROWS, COLUMNS", () => {
 describe("MAP, REDUCE, BYROW, BYCOL", () => {
   it.each<[string, CellValue[][]]>([
     ["=MAP(C1:C3, LAMBDA(n, n * 2))", [[24], [10], [80]]],
+    ["=MAP(A1:A3, UPPER)", [["BANANA"], ["APPLE"], ["CHERRY"]]],
+    ["=MAP(A:A, UPPER)", [["BANANA"], ["APPLE"], ["CHERRY"], ["APPLE"], ["DATE"]]],
+    ["=MAP(C1:C3, ROUND)", [[12], [5], [40]]],
     ['=MAP(A1:A2, C1:C2, LAMBDA(name, n, name & ": " & n))', [["banana: 12"], ["apple: 5"]]],
     ['=MAP(C1:C3, LAMBDA(n, IF(n > 10, "many", "few")))', [["many"], ["few"], ["many"]]],
     [
@@ -317,10 +320,13 @@ describe("MAP, REDUCE, BYROW, BYCOL", () => {
     ["=MAP(5, LAMBDA(n, n + 1))", [[6]]],
     ["=LET(double, LAMBDA(n, n * 2), MAP(C1:C2, double))", [[24], [10]]],
     ["=REDUCE(0, C1:C5, LAMBDA(total, n, total + n))", [[70]]],
+    ["=REDUCE(0, C1:C5, SUM)", [[70]]],
     ['=REDUCE("", A1:A3, LAMBDA(text, name, text & LEFT(name, 1)))', [["bac"]]],
     ["=REDUCE(100, C9:C9, LAMBDA(total, n, total + n))", [[100]]],
     ["=BYROW(SEQUENCE(2, 3), LAMBDA(row, SUM(row)))", [[6], [15]]],
+    ["=BYROW(A1:C3, SUM)", [[12], [5], [40]]],
     ["=BYCOL(SEQUENCE(2, 3), LAMBDA(col, MAX(col)))", [[4, 5, 6]]],
+    ["=BYCOL(A1:C3, COUNTA)", [[3, 3, 3]]],
     ["=SUM(MAP(C1:C5, LAMBDA(n, n * 2)))", [[140]]],
   ])("%s gives %j", (formula, expected) => {
     expect(run(formula)).toEqual(expected);
@@ -339,7 +345,11 @@ describe("MAP, REDUCE, BYROW, BYCOL", () => {
   });
 
   it.each([
-    ["=MAP(C1:C3, 5)", "#VALUE!", "Expected a function made with LAMBDA"],
+    [
+      "=MAP(C1:C3, 5)",
+      "#VALUE!",
+      "Expected a function made with LAMBDA or a built-in function name",
+    ],
     [
       "=MAP(C1:C3, C1:C2, LAMBDA(a, b, a + b))",
       "#VALUE!",
@@ -348,7 +358,8 @@ describe("MAP, REDUCE, BYROW, BYCOL", () => {
     ["=MAP(C1:C3, LAMBDA(a, b, a + b))", "#VALUE!", undefined],
     ["=REDUCE(0, C1:C3, LAMBDA(n, n))", "#ERROR!", "The function takes 1 argument"],
     ["=REDUCE(0, C1:C3, LAMBDA(total, n, total + 1/0))", "#DIV/0!", undefined],
-    ["=BYROW(C1:C3, SUM)", "#NAME?", undefined],
+    ["=BYROW(C1:C3, EXECUTE)", "#VALUE!", "Action functions cannot be used as values"],
+    ["=REDUCE(0, C1:C3, UPPER)", "#ERROR!", "UPPER takes 1 argument"],
   ])("%s is %s", (formula, code, message) => {
     if (formula.includes("LAMBDA(a, b, a + b))") && !formula.includes("C1:C2")) {
       // Each cell's call fails on its own, so the array is made of errors.

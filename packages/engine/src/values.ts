@@ -45,6 +45,16 @@ export interface LambdaValue {
   context: EvaluationContext;
 }
 
+/** A pure built-in function used as a value, such as the `UPPER` in `MAP(A:A, UPPER)`. */
+export interface BuiltinFunctionValue {
+  kind: "builtin";
+  name: string;
+  /** Functions such as `ROW` read the context in which the name appeared. */
+  context: EvaluationContext;
+}
+
+export type FunctionValue = LambdaValue | BuiltinFunctionValue;
+
 /** `null` is an empty cell. */
 export type Scalar = number | string | boolean | DateValue | null;
 
@@ -86,7 +96,7 @@ export type CellValue =
   | ErrorValue
   | ActionValue
   | ButtonValue
-  | LambdaValue
+  | FunctionValue
   | ControlValue
   | ChartValue
   | MarkdownValue;
@@ -123,6 +133,10 @@ export function isButton(value: unknown): value is ButtonValue {
 
 export function isLambda(value: unknown): value is LambdaValue {
   return hasKind(value, "lambda");
+}
+
+export function isFunction(value: unknown): value is FunctionValue {
+  return isLambda(value) || hasKind(value, "builtin");
 }
 
 export function isControl(value: unknown): value is ControlValue {
@@ -238,6 +252,7 @@ export function formatValue(value: CellValue): string {
   if (isAction(value)) return value.name;
   if (isButton(value)) return value.label;
   if (isLambda(value)) return `LAMBDA(${value.params.join(", ")})`;
+  if (isFunction(value)) return value.name;
   if (isControl(value)) return value.control === "checkbox" ? value.label : toText(value.value);
   if (isChart(value)) return value.title === "" ? `${value.chart} chart` : value.title;
   if (isMarkdown(value)) return value.text;

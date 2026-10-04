@@ -1,6 +1,6 @@
 import {
   isError,
-  isLambda,
+  isFunction,
   isRange,
   isScalar,
   toBoolean,
@@ -9,7 +9,7 @@ import {
   type CellValue,
   type ErrorValue,
   type Evaluated,
-  type LambdaValue,
+  type FunctionValue,
   type RangeValue,
   type Scalar,
 } from "../values";
@@ -82,10 +82,12 @@ export function array(rows: CellValue[][]): RangeValue {
   return { kind: "range", rows };
 }
 
-/** A function made by `LAMBDA`, which functions such as `MAP` take as an argument. */
-export function lambda(value: Evaluated): LambdaValue {
+/** A `LAMBDA` or pure built-in function, which higher-order functions can call. */
+export function functionValue(value: Evaluated): FunctionValue {
   const given = unwrap(value);
-  return isLambda(given) ? given : fail("#VALUE!", "Expected a function made with LAMBDA");
+  return isFunction(given)
+    ? given
+    : fail("#VALUE!", "Expected a function made with LAMBDA or a built-in function name");
 }
 
 /** A value fit to be one cell of an array. A failure becomes that cell's error, and a nested array its first value. */
@@ -101,7 +103,7 @@ export function element(compute: () => Evaluated): CellValue {
 
 /** Defines a function that receives its arguments unevaluated, to evaluate only the ones it needs. */
 export function lazy(minArgs: number, maxArgs: number, call: PureFunction["call"]): PureFunction {
-  return { kind: "pure", minArgs, maxArgs, call };
+  return { kind: "pure", minArgs, maxArgs, callableAsValue: false, call };
 }
 
 /**
@@ -113,7 +115,13 @@ export function eager(
   maxArgs: number,
   compute: (...values: Evaluated[]) => Evaluated,
 ): PureFunction {
-  return lazy(minArgs, maxArgs, (args) => compute(...args.map((arg) => arg())));
+  return {
+    kind: "pure",
+    minArgs,
+    maxArgs,
+    callableAsValue: true,
+    call: (args) => compute(...args.map((arg) => arg())),
+  };
 }
 
 interface Item {

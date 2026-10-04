@@ -1,6 +1,13 @@
-import { formatValue, isError, isLambda, isRange, type Evaluated } from "@spreadsheet-app/engine";
+import {
+  formatValue,
+  isError,
+  isFunction,
+  isLambda,
+  isRange,
+  type Evaluated,
+} from "@spreadsheet-app/engine";
 
-/** How a name's value is shown in one line: a range by its size, a function by its parameters. */
+/** How a name's value is shown in one line: a range by its size, a function by its name or parameters. */
 export function shown(value: Evaluated | undefined): { text: string; error?: string } {
   if (value === undefined) return { text: "" };
   if (isError(value)) return { text: value.code, error: value.message ?? value.code };
@@ -8,6 +15,10 @@ export function shown(value: Evaluated | undefined): { text: string; error?: str
     const cols = value.rows[0]?.length ?? 0;
     return { text: `${String(value.rows.length)} × ${String(cols)} values` };
   }
-  if (isLambda(value)) return { text: `function (${value.params.join(", ")})` };
+  if (isFunction(value)) {
+    return {
+      text: isLambda(value) ? `function (${value.params.join(", ")})` : `function ${value.name}`,
+    };
+  }
   return { text: formatValue(value) };
 }

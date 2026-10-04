@@ -769,30 +769,32 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Arrays",
     syntax: "MAP(range, ..., function)",
     summary:
-      "Calls a function on each cell and gives the results in the same arrangement. With several ranges of one size, the function receives one cell of each.",
-    example: 'MAP(A1:A3, B1:B3, LAMBDA(n, name, n & " " & name))',
+      "Calls a LAMBDA or pure built-in function on each cell and gives the results in the same arrangement. With several ranges of one size, the function receives one cell of each.",
+    example: "MAP(B1:B3, UPPER)",
   },
   {
     name: "REDUCE",
     category: "Arrays",
     syntax: "REDUCE(start, range, function)",
     summary:
-      "Folds a range into one value. The function receives the value so far and the next cell, and gives the new value so far.",
-    example: "REDUCE(0, A1:A3, LAMBDA(total, n, total + n * n))",
+      "Folds a range into one value. A LAMBDA or pure built-in function receives the value so far and the next cell.",
+    example: "REDUCE(0, A1:A3, SUM)",
   },
   {
     name: "BYROW",
     category: "Arrays",
     syntax: "BYROW(range, function)",
-    summary: "Calls a function on each row and gives a column of the results.",
-    example: 'BYROW(A1:B3, LAMBDA(row, TEXTJOIN("-", TRUE, row)))',
+    summary:
+      "Calls a LAMBDA or pure built-in function on each row and gives a column of the results.",
+    example: "BYROW(A1:B3, SUM)",
   },
   {
     name: "BYCOL",
     category: "Arrays",
     syntax: "BYCOL(range, function)",
-    summary: "Calls a function on each column and gives a row of the results.",
-    example: "BYCOL(A1:B3, LAMBDA(col, COUNTA(col)))",
+    summary:
+      "Calls a LAMBDA or pure built-in function on each column and gives a row of the results.",
+    example: "BYCOL(A1:B3, COUNTA)",
   },
   {
     name: "BAR_CHART",

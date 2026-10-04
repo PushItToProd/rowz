@@ -7,7 +7,7 @@ import {
   isControl,
   isDate,
   isError,
-  isLambda,
+  isFunction,
   isMarkdown,
   type CellFormat,
   type CellValue,
@@ -68,7 +68,7 @@ const kind = computed(() => {
   if (isButton(value)) return "button";
   if (isControl(value)) return value.control;
   if (isAction(value)) return "action";
-  if (isLambda(value)) return "function";
+  if (isFunction(value)) return "function";
   if (isChart(value)) return "chart";
   if (isMarkdown(value)) return "markdown";
   if (isError(value)) return "error";

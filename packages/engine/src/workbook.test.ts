@@ -267,6 +267,7 @@ describe("recalculation", () => {
       kind: "pure",
       minArgs: 2,
       maxArgs: 2,
+      callableAsValue: true,
       call([label, value]) {
         calls.push(label?.() as string);
         return value?.() ?? null;

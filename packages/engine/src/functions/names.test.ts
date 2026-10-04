@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { callFunction } from "../evaluate";
 import { formulasAfterEdit, inputsAfterRename } from "../rewrite";
 import { at, evaluateFormula, STRUCTURE, workbookWith } from "../testing";
-import { formatValue, isLambda, type CellValue } from "../values";
+import { formatValue, isFunction, isLambda, type CellValue } from "../values";
+import { Workbook } from "../workbook";
+import { defaultFunctions } from "./index";
 
 function expectError(formula: string, code: string, message?: string): void {
   const value = evaluateFormula(formula);
@@ -67,6 +70,9 @@ describe("LAMBDA", () => {
     ["=LAMBDA(X, x + X)(2)", 4],
     ["=LAMBDA(v, SUM(v))(A1:A3)", 6],
     ["=LET(fact, LAMBDA(self, n, IF(n <= 1, 1, n * self(self, n - 1))), fact(fact, 5))", 120],
+    ['=LET(f, UPPER, f("word"))', "WORD"],
+    ["=LET(f, ROUND, f(3.14159))", 3],
+    ["=LET(f, SUM, f(1, 2))", 3],
   ])("%s is %j", (formula, expected) => {
     expect(evaluateFormula(formula, { A1: "1", A2: "2", A3: "3" })).toBe(expected);
   });
@@ -79,8 +85,8 @@ describe("LAMBDA", () => {
     ["=LAMBDA(1, 2)", "#ERROR!", "LAMBDA needs a name here"],
     ["=LAMBDA(x, 1/x)(0)", "#DIV/0!", "Division by zero"],
     ["=LAMBDA(x, x)(1/0)", "#DIV/0!", "Division by zero"],
-    ["=5(1)", "#VALUE!", "Only a function made with LAMBDA can be called"],
-    ['=LET(f, "text", f(1))', "#VALUE!", "Only a function made with LAMBDA can be called"],
+    ["=5(1)", "#VALUE!", "Only a LAMBDA or built-in function can be called"],
+    ['=LET(f, "text", f(1))', "#VALUE!", "Only a LAMBDA or built-in function can be called"],
     ["=(1/0)(1)", "#DIV/0!", "Division by zero"],
     ["=nothing(1)", "#NAME?", "Unknown function NOTHING"],
     ["=LAMBDA(x, x) + 1", "#VALUE!", "Expected a single value"],
@@ -97,6 +103,61 @@ describe("LAMBDA", () => {
     const value = evaluateFormula("=LAMBDA(Price, qty, Price * qty)");
     expect(isLambda(value)).toBe(true);
     expect(formatValue(value)).toBe("LAMBDA(Price, qty)");
+  });
+
+  it("evaluates a bare pure built-in name to a function value", () => {
+    const value = evaluateFormula("=UPPER");
+    expect(isFunction(value)).toBe(true);
+    expect(formatValue(value)).toBe("UPPER");
+  });
+
+  it("does not expose lazy built-ins as function values", () => {
+    for (const [name, definition] of defaultFunctions) {
+      if (definition.kind === "pure" && !definition.callableAsValue) {
+        expectError(`=${name}`, "#NAME?", `Unknown name '${name}'`);
+      }
+    }
+    expectError("=LET(f, IFERROR, f(1/0, 2))", "#NAME?", "Unknown name 'IFERROR'");
+  });
+
+  it("counts calls to a built-in function value toward the call-depth limit", () => {
+    const value = evaluateFormula("=UPPER");
+    if (!isFunction(value)) throw new Error("UPPER did not evaluate to a function value");
+    expect(() => callFunction(value, ["word"], { ...value.context, depth: 200 })).toThrow(
+      "Function calls are nested too deeply",
+    );
+  });
+
+  it("lets a LET binding shadow a built-in function name", () => {
+    expect(evaluateFormula('=LET(UPPER, "local", UPPER)')).toBe("local");
+    const workbook = workbookWith({
+      t1: {
+        B1: "apple",
+        B2: "banana",
+        D1: '=LET(UPPER, LAMBDA(value, value & "!"), MAP(B1:B2, UPPER))',
+      },
+    });
+    expect(workbook.getArray(at("D1"))).toEqual([["apple!"], ["banana!"]]);
+  });
+
+  it("resolves a table named after a built-in before making a function value", () => {
+    const workbook = new Workbook();
+    workbook.setStructure({
+      ...STRUCTURE,
+      tables: STRUCTURE.tables.map((table) =>
+        table.id === "t1" ? { ...table, name: "UPPER" } : table,
+      ),
+    });
+    workbook.setCell(at("A1"), "one");
+    workbook.setCell(at("A2"), "two");
+    workbook.setCell(at("A1", "t2"), "=ROWS(UPPER)");
+    workbook.setCell(at("A2", "t2"), "=MAP(SEQUENCE(2), UPPER)");
+    expect(workbook.getValue(at("A1", "t2"))).toBe(2);
+    expect(workbook.getValue(at("A2", "t2"))).toMatchObject({
+      kind: "error",
+      code: "#VALUE!",
+      message: "Expected a function made with LAMBDA or a built-in function name",
+    });
   });
 });
 
