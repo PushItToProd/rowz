@@ -617,3 +617,5 @@ Together they make a form: inputs, a Save button that appends to a log table and
 - Conditional rules follow inserted and deleted rows and columns as plain format rules do.
 
 **To change.** `packages/engine/src/conditional.ts`, `setConditionalFormats` in `apps/server/src/repo/spreadsheets.ts`, and `formatOf` in the workbook store.
+
+- The text functions `SLICE`, `SLUGIFY`, `DECODEURL`, `BASE64`, `BASE64DECODE`, `DOMAIN`, and `RELATIVE_URL` have inferred semantics because `docs/rows-functions.md` gave none: `SLICE` is zero-based and end-exclusive with negative indices from the end, `DOMAIN` returns the hostname without a port, and `RELATIVE_URL` returns path, query, and fragment. Please check them against Rows.
