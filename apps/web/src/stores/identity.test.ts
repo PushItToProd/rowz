@@ -205,18 +205,18 @@ describe("identity and revision ordering", () => {
     expect(store.isRunning(at("A2"))).toBe(false);
   });
 
-  it("captures the original revision for a draft saved after a remote insertion", async () => {
+  it("saves an unchanged formula draft to its moved target after a remote insertion", async () => {
     const store = await open();
     const identity = store.identityOf(at("A2"))!;
     const revision = store.revision;
     await store.receiveChange(inserted());
-    server.setCells.mockRejectedValueOnce(
-      Object.assign(new Error("The structure changed"), { code: "stale_formula" }),
+    server.setCells.mockImplementationOnce((tableId, cells) =>
+      Promise.resolve(changeWith({ cells: cells.map((cell) => ({ tableId, ...cell })) }, 2)),
     );
     await store.setIdentifiedCell(identity, "=A1", revision);
     expect(server.setCells.mock.calls[0]?.[3]).toBe(0);
-    expect(store.inputOf(at("A3"))).toBe("");
-    expect(store.rejectedDraft).toEqual({ id: identity, input: "=A1", revision: 0 });
+    expect(store.inputOf(at("A3"))).toBe("=A1");
+    expect(store.rejectedDraft).toBeNull();
   });
 
   it("uses the paste's initial revision for every batch", async () => {

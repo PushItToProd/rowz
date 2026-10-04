@@ -67,7 +67,11 @@ function extensions() {
     tokens,
     EditorState.readOnly.of(props.readonly),
     EditorView.editable.of(!props.readonly),
-    EditorView.contentAttributes.of({ "aria-label": props.label, "aria-multiline": "false" }),
+    EditorView.contentAttributes.of({
+      "aria-label": props.label,
+      "aria-multiline": "false",
+      tabindex: "0",
+    }),
     EditorState.transactionFilter.of((transaction) => {
       if (!transaction.docChanged) return transaction;
       if (props.readonly) return [];
@@ -162,7 +166,8 @@ function extensions() {
           key: "Escape",
           run: (editor) => {
             if (editor.composing) return false;
-            if (closeCompletion(editor)) return true;
+            if (completionStatus(editor.state) === "active" && closeCompletion(editor)) return true;
+            closeCompletion(editor);
             if (!props.readonly) emit("cancel");
             return true;
           },

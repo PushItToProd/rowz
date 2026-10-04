@@ -37,6 +37,43 @@ const namesOf = async (spreadsheetId: string, tableId: string) =>
   (await readSnapshot(user, spreadsheetId)).tables.find((table) => table.id === tableId)?.names;
 
 describe("names a table holds", () => {
+  it("updates a named formula by case-insensitive name and preserves current entries", async () => {
+    const { spreadsheetId, tableId } = await sheetWith([
+      { name: "Total", formula: "1" },
+      { name: "TaxRate", formula: "2" },
+    ]);
+    await user.json("PUT", `/tables/${tableId}/names`, {
+      names: [
+        { name: "Added", formula: "3" },
+        { name: "TAXRATE", formula: "4" },
+        { name: "TOTAL", formula: "theirs" },
+      ],
+    });
+    await user.json("PATCH", `/tables/${tableId}/names/total`, { formula: " B2 + 1 " });
+    expect(await namesOf(spreadsheetId, tableId)).toEqual([
+      { name: "Added", formula: "3" },
+      { name: "TAXRATE", formula: "4" },
+      { name: "TOTAL", formula: " B2 + 1 " },
+    ]);
+  });
+
+  it("does not recreate a renamed or deleted target or write to its former position", async () => {
+    const { spreadsheetId, tableId } = await sheetWith([{ name: "Total", formula: "1" }]);
+    await user.json("PUT", `/tables/${tableId}/names`, {
+      names: [{ name: "Replacement", formula: "keep" }],
+    });
+    expect(
+      await user.json("PATCH", `/tables/${tableId}/names/Total`, { formula: "B2" }, 404),
+    ).toMatchObject({ error: { code: "not_found" } });
+    expect(await namesOf(spreadsheetId, tableId)).toEqual([
+      { name: "Replacement", formula: "keep" },
+    ]);
+    await user.json("PUT", `/tables/${tableId}/names`, { names: [] });
+    await user.json("PATCH", `/tables/${tableId}/names/Total`, { formula: "B2" }, 404);
+    expect(await namesOf(spreadsheetId, tableId)).toEqual([]);
+    await user.json("DELETE", `/tables/${tableId}`);
+    await user.json("PATCH", `/tables/${tableId}/names/Total`, { formula: "B2" }, 404);
+  });
   it("are stored with the table and replaced as a list", async () => {
     const { spreadsheetId, tableId } = await sheetWith([{ name: "Corner", formula: "A1" }]);
     expect(await namesOf(spreadsheetId, tableId)).toEqual([{ name: "Corner", formula: "A1" }]);

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type Router, type RouterHistory } from "vue-router";
 import { useSessionStore } from "./stores/session";
+import { useFormulaSessionStore } from "./formula/session";
 import AuthView from "./views/AuthView.vue";
 import EditorView from "./views/EditorView.vue";
 import HelpView from "./views/HelpView.vue";
@@ -24,7 +25,19 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
   const SIGNED_OUT_ONLY = new Set(["login", "signup"]);
   /** Pages anyone can open. */
   const OPEN = new Set(["help"]);
-  router.beforeEach(async (to) => {
+  router.beforeEach(async (to, from) => {
+    const formulas = useFormulaSessionStore();
+    if (
+      formulas.active &&
+      from.name === "editor" &&
+      (to.name !== "editor" || to.params.spreadsheetId !== from.params.spreadsheetId)
+    ) {
+      if (!window.confirm("Leave this spreadsheet and discard the unsaved formula draft?")) {
+        formulas.focus();
+        return false;
+      }
+      if (!formulas.cancel()) return false;
+    }
     const name = typeof to.name === "string" ? to.name : "";
     if (OPEN.has(name)) return true;
     const user = await useSessionStore().load();

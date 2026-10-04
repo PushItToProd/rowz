@@ -13,6 +13,8 @@ import {
   setTableNamesBody,
   structuralEditBody,
   tableParam,
+  tableNameParam,
+  updateNamedFormulaBody,
   updateColumnBody,
   updateTableBody,
 } from "@spreadsheet-app/shared";
@@ -29,6 +31,17 @@ import { onInvalid, type Env } from "../http";
 export function tableRoutes(dependencies: ActionDependencies) {
   return (
     new Hono<Env>()
+      .patch(
+        "/:tableId/names/:name",
+        zValidator("param", tableNameParam, onInvalid),
+        zValidator("json", updateNamedFormulaBody, onInvalid),
+        async (c) => {
+          const { tableId, name } = c.req.valid("param");
+          return c.json(
+            await c.var.repository.updateNamedFormula(tableId, name, c.req.valid("json").formula),
+          );
+        },
+      )
       .patch(
         "/:tableId",
         zValidator("param", tableParam, onInvalid),

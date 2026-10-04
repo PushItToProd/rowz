@@ -30,7 +30,7 @@ const unused = computed(() =>
 /** Whether the bar has anything to show to someone who cannot edit. */
 const active = computed(() => keys.value.length > 0 || filter.value !== "");
 
-/** The revision the filter was started at, which the server compares with the last rewrite. */
+/** Compatibility revision captured for requests from the legacy filter input. */
 let writtenAt = 0;
 
 function save(next: { sort: SortKey[]; filter: string }, revision = store.revision): void {

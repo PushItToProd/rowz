@@ -229,14 +229,16 @@ export const setTableNamesBody = z.object({
   names: z.array(tableName).max(LIMITS.tableNames),
 });
 
+export const updateNamedFormulaBody = z.object({
+  formula: z
+    .string()
+    .max(LIMITS.inputLength)
+    .refine((text) => text.trim() !== "", { message: "Give a formula" }),
+});
+
 export const makeColumnsBody = z.object({ headerRow: z.boolean() });
 
-/**
- * The revision of the spreadsheet a tab had applied when the person began to
- * write a formula. The server refuses the formula when rows or columns have
- * been inserted or deleted, or something renamed or moved, since then: its
- * references were written against a spreadsheet that has changed.
- */
+/** Accepted for older clients; formula writes no longer depend on a starting revision. */
 const writtenAt = z.int().min(0).optional();
 
 export const updateColumnBody = z
@@ -259,15 +261,6 @@ export const updateColumnBody = z
   )
   .refine((body) => body.choices === undefined || body.choicesFrom === undefined, {
     message: "Give choices or choicesFrom, not both",
-  })
-  .superRefine((body, context) => {
-    if (body.formula !== undefined && body.revision === undefined) {
-      context.addIssue({
-        code: "custom",
-        path: ["revision"],
-        message: "A revision is required when writing a formula",
-      });
-    }
   });
 
 /** Sort keys one table has. More than this is not a sort a person chooses by hand. */
@@ -277,29 +270,18 @@ const sortKey = z.object({ colId: z.uuid(), descending: z.boolean() });
 
 /**
  * How a data table's rows are shown, all of it: the sort and filter replace
- * the table's. A filter is a formula, so the request carries the revision it
- * was written at, like any other formula.
+ * the table's. Filters are submitted literally against the current document.
  */
-export const setTableDisplayBody = z
-  .object({
-    sort: z
-      .array(sortKey)
-      .max(MAX_SORT_KEYS)
-      .refine((keys) => new Set(keys.map(({ colId }) => colId)).size === keys.length, {
-        message: "A column can be a sort key once",
-      }),
-    filter: z.string().trim().max(LIMITS.inputLength).optional(),
-    revision: writtenAt,
-  })
-  .superRefine((body, context) => {
-    if (body.filter !== undefined && body.filter !== "" && body.revision === undefined) {
-      context.addIssue({
-        code: "custom",
-        path: ["revision"],
-        message: "A revision is required when writing a filter",
-      });
-    }
-  });
+export const setTableDisplayBody = z.object({
+  sort: z
+    .array(sortKey)
+    .max(MAX_SORT_KEYS)
+    .refine((keys) => new Set(keys.map(({ colId }) => colId)).size === keys.length, {
+      message: "A column can be a sort key once",
+    }),
+  filter: z.string().trim().max(LIMITS.inputLength).optional(),
+  revision: writtenAt,
+});
 
 /**
  * An insert or delete of rows or columns as the editor asks for it, by
@@ -370,17 +352,6 @@ export const setCellsBody = z
   })
   .refine((body) => body.cells.length + (body.appendRows?.length ?? 0) > 0, {
     message: "Give at least one cell or row",
-  })
-  .superRefine((body, context) => {
-    // Keep the shared request schema independent of the formula engine.
-    const writesFormula = body.cells.some(({ input }) => input.startsWith("=") && input.length > 1);
-    if (writesFormula && body.revision === undefined) {
-      context.addIssue({
-        code: "custom",
-        path: ["revision"],
-        message: "A revision is required when writing a formula",
-      });
-    }
   });
 
 /** A value chosen through a checkbox or dropdown. */
@@ -407,15 +378,6 @@ export const updateViewBody = z
   })
   .refine((body) => [body.name, body.source, body.chartType].some((given) => given !== undefined), {
     message: "Give at least one of name, source, chartType",
-  })
-  .superRefine((body, context) => {
-    if (body.source !== undefined && body.revision === undefined) {
-      context.addIssue({
-        code: "custom",
-        path: ["revision"],
-        message: "A revision is required when changing a view source",
-      });
-    }
   });
 
 export const viewParam = z.object({ viewId: z.uuid() });
@@ -716,6 +678,7 @@ export const memberParam = z.object({
 export const versionParam = z.object({ spreadsheetId: z.uuid(), versionId: z.uuid() });
 export const pageParam = z.object({ pageId: z.uuid() });
 export const tableParam = z.object({ tableId: z.uuid() });
+export const tableNameParam = tableParam.extend({ name: z.string().min(1).max(LIMITS.nameLength) });
 export const columnParam = z.object({
   tableId: z.uuid(),
   colId: z.uuid(),

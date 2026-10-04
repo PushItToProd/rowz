@@ -677,3 +677,13 @@ Action functions stay calls in the formula syntax and cannot be passed as functi
 **Why.** This lets `MAP`, `REDUCE`, `BYROW`, and `BYCOL` reuse the normal implementation and arity rules of pure functions while recalculation continues to describe actions without running them.
 
 **To change.** The `callableAsValue` flag on `PureFunction` in `packages/engine/src/functions/registry.ts`, its constructors in `packages/engine/src/functions/arguments.ts`, and `compute` and `callFunction` in `packages/engine/src/evaluate.ts` control which built-ins can be values. The function value types are in `packages/engine/src/values.ts`, and the higher-order functions are in `packages/engine/src/functions/arrays.ts`.
+
+## 2026-10-04: Shared formula drafts and named-formula saves
+
+**Decision.** Chart sources are the first existing input to use the shared CodeMirror session. Each session has one active field; another field for the same target takes ownership of the existing state without saving. Unmounting the owning field retains the draft in the editor dock. Ordinary control actions wait for submission, and failed saves retain focus without replaying the blocked action after cancellation.
+
+Named-formula submission uses a targeted PATCH request with the table ID and case-insensitive name. The repository finds that name in the current table under the spreadsheet lock and changes only its formula. A missing name returns 404 instead of recreating it from an older client list. The existing PUT endpoint remains available for list edits.
+
+**Why.** One editor per session avoids competing CodeMirror state updates and preserves history during focus transfers. Targeted named-formula updates preserve intervening changes to other names and implement the plan's deleted-target behavior.
+
+**To change.** `apps/web/src/formula/session.ts`, `SessionFormulaField.vue`, `FormulaSessionHost.vue`, and the draft submission adapter in the workbook store implement the editing flow. `updateNamedFormula` in `apps/server/src/repo/spreadsheets.ts` and its table route implement the targeted save.

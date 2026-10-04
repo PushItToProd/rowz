@@ -21,6 +21,7 @@ import {
 } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
+import { useFormulaSessionStore } from "../formula/session";
 import { cellStyle } from "../formatStyle";
 import { contains, fillTarget, type GridRange } from "../formula/fill";
 import type { MenuScope } from "./menu";
@@ -284,7 +285,7 @@ function resetSize(axis: Axis, index: number): void {
 function onColumnMousedown(event: MouseEvent, col: number): void {
   if (event.target instanceof HTMLInputElement) return;
   event.preventDefault();
-  onHeaderMousedown(event, "col", col);
+  void onHeaderMousedown(event, "col", col);
 }
 
 /**
@@ -292,7 +293,24 @@ function onColumnMousedown(event: MouseEvent, col: number): void {
  * selects the rows or columns it crosses. With Shift, the press selects from
  * the selected cell's row or column to this one.
  */
-function onHeaderMousedown(event: MouseEvent, axis: Axis, index: number): void {
+async function onHeaderMousedown(event: MouseEvent, axis: Axis, index: number): Promise<void> {
+  if (event.button !== 0) return;
+  const sessions = useFormulaSessionStore();
+  if (sessions.active) {
+    event.preventDefault();
+    const id = lineId(axis, index);
+    if (!(await sessions.submit(store.submitFormulaDraft))) {
+      sessions.focus();
+      return;
+    }
+    const storedIndex =
+      axis === "row"
+        ? props.table.rows.findIndex((row) => row.id === id)
+        : props.table.colIds.findIndex((colId) => colId === id);
+    const place = axis === "row" ? view.value.place(storedIndex) : storedIndex;
+    if (place !== undefined && place >= 0) selectLines(axis, place, place);
+    return;
+  }
   const from = event.shiftKey && selectedPlace.value ? selectedPlace.value[axis] : index;
   selectLines(axis, from, index);
   drag.value = { kind: "lines", axis, from };
@@ -345,9 +363,22 @@ function selectAll(): void {
  * selected first, so the menu acts on what was clicked. A viewer gets the
  * browser's own menu.
  */
-function onCellContextMenu(event: MouseEvent, row: number, col: number): void {
+async function onCellContextMenu(event: MouseEvent, row: number, col: number): Promise<void> {
   if (!store.canEdit) return;
   event.preventDefault();
+  const sessions = useFormulaSessionStore();
+  if (sessions.active) {
+    const target = store.identityOf(cellAt(row, col));
+    if (!(await sessions.submit(store.submitFormulaDraft))) {
+      sessions.focus();
+      return;
+    }
+    const position = target && store.positionOf(target);
+    const place = position && view.value.place(position.row);
+    if (!position || place === undefined) return;
+    row = place;
+    col = position.col;
+  }
   if (!inRange(row, col)) select(row, col);
   focusGrid();
   emit("menu", { x: event.clientX, y: event.clientY, scope: "cells" });
@@ -357,9 +388,24 @@ function onCellContextMenu(event: MouseEvent, row: number, col: number): void {
  * Opens the menu for a right-clicked header. A row or column outside the
  * rows or columns selected whole is selected first.
  */
-function onHeaderContextMenu(event: MouseEvent, axis: Axis, index: number): void {
+async function onHeaderContextMenu(event: MouseEvent, axis: Axis, index: number): Promise<void> {
   if (!store.canEdit) return;
   event.preventDefault();
+  const sessions = useFormulaSessionStore();
+  if (sessions.active) {
+    const id = lineId(axis, index);
+    if (!(await sessions.submit(store.submitFormulaDraft))) {
+      sessions.focus();
+      return;
+    }
+    const storedIndex =
+      axis === "row"
+        ? props.table.rows.findIndex((row) => row.id === id)
+        : props.table.colIds.findIndex((colId) => colId === id);
+    const place = axis === "row" ? view.value.place(storedIndex) : storedIndex;
+    if (place === undefined || place < 0) return;
+    index = place;
+  }
   if (!isLineSelected(axis, index)) selectLines(axis, index, index);
   emit("menu", { x: event.clientX, y: event.clientY, scope: axis });
 }
@@ -436,8 +482,23 @@ function onCellClick(): void {
   tapOnSelected = false;
 }
 
-function onCellMousedown(event: MouseEvent, place: number, col: number): void {
+async function onCellMousedown(event: MouseEvent, place: number, col: number): Promise<void> {
   if (event.button !== 0) return;
+  const sessions = useFormulaSessionStore();
+  if (sessions.active) {
+    event.preventDefault();
+    const target = store.identityOf(cellAt(place, col));
+    if (!(await sessions.submit(store.submitFormulaDraft))) {
+      sessions.focus();
+      return;
+    }
+    const position = target && store.positionOf(target);
+    if (position) {
+      store.selection = position;
+      focusGrid();
+    }
+    return;
+  }
   store.resetTabTraversal();
   if (event.shiftKey && selected.value) {
     const end = stored({ row: place, col });

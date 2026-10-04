@@ -522,6 +522,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await page.getByRole("button", { name: "Add chart" }).last().click();
   const chart = page.locator('[data-view="Chart 1"]');
   await expect(chart).toContainText("Enter the cells to chart");
+  await chart.getByLabel("Chart data").click();
   await chart.getByLabel("Chart data").fill("'Table 1'!A1:B2");
   await chart.getByLabel("Chart data").press("Enter");
   await expect(chart.locator(".chart__bar")).toHaveCount(2);
@@ -626,6 +627,7 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await enter(page, "B2", "=B1*2");
   await page.getByRole("button", { name: "Add chart" }).last().click();
   const chart = page.locator('[data-view="Chart 1"]');
+  await chart.getByLabel("Chart data").click();
   await chart.getByLabel("Chart data").fill("'Table 1'!A1:B2");
   await chart.getByLabel("Chart data").press("Enter");
   await expect(chart.locator(".chart__bar")).toHaveCount(2);
@@ -1368,6 +1370,64 @@ test("saving a script does not scroll to the selected cell", async ({ page }) =>
   });
   await expect(script.locator(".script")).toContainText("42");
   await expect(cell(page, "A1")).not.toBeInViewport();
+});
+
+test("chart drafts keep their original target while browsing pages and block actions on failed saves", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add page", exact: true }).click();
+  const pages = page.getByRole("navigation", { name: "Pages" });
+  await expect(pages.locator('[aria-current="page"]')).toContainText("Page 2");
+  await pages.getByText("Page 1", { exact: true }).click();
+  await expect(pages.locator('[aria-current="page"]')).toContainText("Page 1");
+  await page.getByRole("button", { name: "Add chart", exact: true }).last().click();
+  const chart = page.locator('[data-view="Chart 1"]');
+  let writes = 0;
+  let copies = 0;
+  let fail = true;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/copy")) copies += 1;
+  });
+  await page.route("**/api/views/*", async (route) => {
+    if (route.request().method() !== "PATCH") {
+      await route.continue();
+      return;
+    }
+    writes += 1;
+    if (fail)
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "test_failure", message: "Offline" } }),
+      });
+    else await route.continue();
+  });
+  await chart.getByLabel("Chart data").click();
+  await chart.getByLabel("Chart data").fill("SUM(1, 2)");
+  await expect(chart.locator(".formula-token--identifier").first()).toHaveText("SUM");
+  expect(writes).toBe(0);
+  await pages.getByText("Page 2", { exact: true }).click();
+  expect(writes).toBe(0);
+  const dock = page.locator(".formula-session-fallback");
+  await expect(dock).toContainText("Page 1 · Chart 1 · Chart data");
+  await expect(dock.locator(".cm-content")).toHaveText("SUM(1, 2)");
+  expect(writes).toBe(0);
+  await dock.getByRole("button", { name: "Return to editor" }).click();
+  await expect(chart.getByLabel("Chart data")).toBeFocused();
+  await expect(chart.getByLabel("Chart data")).toHaveText("SUM(1, 2)");
+  expect(writes).toBe(0);
+  const original = page.url();
+  await page.getByRole("button", { name: "Save a copy", exact: true }).click();
+  await expect(chart.getByRole("alert")).toHaveText("Offline");
+  await expect(chart.getByLabel("Chart data")).toBeFocused();
+  expect(page.url()).toBe(original);
+  expect(copies).toBe(0);
+  fail = false;
+  await chart.getByLabel("Chart data").press("Enter");
+  await expect(chart.locator(".cm-editor")).toHaveCount(0);
+  await expect(chart.getByLabel("Chart data")).toHaveValue("SUM(1, 2)");
+  expect(copies).toBe(0);
 });
 
 test("errors stay visible across pages and in the document list", async ({ page }) => {

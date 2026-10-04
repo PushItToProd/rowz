@@ -299,6 +299,7 @@ export function mockApi(): MockedApi {
     resizeLines: vi.fn(),
     setConditionalFormats: vi.fn(),
     setTableNames: vi.fn(),
+    updateNamedFormula: vi.fn(),
     nameColumns: vi.fn(),
     dropColumns: vi.fn(),
     updateColumn: vi.fn(),

@@ -38,7 +38,7 @@ The aim is to do what a traditional spreadsheet does, and do it better. I build 
 - **Charts:** four kinds, with no axis titles, colors, or stacking.
 - **Files:** rowz does not open or save Excel files. It has no layout for printing.
 - **Dates:** there are no time zones, and numbers and dates are written one way whatever the reader's locale.
-- **Working together:** edits made at the same moment are not merged. Open sessions see each other's changes within a second, and the last write to a cell wins. Saves, clicks, and control inputs follow their row and column IDs across insertions; a deleted row or column refuses the request. A formula typed against an older structure is refused, and its draft is kept for correction. This check currently covers structural changes anywhere in the document. There are no comments on cells and no protected ranges. A document can be shared only with someone who already has an account.
+- **Working together:** edits made at the same moment are not merged. Open sessions see each other's changes within a second, and the last write to a cell wins. Saves, clicks, and control inputs follow their row and column IDs across insertions; a deleted row or column refuses the request. Formulas are saved exactly as submitted against the current document, even if its structure changed while they were being typed. There are no comments on cells and no protected ranges. A document can be shared only with someone who already has an account.
 - **Size:** a document holds at most 100,000 filled cells and 100,000 rows across its tables.
 
 ### Known spreadsheet flaws

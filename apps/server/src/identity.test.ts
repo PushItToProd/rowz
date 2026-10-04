@@ -321,6 +321,29 @@ describe("rows a save adds", () => {
 });
 
 describe("a formula written before rows or columns changed", () => {
+  it("saves =B2 from B7 in the same target at B8 after a row is inserted", async () => {
+    const owner = await server.signUp();
+    const snapshot = await createSpreadsheet(owner);
+    const table = snapshot.tables[0]!;
+    const rows = rowIds(snapshot, table.id);
+    const rowId = rows[6]!;
+    const colId = table.colIds[1]!;
+    await owner.json("POST", `/tables/${table.id}/edits`, {
+      axis: "row",
+      kind: "insert",
+      beforeId: rows[1],
+      ids: [randomUUID()],
+    });
+    // Another writer has changed the target since the draft was started.
+    await owner.json("PUT", `/tables/${table.id}/cells`, {
+      cells: [{ rowId, colId, input: "theirs" }],
+    });
+    await owner.json("PUT", `/tables/${table.id}/cells`, {
+      cells: [{ rowId, colId, input: "=B2" }],
+      revision: snapshot.revision,
+    });
+    expect(await storedInputs(owner, snapshot.id, table.id)).toEqual({ "7:1": "=B2" });
+  });
   async function start() {
     const owner = await server.signUp();
     const snapshot = await createSpreadsheet(owner);
@@ -340,16 +363,16 @@ describe("a formula written before rows or columns changed", () => {
         kind: "insert",
         index: 0,
       });
-    const stale = { error: { code: "stale_formula" } };
-    return { owner, snapshot, table, other, save, insertRow, stale };
+    return { owner, snapshot, table, other, save, insertRow };
   }
 
-  it("is refused, while a value written then is stored", async () => {
-    const { snapshot, table, owner, other, save, insertRow, stale } = await start();
+  it("is accepted literally at the original target's new position", async () => {
+    const { snapshot, table, owner, other, save, insertRow } = await start();
     const opened = snapshot.revision;
     // The table holds no formula, and the insert still changes what A6 means.
     const { revision } = await insertRow();
-    expect(await save("=A6", opened, 409)).toMatchObject(stale);
+    await save("=A6", opened);
+    expect(await storedInputs(owner, snapshot.id, table.id)).toEqual({ "1:0": "=A6" });
     await save("typed", opened);
     expect(await storedInputs(owner, snapshot.id, table.id)).toEqual({ "1:0": "typed" });
 
@@ -358,20 +381,19 @@ describe("a formula written before rows or columns changed", () => {
     expect(await storedInputs(owner, snapshot.id, table.id)).toMatchObject({ "1:1": "=A6" });
   });
 
-  it("allows formulas after value changes, but requires a known revision", async () => {
-    const { snapshot, save, stale } = await start();
+  it("accepts omitted, old, and future revisions and lets the last submitter win", async () => {
+    const { snapshot, table, owner, save } = await start();
     await save("typed", undefined);
     await save("=A6", snapshot.revision);
-    expect(await save("=A7", undefined, 400)).toMatchObject({
-      error: { code: "invalid_request" },
-    });
-    expect(await save("=A8", snapshot.revision + 100, 409)).toMatchObject(stale);
+    await save("=A7", undefined);
+    await save("=A8", snapshot.revision + 100);
+    expect(await storedInputs(owner, snapshot.id, table.id)).toEqual({ "0:0": "=A8" });
   });
 
-  it("is refused after a rename and a move too", async () => {
-    const { owner, snapshot, table, save, stale } = await start();
+  it("is accepted literally after renames and moves", async () => {
+    const { owner, snapshot, table, save } = await start();
     const renamed = await owner.json<Change>("PATCH", `/tables/${table.id}`, { name: "Sales" });
-    expect(await save("=Sales!A1", snapshot.revision, 409)).toMatchObject(stale);
+    await save("=Sales!A1", snapshot.revision);
     const { page } = await owner.json<{ page: { id: string } }>(
       "POST",
       `/spreadsheets/${snapshot.id}/pages`,
@@ -380,11 +402,12 @@ describe("a formula written before rows or columns changed", () => {
     );
     const view = await addView(owner, snapshot.pages[0]!.id);
     await owner.json("PUT", `/views/${view.id}/page`, { pageId: page.id });
-    expect(await save("=Sales!A1", renamed.revision + 2, 409)).toMatchObject(stale);
+    await save("=Sales!A1", renamed.revision + 2);
+    expect(await storedInputs(owner, snapshot.id, table.id)).toEqual({ "0:0": "=Sales!A1" });
   });
 
-  it("is refused as the formula of a formula column and as the source of a view", async () => {
-    const { owner, snapshot, table, insertRow, stale } = await start();
+  it("accepts column formulas and view sources without a current revision", async () => {
+    const { owner, snapshot, table, insertRow } = await start();
     await owner.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "1" }));
     await owner.json("POST", `/tables/${table.id}/columns`, { headerRow: false });
     const view = await addView(owner, snapshot.pages[0]!.id);
@@ -393,19 +416,17 @@ describe("a formula written before rows or columns changed", () => {
 
     const column = `/tables/${table.id}/columns/${table.colIds[1]!}`;
     const formula = { type: "formula", formula: "=A1" };
-    expect(
-      await owner.json("PATCH", column, { ...formula, revision: opened.revision }, 409),
-    ).toMatchObject(stale);
+    await owner.json("PATCH", column, { ...formula, revision: opened.revision });
     // A change that writes no formula is not checked.
     await owner.json("PATCH", column, { name: "Renamed", revision: opened.revision });
     await owner.json("PATCH", column, { ...formula, revision: revision + 1 });
+    await owner.json("PATCH", column, { formula: "=A2" });
 
     const source = "{{ 'Table 1'!A1 }}";
-    expect(
-      await owner.json("PATCH", `/views/${view.id}`, { source, revision: opened.revision }, 409),
-    ).toMatchObject(stale);
+    await owner.json("PATCH", `/views/${view.id}`, { source, revision: opened.revision });
     await owner.json("PATCH", `/views/${view.id}`, { name: "Still", revision: opened.revision });
     const current = (await readSnapshot(owner, snapshot.id)).revision;
     await owner.json("PATCH", `/views/${view.id}`, { source, revision: current });
+    await owner.json("PATCH", `/views/${view.id}`, { source: "{{ 'Table 1'!B2 }}" });
   });
 });

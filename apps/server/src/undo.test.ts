@@ -459,6 +459,23 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "update one named formula",
+    async prepare({ tableId }) {
+      await owner.json("PUT", `/tables/${tableId}/names`, {
+        names: [
+          { name: "Corner", formula: "A1" },
+          { name: "Other", formula: "B1" },
+        ],
+      });
+      return {
+        method: "PATCH",
+        path: `/tables/${tableId}/names/corner`,
+        body: { formula: "C1" },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "resize a table's columns",
     async prepare({ id, tableId }) {
       const read = await readSnapshot(owner, id);

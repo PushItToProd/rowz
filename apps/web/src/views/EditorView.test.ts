@@ -5,6 +5,8 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { api } from "../api/client";
 import { changeWith, snapshotWith, wireSnapshot, type MockedApi } from "../testing";
 import EditorView from "./EditorView.vue";
+import { useWorkbookStore } from "../stores/workbook";
+import { useFormulaSessionStore } from "../formula/session";
 
 vi.mock("../api/client", async () => {
   const testing = await import("../testing");
@@ -71,6 +73,42 @@ async function render(role = "owner", empty = false) {
   await flushPromises();
   return wrapper;
 }
+
+it("blocks page-control clicks on save failure, and cancel does not replay them", async () => {
+  const wrapper = await render();
+  const store = useWorkbookStore();
+  store.views = [
+    {
+      id: "chart",
+      pageId: "p1",
+      name: "Chart",
+      kind: "chart",
+      source: "1",
+      chartType: "bar",
+      position: 1,
+    },
+  ];
+  const formulas = useFormulaSessionStore();
+  await formulas.start(
+    {
+      target: { kind: "chart", viewId: "chart" },
+      context: { pageId: "p1" },
+      mode: "formula",
+      text: "draft",
+    },
+    store.submitFormulaDraft,
+  );
+  server.updateView.mockRejectedValueOnce(new Error("Offline"));
+  const button = wrapper.findAll("button").find((item) => item.text() === "Save a copy")!;
+  await button.trigger("click");
+  await flushPromises();
+  expect(server.copySpreadsheet).not.toHaveBeenCalled();
+  expect(formulas.active?.state.doc.toString()).toBe("draft");
+  formulas.cancel();
+  await flushPromises();
+  expect(server.copySpreadsheet).not.toHaveBeenCalled();
+  wrapper.unmount();
+});
 
 it("lets a viewer save a copy and navigate to it", async () => {
   const wrapper = await render("viewer");

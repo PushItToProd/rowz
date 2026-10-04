@@ -130,6 +130,9 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [x] plan shared editing support across single-formula inputs, multiline scripts, and formulas embedded in Markdown; use CodeMirror as specified in [the implementation plan](plans/formula-editing.md)
   - [x] implement tolerant formula-fragment analysis, a shared single-line CodeMirror component, and persistent session primitives with retained editor history and failed-save handling
   - [ ] connect the shared session to page transitions and migrate single-formula fields, including deleted-target recovery and removal of revision-based save restrictions
+    - [x] remove revision-based formula-write refusals from request validation and the server; update stale-write client handling and tests
+    - [x] migrate chart sources, retain unmounted drafts, add deleted-target recovery, and block actions after failed shared-draft saves
+    - [ ] migrate cells, the formula bar, names, filters, and formula-column definitions
   - [ ] syntax highlighting for formulas in scripts and Markdown
   - Coordinate completion, reference picking, reference colors, and keyboard behavior across these editors. The formula-column prompt replacement below is part of this work.
 - [x] hitting tab with the formula bar focused should have the same effect as hitting tab with the cell itself selected

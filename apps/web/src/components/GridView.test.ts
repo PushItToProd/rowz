@@ -16,6 +16,7 @@ import {
   wireSnapshot,
 } from "../testing";
 import GridView from "./GridView.vue";
+import { useFormulaSessionStore } from "../formula/session";
 
 vi.mock("../api/client", async () => {
   const testing = await import("../testing");
@@ -1168,6 +1169,48 @@ describe("a viewer", () => {
 });
 
 describe("row and column headers, and the menu", () => {
+  it("retains the selection when saving another formula editor fails", async () => {
+    await mountGrid();
+    await select("A1");
+    const store = useWorkbookStore();
+    store.views = [
+      {
+        id: "chart",
+        kind: "chart",
+        pageId: "p1",
+        name: "Chart",
+        source: "1",
+        chartType: "bar",
+        position: 1,
+      },
+    ];
+    const formulas = useFormulaSessionStore();
+    await formulas.start(
+      {
+        target: { kind: "chart", viewId: "chart" },
+        context: { pageId: "p1" },
+        mode: "formula",
+        text: "draft",
+      },
+      store.submitFormulaDraft,
+    );
+    server.updateView.mockRejectedValue(new Error("Offline"));
+    await cellAt("B2").trigger("mousedown", { button: 0 });
+    await flushPromises();
+    expect(store.selection).toEqual(at("A1"));
+    await wrapper.get("thead th:nth-child(3)").trigger("mousedown", { button: 0 });
+    await flushPromises();
+    expect(store.selection).toEqual(at("A1"));
+    expect(store.selectionEnd).toBeNull();
+    await cellAt("B2").trigger("contextmenu");
+    await flushPromises();
+    await wrapper.get("thead th:nth-child(3)").trigger("contextmenu");
+    await flushPromises();
+    expect(store.selection).toEqual(at("A1"));
+    expect(store.selectionEnd).toBeNull();
+    expect(wrapper.emitted("menu")).toBeUndefined();
+    expect(formulas.active?.state.doc.toString()).toBe("draft");
+  });
   const range = () => useWorkbookStore().selectedRange;
 
   it("selects a whole row or column from its header", async () => {
@@ -1618,7 +1661,7 @@ it("keeps a new-row draft separate from a row appended remotely", async () => {
   expect(store.tables[0]?.rowCount).toBe(2);
 });
 
-it("reopens a stale formula draft after restoring the confirmed cell", async () => {
+it("saves a formula draft literally after its target moves", async () => {
   await mountGrid({ A1: "old" });
   await select("A1");
   await press("=");
@@ -1627,14 +1670,11 @@ it("reopens a stale formula draft after restoring the confirmed cell", async () 
   await store.receiveChange(
     changeWith({ rows: [{ id: "remote", tableId: "t1", orderKey: "Zz" }] }),
   );
-  server.setCells.mockRejectedValueOnce(
-    Object.assign(new Error("The structure changed"), { code: "stale_formula" }),
-  );
   await press("Enter");
   await flushPromises();
   expect(server.setCells.mock.calls[0]?.[3]).toBe(0);
-  expect(store.inputOf(at("A2"))).toBe("old");
-  expect(wrapper.get<HTMLInputElement>(".grid__editor").element.value).toBe("=A2");
+  expect(store.inputOf(at("A2"))).toBe("=A2");
+  expect(wrapper.find(".grid__editor").exists()).toBe(false);
 });
 
 describe("a sorted and filtered data table", () => {

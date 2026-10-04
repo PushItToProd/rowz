@@ -275,7 +275,7 @@ export const api = {
   setTableDisplay: (
     tableId: string,
     display: { sort: SortKey[]; filter?: string },
-    revision: number,
+    revision?: number,
   ): Promise<Change> =>
     body(
       routes.tables[":tableId"].display.$put({
@@ -284,6 +284,14 @@ export const api = {
           sort: display.sort,
           ...(display.filter === undefined ? {} : { filter: display.filter, revision }),
         },
+      }),
+    ),
+
+  updateNamedFormula: (tableId: string, name: string, formula: string): Promise<Change> =>
+    body(
+      routes.tables[":tableId"].names[":name"].$patch({
+        param: { tableId, name },
+        json: { formula },
       }),
     ),
 

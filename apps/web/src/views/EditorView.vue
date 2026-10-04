@@ -5,6 +5,8 @@ import { useRouter } from "vue-router";
 import EditableName from "../components/EditableName.vue";
 import AddBlockRow from "../components/AddBlockRow.vue";
 import FormulaBar from "../components/FormulaBar.vue";
+import FormulaSessionHost from "../components/FormulaSessionHost.vue";
+import { useFormulaSessionStore } from "../formula/session";
 import PageTabs from "../components/PageTabs.vue";
 import ChartCard from "../components/ChartCard.vue";
 import ContextMenu from "../components/ContextMenu.vue";
@@ -30,6 +32,57 @@ import { useWorkbookStore } from "../stores/workbook";
 const props = defineProps<{ spreadsheetId: string; pageId?: string }>();
 const store = useWorkbookStore();
 const router = useRouter();
+const formulas = useFormulaSessionStore();
+const replayed = new WeakSet<Event>();
+
+function pageNavigation(target: Element): boolean {
+  return target.closest(".page-tabs") !== null && target.closest("button") === null;
+}
+function preserveNavigationFocus(event: MouseEvent): void {
+  if (
+    formulas.active &&
+    event.target instanceof Element &&
+    (pageNavigation(event.target) || event.target.closest(".editor__back"))
+  )
+    event.preventDefault();
+}
+/** Page-control clicks run only after the draft save succeeds. */
+function guardControl(event: MouseEvent): void {
+  const target = event.target;
+  if (!formulas.active || replayed.has(event) || !(target instanceof HTMLElement)) return;
+  if (
+    target.closest("[data-formula-field], .formula-session-fallback, .editor__back") ||
+    pageNavigation(target)
+  )
+    return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  void formulas.submit(store.submitFormulaDraft).then((saved) => {
+    if (!saved) {
+      formulas.focus();
+      return;
+    }
+    if (!target.isConnected) return;
+    const click = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      button: event.button,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+    });
+    replayed.add(click);
+    target.dispatchEvent(click);
+  });
+}
+async function returnToEditor(pageId: string): Promise<void> {
+  if (store.pages.some((item) => item.id === pageId)) {
+    await router.push({ name: "editor", params: { spreadsheetId: props.spreadsheetId, pageId } });
+    await nextTick();
+    formulas.focus();
+  }
+}
 
 const loadError = ref<string | null>(null);
 const copying = ref(false);
@@ -251,7 +304,12 @@ watch(
 
 <template>
   <!-- `data-saving` is what the end-to-end tests wait on before a reload, which the page would otherwise ask about. -->
-  <div class="editor" :data-saving="store.saving ? '' : undefined">
+  <div
+    class="editor"
+    :data-saving="store.saving ? '' : undefined"
+    @click.capture="guardControl"
+    @mousedown.capture="preserveNavigationFocus"
+  >
     <div class="editor__chrome">
       <header class="editor__header">
         <RouterLink :to="{ name: 'spreadsheets' }" class="editor__back" aria-label="← Spreadsheets">
@@ -310,6 +368,8 @@ watch(
         <PageTabs :spreadsheet-id="spreadsheetId" :active-page-id="page.id" />
       </template>
     </div>
+
+    <FormulaSessionHost @return="returnToEditor" />
 
     <p v-if="loadError" class="notice notice--error" role="alert">{{ loadError }}</p>
     <p v-else-if="!loaded" class="editor__loading">Loading…</p>

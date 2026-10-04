@@ -42,6 +42,7 @@ import {
   type StructuralEditBody,
 } from "@spreadsheet-app/shared";
 import { defineStore } from "pinia";
+import { useFormulaSessionStore, type EditingTarget } from "../formula/session";
 import { toSpreadsheetFile } from "../files/spreadsheetFile";
 import { computed, reactive, ref, shallowRef, watch } from "vue";
 import {
@@ -348,7 +349,17 @@ export const useWorkbookStore = defineStore("workbook", () => {
     return request;
   }
 
-  function enqueueWrite<T>(change: () => Promise<T>): Promise<T> {
+  function enqueueWrite<T>(change: () => Promise<T>, draftWrite = false): Promise<T> {
+    const sessions = useFormulaSessionStore();
+    if (!draftWrite && sessions.active) {
+      return sessions.submit(submitFormulaDraft).then((saved) => {
+        if (!saved) {
+          sessions.focus();
+          throw new Error(sessions.active?.error ?? "The draft could not be saved");
+        }
+        return enqueueWrite(change, true);
+      });
+    }
     const queued = mutations.then(change);
     mutations = queued.catch(() => undefined);
     return countUnanswered(queued);
@@ -988,6 +999,57 @@ export const useWorkbookStore = defineStore("workbook", () => {
     }, "The names could not be saved");
   }
 
+  /** Saves exact draft text to its current target, without a starting-revision restriction. */
+  function submitFormulaDraft(target: EditingTarget, text: string): Promise<"saved" | "deleted"> {
+    return enqueueWrite(async () => {
+      if (!canEdit.value) throw new Error("You cannot edit this spreadsheet");
+      const table =
+        "tableId" in target ? tables.value.find((item) => item.id === target.tableId) : undefined;
+      if ("tableId" in target && !table) return "deleted";
+      try {
+        let change: Change;
+        switch (target.kind) {
+          case "cell":
+            if (!positionOf(target)) return "deleted";
+            change = await api.setCells(target.tableId, [
+              { rowId: target.rowId, colId: target.colId, input: text },
+            ]);
+            break;
+          case "column":
+            if (!table?.colIds.includes(target.colId)) return "deleted";
+            change = await api.updateColumn(target.tableId, target.colId, { formula: text });
+            break;
+          case "name": {
+            change = await api.updateNamedFormula(target.tableId, target.name, text);
+            break;
+          }
+          case "filter":
+            if (!table) return "deleted";
+            change = await api.setTableDisplay(target.tableId, { ...table.display, filter: text });
+            break;
+          case "chart":
+            {
+              const view = views.value.find((item) => item.id === target.viewId);
+              if (!view) return "deleted";
+              if (text === view.source) return "saved";
+            }
+            change = await api.updateView(target.viewId, { source: text });
+            break;
+        }
+        await receiveChange(change);
+        return "saved";
+      } catch (cause) {
+        if (
+          cause instanceof Error &&
+          "code" in cause &&
+          ["not_found", "row_deleted", "column_deleted"].includes(String(cause.code))
+        )
+          return "deleted";
+        throw cause;
+      }
+    }, true);
+  }
+
   /**
    * The choices a choice column offers: its list, or the distinct non-empty
    * values of the column it takes them from, in stored order. `undefined` for
@@ -1090,15 +1152,6 @@ export const useWorkbookStore = defineStore("workbook", () => {
       } while (pending.changes.length > 0);
     } catch (cause) {
       failedSaves += 1;
-      if (cause instanceof Error && "code" in cause && cause.code === "stale_formula") {
-        const cell = pending.changes.find((cell) => isFormulaInput(cell.input));
-        if (cell)
-          rejectedDraft.value = {
-            id: { tableId: pending.tableId, rowId: cell.rowId, colId: cell.colId },
-            input: cell.input,
-            revision: writtenAt,
-          };
-      }
       fail(cause, "The change could not be saved");
     } finally {
       unsavedChanges.delete(pending);
@@ -1384,21 +1437,21 @@ export const useWorkbookStore = defineStore("workbook", () => {
     running.add(key);
     const queuedSaves = saves;
     const failedBefore = failedSaves;
-    return enqueueWrite(async () => {
-      try {
+    try {
+      return await enqueueWrite(async () => {
         // The server evaluates stored inputs, so pending edits must be stored first. When one
         // could not be, the action would run on something other than what was typed.
         if (!(await stored(queuedSaves, failedBefore))) return undefined;
         const result = await request();
         if (result.change) await receiveChange(result.change);
         return result;
-      } catch (cause) {
-        fail(cause, "The action could not be run");
-        return undefined;
-      } finally {
-        running.delete(key);
-      }
-    });
+      });
+    } catch (cause) {
+      fail(cause, "The action could not be run");
+      return undefined;
+    } finally {
+      running.delete(key);
+    }
   }
 
   /** Asks the server to run the button in a cell. */
@@ -1824,6 +1877,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     evaluateOnPage,
     nameValue,
     setTableNames,
+    submitFormulaDraft,
     statementValue,
     assertions,
     errors,

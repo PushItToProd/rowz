@@ -37,14 +37,6 @@ export const rowDeleted = (): ApiFailure =>
 export const columnDeleted = (): ApiFailure =>
   new ApiFailure(409, "column_deleted", "This column no longer exists");
 
-/** Formula text was written before a change to what its references mean. */
-export const staleFormula = (): ApiFailure =>
-  new ApiFailure(
-    409,
-    "stale_formula",
-    "Rows, columns, or names changed while this formula was being written. Check what it refers to and save it again",
-  );
-
 export const unprocessable = (code: string, message: string): ApiFailure =>
   new ApiFailure(422, code, message);
 

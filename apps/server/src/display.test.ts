@@ -89,13 +89,13 @@ describe("a table's display", () => {
     expect((await table()).display).toEqual({ sort: [{ colId: qty, descending: true }] });
   });
 
-  it("requires a revision with a filter", async () => {
+  it("accepts a filter without a revision", async () => {
     const { put } = await sales();
-    await put({ sort: [], filter: "=[Qty] > 3" }, 400);
+    await put({ sort: [], filter: "=[Qty] > 3" });
   });
 
-  it("refuses a filter written before the last rewrite", async () => {
-    const { tableId, put, revision } = await sales();
+  it("accepts a filter written before the last rewrite literally", async () => {
+    const { id, tableId, put, revision } = await sales();
     const written = await revision();
     await user.json("POST", `/tables/${tableId}/edits`, {
       axis: "row",
@@ -103,9 +103,11 @@ describe("a table's display", () => {
       beforeId: null,
       ids: [randomUUID()],
     });
-    const refused = await put({ sort: [], filter: "=[Qty] > 3", revision: written }, 409);
-    expect(refused).toMatchObject({ error: { code: "stale_formula" } });
-    // A sort has no formula, so it is not refused.
+    await put({ sort: [], filter: "=[Qty] > 3", revision: written });
+    expect(
+      (await readSnapshot(user, id)).tables.find((table) => table.id === tableId)?.display.filter,
+    ).toBe("=[Qty] > 3");
+    // Sort-only updates continue to work with the same old revision.
     await put({ sort: [], revision: written });
   });
 

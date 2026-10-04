@@ -2,10 +2,12 @@
 import { onBeforeUnmount } from "vue";
 import { warnBeforeLeaving } from "./leaveWarning";
 import { useWorkbookStore } from "./stores/workbook";
+import { useFormulaSessionStore } from "./formula/session";
 
 // Here and not in the editor: a save goes on after the editor is left for the list of spreadsheets.
 const workbook = useWorkbookStore();
-onBeforeUnmount(warnBeforeLeaving(() => workbook.saving));
+const formulas = useFormulaSessionStore();
+onBeforeUnmount(warnBeforeLeaving(() => workbook.saving || formulas.active !== undefined));
 </script>
 
 <template>

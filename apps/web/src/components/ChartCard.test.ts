@@ -6,6 +6,9 @@ import { api, type ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import { at, snapshotWith, type MockedApi } from "../testing";
 import ChartCard from "./ChartCard.vue";
+import { EditorView } from "@codemirror/view";
+import { useFormulaSessionStore } from "../formula/session";
+import FormulaSessionHost from "./FormulaSessionHost.vue";
 
 vi.mock("../api/client", async () => {
   const testing = await import("../testing");
@@ -39,9 +42,9 @@ async function render(view: Partial<ViewRecord> = {}, role = "owner"): Promise<v
   await store.load("s1");
   wrapper = mount(
     {
-      components: { ChartCard },
+      components: { ChartCard, FormulaSessionHost },
       setup: () => ({ store }),
-      template: `<ChartCard v-if="store.views[0]" :view="store.views[0]" />`,
+      template: `<ChartCard v-if="store.views[0]" :view="store.views[0]" /><FormulaSessionHost />`,
     },
     { attachTo: document.body },
   );
@@ -58,6 +61,22 @@ beforeEach(() => {
 afterEach(() => {
   wrapper.unmount();
 });
+
+async function editSource(text: string): Promise<EditorView> {
+  const input = wrapper.find('input[aria-label="Chart data"]');
+  if (input.exists()) {
+    await input.trigger("focus");
+    await flushPromises();
+  }
+  const editor = EditorView.findFromDOM(wrapper.get(".cm-editor").element as HTMLElement)!;
+  editor.dispatch({
+    changes: { from: 0, to: editor.state.doc.length, insert: text },
+    selection: { anchor: text.length },
+    userEvent: "input.type",
+  });
+  await wrapper.vm.$nextTick();
+  return editor;
+}
 
 describe("ChartCard", () => {
   it("draws the cells its data names, computing formulas among them", async () => {
@@ -100,16 +119,15 @@ describe("ChartCard", () => {
     await input.trigger("blur");
     expect(server.updateView).not.toHaveBeenCalled();
 
-    await input.setValue("'Table 1'!A1:B2");
-    await input.trigger("keydown", { key: "Enter" });
+    await editSource("'Table 1'!A1:B2");
+    await wrapper.get(".cm-content").trigger("keydown", { key: "Enter", keyCode: 13 });
     await flushPromises();
     expect(server.updateView).toHaveBeenCalledWith("v1", {
-      revision: expect.any(Number),
       source: "'Table 1'!A1:B2",
     });
     expect(wrapper.findAll(".chart__bar")).toHaveLength(2);
 
-    await input.trigger("blur");
+    await wrapper.get('input[aria-label="Chart data"]').trigger("blur");
     expect(server.updateView).toHaveBeenCalledTimes(1);
   });
 
@@ -159,13 +177,69 @@ describe("ChartCard", () => {
   it("keeps the source draft while the input has focus", async () => {
     await render();
     const store = useWorkbookStore();
-    const input = wrapper.get<HTMLInputElement>('input[aria-label="Chart data"]');
-    await input.trigger("focus");
-    await input.setValue("draft source");
+    const editor = await editSource("draft source");
 
     store.views = store.views.map((view) => ({ ...view, source: "source from undo" }));
     await flushPromises();
-    expect(input.element.value).toBe("draft source");
+    expect(editor.state.doc.toString()).toBe("draft source");
+  });
+
+  it("saves on blur, cancels without saving, and preserves failed drafts and focus", async () => {
+    await render();
+    const editor = await editSource("'Table 1'!A1:B2");
+    editor.contentDOM.blur();
+    await flushPromises();
+    expect(server.updateView).toHaveBeenCalledExactlyOnceWith("v1", { source: "'Table 1'!A1:B2" });
+    await editSource("discard me");
+    await wrapper.get(".cm-content").trigger("keydown", { key: "Escape", keyCode: 27 });
+    await flushPromises();
+    expect(useFormulaSessionStore().active).toBeUndefined();
+    expect(server.updateView).toHaveBeenCalledTimes(1);
+
+    await editSource("retain me");
+    server.updateView.mockRejectedValueOnce(new Error("Offline"));
+    await wrapper.get(".cm-content").trigger("keydown", { key: "Enter", keyCode: 13 });
+    await flushPromises();
+    expect(useFormulaSessionStore().active!.state.doc.toString()).toBe("retain me");
+    expect(wrapper.get('[role="alert"]').text()).toBe("Offline");
+    expect(document.activeElement).toBe(wrapper.get(".cm-content").element);
+    await wrapper.get(".cm-content").trigger("keydown", { key: "Enter", keyCode: 13 });
+    await flushPromises();
+    expect(useFormulaSessionStore().active).toBeUndefined();
+  });
+
+  it("does not run a requested chart-control action after a failed source save", async () => {
+    await render();
+    await editSource("retain me");
+    server.updateView.mockRejectedValue(new Error("Offline"));
+    await wrapper.get("select").setValue("pie");
+    await flushPromises();
+    expect(server.updateView).toHaveBeenCalledExactlyOnceWith("v1", { source: "retain me" });
+    expect(wrapper.get("select").element).toHaveProperty("value", "bar");
+    await wrapper.get("button.danger").trigger("click");
+    await flushPromises();
+    expect(server.deleteView).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("keeps a draft when its chart unmounts and reports deletion only on submission", async () => {
+    await render();
+    await editSource('SUM(1, "copy me")');
+    useWorkbookStore().views = [];
+    await flushPromises();
+    const session = useFormulaSessionStore();
+    expect(session.active!.state.doc.toString()).toBe('SUM(1, "copy me")');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(wrapper.find(".formula-session-fallback").exists()).toBe(true);
+    await wrapper
+      .get(".formula-session-fallback .cm-content")
+      .trigger("keydown", { key: "Enter", keyCode: 13 });
+    await flushPromises();
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain("Your input was not saved");
+    expect(dialog.querySelector(".cm-content")?.textContent).toBe('SUM(1, "copy me")');
+    expect(dialog.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("false");
+    expect(server.updateView).not.toHaveBeenCalled();
   });
 
   it("deletes the chart after confirming", async () => {

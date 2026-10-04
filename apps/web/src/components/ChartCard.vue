@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { isChart, isError, isRange, type CellValue, type ChartType } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, ref, watch } from "vue";
+import { computed } from "vue";
 import type { ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import ChartView from "./ChartView.vue";
+import SessionFormulaField from "./SessionFormulaField.vue";
+import { useFormulaSessionStore } from "../formula/session";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
 
@@ -18,37 +20,27 @@ const TYPES: readonly { value: ChartType; label: string }[] = [
   { value: "scatter", label: "Scatter" },
 ];
 
-const editing = ref(false);
-let editRevision = store.revision;
-const draft = ref(props.view.source);
-// Follow changes made elsewhere, such as a table rename rewriting the range.
-watch(
-  () => props.view.source,
-  (source) => {
-    if (!editing.value) draft.value = source;
-  },
-);
-
-async function saveSource(): Promise<void> {
-  if (draft.value === props.view.source) return;
-  if (!(await store.updateView(props.view.id, { source: draft.value }, editRevision))) {
-    editing.value = true;
-    editRevision = store.revision;
+const sessions = useFormulaSessionStore();
+async function ready(): Promise<boolean> {
+  const saved = await sessions.submit(store.submitFormulaDraft);
+  if (!saved) sessions.focus();
+  return saved;
+}
+async function setType(event: Event): Promise<void> {
+  const field = event.target as HTMLSelectElement;
+  const chartType = field.value as ChartType;
+  if (!(await ready())) {
+    field.value = props.view.chartType ?? "bar";
+    return;
   }
+  await store.updateView(props.view.id, { chartType });
 }
-
-function finishSource(): void {
-  void saveSource();
-  editing.value = false;
+async function rename(name: string): Promise<void> {
+  if (await ready()) await store.updateView(props.view.id, { name });
 }
-
-function setType(event: Event): void {
-  const chartType = (event.target as HTMLSelectElement).value as ChartType;
-  void store.updateView(props.view.id, { chartType });
-}
-
-function remove(): void {
-  if (window.confirm(`Delete ${props.view.name}?`)) void store.deleteView(props.view.id);
+async function remove(): Promise<void> {
+  if (!(await ready())) return;
+  if (window.confirm(`Delete ${props.view.name}?`)) await store.deleteView(props.view.id);
 }
 
 /** The data to draw, or why there is none. */
@@ -79,7 +71,7 @@ const data = computed((): { rows: CellValue[][] } | { problem: string } => {
           :value="view.name"
           label="Chart name"
           :disabled="!store.canEdit"
-          @rename="store.updateView(view.id, { name: $event })"
+          @rename="rename"
         />
       </h2>
       <div v-if="store.canEdit" class="view-card__actions">
@@ -94,17 +86,14 @@ const data = computed((): { rows: CellValue[][] } | { problem: string } => {
 
     <label v-if="store.canEdit" class="view-card__source">
       Data
-      <input
-        v-model="draft"
-        aria-label="Chart data"
+      <SessionFormulaField
+        :target="{ kind: 'chart', viewId: view.id }"
+        :context="{ pageId: view.pageId }"
+        :value="view.source"
+        label="Chart data"
+        :target-label="`${store.pages.find((page) => page.id === view.pageId)?.name ?? ''} · ${view.name} · Chart data`"
         placeholder="'Table 1'!A1:B10"
-        :maxlength="LIMITS.viewSourceLength"
-        @keydown.enter="saveSource"
-        @focus="
-          editing = true;
-          editRevision = store.revision;
-        "
-        @blur="finishSource"
+        :max-length="LIMITS.viewSourceLength"
       />
     </label>
 

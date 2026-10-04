@@ -117,7 +117,6 @@ import {
   notFound,
   ownerOnly,
   rowDeleted,
-  staleFormula,
   unprocessable,
 } from "../errors";
 
@@ -558,28 +557,6 @@ export class SpreadsheetRepository {
    */
   async read(spreadsheetId: string): Promise<Contents> {
     return new Contents(await this.getSnapshot(spreadsheetId));
-  }
-
-  /**
-   * Refuses formula text that was written before the last change to what
-   * references mean. `revision` is the one the writer's session had applied
-   * when the text was begun. A missing or future revision is refused. Must
-   * run inside `change`.
-   */
-  private async checkWrittenAt(
-    tx: Database,
-    spreadsheetId: string,
-    revision: number | undefined,
-  ): Promise<void> {
-    if (revision === undefined) {
-      throw unprocessable("revision_required", "A revision is required when writing a formula");
-    }
-    const [current] = await tx
-      .select({ revision: spreadsheets.revision, rewriteRevision: spreadsheets.rewriteRevision })
-      .from(spreadsheets)
-      .where(eq(spreadsheets.id, spreadsheetId));
-    if (!current) throw notFound("Spreadsheet");
-    if (revision > current.revision || revision < current.rewriteRevision) throw staleFormula();
   }
 
   private async pruneJournal(tx: Database, spreadsheetId: string): Promise<void> {
@@ -1635,11 +1612,26 @@ export class SpreadsheetRepository {
     return change;
   }
 
+  /** Updates a named formula against the current list under the spreadsheet lock. */
+  async updateNamedFormula(tableId: string, name: string, formula: string): Promise<Change> {
+    const { change } = await this.changeTable(tableId, async (table, _tx, writer) => {
+      const index = table.names.findIndex(
+        (entry) => entry.name.toLowerCase() === name.toLowerCase(),
+      );
+      if (index < 0) throw notFound("Name");
+      writer.setLabel(`Change formula of ${name} in ${table.name}`);
+      await writer.updateTable(tableId, {
+        names: table.names.map((entry, position) =>
+          position === index ? { ...entry, formula } : entry,
+        ),
+      });
+    });
+    return change;
+  }
+
   /**
    * Replaces how a data table's rows are shown: its sort and filter. Neither
-   * changes the stored row order. A filter is a formula, so it is refused when
-   * it was written before something it names was renamed, moved, inserted, or
-   * deleted.
+   * changes the stored row order. The submitted filter is accepted literally.
    */
   async setTableDisplay(
     tableId: string,
@@ -1652,9 +1644,6 @@ export class SpreadsheetRepository {
       if (display.sort.some(({ colId }) => !table.colIds.includes(colId))) throw columnDeleted();
       const written = display.filter?.trim() ?? "";
       const filter = written === "" || written === "=" ? "" : filterFormula(written);
-      if (filter !== "" && filter !== table.display.filter) {
-        await this.checkWrittenAt(tx, table.spreadsheetId, display.revision);
-      }
       writer.setLabel(`Sort and filter ${table.name}`);
       await writer.updateTable(tableId, {
         display: { sort: display.sort, ...(filter === "" ? {} : { filter }) },
@@ -1819,9 +1808,6 @@ export class SpreadsheetRepository {
           ? `Rename column ${before.name}`
           : `Change column ${before.name}`,
       );
-      if (changes.formula !== undefined) {
-        await this.checkWrittenAt(tx, found.spreadsheetId, changes.revision);
-      }
 
       const name = changes.name ?? before.name;
       const taken = found.columns.some(
@@ -1941,7 +1927,7 @@ export class SpreadsheetRepository {
   async updateView(
     viewId: string,
     {
-      revision,
+      revision: _revision,
       ...changes
     }: {
       name?: string | undefined;
@@ -1954,9 +1940,6 @@ export class SpreadsheetRepository {
       writer.setLabel(`Update ${view.kind} ${view.name}`);
       if (changes.chartType !== undefined && view.kind !== "chart") {
         throw unprocessable("not_a_chart", `${view.name} is not a chart`);
-      }
-      if (changes.source !== undefined && changes.source !== view.source) {
-        await this.checkWrittenAt(tx, view.spreadsheetId, revision);
       }
       let source = changes.source;
       if (view.kind === "script" && source !== undefined && source !== view.source) {
@@ -2020,7 +2003,6 @@ export class SpreadsheetRepository {
     {
       cells: written,
       appendRows = [],
-      revision,
     }: {
       cells: readonly IdentityCellInput[];
       appendRows?: readonly string[] | undefined;
@@ -2029,9 +2011,6 @@ export class SpreadsheetRepository {
   ): Promise<Change> {
     const { change } = await this.changeTable(tableId, async (table, tx, writer) => {
       writer.setLabel(`Change cells in ${table.name}`);
-      if (written.some((cell) => isFormulaInput(cell.input))) {
-        await this.checkWrittenAt(tx, table.spreadsheetId, revision);
-      }
       // One statement cannot update the same cell twice, so keep the last entry per cell.
       const latest = [
         ...new Map(written.map((cell) => [`${cell.rowId}:${cell.colId}`, cell])).values(),

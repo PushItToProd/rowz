@@ -24,6 +24,8 @@ export interface FormulaSession {
   context: EditingContext;
   mode: FormulaMode;
   initialText: string;
+  label?: string;
+  maxLength?: number;
   state: EditorState;
   saving: boolean;
   error?: string;
@@ -35,6 +37,8 @@ export interface StartEditing {
   context: EditingContext;
   mode: FormulaMode;
   text: string;
+  label?: string;
+  maxLength?: number;
 }
 
 export type SaveDraft = (target: EditingTarget, text: string) => Promise<"saved" | "deleted">;
@@ -69,6 +73,46 @@ export function sameEditingTarget(left: EditingTarget, right: EditingTarget): bo
 /** Owned by Pinia, so unmounting a page or transferring between editors retains the draft. */
 export const useFormulaSessionStore = defineStore("formulaEditing", () => {
   const active = shallowRef<FormulaSession>();
+  const owner = shallowRef<symbol>();
+  const fields = shallowRef<readonly { token: symbol; target: EditingTarget; focus: () => void }[]>(
+    [],
+  );
+  const hasField = () => {
+    const target = active.value?.target;
+    return (
+      target !== undefined &&
+      fields.value.some(
+        (field) => field.token === owner.value && sameEditingTarget(field.target, target),
+      )
+    );
+  };
+  function attachField(target: EditingTarget, focus: () => void, token = Symbol()): () => void {
+    fields.value = [...fields.value, { token, target, focus }];
+    if (!owner.value && active.value && sameEditingTarget(target, active.value.target))
+      owner.value = token;
+    return () => {
+      fields.value = fields.value.filter((field) => field.token !== token);
+      if (owner.value === token) {
+        owner.value = fields.value.find(
+          (field) => active.value && sameEditingTarget(field.target, active.value.target),
+        )?.token;
+      }
+    };
+  }
+  function activateField(token: symbol): void {
+    if (
+      fields.value.some(
+        (field) =>
+          field.token === token &&
+          active.value &&
+          sameEditingTarget(field.target, active.value.target),
+      )
+    )
+      owner.value = token;
+  }
+  function focus(): void {
+    fields.value.find((field) => field.token === owner.value)?.focus();
+  }
   let pending: Promise<boolean> | undefined;
 
   function updateState(state: EditorState): void {
@@ -95,6 +139,7 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
           return false;
         }
         active.value = undefined;
+        owner.value = undefined;
         return true;
       } catch (error) {
         active.value = {
@@ -121,9 +166,14 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
       context: { ...request.context },
       mode: request.mode,
       initialText: request.text,
+      label: request.label,
+      maxLength: request.maxLength,
       state: EditorState.create({ doc: request.text, selection: { anchor: request.text.length } }),
       saving: false,
     };
+    owner.value = fields.value.find((field) =>
+      sameEditingTarget(field.target, request.target),
+    )?.token;
     return true;
   }
 
@@ -131,8 +181,20 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
   function cancel(): boolean {
     if (pending) return false;
     active.value = undefined;
+    owner.value = undefined;
     return true;
   }
 
-  return { active, updateState, submit, start, cancel };
+  return {
+    active,
+    owner,
+    activateField,
+    updateState,
+    submit,
+    start,
+    cancel,
+    attachField,
+    hasField,
+    focus,
+  };
 });
