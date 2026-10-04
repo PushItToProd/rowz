@@ -9,6 +9,8 @@ import { api } from "../api/client";
 import { download } from "../files/download";
 import { useWorkbookStore } from "../stores/workbook";
 import { at, snapshotWith, TABLE, type MockedApi } from "../testing";
+import { EditorView } from "@codemirror/view";
+import { useFormulaSessionStore } from "../formula/session";
 import TableCard from "./TableCard.vue";
 
 vi.mock("../api/client", async () => {
@@ -800,6 +802,24 @@ describe("sorting and filtering a data table", () => {
 
   const bar = () => wrapper.get('[role="group"][aria-label="Sort and filter Table 1"]');
 
+  async function editFilter(text: string): Promise<EditorView> {
+    const input = bar().find('input[aria-label="Table filter"]');
+    if (input.exists()) {
+      (input.element as HTMLInputElement).focus();
+      await flushPromises();
+    }
+    const view = EditorView.findFromDOM(
+      bar().get('[aria-label="Table filter"]').element as HTMLElement,
+    )!;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: text },
+      selection: { anchor: text.length },
+      userEvent: "input.type",
+    });
+    await flushPromises();
+    return view;
+  }
+
   it("resizes the selected visible rows by stored identity while sorted and filtered", async () => {
     await renderSorted();
     server.resizeLines.mockResolvedValue(changeWith());
@@ -840,24 +860,52 @@ describe("sorting and filtering a data table", () => {
     expect(bar().text()).toContain("2 rows hidden");
   });
 
-  it("saves a changed filter with the revision it was started at", async () => {
+  it("saves a changed filter once on Enter without a starting revision", async () => {
     await renderSorted();
-    const input = bar().get('[aria-label="Table filter"]');
-    const written = useWorkbookStore().revision;
-    await input.trigger("focus");
-    await input.setValue("=[Qty] > 2");
-    await input.trigger("keydown", { key: "Enter" });
-    await input.trigger("blur");
-    expect(server.setTableDisplay).toHaveBeenCalledExactlyOnceWith(
-      "t1",
-      { sort: [{ colId: "c2", descending: true }], filter: "=[Qty] > 2" },
-      written,
+    await editFilter("=[Qty] > 2");
+    await bar().get('[aria-label="Table filter"]').trigger("keydown", { key: "Enter" });
+    await flushPromises();
+    expect(server.setTableDisplay).toHaveBeenCalledExactlyOnceWith("t1", {
+      sort: [{ colId: "c2", descending: true }],
+      filter: "=[Qty] > 2",
+    });
+  });
+
+  it("blocks sort changes on a failed filter save, restores the sort control, and permits cancel", async () => {
+    await renderSorted();
+    const view = await editFilter("=[Qty] > 2");
+    server.setTableDisplay.mockRejectedValue(new Error("Offline"));
+    await bar().get('[aria-label="Sort direction 1"]').setValue("ascending");
+    await flushPromises();
+    expect(server.setTableDisplay).toHaveBeenCalledExactlyOnceWith("t1", {
+      sort: [{ colId: "c2", descending: true }],
+      filter: "=[Qty] > 2",
+    });
+    expect(bar().get('[aria-label="Sort direction 1"]').element).toHaveProperty(
+      "value",
+      "descending",
     );
+    expect(document.activeElement).toBe(view.contentDOM);
+    expect(view.state.doc.toString()).toBe("=[Qty] > 2");
+    await bar().get('[aria-label="Table filter"]').trigger("keydown", { key: "Escape" });
+    await flushPromises();
+    expect(useFormulaSessionStore().active).toBeUndefined();
+    expect(server.setTableDisplay).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves on Tab and moves focus to the next control", async () => {
+    await renderSorted();
+    await editFilter("=[Qty] > 2");
+    await bar().get('[aria-label="Table filter"]').trigger("keydown", { key: "Tab" });
+    await flushPromises();
+    expect(server.setTableDisplay).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(button("Clear filter").element);
   });
 
   it("clears the filter and keeps the sort", async () => {
     await renderSorted();
     await button("Clear filter").trigger("click");
+    await flushPromises();
     expect(server.setTableDisplay).toHaveBeenCalledExactlyOnceWith(
       "t1",
       { sort: [{ colId: "c2", descending: true }] },
@@ -954,14 +1002,13 @@ describe("sorting and filtering a data table", () => {
 
   it("keeps a filter typed just before a sort is added", async () => {
     await renderSorted();
-    await button("Clear filter").trigger("click");
-    await flushPromises();
-    const input = bar().get('[aria-label="Table filter"]');
-    await input.trigger("focus");
-    await input.setValue("=[Qty] > 3");
-    await input.trigger("blur");
+    await editFilter("=[Qty] > 3");
+    server.setTableDisplay.mockResolvedValueOnce(
+      changeWith({ ...SORTED_TABLE, display: { ...SORTED_TABLE.display, filter: "=[Qty] > 3" } }),
+    );
     await button("Add sort").trigger("click");
     await flushPromises();
+    expect(server.setTableDisplay).toHaveBeenCalledTimes(2);
     expect(server.setTableDisplay).toHaveBeenLastCalledWith(
       "t1",
       {

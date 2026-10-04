@@ -687,3 +687,11 @@ Named-formula submission uses a targeted PATCH request with the table ID and cas
 **Why.** One editor per session avoids competing CodeMirror state updates and preserves history during focus transfers. Targeted named-formula updates preserve intervening changes to other names and implement the plan's deleted-target behavior.
 
 **To change.** `apps/web/src/formula/session.ts`, `SessionFormulaField.vue`, `FormulaSessionHost.vue`, and the draft submission adapter in the workbook store implement the editing flow. `updateNamedFormula` in `apps/server/src/repo/spreadsheets.ts` and its table route implement the targeted save.
+
+## 2026-10-04: Unfinished new names
+
+**Decision.** The new-name form owns a local CodeMirror state alongside its identifier. Existing named formulas and filters use the shared session. Submitting a new name first saves any active shared draft, then appends the unfinished entry to the current name list. Sort changes similarly read the current filter after saving the shared draft. Failed submissions retain focus and block the requested action.
+
+**Why.** The plan makes unfinished new names an exception to automatic submission: moving between controls retains both fields, and closing the form discards them. A local state implements that lifetime without assigning a nonexistent named target to the shared session. Reading saved contents after submission prevents a following list or sort update from restoring an older formula.
+
+**To change.** `NamesPanel.vue` owns the unfinished entry. `TableDisplayBar.vue` saves shared drafts before changing display settings. Both components reuse `FormulaEditor.vue` and `SessionFormulaField.vue`.

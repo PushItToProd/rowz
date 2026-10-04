@@ -2,14 +2,19 @@
 import { MAX_SORT_KEYS } from "@spreadsheet-app/shared";
 import { LIMITS } from "@spreadsheet-app/shared";
 import type { SortKey } from "@spreadsheet-app/engine";
-import { computed, ref, watch } from "vue";
+import { computed, nextTick } from "vue";
 import type { TableRecord } from "../api/client";
-import { useFormulaAssist } from "../formula/useFormulaAssist";
+import { useFormulaSessionStore } from "../formula/session";
 import { useWorkbookStore } from "../stores/workbook";
-import FormulaAssist from "./FormulaAssist.vue";
+import SessionFormulaField from "./SessionFormulaField.vue";
 
 const props = defineProps<{ table: TableRecord }>();
 const store = useWorkbookStore();
+const sessions = useFormulaSessionStore();
+const targetLabel = computed(
+  () =>
+    `${store.pages.find((page) => page.id === props.table.pageId)?.name ?? "Page"} · ${props.table.name} · Filter`,
+);
 
 const columns = computed(() => props.table.columns ?? []);
 const sort = computed(() => props.table.display.sort);
@@ -30,83 +35,49 @@ const unused = computed(() =>
 /** Whether the bar has anything to show to someone who cannot edit. */
 const active = computed(() => keys.value.length > 0 || filter.value !== "");
 
-/** Compatibility revision captured for requests from the legacy filter input. */
-let writtenAt = 0;
-
-function save(next: { sort: SortKey[]; filter: string }, revision = store.revision): void {
-  void store.setTableDisplay(
-    props.table.id,
-    next.filter === "" ? { sort: next.sort } : { sort: next.sort, filter: next.filter },
-    revision,
-  );
-}
-
-function setSort(next: SortKey[]): void {
-  // Clicking here blurs the filter first, which saves what was typed. This write must carry it too.
-  const typed = draft.value.trim();
-  save({ sort: next, filter: typed }, typed === filter.value ? store.revision : writtenAt);
+/** Read the saved filter after submitting, so sort changes cannot restore an older draft. */
+async function setSort(next: SortKey[]): Promise<boolean> {
+  if (!(await sessions.submit(store.submitFormulaDraft))) {
+    await nextTick();
+    sessions.focus();
+    return false;
+  }
+  const table = store.tables.find((table) => table.id === props.table.id);
+  return table ? store.setTableDisplay(table.id, { ...table.display, sort: next }) : false;
 }
 
 function addKey(): void {
   const colId = unused.value[0];
-  if (colId) setSort([...sort.value, { colId, descending: false }]);
+  if (colId) void setSort([...sort.value, { colId, descending: false }]);
 }
 
-function changeKey(index: number, changes: Partial<SortKey>): void {
-  setSort(sort.value.map((key, position) => (position === index ? { ...key, ...changes } : key)));
+async function changeKey(index: number, changes: Partial<SortKey>, event: Event): Promise<void> {
+  const saved = await setSort(
+    sort.value.map((key, position) => (position === index ? { ...key, ...changes } : key)),
+  );
+  if (!saved && event.target instanceof HTMLSelectElement) {
+    const key = sort.value[index];
+    event.target.value =
+      changes.colId !== undefined
+        ? (key?.colId ?? "")
+        : key?.descending
+          ? "descending"
+          : "ascending";
+  }
 }
 
 function removeKey(index: number): void {
-  setSort(sort.value.filter((_, position) => position !== index));
+  void setSort(sort.value.filter((_, position) => position !== index));
 }
 
-const input = ref<HTMLInputElement>();
-const focused = ref(false);
-const draft = ref(filter.value);
-// Follow outside changes, such as undo, unless the filter is being typed.
-watch(filter, (stored) => {
-  if (!focused.value) draft.value = stored;
-});
-
-const typed = computed({
-  get: () => (focused.value ? draft.value : null),
-  set: (text) => (draft.value = text ?? ""),
-});
-const assist = useFormulaAssist(
-  typed,
-  () => input.value,
-  () => props.table.id,
-);
-
-function onFocus(): void {
-  focused.value = true;
-  writtenAt = store.revision;
-}
-
-function commitFilter(): void {
-  const next = draft.value.trim();
-  if (next === filter.value || (next === "" && filter.value === "")) return;
-  save({ sort: sort.value, filter: next }, writtenAt);
-}
-
-function onBlur(): void {
-  focused.value = false;
-  commitFilter();
-}
-
-function onKeydown(event: KeyboardEvent): void {
-  if (assist.onKeydown(event)) return;
-  if (event.key === "Enter") input.value?.blur();
-  else if (event.key === "Escape") {
-    draft.value = filter.value;
-    input.value?.blur();
-  } else return;
-  event.preventDefault();
-}
-
-function clearFilter(): void {
-  draft.value = "";
-  save({ sort: sort.value, filter: "" });
+async function clearFilter(): Promise<void> {
+  if (!(await sessions.submit(store.submitFormulaDraft))) {
+    await nextTick();
+    sessions.focus();
+    return;
+  }
+  const table = store.tables.find((table) => table.id === props.table.id);
+  if (table) await store.setTableDisplay(table.id, { sort: table.display.sort });
 }
 </script>
 
@@ -118,35 +89,21 @@ function clearFilter(): void {
     :aria-label="`Sort and filter ${table.name}`"
   >
     <span class="table-display__group">
-      <label>
-        Filter
-        <input
-          ref="input"
-          v-model="draft"
-          class="table-display__filter"
-          aria-label="Table filter"
-          placeholder="=[Column] > 100"
-          spellcheck="false"
-          :disabled="!store.canEdit"
-          :maxlength="LIMITS.inputLength"
-          @keydown="onKeydown"
-          @input="assist.track"
-          @keyup="assist.track"
-          @click="assist.track"
-          @focus="onFocus"
-          @blur="onBlur"
-        />
-      </label>
+      <span class="table-display__label">Filter</span>
+      <SessionFormulaField
+        class="table-display__filter"
+        :target="{ kind: 'filter', tableId: table.id }"
+        :context="{ pageId: table.pageId, tableId: table.id }"
+        :value="filter"
+        label="Table filter"
+        :target-label="targetLabel"
+        placeholder="=[Column] > 100"
+        :readonly="!store.canEdit"
+        :max-length="LIMITS.inputLength"
+      />
       <button v-if="filter !== '' && store.canEdit" type="button" @click="clearFilter">
         Clear filter
       </button>
-      <FormulaAssist
-        :items="assist.suggestions.value.items"
-        :active="assist.active.value"
-        :signature="assist.signature.value"
-        :anchor="focused ? input : undefined"
-        @pick="assist.accept($event)"
-      />
     </span>
 
     <span class="table-display__group">
@@ -156,7 +113,7 @@ function clearFilter(): void {
           :value="key.colId"
           :aria-label="`Sort column ${index + 1}`"
           :disabled="!store.canEdit"
-          @change="changeKey(index, { colId: ($event.target as HTMLSelectElement).value })"
+          @change="changeKey(index, { colId: ($event.target as HTMLSelectElement).value }, $event)"
         >
           <option v-for="colId in [key.colId, ...unused]" :key="colId" :value="colId">
             {{ nameOf(colId) }}
@@ -167,9 +124,13 @@ function clearFilter(): void {
           :aria-label="`Sort direction ${index + 1}`"
           :disabled="!store.canEdit"
           @change="
-            changeKey(index, {
-              descending: ($event.target as HTMLSelectElement).value === 'descending',
-            })
+            changeKey(
+              index,
+              {
+                descending: ($event.target as HTMLSelectElement).value === 'descending',
+              },
+              $event,
+            )
           "
         >
           <option value="ascending">Ascending</option>

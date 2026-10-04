@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import type { TableName } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, shallowRef, watch } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
+import { EditorState } from "@codemirror/state";
+import { namingContext } from "../formula/context";
+import { useFormulaSessionStore } from "../formula/session";
+import FormulaEditor from "./FormulaEditor.vue";
+import SessionFormulaField from "./SessionFormulaField.vue";
 import EditableName from "./EditableName.vue";
 import { shown } from "./shownValue";
 
@@ -14,9 +19,17 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: [] }>();
 const store = useWorkbookStore();
+const sessions = useFormulaSessionStore();
+const newContext = shallowRef({ pageId: props.table.pageId, tableId: props.table.id });
+const context = computed(() => namingContext(newContext.value));
+const targetLabel = (name: string) =>
+  `${store.pages.find((page) => page.id === props.table.pageId)?.name ?? "Page"} · ${props.table.name} · ${name}`;
 
 const newName = ref("");
-const newFormula = ref(props.suggestion ?? "");
+const newState = shallowRef(EditorState.create({ doc: props.suggestion ?? "" }));
+const newFormula = computed(() => newState.value.doc.toString());
+const adding = ref(false);
+const newEditor = ref<{ focus(): void }>();
 const nameInput = ref<HTMLInputElement>();
 
 // A range chosen from the menu starts a new name, whatever was being typed.
@@ -24,7 +37,8 @@ watch(
   () => props.suggestion,
   async (suggestion) => {
     if (suggestion === undefined) return;
-    newFormula.value = suggestion;
+    newContext.value = { pageId: props.table.pageId, tableId: props.table.id };
+    newState.value = EditorState.create({ doc: suggestion });
     await nextTick();
     nameInput.value?.focus();
   },
@@ -38,34 +52,72 @@ const held = computed(() =>
   })),
 );
 
-const replace = (names: TableName[]): Promise<boolean> =>
-  store.setTableNames(props.table.id, names);
-
+async function submitDraft(): Promise<boolean> {
+  if (await sessions.submit(store.submitFormulaDraft)) return true;
+  await nextTick();
+  sessions.focus();
+  return false;
+}
+function discardNew(): void {
+  newContext.value = { pageId: props.table.pageId, tableId: props.table.id };
+  newName.value = "";
+  newState.value = EditorState.create({ doc: "" });
+}
 async function add(): Promise<void> {
-  const name = newName.value.trim();
-  const formula = newFormula.value.trim();
-  if (name === "" || formula === "") return;
-  if (await replace([...props.table.names, { name, formula }])) {
-    newName.value = "";
-    newFormula.value = "";
+  if (adding.value) return;
+  adding.value = true;
+  try {
+    if (!(await submitDraft())) return;
+    const name = newName.value.trim();
+    const formula = newFormula.value.trim();
+    const table = store.tables.find((table) => table.id === props.table.id);
+    if (!table || name === "" || formula === "") return;
+    if (await store.setTableNames(table.id, [...table.names, { name, formula }])) discardNew();
+    else {
+      await nextTick();
+      newEditor.value?.focus();
+    }
+  } finally {
+    adding.value = false;
   }
 }
-
-function change(index: number, changes: Partial<TableName>): void {
-  void replace(
-    props.table.names.map((current, position) =>
-      position === index ? { ...current, ...changes } : current,
+async function change(name: string, changes: Partial<TableName>): Promise<void> {
+  if (!(await submitDraft())) return;
+  const table = store.tables.find((table) => table.id === props.table.id);
+  if (!table) return;
+  await store.setTableNames(
+    table.id,
+    table.names.map((entry) =>
+      entry.name.toLowerCase() === name.toLowerCase() ? { ...entry, ...changes } : entry,
     ),
   );
 }
-
-function onFormula(index: number, event: Event): void {
-  const formula = (event.target as HTMLInputElement).value.trim();
-  if (formula !== "" && formula !== props.table.names[index]?.formula) change(index, { formula });
+async function remove(name: string): Promise<void> {
+  if (!(await submitDraft())) return;
+  const table = store.tables.find((table) => table.id === props.table.id);
+  if (table)
+    await store.setTableNames(
+      table.id,
+      table.names.filter((entry) => entry.name.toLowerCase() !== name.toLowerCase()),
+    );
 }
-
-function remove(index: number): void {
-  void replace(props.table.names.filter((_, position) => position !== index));
+async function close(): Promise<void> {
+  if (!(await submitDraft())) return;
+  discardNew();
+  emit("close");
+}
+function commitNew(key: "Enter" | "Tab", backwards: boolean): void {
+  if (key === "Enter") {
+    void add();
+    return;
+  }
+  const controls = [
+    ...document.querySelectorAll<HTMLElement>(
+      'input:not(:disabled), select:not(:disabled), button:not(:disabled), a[href], [tabindex="0"]',
+    ),
+  ];
+  const index = controls.indexOf(document.activeElement as HTMLElement);
+  controls[index + (backwards ? -1 : 1)]?.focus();
 }
 </script>
 
@@ -73,24 +125,25 @@ function remove(index: number): void {
   <section class="names-panel" :aria-label="`Names in ${table.name}`">
     <table v-if="table.names.length > 0">
       <tbody>
-        <tr v-for="(entry, index) in held" :key="entry.name" :data-name="entry.name">
+        <tr v-for="entry in held" :key="entry.name" :data-name="entry.name">
           <th scope="row">
             <EditableName
               :value="entry.name"
               label="Name"
               :disabled="!store.canEdit"
-              @rename="change(index, { name: $event })"
+              @rename="change(entry.name, { name: $event })"
             />
           </th>
           <td>
-            <input
-              :value="entry.formula"
+            <SessionFormulaField
               class="names-panel__formula"
-              aria-label="Formula of the name"
-              spellcheck="false"
-              :disabled="!store.canEdit"
-              :maxlength="LIMITS.inputLength"
-              @change="onFormula(index, $event)"
+              :target="{ kind: 'name', tableId: table.id, name: entry.name }"
+              :context="{ pageId: table.pageId, tableId: table.id }"
+              :value="entry.formula"
+              label="Formula of the name"
+              :target-label="targetLabel(entry.name)"
+              :readonly="!store.canEdit"
+              :max-length="LIMITS.inputLength"
             />
           </td>
           <td :class="{ script__error: entry.value.error }" class="names-panel__value">
@@ -102,7 +155,7 @@ function remove(index: number): void {
               type="button"
               class="danger"
               :aria-label="`Remove ${entry.name}`"
-              @click="remove(index)"
+              @click="remove(entry.name)"
             >
               ×
             </button>
@@ -122,19 +175,27 @@ function remove(index: number): void {
         placeholder="Name"
         spellcheck="false"
         :maxlength="LIMITS.nameLength"
+        :disabled="adding"
       />
-      <input
-        v-model="newFormula"
-        aria-label="Formula of the new name"
-        placeholder="Formula, such as B2:B9"
-        spellcheck="false"
-        :maxlength="LIMITS.inputLength"
+      <FormulaEditor
+        ref="newEditor"
+        class="names-panel__formula"
+        :state="newState"
+        mode="formula"
+        :context="context"
+        label="Formula of the new name"
+        :max-length="LIMITS.inputLength"
+        :readonly="adding"
+        @update:state="newState = $event"
+        @commit="commitNew"
+        @cancel="discardNew"
       />
-      <button type="submit" :disabled="newName.trim() === '' || newFormula.trim() === ''">
+      <button type="submit" :disabled="adding || newName.trim() === '' || newFormula.trim() === ''">
         Add name
       </button>
-      <button type="button" @click="emit('close')">Close</button>
+      <button type="button" :disabled="adding" @click="discardNew">Cancel</button>
+      <button type="button" :disabled="adding" @click="close">Close</button>
     </form>
-    <button v-else type="button" @click="emit('close')">Close</button>
+    <button v-else type="button" @click="close">Close</button>
   </section>
 </template>

@@ -1873,3 +1873,10 @@ select.cell-control--dropdown {
 .errors .assertions__list li + li {
   margin-top: 0.5rem;
 }
+
+.names-panel__formula input,
+.table-display__filter input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}

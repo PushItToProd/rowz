@@ -786,6 +786,7 @@ test("a data table is sorted and filtered in place, and edits and fills act on t
   );
 
   // A filter hides rows, and the table says how many.
+  await page.getByLabel("Table filter").click();
   await page.getByLabel("Table filter").fill("=[Qty] > 1");
   await page.getByLabel("Table filter").press("Enter");
   await expect(page.getByText("1 row hidden")).toBeVisible();
@@ -1370,6 +1371,60 @@ test("saving a script does not scroll to the selected cell", async ({ page }) =>
   });
   await expect(script.locator(".script")).toContainText("42");
   await expect(cell(page, "A1")).not.toBeInViewport();
+});
+
+test("named formulas use shared editing while new names require an explicit submission", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await page.locator("[data-open-names]").click();
+  const panel = page.getByRole("region", { name: "Names in Table 1" });
+  let created = 0;
+  page.on("request", (request) => {
+    if (request.method() === "PUT" && request.url().endsWith("/names")) created += 1;
+  });
+  await panel.getByLabel("New name", { exact: true }).fill("Fee");
+  const newFormula = panel.getByLabel("Formula of the new name", { exact: true });
+  await newFormula.fill("1 + 2");
+  await newFormula.press("Tab");
+  await expect(panel.getByRole("button", { name: "Add name", exact: true })).toBeFocused();
+  expect(created).toBe(0);
+  await cell(page, "A1").click();
+  await expect(newFormula).toHaveText("1 + 2");
+  expect(created).toBe(0);
+  await newFormula.press("Enter");
+  await expect(panel.locator(".names-panel__value")).toHaveText("3");
+  expect(created).toBe(1);
+
+  let fail = true;
+  let saved = 0;
+  await page.route("**/api/tables/*/names/*", async (route) => {
+    if (route.request().method() !== "PATCH") {
+      await route.continue();
+      return;
+    }
+    saved += 1;
+    if (fail)
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "test_failure", message: "Offline" } }),
+      });
+    else await route.continue();
+  });
+  const formula = panel.getByLabel("Formula of the name", { exact: true });
+  await formula.click();
+  await formula.fill("4 + 5");
+  await formula.press("Tab");
+  await expect(panel.getByRole("alert")).toHaveText("Offline");
+  await expect(formula).toBeFocused();
+  await expect(formula).toHaveText("4 + 5");
+  await expect(panel.locator(".names-panel__value")).toHaveText("3");
+  expect(saved).toBe(1);
+  fail = false;
+  await formula.press("Enter");
+  await expect(panel.locator(".names-panel__value")).toHaveText("9");
+  expect(saved).toBe(2);
 });
 
 test("chart drafts keep their original target while browsing pages and block actions on failed saves", async ({
