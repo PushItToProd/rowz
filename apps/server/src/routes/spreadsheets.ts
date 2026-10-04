@@ -36,6 +36,9 @@ export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
         const undoState = await c.var.repository.undoState(spreadsheetId);
         return c.json({ ...snapshot, ...undoState });
       })
+      .post("/:spreadsheetId/copy", zValidator("param", spreadsheetParam, onInvalid), async (c) =>
+        c.json(await c.var.repository.copySpreadsheet(c.req.valid("param").spreadsheetId), 201),
+      )
       .post("/:spreadsheetId/undo", zValidator("param", spreadsheetParam, onInvalid), async (c) =>
         c.json(await c.var.repository.undo(c.req.valid("param").spreadsheetId)),
       )

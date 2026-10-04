@@ -72,6 +72,38 @@ async function render(role = "owner", empty = false) {
   return wrapper;
 }
 
+it("lets a viewer save a copy and navigate to it", async () => {
+  const wrapper = await render("viewer");
+  server.copySpreadsheet.mockResolvedValue({ id: "copy", name: "Copy", updatedAt: "" });
+  const push = vi.spyOn(wrapper.vm.$router, "push");
+  await wrapper
+    .findAll("button")
+    .find((button) => button.text() === "Save a copy")!
+    .trigger("click");
+  await flushPromises();
+  expect(server.copySpreadsheet).toHaveBeenCalledWith("s1");
+  expect(push).toHaveBeenCalledWith({ name: "editor", params: { spreadsheetId: "copy" } });
+  wrapper.unmount();
+});
+
+it("reports a failed copy and leaves the document open", async () => {
+  const wrapper = await render();
+  server.copySpreadsheet.mockRejectedValue(new Error("Copy failed"));
+  await wrapper
+    .findAll("button")
+    .find((button) => button.text() === "Save a copy")!
+    .trigger("click");
+  await flushPromises();
+  expect(wrapper.text()).toContain("Copy failed");
+  expect(
+    wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Save a copy")!
+      .attributes("disabled"),
+  ).toBeUndefined();
+  wrapper.unmount();
+});
+
 it("places insertion controls before, between, and after blocks and sends their indices", async () => {
   const wrapper = await render();
   expect(wrapper.get("main").element.children.length).toBe(5);

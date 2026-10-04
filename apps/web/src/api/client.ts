@@ -158,6 +158,9 @@ export const api = {
   importSpreadsheet: (file: SpreadsheetFile): Promise<SpreadsheetListItem> =>
     body(routes.spreadsheets.import.$post({ json: file })),
 
+  copySpreadsheet: (spreadsheetId: string): Promise<SpreadsheetListItem> =>
+    body(routes.spreadsheets[":spreadsheetId"].copy.$post({ param: { spreadsheetId } })),
+
   createSpreadsheet: (name: string): Promise<SpreadsheetListItem> =>
     body(routes.spreadsheets.$post({ json: { name } })),
 

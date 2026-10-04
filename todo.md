@@ -21,7 +21,7 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 
 ## Inbox - to be categorized
 
-- [ ] "Save as"/"Save a copy" for duplicating an existing document
+- [x] "Save as"/"Save a copy" for duplicating an existing document
 - [x] when errors appear in a rendered markdown block, show the errors as a chip with the error message. e.g. writing `{{ A+nonexistentvar }}` currently just renders `#NAME?` verbatim, but not even what name is invalid
 
 ## Plans
@@ -384,6 +384,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 ## Before sharing with others
 
 These items harden rowz for several users, hostile input, or a deployed server. They are parked while one person uses rowz on their own machine. Review findings of that kind go here.
+
+- [ ] **P10** (Claude) `personalWorkspace()` in [spreadsheets.ts](apps/server/src/repo/spreadsheets.ts) puts a new spreadsheet, an import, and a copy into the caller's oldest workspace membership whatever the role. Once a user can belong to a shared workspace, a new spreadsheet or "Save a copy" can land in a workspace that other members read, and the caller may not own it. Choose a workspace where the caller is an owner, or one made for the caller.
 
 - [ ] **P10** (Claude) The capacity the growth menu offers can be stale while an insert is pending. [TableCard.vue](apps/web/src/components/TableCard.vue) computes it from table records that update only when the server answers. With five spreadsheet rows left, choose "Add 5 rows", reopen the menu before the response arrives, and choose it again: the second request is rejected by the server.
 

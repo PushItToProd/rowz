@@ -1,6 +1,9 @@
 import { FILE_LIMITS, LIMITS, type SpreadsheetFile } from "@spreadsheet-app/shared";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { SpreadsheetSummary } from "./app";
+import { Contents } from "./repo/contents";
+import { toSpreadsheetFile } from "@spreadsheet-app/shared";
+import type { Snapshot } from "./app";
 import {
   readSnapshot,
   startTestServer,
@@ -68,6 +71,118 @@ async function imported(contents: SpreadsheetFile): Promise<TestSnapshot> {
 }
 
 describe("importing a spreadsheet file", () => {
+  it("copies all serialized content with fresh IDs, ownership, and empty history", async () => {
+    const contents = file();
+    const table = contents.pages[0]!.blocks[0]!;
+    if (table.type !== "table") throw new Error("Expected table fixture");
+    table.gridSizes = { rows: [{ index: 0, size: 60 }], columns: [{ index: 1, size: 180 }] };
+    table.formats = [{ startRow: 0, endRow: null, startCol: 0, endCol: 1, format: { bold: true } }];
+    table.conditionalFormats = [
+      {
+        kind: "criterion",
+        criterion: ">15",
+        startRow: 0,
+        endRow: null,
+        startCol: 0,
+        endCol: 0,
+        format: { fill: "red" },
+      },
+    ];
+    table.names = [{ name: "Total", formula: "=SUM(A1:A5)" }];
+    table.cells.push({ row: 0, col: 1, input: '=BUTTON("Increment", EXECUTE(A1+1,A1))' });
+    contents.pages[1]!.blocks.push(
+      { type: "script", name: "Calculations", source: "Twice = Data!Sales!A1*2" },
+      {
+        type: "table",
+        name: "Derived",
+        rowCount: 2,
+        colCount: 2,
+        columns: [
+          { name: "Amount", type: "number" },
+          { name: "Double", type: "formula", formula: "=[Amount]*2" },
+        ],
+        display: { sort: [{ column: 0, descending: true }], filter: "=[Amount]>0" },
+        cells: [{ row: 0, col: 0, input: "7" }],
+      },
+      {
+        type: "table",
+        name: "Choices",
+        rowCount: 0,
+        colCount: 1,
+        columns: [
+          {
+            name: "Amount",
+            type: "choice",
+            choicesFrom: { page: "Report", table: "Derived", column: "Amount" },
+          },
+        ],
+        cells: [],
+      },
+    );
+    const source = await imported(contents);
+    const reader = await server.signUp("Copier");
+    await user.json("PUT", `/spreadsheets/${source.id}/members`, {
+      email: reader.email,
+      role: "viewer",
+    });
+    const copy = await reader.json<SpreadsheetSummary>(
+      "POST",
+      `/spreadsheets/${source.id}/copy`,
+      undefined,
+      201,
+    );
+    const original = await user.json<Snapshot>("GET", `/spreadsheets/${source.id}`);
+    const duplicated = await reader.json<Snapshot>("GET", `/spreadsheets/${copy.id}`);
+    const serialize = (snapshot: Snapshot) => {
+      const { data } = new Contents(snapshot);
+      return toSpreadsheetFile("same name", snapshot.pages, data.tables, snapshot.views, (table) =>
+        data.cells
+          .filter((cell) => cell.tableId === table.id)
+          .map(({ row, col, input }) => ({ row, col, input })),
+      );
+    };
+    expect(serialize(duplicated)).toEqual(serialize(original));
+    expect(duplicated).toMatchObject({
+      name: "Budget (copy)",
+      role: "owner",
+      revision: 0,
+      undoable: false,
+      redoable: false,
+    });
+    const identities = (snapshot: Snapshot) => [
+      snapshot.id,
+      ...snapshot.pages.map((page) => page.id),
+      ...snapshot.tables.flatMap((table) => [table.id, ...table.colIds]),
+      ...snapshot.rows.map((row) => row.id),
+      ...snapshot.views.map((view) => view.id),
+    ];
+    expect(identities(duplicated).some((id) => identities(original).includes(id))).toBe(false);
+    expect(await reader.json("GET", `/spreadsheets/${copy.id}/versions`)).toEqual([]);
+    const members = await reader.json<{ shared: boolean }[]>(
+      "GET",
+      `/spreadsheets/${copy.id}/members`,
+    );
+    expect(members).toHaveLength(1);
+    expect(members[0]!.shared).toBe(false);
+    await reader.json("PUT", `/tables/${duplicated.tables[0]!.id}/cells`, {
+      cells: [{ row: 0, col: 0, input: "changed" }],
+    });
+    expect(serialize(await user.json<Snapshot>("GET", `/spreadsheets/${source.id}`))).toEqual(
+      serialize(original),
+    );
+    await user.json("POST", `/spreadsheets/${copy.id}/copy`, undefined, 404);
+    const stranger = await server.signUp();
+    await stranger.json("POST", `/spreadsheets/${source.id}/copy`, undefined, 404);
+    const again = await reader.json<SpreadsheetSummary>(
+      "POST",
+      `/spreadsheets/${source.id}/copy`,
+      undefined,
+      201,
+    );
+    expect(again.name).toBe(copy.name);
+    expect(again.id).not.toBe(copy.id);
+  });
+
   it("creates the pages, tables, views, and cells the file describes, in its order", async () => {
     const snapshot = await imported(file());
     expect(snapshot).toMatchObject({ name: "Budget", role: "owner" });

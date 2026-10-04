@@ -812,7 +812,30 @@ export class SpreadsheetRepository {
     return this.createFromFile(file);
   }
 
-  private async createFromFile(file: SpreadsheetFile): Promise<SpreadsheetSummary> {
+  /** Copies current content with fresh identities and no shares or history. */
+  async copySpreadsheet(spreadsheetId: string): Promise<SpreadsheetSummary> {
+    const { snapshot, data } = await this.read(spreadsheetId);
+    const cellsOf = new Map<string, CellInput[]>();
+    for (const { tableId, ...cell } of data.cells) {
+      const held = cellsOf.get(tableId);
+      if (held) held.push(cell);
+      else cellsOf.set(tableId, [cell]);
+    }
+    const suffix = " (copy)";
+    const file = toSpreadsheetFile(
+      snapshot.name.slice(0, LIMITS.nameLength - suffix.length) + suffix,
+      snapshot.pages,
+      data.tables,
+      snapshot.views,
+      (table) => cellsOf.get(table.id) ?? [],
+    );
+    return this.createFromFile(file, false);
+  }
+
+  private async createFromFile(
+    file: SpreadsheetFile,
+    keepInitialVersion = true,
+  ): Promise<SpreadsheetSummary> {
     return this.db.transaction(async (tx) => {
       const workspaceId = await this.within(tx).personalWorkspace();
       const [spreadsheet] = await tx
@@ -822,7 +845,7 @@ export class SpreadsheetRepository {
       if (!spreadsheet) throw new Error("Insert returned no spreadsheet");
       await this.insertContents(tx, spreadsheet.id, file);
       // Keeps the first version, so that the spreadsheet can be put back as it arrived.
-      await this.touch(tx, spreadsheet.id);
+      if (keepInitialVersion) await this.touch(tx, spreadsheet.id);
       return { id: spreadsheet.id, name: spreadsheet.name, updatedAt: spreadsheet.updatedAt };
     });
   }

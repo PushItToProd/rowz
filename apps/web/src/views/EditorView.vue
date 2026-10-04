@@ -18,6 +18,7 @@ import HistoryPanel from "../components/HistoryPanel.vue";
 import SharePanel from "../components/SharePanel.vue";
 import { useSessionStore } from "../stores/session";
 import { watchSpreadsheet } from "../api/live";
+import { api } from "../api/client";
 import { download, fileName } from "../files/download";
 import { fitsImport } from "../files/spreadsheetFile";
 import { usePageTitle } from "../pageTitle";
@@ -31,6 +32,21 @@ const store = useWorkbookStore();
 const router = useRouter();
 
 const loadError = ref<string | null>(null);
+const copying = ref(false);
+async function saveCopy(): Promise<void> {
+  copying.value = true;
+  try {
+    const copy = await api.copySpreadsheet(props.spreadsheetId);
+    await openCopy(copy.id);
+  } catch (error) {
+    store.notice = {
+      kind: "error",
+      text: error instanceof Error ? error.message : "Could not save a copy",
+    };
+  } finally {
+    copying.value = false;
+  }
+}
 
 /** Saves the spreadsheet, formulas included, as a file that can be imported again. */
 function exportFile(): void {
@@ -282,6 +298,9 @@ watch(
         </button>
         <button v-if="loaded" type="button" @click="historyOpen = true">History</button>
         <button v-if="loaded" type="button" @click="exportFile">Export</button>
+        <button v-if="loaded" type="button" :disabled="copying || store.saving" @click="saveCopy">
+          Save a copy
+        </button>
         <!-- A new tab, so reading about a formula does not take the user away from the sheet. -->
         <RouterLink :to="{ name: 'help' }" target="_blank" class="editor__help">Help</RouterLink>
       </header>

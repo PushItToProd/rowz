@@ -383,7 +383,7 @@ test("a form with a checkbox and a dropdown saves rows to a log", async ({ page 
   await cell(page, "C3").getByRole("checkbox").check();
   await expect(cell(page, "B3")).toHaveText("TRUE");
 
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(cell(page, "A1", "Table 2")).toHaveText("pear");
   await expect(cell(page, "B1", "Table 2")).toHaveText("large");
   await expect(cell(page, "C1", "Table 2")).toHaveText("TRUE");
@@ -393,7 +393,7 @@ test("a form with a checkbox and a dropdown saves rows to a log", async ({ page 
   await expect(cell(page, "C2").getByRole("combobox")).toHaveValue("-1");
 
   await enter(page, "B1", "fig");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(cell(page, "A2", "Table 2")).toHaveText("fig");
 
   await reload(page);
@@ -1036,6 +1036,24 @@ test("header menus resize selected rows and columns in pixels", async ({ page })
   await reload(page);
   await expectCellSize(page, "A2", "width", 175);
   await expectCellSize(page, "A2", "height", 65);
+});
+
+test("Save a copy opens an independent document with working formulas", async ({ page }) => {
+  await newSpreadsheet(page);
+  const original = page.url();
+  await enter(page, "A1", "21");
+  await enter(page, "B1", "=A1*2");
+  await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
+  await page.getByRole("button", { name: "Save a copy", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Untitled spreadsheet (copy)");
+  expect(page.url()).not.toBe(original);
+  await expect(cell(page, "B1")).toHaveText("42");
+  await enter(page, "A1", "5");
+  await expect(cell(page, "B1")).toHaveText("10");
+  await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
+  await page.goto(original);
+  await expect(cell(page, "A1")).toHaveText("21");
+  await expect(cell(page, "B1")).toHaveText("42");
 });
 
 test("the header says when a change is on its way to the server", async ({ page }) => {

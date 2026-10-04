@@ -47,6 +47,7 @@ function readRoutes(): Route[] {
     ["GET", `/spreadsheets/${snapshot.id}/events`],
     ["GET", `/spreadsheets/${snapshot.id}/versions`],
     ["GET", `/spreadsheets/${snapshot.id}/members`],
+    ["POST", `/spreadsheets/${snapshot.id}/copy`],
     ["POST", `/spreadsheets/${snapshot.id}/versions/${UNKNOWN_ID}/copy`],
   ];
 }
@@ -59,6 +60,7 @@ function readRoutes(): Route[] {
 const CHANGES_NO_SPREADSHEET = [
   "POST /spreadsheets",
   "POST /spreadsheets/import",
+  "POST /spreadsheets/:spreadsheetId/copy",
   "POST /spreadsheets/:spreadsheetId/versions/:versionId/copy",
 ];
 

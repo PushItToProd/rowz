@@ -614,6 +614,7 @@ function content(snapshot: TestSnapshot) {
 const NOT_JOURNALED = [
   "POST /spreadsheets",
   "POST /spreadsheets/import",
+  "POST /spreadsheets/:spreadsheetId/copy",
   "PATCH /spreadsheets/:spreadsheetId",
   "DELETE /spreadsheets/:spreadsheetId",
   "PUT /spreadsheets/:spreadsheetId/members",
