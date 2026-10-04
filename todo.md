@@ -107,7 +107,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P6** the reference functions `OFFSET`, `INDIRECT`, `ADDRESS`, `ISFORMULA`, `ISREF`
 - [ ] **P7** random numbers
 - [ ] **P6** date helpers except for `TO_TIMEZONE` since we don't use time zones here
-- [ ] **P8** other text - `SLICE`, `SLUGIFY`, `DECODEURL`, `BASE64`, `BASE64DECODE`, `DOMAIN`, `RELATIVE_URL`
+- [x] other text - `SLICE`, `SLUGIFY`, `DECODEURL`, `BASE64`, `BASE64DECODE`, `DOMAIN`, `RELATIVE_URL`
 - [ ] **P7** `LOOKUP`, `HLOOKUP`, `XYLOOKUP` (skip `FLOOKUP` for now)
 - [ ] **P6** `SUBTOTAL`, `ARRAY_CONSTRAIN`, `FILTER_COLUMNS`, `RANGE_CONTAINS`
 - [ ] consider resolving an ambiguous bare word by nearness: a name in the formula's own table or script first, then names and tables on the formula's page. The author considers this dangerous and has not decided to do it. If it is done, every use of a word with more than one meaning in the document is marked with a yellow wavy underline. See [DECISIONS.md](DECISIONS.md), "An ambiguous name is an error"
@@ -453,3 +453,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - allow table cells to contain structs/arrays/nested tables
 
 - [ ] `ContextMenu.vue` moves focus to the menu only on mount. If the focused item becomes disabled while the menu stays open (for example another tab uses the last row capacity), focus can leave the menu and Escape stops working. Keep focus on the menu when its focused item is disabled, and test it.
+
+- [ ] Add tests for `BASE64DECODE` with malformed padding or trailing bits made of valid alphabet characters (`"A==="`, `"AA=A"`, `"AB=="`), and for `SLICE("abcdef", -4, -1)` (negative end index).

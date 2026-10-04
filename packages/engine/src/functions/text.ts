@@ -36,6 +36,89 @@ function find(needle: string, haystack: string, from: number): number {
   return index === -1 ? fail("#VALUE!", `"${needle}" was not found`) : index + 1;
 }
 
+const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/** Encodes UTF-8 bytes with the standard Base64 alphabet. */
+function encodeBase64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let encoded = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const first = bytes[i];
+    if (first === undefined) continue;
+    const second = bytes[i + 1];
+    const third = bytes[i + 2];
+    encoded += BASE64_ALPHABET.charAt(first >> 2);
+    encoded += BASE64_ALPHABET.charAt(((first & 0b11) << 4) | ((second ?? 0) >> 4));
+    encoded +=
+      second === undefined
+        ? "=="
+        : third === undefined
+          ? BASE64_ALPHABET.charAt((second & 0b1111) << 2) + "="
+          : BASE64_ALPHABET.charAt(((second & 0b1111) << 2) | (third >> 6)) +
+            BASE64_ALPHABET.charAt(third & 0b111111);
+  }
+  return encoded;
+}
+
+/** Decodes standard Base64 as UTF-8, rejecting malformed Base64 and UTF-8. */
+function decodeBase64(value: string): string {
+  const compact = value.replace(/[\t\n\f\r ]/g, "");
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(compact)) {
+    return fail("#VALUE!", "The text is not valid Base64");
+  }
+
+  const paddingAt = compact.indexOf("=");
+  const unpadded = paddingAt === -1 ? compact : compact.slice(0, paddingAt);
+  const givenPadding = compact.length - unpadded.length;
+  const remainder = unpadded.length % 4;
+  if (remainder === 1) return fail("#VALUE!", "The text is not valid Base64");
+  const padding = (4 - remainder) % 4;
+  if (givenPadding > 0 && (compact.length % 4 !== 0 || givenPadding !== padding)) {
+    return fail("#VALUE!", "The text is not valid Base64");
+  }
+  const lastValue = BASE64_ALPHABET.indexOf(unpadded.at(-1) ?? "A");
+  if (
+    (remainder === 2 && (lastValue & 0b1111) !== 0) ||
+    (remainder === 3 && (lastValue & 0b11) !== 0)
+  ) {
+    return fail("#VALUE!", "The text is not valid Base64");
+  }
+
+  const normalized = unpadded + "=".repeat(padding);
+  const bytes = new Uint8Array((normalized.length / 4) * 3 - padding);
+  let byteIndex = 0;
+  for (let i = 0; i < normalized.length; i += 4) {
+    const first = BASE64_ALPHABET.indexOf(normalized.charAt(i));
+    const second = BASE64_ALPHABET.indexOf(normalized.charAt(i + 1));
+    const third =
+      normalized.charAt(i + 2) === "=" ? 0 : BASE64_ALPHABET.indexOf(normalized.charAt(i + 2));
+    const fourth =
+      normalized.charAt(i + 3) === "=" ? 0 : BASE64_ALPHABET.indexOf(normalized.charAt(i + 3));
+    bytes[byteIndex++] = (first << 2) | (second >> 4);
+    if (normalized.charAt(i + 2) !== "=")
+      bytes[byteIndex++] = ((second & 0b1111) << 4) | (third >> 2);
+    if (normalized.charAt(i + 3) !== "=") bytes[byteIndex++] = ((third & 0b11) << 6) | fourth;
+  }
+
+  try {
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    return fail("#VALUE!", "The Base64 text does not contain valid UTF-8");
+  }
+}
+
+/** Parses an absolute URL with a host. */
+function absoluteUrl(value: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return fail("#VALUE!", "Expected an absolute URL with a host");
+  }
+  if (!parsed.hostname) return fail("#VALUE!", "Expected an absolute URL with a host");
+  return parsed;
+}
+
 const concatenate: FunctionDefinition = eager(1, Infinity, (...values) =>
   items(values)
     .map(({ value }) => text(value))
@@ -80,6 +163,40 @@ export const textFunctions: Record<string, FunctionDefinition> = {
   CODE: textFunction((value) => value.codePointAt(0) ?? fail("#VALUE!", "The text is empty")),
   /** Writes text so it can be part of a web address. */
   ENCODEURL: textFunction(encodeURIComponent),
+  /** Replaces runs of punctuation and spaces with hyphens and removes diacritics. */
+  SLUGIFY: textFunction((value) =>
+    value
+      .normalize("NFKD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, "-")
+      .replace(/^-|-$/g, ""),
+  ),
+  /** Decodes text written for a URL component. */
+  DECODEURL: textFunction((value) => {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return fail("#VALUE!", "The text is not valid URL-encoded text");
+    }
+  }),
+  /** Encodes text as standard Base64 using UTF-8. */
+  BASE64: textFunction(encodeBase64),
+  /** Decodes standard Base64 text as UTF-8. */
+  BASE64DECODE: textFunction(decodeBase64),
+  /** The host name of an absolute URL, without its port. */
+  DOMAIN: textFunction((value) => absoluteUrl(value).hostname),
+  /** The path, query, and fragment of an absolute URL. */
+  RELATIVE_URL: textFunction((value) => {
+    const parsed = absoluteUrl(value);
+    return parsed.pathname + parsed.search + parsed.hash;
+  }),
+  /** A zero-based, end-exclusive part of text. Negative indexes count from the end. */
+  SLICE: eager(2, 3, (value, start, ...endValues) => {
+    const source = text(value);
+    const end = endValues.at(0);
+    return source.slice(integer(start), end === undefined ? undefined : integer(end));
+  }),
   /** Writes a number as text with a fixed number of decimals, grouping thousands unless told not to. */
   FIXED: eager(1, 3, (value, decimals = 2, plain = false) => {
     const places = Math.min(count(decimals, "The number of decimals"), MAX_DECIMALS);

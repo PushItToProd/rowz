@@ -1056,6 +1056,57 @@ const ENTRIES: readonly FunctionDoc[] = [
     example: 'ENCODEURL("a b&c")',
   },
   {
+    name: "DECODEURL",
+    category: "Text",
+    syntax: "DECODEURL(text)",
+    summary: "Decodes text written for a URL component.",
+    example: 'DECODEURL("a%20b%26c")',
+  },
+  {
+    name: "BASE64",
+    category: "Text",
+    syntax: "BASE64(text)",
+    summary: "Encodes text as standard Base64 using UTF-8.",
+    example: 'BASE64("Hello")',
+  },
+  {
+    name: "BASE64DECODE",
+    category: "Text",
+    syntax: "BASE64DECODE(text)",
+    summary: "Decodes standard Base64 text as UTF-8.",
+    example: 'BASE64DECODE("SGVsbG8=")',
+  },
+  {
+    name: "DOMAIN",
+    category: "Text",
+    syntax: "DOMAIN(url)",
+    summary: "Gives the host name of an absolute URL, without its port.",
+    example: 'DOMAIN("https://www.example.com/path")',
+  },
+  {
+    name: "RELATIVE_URL",
+    category: "Text",
+    syntax: "RELATIVE_URL(url)",
+    summary: "Gives the path, query, and fragment of an absolute URL.",
+    example: 'RELATIVE_URL("https://example.com/path?q=x#top")',
+  },
+  {
+    name: "SLICE",
+    category: "Text",
+    syntax: "SLICE(text, start, [end])",
+    summary:
+      "Gives a zero-based, end-exclusive part of text. Negative indexes count from the end, and the end defaults to the text length.",
+    example: 'SLICE("abcdef", 1, 4)',
+  },
+  {
+    name: "SLUGIFY",
+    category: "Text",
+    syntax: "SLUGIFY(text)",
+    summary:
+      "Lowercases text, removes diacritics, and replaces each run of punctuation or spaces with a hyphen.",
+    example: 'SLUGIFY("Crème brûlée")',
+  },
+  {
     name: "FIXED",
     category: "Text",
     syntax: "FIXED(number, [decimals], [no_commas])",
