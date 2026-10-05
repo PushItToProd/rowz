@@ -148,6 +148,8 @@ A bare name must be unique across the document. If two names, two tables, or a n
 
 ## Formulas
 
+The tokenizer and parser syntax is specified in [Formula language grammar](docs/formula-language-grammar.md).
+
 A cell whose input starts with `=` is a formula. A leading apostrophe forces text: `'=not a formula`.
 
 The app has a help page at `/help` with the full reference. It lists every function with an example whose result the engine computes when the page loads.
@@ -309,6 +311,8 @@ The server runs from TypeScript source through `tsx`. There is no compiled serve
 One server process is assumed. Live updates between sessions are announced in the process's memory, so sessions connected to different processes would not hear each other.
 
 ## Development
+
+See the [native browser UI audit](docs/native-browser-ui-audit.md) for the current controls and in-app replacement options.
 
 | Command              | Does                                                                 |
 | -------------------- | -------------------------------------------------------------------- |
