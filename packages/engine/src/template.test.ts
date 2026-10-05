@@ -54,6 +54,28 @@ describe("output", () => {
     expect(markdown("{{Table1!A1}} and {{ UPPER(Table1!A2) }}")).toBe("pear and APPLE");
   });
 
+  it("keeps each rendered BUTTON and plans its action from the view page", () => {
+    const blocks = render(
+      '{% for name in Table1!A1:A2 %}{{ BUTTON(name, EXECUTE(9, Table1!C1)) }}{% end %} {{ BUTTON("Later", EXECUTE(Table1!B1+1, Table1!B1)) }}',
+    );
+    const buttons = blocks.flatMap((block) =>
+      block.type === "markdown" ? block.parts.filter((part) => part.type === "button") : [],
+    );
+
+    expect(buttons.map(({ label, occurrence }) => ({ label, occurrence }))).toEqual([
+      { label: "pear", occurrence: 0 },
+      { label: "apple", occurrence: 1 },
+      { label: "Later", occurrence: 2 },
+    ]);
+    expect(buttons[2]?.type).toBe("button");
+    if (buttons[2]?.type !== "button") throw new Error("Expected a button");
+    expect(buttons[2].action.pageId).toBe(PAGE);
+    expect(workbook.planAction(buttons[2].action)).toEqual({
+      ok: true,
+      effects: [{ type: "setCell", tableId: "t1", row: 0, col: 1, input: "6" }],
+    });
+  });
+
   it("leaves text without tags as it is", () => {
     expect(markdown("# Title\n\nSome *emphasis* and a { brace }.")).toBe(
       "# Title\n\nSome *emphasis* and a { brace }.",

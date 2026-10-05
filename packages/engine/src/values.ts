@@ -22,8 +22,10 @@ export interface ActionValue {
   kind: "action";
   name: string;
   args: Node[];
-  /** The cell whose formula contains the action. Unqualified references resolve against its table. */
+  /** The cell whose formula contains the action. A page action sets `pageId` instead. */
   origin: CellId;
+  /** The page used to resolve references when a text view template contains the action. */
+  pageId?: string;
 }
 
 export interface ButtonValue {

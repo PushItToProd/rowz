@@ -1423,14 +1423,14 @@ export const useWorkbookStore = defineStore("workbook", () => {
   }
 
   /** Names a written cell, with its table when that is not the table the button is in. */
-  function nameOf(cell: CellId, buttonTableId: string): string {
+  function nameOf(cell: CellId, buttonTableId?: string): string {
     const address = formatAddress(cell);
-    if (cell.tableId === buttonTableId) return address;
+    if (buttonTableId !== undefined && cell.tableId === buttonTableId) return address;
     const table = tables.value.find((candidate) => candidate.id === cell.tableId);
     return table ? `${table.name}!${address}` : address;
   }
 
-  function describe(result: ClickResult, buttonTableId: string): Notice {
+  function describe(result: ClickResult, buttonTableId?: string): Notice {
     if (result.status === "failed") {
       return { kind: "error", text: result.error ?? "The action failed" };
     }
@@ -1459,7 +1459,13 @@ export const useWorkbookStore = defineStore("workbook", () => {
   ): Promise<ClickResult | undefined> {
     const identity = identityOf(id);
     if (!identity) return undefined;
-    const key = cellIdentityKey(identity);
+    return runRequest(cellIdentityKey(identity), request);
+  }
+
+  async function runRequest(
+    key: string,
+    request: () => Promise<ClickResult>,
+  ): Promise<ClickResult | undefined> {
     if (running.has(key) || !canEdit.value) return undefined;
     running.add(key);
     const queuedSaves = saves;
@@ -1487,6 +1493,20 @@ export const useWorkbookStore = defineStore("workbook", () => {
     if (!identity) return;
     const result = await run(id, () => api.click(identity));
     if (result) notice.value = describe(result, id.tableId);
+  }
+
+  /** Runs one BUTTON occurrence from a text view on the server. */
+  async function clickViewButton(viewId: string, occurrence: number): Promise<void> {
+    const view = views.value.find((candidate) => candidate.id === viewId);
+    if (view?.kind !== "text") return;
+    const result = await runRequest(`view:${viewId}:${String(occurrence)}`, () =>
+      api.clickViewButton(viewId, occurrence),
+    );
+    if (result) notice.value = describe(result);
+  }
+
+  function isViewButtonRunning(viewId: string, occurrence: number): boolean {
+    return running.has(`view:${viewId}:${String(occurrence)}`);
   }
 
   /** Stores a value chosen through the checkbox or dropdown in a cell. Success is silent. */
@@ -1893,6 +1913,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     rejectedDraft,
     receiveChange,
     isRunning,
+    isViewButtonRunning,
     restoreVersion,
     spreadsheet,
     pages,
@@ -1939,6 +1960,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     inputOf,
     setCell,
     click,
+    clickViewButton,
     input,
     renameSpreadsheet,
     addPage,

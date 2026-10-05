@@ -330,6 +330,7 @@ export function mockApi(): MockedApi {
       redoable: false,
     }),
     click: vi.fn().mockResolvedValue(clickResult()),
+    clickViewButton: vi.fn().mockResolvedValue(clickResult()),
     input: vi.fn().mockResolvedValue(clickResult()),
   };
 }

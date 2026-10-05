@@ -81,6 +81,9 @@ describe("HelpView", () => {
     );
     expect(wrapper.get("#text-views").text()).toContain("{% for name, amount in Sales!A2:B9 %}");
     expect(wrapper.get("#text-views pre").text()).toContain("{{ total }}");
+    expect(wrapper.get("#text-views").text()).toContain(
+      "A formula that gives BUTTON shows a clickable button",
+    );
   });
 
   it("explains every error code", () => {

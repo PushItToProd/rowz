@@ -39,6 +39,8 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 
 ## Bugs
 
+- [ ] A text-view `BUTTON` click sends only its occurrence index, so a stale view whose conditional content shifted can run a different button; send a render token or the button's label/action fingerprint and answer 409 on mismatch
+- [ ] A text-view `BUTTON` inside a template loop loses the loop's bound names when the action is planned (`ActionValue` keeps the page but not the template bindings), so an action body that uses a loop variable fails with `#NAME?`; preserve the bindings for the selected occurrence
 - [ ] **P2** conditional formatting criteria doesn't handle strings -- I made a conditional format with a condition like `="foobar"` but it didn't apply (maybe b/c it was a data table column with formula values)
 
 - [ ] `QUERY` treats single quotes as delimiting string literals which contradicts the outer formula languge syntax. this isn't exactly a bug but I consider it a severe enough misfeature I'm classing it as one - we should probably have single quotes delimit identifiers in `QUERY` syntax instead so you can write queries like `=QUERY(People, "select 'Favorite food', count(*) group by 'Favorite food'")`. (as this is a pre-production app I don't care if this breaks anything)
@@ -312,7 +314,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] call a webhook
     - (Claude) needs the outbox under Before sharing with others, and a rule for which addresses a server may call, so a formula cannot reach the server's own network
 - [ ] (Claude) scheduled actions: Rows' `SCHEDULE`, `REPEAT`, `REFRESH`. Needs a server scheduler and a rule for whose permissions a scheduled run uses
-- [ ] **P3** a `BUTTON` in a text view shows only its label; it could run if views had a click endpoint
+- [x] **P3** run a `BUTTON` in a text view through a view click endpoint
 - [ ] **P3** (Claude) show the runs of a document's buttons to the people who can open it: who clicked, when, what it wrote and sent, and how it ended. `action_runs` records all of this and nothing shows it
 - [ ] **P3** (Claude) a button can ask for confirmation before it runs, for an action that clears cells or sends email
 

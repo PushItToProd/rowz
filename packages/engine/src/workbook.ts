@@ -614,12 +614,13 @@ export class Workbook {
   private effectsOf(action: ActionValue): Effect[] {
     const definition = this.functions.get(action.name);
     if (definition?.kind !== "action") fail("#NAME?", `Unknown action ${action.name}`);
-    const context = this.context(action.origin);
+    const context =
+      action.pageId === undefined ? this.context(action.origin) : this.pageContext(action.pageId);
     const effects = definition.plan(action.args, {
       origin: action.origin,
       evaluate: (node) => evaluate(node, context),
       resolve: (reference) => context.resolve(reference),
-      target: (node) => this.targetOf(node, action.origin),
+      target: (node) => this.targetOf(node, action.origin, action.pageId),
       tableOf: (tableId) => ({
         ...this.extent(tableId),
         columns: this.tables.table(tableId)?.columns ?? null,
@@ -914,14 +915,19 @@ export class Workbook {
   private targetOf(
     node: Node | undefined,
     origin: CellId,
+    pageId?: string,
   ): { range: CellRange | undefined; single: boolean } | undefined {
     if (node?.type === "reference") {
-      return { range: this.resolve(node.reference, origin), single: isSingleCell(node.reference) };
+      const range =
+        pageId === undefined
+          ? this.resolve(node.reference, origin)
+          : this.rangeOf(node.reference, this.tables.findFromPage(node.reference, pageId));
+      return { range, single: isSingleCell(node.reference) };
     }
     if (node?.type !== "name" && node?.type !== "qualified") return undefined;
-    const pageId = this.tables.table(origin.tableId)?.pageId;
+    const holderPage = pageId ?? this.tables.table(origin.tableId)?.pageId;
     const record =
-      node.type === "name" ? this.bareName(node.name) : this.qualifiedName(node, pageId);
+      node.type === "name" ? this.bareName(node.name) : this.qualifiedName(node, holderPage);
     if (!record || !("ast" in record.content) || record.content.ast.type !== "reference") {
       return undefined;
     }
@@ -1036,8 +1042,9 @@ export class Workbook {
   /** The context of a formula written on a page and not in a table, which names the table of every cell it reads. */
   private pageContext(pageId: string): EvaluationContext {
     return {
-      // No cell holds this formula. An action made here has nowhere to run from.
+      // No cell holds this formula, so actions keep the page as their context.
       origin: NO_CELL,
+      pageId,
       functions: this.functions,
       resolve: (reference) => this.rangeOf(reference, this.tables.findFromPage(reference, pageId)),
       read: (cell) => this.current(cell),

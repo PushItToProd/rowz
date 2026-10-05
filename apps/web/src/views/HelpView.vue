@@ -256,6 +256,8 @@ We sold **{{ total }}** in all.
 
 {{ BAR_CHART(Sales!A2:B4, "Sales by person") }}`;
 
+const TEMPLATE_BUTTON_EXAMPLE = '{{ BUTTON("Approve", EXECUTE(TRUE, Sales!D2)) }}';
+
 const OPERATORS = [
   ["-x", "Negation", "-A1"],
   ["^", "Power", "A1 ^ 2"],
@@ -832,7 +834,8 @@ const OPERATORS = [
       <p>
         An <em>action</em> is a function that changes something: <code>EXECUTE</code> writes to a
         cell, and <code>SEND_EMAIL</code> sends a message. An action does nothing by being in a
-        cell. It runs when it is inside <code>BUTTON</code> and someone clicks the button.
+        cell. It runs when it is inside <code>BUTTON</code> and someone clicks the button in a cell
+        or text view.
       </p>
       <pre><code>=BUTTON("Sum range", EXECUTE(SUM(A1,A2),A3))
 =BUTTON("Click me!", SEND_EMAIL(A1,A2,A3))</code></pre>
@@ -1122,6 +1125,11 @@ const OPERATORS = [
         <li>
           A formula that gives one value puts it into the sentence. A formula that gives a range
           shows it as a table, and a chart function such as <code>BAR_CHART</code> shows the chart.
+        </li>
+        <li>
+          A formula that gives <code>BUTTON</code> shows a clickable button. For example,
+          <code>{{ TEMPLATE_BUTTON_EXAMPLE }}</code> writes TRUE to <code>Sales!D2</code> when
+          clicked. A button inside a loop appears once for each row.
         </li>
         <li>
           A formula that fails shows an error chip with its code and message where its value would

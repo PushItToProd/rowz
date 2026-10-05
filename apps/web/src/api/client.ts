@@ -405,4 +405,12 @@ export const api = {
         clock(),
       ),
     ),
+
+  clickViewButton: (viewId: string, buttonIndex: number): Promise<ClickResult> =>
+    body(
+      routes.views[":viewId"].buttons[":buttonIndex"].click.$post(
+        { param: { viewId, buttonIndex: String(buttonIndex) } },
+        clock(),
+      ),
+    ),
 };

@@ -636,6 +636,32 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await expect(text).toBeVisible();
 });
 
+test("a text view button runs the selected stored action", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "1");
+  await page.getByRole("button", { name: "Add text" }).last().click();
+  const text = page.locator('[data-view="Text 1"]');
+  await text.getByRole("button", { name: "Edit" }).click();
+  await text
+    .getByLabel("Text view source")
+    .fill(
+      [
+        `{{ BUTTON("Increment", EXECUTE('Table 1'!A1 + 1, 'Table 1'!A1)) }}`,
+        `{{ BUTTON("Set nine", EXECUTE(9, 'Table 1'!A1)) }}`,
+      ].join("\n\n"),
+    );
+  await text.getByRole("button", { name: "Done" }).click();
+
+  await text.getByRole("button", { name: "Set nine" }).click();
+  await expect(cell(page, "A1")).toHaveText("9");
+  await expect(page.getByRole("status")).toHaveText(/Updated Table 1!A1/);
+
+  await text.getByRole("button", { name: "Increment" }).click();
+  await expect(cell(page, "A1")).toHaveText("10");
+  await reload(page);
+  await expect(text.getByRole("button", { name: "Increment" })).toBeVisible();
+});
+
 test("a spreadsheet is exported to a file and imported again, and a table to and from CSV", async ({
   page,
 }, testInfo) => {

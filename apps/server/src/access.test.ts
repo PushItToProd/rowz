@@ -27,6 +27,18 @@ beforeAll(async () => {
     cellsBody({ A1: '=BUTTON("Go", EXECUTE(1, B1))', A2: "=CHECKBOX(B2)" }),
   );
   await owner.json("POST", `/pages/${created.pages[0]!.id}/views`, { kind: "chart" }, 201);
+  const textView = await owner.json<{ view: { id: string } }>(
+    "POST",
+    `/pages/${created.pages[0]!.id}/views`,
+    { kind: "text" },
+    201,
+  );
+  await owner.json(
+    "PATCH",
+    `/views/${textView.view.id}`,
+    { source: "{{ BUTTON(\"View action\", EXECUTE(2, 'Table 1'!B1)) }}" },
+    200,
+  );
   snapshot = await owner.json<Snapshot>("GET", `/spreadsheets/${created.id}`);
 });
 afterAll(() => server.close());
@@ -77,6 +89,7 @@ function writeRoutes(): Route[] {
   const page = snapshot.pages[0]!.id;
   const table = snapshot.tables[0]!.id;
   const view = snapshot.views[0]!.id;
+  const textView = snapshot.views.find(({ kind }) => kind === "text")!.id;
   return [
     ["POST", `/spreadsheets/${snapshot.id}/versions/${UNKNOWN_ID}/restore`],
     ["PATCH", `/spreadsheets/${snapshot.id}`, { name: "Taken over" }],
@@ -84,7 +97,7 @@ function writeRoutes(): Route[] {
     ["POST", `/spreadsheets/${snapshot.id}/undo`],
     ["POST", `/spreadsheets/${snapshot.id}/redo`],
     ["PATCH", `/pages/${page}`, { name: "Taken over" }],
-    ["PUT", `/pages/${page}/order`, { blocks: [view, table] }],
+    ["PUT", `/pages/${page}/order`, { blocks: [view, textView, table] }],
     ["PUT", `/spreadsheets/${snapshot.id}/pages/order`, { pages: [page] }],
     // The page they are on already, which is refused only once the caller may write.
     ["PUT", `/tables/${table}/page`, { pageId: page }],
@@ -95,6 +108,7 @@ function writeRoutes(): Route[] {
     // Below the button in A1, so the click that follows still finds it.
     ["POST", `/tables/${table}/edits`, { axis: "row", kind: "insert", index: 5 }],
     ["POST", `/tables/${table}/cells/0/0/click`],
+    ["POST", `/views/${textView}/buttons/0/click`],
     ["POST", `/tables/${table}/cells/1/0/input`, { value: true }],
     [
       "POST",
@@ -297,7 +311,7 @@ describe("an editor", () => {
     // added, and each move names the page the block is on. Sharing and deleting are the owner's.
     expect(await statuses(editor, writeRoutes())).toEqual([
       404, 204, 201, 200, 200, 200, 200, 409, 422, 422, 201, 200, 200, 200, 200, 200, 200, 200, 200,
-      200, 200, 200, 200, 200, 200, 201, 200, 200, 200, 200, 403, 403, 403,
+      200, 200, 200, 200, 200, 200, 200, 201, 200, 200, 200, 200, 403, 403, 403,
     ]);
     await owner.json("DELETE", `/spreadsheets/${snapshot.id}`, undefined, 204);
     await editor.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);

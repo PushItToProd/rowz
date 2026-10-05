@@ -65,7 +65,9 @@ async function readSample(id: string): Promise<Sample> {
                 .map((part) =>
                   part.type === "text"
                     ? part.text
-                    : `${part.error.code} ${part.error.message ?? part.error.code}`,
+                    : part.type === "error"
+                      ? `${part.error.code} ${part.error.message ?? part.error.code}`
+                      : part.label,
                 )
                 .join("")
             : `[${block.type}]`,

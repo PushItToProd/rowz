@@ -339,6 +339,21 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "run a text view button and journal its cell write",
+    async prepare({ pageId, tableId }) {
+      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "1" }), 200);
+      const view = await createView(owner, pageId);
+      await owner.json("PATCH", `/views/${view.id}`, {
+        source: `{{ BUTTON("Add one", EXECUTE('Table 1'!A1 + 1, 'Table 1'!A1)) }}`,
+      });
+      return {
+        method: "POST",
+        path: `/views/${view.id}/buttons/0/click`,
+        status: 200,
+      };
+    },
+  },
+  {
     name: "write a cell into a new row",
     async prepare({ id, tableId }) {
       await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "first" }));

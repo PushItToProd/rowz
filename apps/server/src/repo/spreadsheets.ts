@@ -3125,6 +3125,21 @@ export class SpreadsheetRepository {
     return authorize(row, access, "View");
   }
 
+  /** Finds a view for a click, returning 409 for a deleted view and hiding inaccessible views. */
+  async findViewForClick(viewId: string): Promise<Found<ViewRecord>> {
+    const [row] = await this.db
+      .select({ ...viewColumns, spreadsheetId: spreadsheets.id, role: this.access.role })
+      .from(views)
+      .innerJoin(pages, eq(pages.id, views.pageId))
+      .innerJoin(spreadsheets, eq(spreadsheets.id, pages.spreadsheetId))
+      .leftJoin(this.access, this.granted())
+      .where(eq(views.id, viewId));
+    if (!row) throw conflict("This text view no longer exists");
+    if (row.role === null) throw notFound("View");
+    const found: Found<ViewRecord> = { ...row, role: row.role };
+    return authorize(found, "write", "View");
+  }
+
   /** The join condition that limits a query to the spreadsheets the user may open. */
   private granted() {
     return and(eq(this.access.spreadsheetId, spreadsheets.id), eq(this.access.userId, this.userId));

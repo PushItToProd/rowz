@@ -57,7 +57,7 @@ export function createApp(dependencies: AppDependencies) {
     .route("/spreadsheets", spreadsheetRoutes(changes, dependencies.shutdown))
     .route("/pages", pageRoutes())
     .route("/tables", tableRoutes(dependencies))
-    .route("/views", viewRoutes());
+    .route("/views", viewRoutes(dependencies));
 
   return new Hono().onError(onError).route("/api", api);
 }

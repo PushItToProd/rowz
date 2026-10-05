@@ -41,6 +41,8 @@ export interface NameScope {
 export interface EvaluationContext {
   /** The cell whose formula is being evaluated. */
   origin: CellId;
+  /** The page whose formula is being evaluated when it is not in a cell. */
+  pageId?: string;
   functions: FunctionRegistry;
   /** Finds the cells a reference points at, or `undefined` if its table does not exist. */
   resolve(reference: Reference): CellRange | undefined;
@@ -325,7 +327,13 @@ function call(name: string, args: readonly Node[], context: EvaluationContext): 
   checkArity(name, args.length, definition.minArgs, definition.maxArgs);
   switch (definition.kind) {
     case "action":
-      return { kind: "action", name, args: [...args], origin: context.origin };
+      return {
+        kind: "action",
+        name,
+        args: [...args],
+        origin: context.origin,
+        ...(context.pageId === undefined ? {} : { pageId: context.pageId }),
+      };
     case "special":
       return definition.evaluate(args, context);
     case "pure":

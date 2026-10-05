@@ -8,6 +8,7 @@ import {
   cellsBody,
   changedCells,
   createSpreadsheet,
+  addView,
   readSnapshot,
   rowIds,
   startTestServer,
@@ -382,6 +383,58 @@ describe("clicking a SEND_EMAIL button", () => {
     for (let attempt = 0; attempt < 4; attempt += 1) await click(sheet, 0, 1, sender);
     server.failSending(false);
     expect(await click(sheet, 0, 1, sender)).toMatchObject({ status: "succeeded" });
+  });
+});
+
+describe("clicking a text view button", () => {
+  it("selects the rendered occurrence and derives its action from the stored view", async () => {
+    const sheet = await sheetWith({ A1: "2" });
+    const view = await addView(user, sheet.pageId);
+    await user.json("PATCH", `/views/${view.id}`, {
+      source:
+        `{{ BUTTON("Increment", EXECUTE('Table 1'!A1 + 1, 'Table 1'!A1)) }}` +
+        ` {{ BUTTON("Set to nine", EXECUTE(9, 'Table 1'!A1)) }}`,
+    });
+
+    const result = await user.json<ClickResult>("POST", `/views/${view.id}/buttons/1/click`, {
+      action: "EXECUTE(999, 'Table 1'!A1)",
+    });
+    expect(result).toMatchObject({ status: "succeeded", error: null, emailsSent: 0 });
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "0:0": "9",
+    });
+    expect(await runsFor(sheet)).toMatchObject([
+      {
+        id: result.runId,
+        tableId: null,
+        row: null,
+        col: null,
+        viewId: view.id,
+        buttonIndex: 1,
+        effects: [{ type: "setCell", tableId: sheet.tableId, row: 0, col: 0, input: "9" }],
+      },
+    ]);
+
+    const next = await user.json<ClickResult>("POST", `/views/${view.id}/buttons/0/click`);
+    expect(next.status).toBe("succeeded");
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "0:0": "10",
+    });
+  });
+
+  it("answers 409 when the button or its view no longer exists", async () => {
+    const sheet = await sheetWith({});
+    const view = await addView(user, sheet.pageId);
+    await user.json("PATCH", `/views/${view.id}`, {
+      source: `{{ BUTTON("Go", EXECUTE(1, 'Table 1'!A1)) }}`,
+    });
+    await user.json("PATCH", `/views/${view.id}`, { source: "The button was removed." });
+
+    const missingButton = await user.request("POST", `/views/${view.id}/buttons/0/click`);
+    expect(missingButton.status).toBe(409);
+    await user.json("DELETE", `/views/${view.id}`, undefined, 200);
+    const missingView = await user.request("POST", `/views/${view.id}/buttons/0/click`);
+    expect(missingView.status).toBe(409);
   });
 });
 

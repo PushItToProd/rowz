@@ -63,20 +63,39 @@ function errorChip(error: ErrorValue): HTMLSpanElement {
   return chip;
 }
 
-function markersIn(text: string, chips: ReadonlyMap<string, ErrorValue>): [string, ErrorValue][] {
-  const found: [string, ErrorValue][] = [];
-  for (const match of text.matchAll(/ROWZERROR\d+END/g)) {
+type InlineReplacement = Extract<TemplateInline, { type: "error" | "button" }>;
+const REPLACEMENT_MARKER = /ROWZ(?:ERROR|BUTTON)\d+END/g;
+
+function markersIn(
+  text: string,
+  replacements: ReadonlyMap<string, InlineReplacement>,
+): [string, InlineReplacement][] {
+  const found: [string, InlineReplacement][] = [];
+  for (const match of text.matchAll(REPLACEMENT_MARKER)) {
     const marker = match[0];
-    const error = chips.get(marker);
-    if (error !== undefined) found.push([marker, error]);
+    const replacement = replacements.get(marker);
+    if (replacement !== undefined) found.push([marker, replacement]);
   }
   return found;
 }
 
-/** Renders Markdown text and inserts error chips after Markdown has escaped its source. */
-function renderMarkdown(parts: TemplateInline[]): string {
+function inlineElement(part: InlineReplacement, viewId: string, isEditing: boolean): HTMLElement {
+  if (part.type === "error") return errorChip(part.error);
+  const button = document.createElement("button");
+  const running = store.isViewButtonRunning(viewId, part.occurrence);
+  button.type = "button";
+  button.className = "text-view__button";
+  button.dataset.viewButton = String(part.occurrence);
+  button.disabled = isEditing || !store.canEdit || running;
+  if (running) button.setAttribute("aria-busy", "true");
+  button.textContent = running ? "Running…" : part.label;
+  return button;
+}
+
+/** Renders Markdown, then inserts error chips and buttons through DOM nodes. */
+function renderMarkdown(parts: TemplateInline[], viewId: string, isEditing: boolean): string {
   const literal = parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("");
-  if (!parts.some((part) => part.type === "error")) return markdown.render(literal);
+  if (!parts.some((part) => part.type !== "text")) return markdown.render(literal);
 
   const renderedLiteral = document.createElement("template");
   renderedLiteral.innerHTML = markdown.render(literal);
@@ -88,20 +107,22 @@ function renderMarkdown(parts: TemplateInline[]): string {
   }
   const usedMarkers = new Set<string>();
   for (const text of [literal, ...literalOutput]) {
-    for (const match of text.matchAll(/ROWZERROR\d+END/g)) usedMarkers.add(match[0]);
+    for (const match of text.matchAll(REPLACEMENT_MARKER)) usedMarkers.add(match[0]);
   }
 
-  const chips = new Map<string, ErrorValue>();
+  const replacements = new Map<string, InlineReplacement>();
   let markerIndex = 0;
   const source = parts
     .map((part) => {
       if (part.type === "text") return part.text;
       let marker: string;
+      const prefix = part.type === "error" ? "ROWZERROR" : "ROWZBUTTON";
       do {
-        marker = `ROWZERROR${String(markerIndex)}END`;
+        marker = `${prefix}${String(markerIndex)}END`;
         markerIndex += 1;
       } while (usedMarkers.has(marker));
-      chips.set(marker, part.error);
+      usedMarkers.add(marker);
+      replacements.set(marker, part);
       return marker;
     })
     .join("");
@@ -116,14 +137,14 @@ function renderMarkdown(parts: TemplateInline[]): string {
     const replacement = document.createDocumentFragment();
     let from = 0;
     let found = false;
-    for (const match of node.data.matchAll(/ROWZERROR\d+END/g)) {
+    for (const match of node.data.matchAll(REPLACEMENT_MARKER)) {
       const marker = match[0];
-      const error = chips.get(marker);
+      const inline = replacements.get(marker);
       const next = match.index;
-      if (error === undefined) continue;
+      if (inline === undefined) continue;
       found = true;
       replacement.append(document.createTextNode(node.data.slice(from, next)));
-      replacement.append(errorChip(error));
+      replacement.append(inlineElement(inline, viewId, isEditing));
       from = next + marker.length;
     }
     if (found) {
@@ -136,45 +157,47 @@ function renderMarkdown(parts: TemplateInline[]): string {
     const attributes = Array.from(element.attributes);
     const attributeErrors = attributes.map((attribute) => ({
       attribute,
-      errors: markersIn(attribute.value, chips),
+      replacements: markersIn(attribute.value, replacements),
     }));
     const urlAttribute =
       element.tagName === "A" ? "href" : element.tagName === "IMG" ? "src" : undefined;
-    const urlErrors =
+    const urlReplacements =
       urlAttribute === undefined
         ? undefined
-        : attributeErrors.find(({ attribute }) => attribute.name === urlAttribute)?.errors;
-    if (urlErrors && urlErrors.length > 0 && element.tagName === "A") {
+        : attributeErrors.find(({ attribute }) => attribute.name === urlAttribute)?.replacements;
+    if (urlReplacements && urlReplacements.length > 0 && element.tagName === "A") {
       const replacement = document.createDocumentFragment();
       while (element.firstChild) replacement.append(element.firstChild);
-      for (const [, error] of urlErrors) {
+      for (const [, inline] of urlReplacements) {
         replacement.append(document.createTextNode(" "));
-        replacement.append(errorChip(error));
+        replacement.append(inlineElement(inline, viewId, isEditing));
       }
       element.replaceWith(replacement);
       continue;
     }
-    if (urlErrors && urlErrors.length > 0 && element.tagName === "IMG") {
+    if (urlReplacements && urlReplacements.length > 0 && element.tagName === "IMG") {
       const replacement = document.createDocumentFragment();
-      for (const [, error] of urlErrors) replacement.append(errorChip(error));
+      for (const [, inline] of urlReplacements) {
+        replacement.append(inlineElement(inline, viewId, isEditing));
+      }
       element.replaceWith(replacement);
       continue;
     }
 
-    const found = new Map<string, ErrorValue>();
-    for (const { attribute, errors } of attributeErrors) {
-      for (const [marker, error] of errors) {
-        found.set(marker, error);
+    const found = new Map<string, InlineReplacement>();
+    for (const { attribute, replacements: inAttribute } of attributeErrors) {
+      for (const [marker, inline] of inAttribute) {
+        found.set(marker, inline);
         attribute.value = attribute.value.replaceAll(marker, "");
       }
     }
     if (found.size > 0) {
-      const chipsAfter = document.createDocumentFragment();
-      for (const error of found.values()) {
-        chipsAfter.append(document.createTextNode(" "));
-        chipsAfter.append(errorChip(error));
+      const replacementsAfter = document.createDocumentFragment();
+      for (const inline of found.values()) {
+        replacementsAfter.append(document.createTextNode(" "));
+        replacementsAfter.append(inlineElement(inline, viewId, isEditing));
       }
-      element.after(chipsAfter);
+      element.after(replacementsAfter);
     }
   }
   return rendered.innerHTML;
@@ -185,9 +208,21 @@ const parts = computed(() =>
   renderTemplate(editing.value ? draft.value : props.view.source, (expression, names) =>
     store.evaluateOnPage(props.view.pageId, expression, names),
   ).map((part) =>
-    part.type === "markdown" ? { ...part, html: renderMarkdown(part.parts) } : part,
+    part.type === "markdown"
+      ? { ...part, html: renderMarkdown(part.parts, props.view.id, editing.value) }
+      : part,
   ),
 );
+
+function runTextButton(event: MouseEvent): void {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const button = target.closest<HTMLButtonElement>("button[data-view-button]");
+  if (!button || !props.view.id) return;
+  event.preventDefault();
+  event.stopPropagation();
+  void store.clickViewButton(props.view.id, Number(button.dataset.viewButton));
+}
 </script>
 
 <template>
@@ -216,6 +251,7 @@ const parts = computed(() =>
     <div
       class="text-view"
       :title="store.canEdit && !editing ? 'Double-click to edit' : undefined"
+      @click="runTextButton"
       @dblclick="edit"
     >
       <template v-for="(part, index) in parts" :key="index">

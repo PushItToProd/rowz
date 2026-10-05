@@ -381,6 +381,11 @@ export const updateViewBody = z
   });
 
 export const viewParam = z.object({ viewId: z.uuid() });
+/** Names a rendered BUTTON occurrence in a text view. */
+export const viewButtonParam = z.object({
+  viewId: z.uuid(),
+  buttonIndex: z.coerce.number().int().nonnegative(),
+});
 
 /** Limits on a spreadsheet file, which a person can write by hand or another program can produce. */
 export const FILE_LIMITS = {

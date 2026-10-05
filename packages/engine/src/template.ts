@@ -2,6 +2,7 @@ import { rewriteBareNames, rewriteReferences, type Replace } from "./rewrite";
 import {
   error,
   formatValue,
+  isButton,
   isChart,
   isError,
   isMarkdown,
@@ -12,6 +13,7 @@ import {
   type ChartValue,
   type Evaluated,
   type ErrorValue,
+  type ActionValue,
 } from "./values";
 
 /**
@@ -45,7 +47,10 @@ export class TemplateSyntaxError extends Error {
 }
 
 /** One part of what a text view shows. Markdown runs until a table or chart interrupts it. */
-export type TemplateInline = { type: "text"; text: string } | { type: "error"; error: ErrorValue };
+export type TemplateInline =
+  | { type: "text"; text: string }
+  | { type: "error"; error: ErrorValue }
+  | { type: "button"; label: string; occurrence: number; action: ActionValue };
 
 export type TemplateBlock =
   | { type: "markdown"; parts: TemplateInline[] }
@@ -393,6 +398,7 @@ export function renderNodes(
   const blocks: TemplateBlock[] = [];
   let markdown: TemplateInline[] = [];
   let iterations = 0;
+  let buttonOccurrence = 0;
   const appendMarkdown = (text: string): void => {
     if (text === "") return;
     const last = markdown.at(-1);
@@ -400,7 +406,7 @@ export function renderNodes(
     else markdown.push({ type: "text", text });
   };
   const flush = (): void => {
-    if (markdown.some((part) => part.type === "error" || part.text.trim() !== "")) {
+    if (markdown.some((part) => part.type !== "text" || part.text.trim() !== "")) {
       blocks.push({ type: "markdown", parts: markdown });
     }
     markdown = [];
@@ -411,7 +417,15 @@ export function renderNodes(
     const [[single = null] = []] = rows;
     if (rows.length <= 1 && (rows[0]?.length ?? 0) <= 1) {
       // Markdown made by a formula is meant to be formatted, so it goes in as written.
-      if (isMarkdown(single)) appendMarkdown(single.text);
+      if (isButton(single)) {
+        markdown.push({
+          type: "button",
+          label: single.label,
+          occurrence: buttonOccurrence,
+          action: single.action,
+        });
+        buttonOccurrence += 1;
+      } else if (isMarkdown(single)) appendMarkdown(single.text);
       else if (isError(single)) markdown.push({ type: "error", error: single });
       else if (!isChart(single)) appendMarkdown(escapeMarkdown(formatValue(single)));
       else {

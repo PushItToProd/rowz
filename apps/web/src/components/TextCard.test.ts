@@ -5,7 +5,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, snapshotWith, type MockedApi } from "../testing";
+import { at, clickResult, snapshotWith, type MockedApi } from "../testing";
 import TextCard from "./TextCard.vue";
 
 vi.mock("../api/client", async () => {
@@ -132,6 +132,47 @@ describe("TextCard", () => {
     expect(shown().get(".chart").attributes("data-chart")).toBe("pie");
     expect(shown().findAll(".chart__slice")).toHaveLength(2);
     expect(shown().get("figcaption").text()).toBe("Fruit");
+  });
+
+  it("renders safe text-view buttons and sends only their occurrence index", async () => {
+    await render(
+      `{{ BUTTON("<img src=x onerror=alert(1)>", EXECUTE(1, 'Table 1'!A1)) }} {{ BUTTON("Second", EXECUTE(2, 'Table 1'!A1)) }}`,
+    );
+    expect(shown().find("img").exists()).toBe(false);
+    expect(
+      shown()
+        .findAll(".text-view__button")
+        .map((item) => item.text()),
+    ).toEqual(["<img src=x onerror=alert(1)>", "Second"]);
+    expect(
+      shown()
+        .findAll(".text-view__button")
+        .every((item) => item.element.tagName === "BUTTON"),
+    ).toBe(true);
+
+    server.clickViewButton.mockResolvedValue(clickResult());
+    await button("Second").trigger("click");
+    await flushPromises();
+    expect(server.clickViewButton).toHaveBeenCalledExactlyOnceWith("v1", 1);
+    expect(useWorkbookStore().notice).toEqual({ kind: "success", text: "Done" });
+  });
+
+  it("shows busy and error feedback while a text-view action runs", async () => {
+    await render(`{{ BUTTON("Run", EXECUTE(1, 'Table 1'!A1)) }}`);
+    let finish!: (result: ReturnType<typeof clickResult>) => void;
+    server.clickViewButton.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+
+    await button("Run").trigger("click");
+    await flushPromises();
+    expect(button("Running…").attributes("disabled")).toBeDefined();
+    finish(clickResult({ status: "failed", error: "The action failed" }));
+    await flushPromises();
+    expect(button("Run").attributes("disabled")).toBeUndefined();
+    expect(useWorkbookStore().notice).toEqual({ kind: "error", text: "The action failed" });
   });
 
   it("shows HTML in the source and in cell values as text, and does not run it", async () => {

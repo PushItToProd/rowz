@@ -2,19 +2,22 @@ import {
   createWorkbook,
   isButton,
   isControl,
+  renderTemplate,
   type ActionPlan,
   type CellValue,
   type Effect,
   type ErrorValue,
   type Scalar,
   type SendEmailEffect,
+  type TemplateBlock,
+  type TemplateInline,
   type Workbook,
 } from "@spreadsheet-app/engine";
 import type { IdentifiedCell } from "@spreadsheet-app/shared";
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { actionRuns, type RunStatus } from "../db/schema";
-import { ApiFailure, unprocessable } from "../errors";
+import { ApiFailure, conflict, unprocessable } from "../errors";
 import type { Mailer } from "../mail/mailer";
 import { SpreadsheetRepository, type Change, type RepositoryOptions } from "../repo/spreadsheets";
 
@@ -106,6 +109,51 @@ export function runButton(
 }
 
 /**
+ * Runs the indexed BUTTON occurrence in a stored text view. The request names
+ * only the view and its rendered occurrence; the action is read from the view
+ * again under the spreadsheet lock.
+ */
+export function runViewButton(
+  dependencies: ActionDependencies,
+  userId: string,
+  viewId: string,
+  buttonIndex: number,
+  now: () => number,
+): Promise<ClickResult> {
+  return runAction(dependencies, userId, now, async (repository) => {
+    let view = await repository.findViewForClick(viewId);
+    if (view.kind !== "text") throw conflict("This text view no longer exists");
+    try {
+      await repository.lockSpreadsheet(view.spreadsheetId);
+    } catch (cause) {
+      if (cause instanceof ApiFailure && cause.status === 404) {
+        // Distinguish a deleted target from access that was removed while waiting.
+        await repository.findViewForClick(viewId);
+      }
+      throw cause;
+    }
+
+    // A view can be deleted or its source changed while this request waits.
+    view = await repository.findViewForClick(viewId);
+    if (view.kind !== "text") throw conflict("This text view no longer exists");
+
+    const contents = await repository.read(view.spreadsheetId);
+    const workbook = createWorkbook(contents.data, { now });
+    const rendered = renderTemplate(view.source, (expression, names) =>
+      workbook.evaluateOnPage(view.pageId, expression, names),
+    );
+    const button = buttonAt(rendered, buttonIndex);
+    if (!button) throw conflict("This button no longer exists");
+
+    return {
+      spreadsheetId: view.spreadsheetId,
+      target: { viewId, buttonIndex },
+      plan: workbook.planAction(button.action),
+    };
+  });
+}
+
+/**
  * Stores a value chosen through the control in a cell, such as a checkbox.
  * The control's formula says which cell the value goes to and which values
  * are allowed, so the client supplies only the choice.
@@ -129,19 +177,18 @@ export function runControl(
 }
 
 /**
- * Carries out what a cell asks for. What the action writes to the spreadsheet
+ * Carries out what a button asks for. What the action writes to the spreadsheet
  * is one change, and it commits together with the audit record. Email is sent
  * after the commit, so a rolled-back run never sends mail.
  */
 async function runCell(
-  { db, mailer, emailsPerHour, repositoryOptions }: ActionDependencies,
+  dependencies: ActionDependencies,
   userId: string,
   cell: IdentifiedCell,
   now: () => number,
   decide: Decide,
 ): Promise<ClickResult> {
-  const planned = await db.transaction(async (tx): Promise<Planned> => {
-    const repository = new SpreadsheetRepository(tx, userId, repositoryOptions);
+  return runAction(dependencies, userId, now, async (repository) => {
     const { spreadsheetId } = await repository.findTable(cell.tableId, "write");
     await repository.lockSpreadsheet(spreadsheetId);
 
@@ -150,6 +197,46 @@ async function runCell(
     const resolved = contents.position(cell);
     const workbook = createWorkbook(contents.data, { now });
     const plan = decide(workbook, workbook.getValue(resolved));
+    return { spreadsheetId, target: resolved, plan };
+  });
+}
+
+type RunTarget =
+  | { tableId: string; row: number; col: number; viewId?: never; buttonIndex?: never }
+  | { tableId?: never; row?: never; col?: never; viewId: string; buttonIndex: number };
+
+interface LocatedPlan {
+  spreadsheetId: string;
+  target: RunTarget;
+  plan: ActionPlan;
+}
+
+type LocatePlan = (repository: SpreadsheetRepository) => Promise<LocatedPlan>;
+
+function buttonAt(
+  blocks: readonly TemplateBlock[],
+  occurrence: number,
+): Extract<TemplateInline, { type: "button" }> | undefined {
+  for (const block of blocks) {
+    if (block.type !== "markdown") continue;
+    const button = block.parts.find(
+      (part): part is Extract<TemplateInline, { type: "button" }> =>
+        part.type === "button" && part.occurrence === occurrence,
+    );
+    if (button) return button;
+  }
+  return undefined;
+}
+
+async function runAction(
+  { db, mailer, emailsPerHour, repositoryOptions }: ActionDependencies,
+  userId: string,
+  now: () => number,
+  locate: LocatePlan,
+): Promise<ClickResult> {
+  const planned = await db.transaction(async (tx): Promise<Planned> => {
+    const repository = new SpreadsheetRepository(tx, userId, repositoryOptions);
+    const { spreadsheetId, target, plan } = await locate(repository);
 
     const record = async (
       effects: Effect[],
@@ -162,7 +249,7 @@ async function runCell(
         .insert(actionRuns)
         .values({
           spreadsheetId,
-          ...resolved,
+          ...target,
           userId,
           effects,
           // A refused run sends nothing, so it uses none of the user's limit.

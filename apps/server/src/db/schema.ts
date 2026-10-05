@@ -13,6 +13,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   foreignKey,
   index,
   integer,
@@ -344,7 +345,7 @@ export const journal = pgTable(
 
 export type RunStatus = "pending" | "succeeded" | "failed";
 
-/** The audit log of button clicks: who clicked which cell, what it asked for, and how it ended. */
+/** The audit log of button clicks: who clicked, what it asked for, and how it ended. */
 export const actionRuns = pgTable(
   "action_runs",
   {
@@ -352,11 +353,13 @@ export const actionRuns = pgTable(
     spreadsheetId: uuid("spreadsheet_id")
       .notNull()
       .references(() => spreadsheets.id, { onDelete: "cascade" }),
-    // Not a foreign key: the record outlives the table the button was in.
-    tableId: uuid("table_id").notNull(),
-    // Where the cell was when it was clicked.
-    row: integer("row_index").notNull(),
-    col: integer("col_index").notNull(),
+    // Target IDs are not foreign keys: a run outlives the button it came from.
+    tableId: uuid("table_id"),
+    viewId: uuid("view_id"),
+    // A cell position, or the occurrence of a button in a text view.
+    row: integer("row_index"),
+    col: integer("col_index"),
+    buttonIndex: integer("button_index"),
     userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     effects: jsonb("effects").$type<Effect[]>().notNull(),
     /**
@@ -369,7 +372,13 @@ export const actionRuns = pgTable(
     error: text("error"),
     createdAt,
   },
-  (table) => [index("action_runs_user_time").on(table.userId, table.createdAt)],
+  (table) => [
+    index("action_runs_user_time").on(table.userId, table.createdAt),
+    check(
+      "action_runs_target",
+      sql`(${table.tableId} IS NOT NULL AND ${table.row} IS NOT NULL AND ${table.col} IS NOT NULL AND ${table.viewId} IS NULL AND ${table.buttonIndex} IS NULL) OR (${table.tableId} IS NULL AND ${table.row} IS NULL AND ${table.col} IS NULL AND ${table.viewId} IS NOT NULL AND ${table.buttonIndex} IS NOT NULL AND ${table.buttonIndex} >= 0)`,
+    ),
+  ],
 );
 
 /** A user's private groups for the documents in their list. */

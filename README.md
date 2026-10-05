@@ -124,6 +124,8 @@ We sold **{{ total }}** in all.
 
 `{{ }}` shows one value in the sentence, a range as a table, and the result of `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, or `SCATTER_CHART` as a chart. A failed formula appears as an error chip with its code and message. A formula in a chart or text view is written on a page and not in a table, so it names the table of every cell it reads.
 
+A `BUTTON` result is clickable in a text view, including when a loop renders it more than once. For example, `{{ BUTTON("Approve", EXECUTE(TRUE, Sales!D2)) }}` shows an **Approve** button. The server re-evaluates the saved view when clicked and runs the action at that occurrence.
+
 Formula inputs share completion and local undo history. Scripts and Markdown templates use multiline editors: Enter inserts a newline, Done or Ctrl/Cmd+Enter saves, and Cancel discards the draft. Escape dismisses completion without discarding multiline edits. Tab accepts a suggestion when one is open; otherwise it saves and moves focus. Formula drafts retain their history while browsing pages and appear in a labeled draft editor when their original field is unavailable.
 
 At an unfinished operand, click a cell or drag a range to insert its reference. Use **Pick reference** to replace selected formula text or a reference under the caret. Further picks replace that insertion until typing or caret movement resumes. A drag creates one undo step; Escape cancels it. Picked positional addresses are relative. Named headers insert same-row columns in filters and formula-column definitions, and whole columns elsewhere. A drag through sorted or filtered rows must describe exactly one stored rectangle.
@@ -250,11 +252,11 @@ Rows and columns have persistent UUIDs. Cells and undo entries name those IDs; i
 
 The engine is pure. Evaluating an action formula returns a description of the effect, and `Workbook.planAction` turns that description into a list of effects such as `setCell` or `sendEmail`. The engine never applies them.
 
-The same engine runs in two places. The browser runs it to show values as soon as a cell changes. The server runs it when a button is clicked: it loads the stored cell inputs, evaluates the clicked cell, plans the action, and applies the effects. The browser sends only the address of the clicked cell, so it cannot ask the server for an effect that the stored formula does not describe.
+The same engine runs in two places. The browser runs it to show values as soon as a cell changes. The server runs it when a button is clicked: it loads the stored inputs, evaluates the clicked cell or the text view's selected button occurrence, plans the action, and applies the effects. The browser sends a cell's identity or a view ID and button occurrence, so it cannot ask the server for an effect that the stored formula does not describe.
 
 Cell writes and a record in `action_runs` commit in one transaction. Email is sent after the commit.
 
-Every change to what a document holds runs in a transaction that first locks the document's row, so changes to one document happen one at a time and each reads what the one before it left. A request that changes anything must also come from a page served at `BASE_URL`: the server refuses one whose `Origin` header names another origin. `action_runs` records who clicked which cell, the effects, and the outcome.
+Every change to what a document holds runs in a transaction that first locks the document's row, so changes to one document happen one at a time and each reads what the one before it left. A request that changes anything must also come from a page served at `BASE_URL`: the server refuses one whose `Origin` header names another origin. `action_runs` records who clicked a cell button or a text view button, the effects, and the outcome.
 
 Every document belongs to a workspace, and users reach documents through workspace membership with a role of owner, editor, or viewer. All data access goes through `SpreadsheetRepository`, which checks membership in each query. A document outside the user's workspaces is reported as not found.
 
