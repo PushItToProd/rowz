@@ -7,4 +7,5 @@ playwright-report/
 *.tsbuildinfo
 .env
 .env.local
+.rowz-credential.local
 .playwright-mcp/

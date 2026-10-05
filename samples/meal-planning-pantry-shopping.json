@@ -1,0 +1,1714 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "Meal Plan → Pantry Check → Shopping List",
+  "pages": [
+    {
+      "name": "This week",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Weekly plan",
+          "source": "# Week of October 5\n\nPlan dinners, scale ingredient needs by **CookServings**, subtract the pantry quantities, and make a store-grouped shopping list. Leftover nights use food made earlier in the week, so they do not create new ingredient demand.\n\nThe Monday curry is cooked for four and serves two people, leaving lunch for Wednesday. Try changing its **CookServings** from 4 to 6. Rice, onion, and chickpea needs update on the Shopping page; refresh the editable purchase queue there to capture the new quantities."
+        },
+        {
+          "type": "table",
+          "name": "Recipes",
+          "rowCount": 6,
+          "colCount": 3,
+          "columns": [
+            {
+              "name": "Recipe",
+              "type": "text"
+            },
+            {
+              "name": "BaseServings",
+              "type": "number"
+            },
+            {
+              "name": "PrepNote",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Chickpea curry"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "4"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "Coconut milk, spinach, and rice; makes useful leftovers"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Black bean tacos"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "4"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Shared onion with Monday curry"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Sheet-pan chicken"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "4"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "Roast potatoes and broccoli on one tray"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Lentil soup"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "6"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "Soup freezes well; Friday batch covers Saturday lunch"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "Vegetable fried rice"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "4"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "Use cold rice and frozen peas"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "Leftovers"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "1"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "Use portions cooked earlier in the week"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "MealPlan",
+          "rowCount": 7,
+          "colCount": 6,
+          "columns": [
+            {
+              "name": "MealID",
+              "type": "text"
+            },
+            {
+              "name": "Day",
+              "type": "date"
+            },
+            {
+              "name": "Meal",
+              "type": "text"
+            },
+            {
+              "name": "Recipe",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "This week",
+                "table": "Recipes",
+                "column": "Recipe"
+              }
+            },
+            {
+              "name": "CookServings",
+              "type": "number"
+            },
+            {
+              "name": "PlanNote",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "MON"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "2026-10-05"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "Dinner"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "Chickpea curry"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "4"
+            },
+            {
+              "row": 0,
+              "col": 5,
+              "input": "Cook extra for Wednesday lunch"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "TUE"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "2026-10-06"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Dinner"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "Black bean tacos"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "2"
+            },
+            {
+              "row": 1,
+              "col": 5,
+              "input": "Small batch"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "WED"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "2026-10-07"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "Dinner"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "Leftovers"
+            },
+            {
+              "row": 2,
+              "col": 4,
+              "input": "2"
+            },
+            {
+              "row": 2,
+              "col": 5,
+              "input": "Monday curry"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "THU"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "2026-10-08"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "Dinner"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "Sheet-pan chicken"
+            },
+            {
+              "row": 3,
+              "col": 4,
+              "input": "4"
+            },
+            {
+              "row": 3,
+              "col": 5,
+              "input": ""
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "FRI"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "2026-10-09"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "Dinner"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "Lentil soup"
+            },
+            {
+              "row": 4,
+              "col": 4,
+              "input": "6"
+            },
+            {
+              "row": 4,
+              "col": 5,
+              "input": "Save two portions for Saturday"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "SAT"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "2026-10-10"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "Dinner"
+            },
+            {
+              "row": 5,
+              "col": 3,
+              "input": "Leftovers"
+            },
+            {
+              "row": 5,
+              "col": 4,
+              "input": "2"
+            },
+            {
+              "row": 5,
+              "col": 5,
+              "input": "Friday soup"
+            },
+            {
+              "row": 6,
+              "col": 0,
+              "input": "SUN"
+            },
+            {
+              "row": 6,
+              "col": 1,
+              "input": "2026-10-11"
+            },
+            {
+              "row": 6,
+              "col": 2,
+              "input": "Dinner"
+            },
+            {
+              "row": 6,
+              "col": 3,
+              "input": "Vegetable fried rice"
+            },
+            {
+              "row": 6,
+              "col": 4,
+              "input": "4"
+            },
+            {
+              "row": 6,
+              "col": 5,
+              "input": ""
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "ddd, mmm d"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "IngredientNeeds",
+          "rowCount": 21,
+          "colCount": 8,
+          "columns": [
+            {
+              "name": "MealID",
+              "type": "text"
+            },
+            {
+              "name": "Recipe",
+              "type": "text"
+            },
+            {
+              "name": "Ingredient",
+              "type": "text"
+            },
+            {
+              "name": "AmountAtBase",
+              "type": "number"
+            },
+            {
+              "name": "Unit",
+              "type": "text"
+            },
+            {
+              "name": "BaseServings",
+              "type": "formula",
+              "formula": "=XLOOKUP([Recipe],Recipes[Recipe],Recipes[BaseServings])"
+            },
+            {
+              "name": "PlannedServings",
+              "type": "formula",
+              "formula": "=XLOOKUP([MealID],MealPlan[MealID],MealPlan[CookServings])"
+            },
+            {
+              "name": "Required",
+              "type": "formula",
+              "formula": "=[AmountAtBase]*[PlannedServings]/[BaseServings]"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "MON"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Chickpea curry"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "Chickpeas"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "2"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "cans"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "MON"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "Chickpea curry"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Coconut milk"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "1"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "can"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "MON"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "Chickpea curry"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "Rice"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "2"
+            },
+            {
+              "row": 2,
+              "col": 4,
+              "input": "cups"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "MON"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "Chickpea curry"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "Onion"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "1"
+            },
+            {
+              "row": 3,
+              "col": 4,
+              "input": "cup"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "MON"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "Chickpea curry"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "Spinach"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "2"
+            },
+            {
+              "row": 4,
+              "col": 4,
+              "input": "cups"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "TUE"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "Black bean tacos"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "Black beans"
+            },
+            {
+              "row": 5,
+              "col": 3,
+              "input": "2"
+            },
+            {
+              "row": 5,
+              "col": 4,
+              "input": "cans"
+            },
+            {
+              "row": 6,
+              "col": 0,
+              "input": "TUE"
+            },
+            {
+              "row": 6,
+              "col": 1,
+              "input": "Black bean tacos"
+            },
+            {
+              "row": 6,
+              "col": 2,
+              "input": "Tortillas"
+            },
+            {
+              "row": 6,
+              "col": 3,
+              "input": "8"
+            },
+            {
+              "row": 6,
+              "col": 4,
+              "input": "each"
+            },
+            {
+              "row": 7,
+              "col": 0,
+              "input": "TUE"
+            },
+            {
+              "row": 7,
+              "col": 1,
+              "input": "Black bean tacos"
+            },
+            {
+              "row": 7,
+              "col": 2,
+              "input": "Onion"
+            },
+            {
+              "row": 7,
+              "col": 3,
+              "input": "1"
+            },
+            {
+              "row": 7,
+              "col": 4,
+              "input": "cup"
+            },
+            {
+              "row": 8,
+              "col": 0,
+              "input": "TUE"
+            },
+            {
+              "row": 8,
+              "col": 1,
+              "input": "Black bean tacos"
+            },
+            {
+              "row": 8,
+              "col": 2,
+              "input": "Salsa"
+            },
+            {
+              "row": 8,
+              "col": 3,
+              "input": "1"
+            },
+            {
+              "row": 8,
+              "col": 4,
+              "input": "cup"
+            },
+            {
+              "row": 9,
+              "col": 0,
+              "input": "THU"
+            },
+            {
+              "row": 9,
+              "col": 1,
+              "input": "Sheet-pan chicken"
+            },
+            {
+              "row": 9,
+              "col": 2,
+              "input": "Chicken"
+            },
+            {
+              "row": 9,
+              "col": 3,
+              "input": "1.5"
+            },
+            {
+              "row": 9,
+              "col": 4,
+              "input": "lb"
+            },
+            {
+              "row": 10,
+              "col": 0,
+              "input": "THU"
+            },
+            {
+              "row": 10,
+              "col": 1,
+              "input": "Sheet-pan chicken"
+            },
+            {
+              "row": 10,
+              "col": 2,
+              "input": "Potatoes"
+            },
+            {
+              "row": 10,
+              "col": 3,
+              "input": "1.5"
+            },
+            {
+              "row": 10,
+              "col": 4,
+              "input": "lb"
+            },
+            {
+              "row": 11,
+              "col": 0,
+              "input": "THU"
+            },
+            {
+              "row": 11,
+              "col": 1,
+              "input": "Sheet-pan chicken"
+            },
+            {
+              "row": 11,
+              "col": 2,
+              "input": "Broccoli"
+            },
+            {
+              "row": 11,
+              "col": 3,
+              "input": "1"
+            },
+            {
+              "row": 11,
+              "col": 4,
+              "input": "head"
+            },
+            {
+              "row": 12,
+              "col": 0,
+              "input": "FRI"
+            },
+            {
+              "row": 12,
+              "col": 1,
+              "input": "Lentil soup"
+            },
+            {
+              "row": 12,
+              "col": 2,
+              "input": "Lentils"
+            },
+            {
+              "row": 12,
+              "col": 3,
+              "input": "1.5"
+            },
+            {
+              "row": 12,
+              "col": 4,
+              "input": "cups"
+            },
+            {
+              "row": 13,
+              "col": 0,
+              "input": "FRI"
+            },
+            {
+              "row": 13,
+              "col": 1,
+              "input": "Lentil soup"
+            },
+            {
+              "row": 13,
+              "col": 2,
+              "input": "Carrots"
+            },
+            {
+              "row": 13,
+              "col": 3,
+              "input": "3"
+            },
+            {
+              "row": 13,
+              "col": 4,
+              "input": "each"
+            },
+            {
+              "row": 14,
+              "col": 0,
+              "input": "FRI"
+            },
+            {
+              "row": 14,
+              "col": 1,
+              "input": "Lentil soup"
+            },
+            {
+              "row": 14,
+              "col": 2,
+              "input": "Celery"
+            },
+            {
+              "row": 14,
+              "col": 3,
+              "input": "2"
+            },
+            {
+              "row": 14,
+              "col": 4,
+              "input": "stalks"
+            },
+            {
+              "row": 15,
+              "col": 0,
+              "input": "FRI"
+            },
+            {
+              "row": 15,
+              "col": 1,
+              "input": "Lentil soup"
+            },
+            {
+              "row": 15,
+              "col": 2,
+              "input": "Broth"
+            },
+            {
+              "row": 15,
+              "col": 3,
+              "input": "6"
+            },
+            {
+              "row": 15,
+              "col": 4,
+              "input": "cups"
+            },
+            {
+              "row": 16,
+              "col": 0,
+              "input": "FRI"
+            },
+            {
+              "row": 16,
+              "col": 1,
+              "input": "Lentil soup"
+            },
+            {
+              "row": 16,
+              "col": 2,
+              "input": "Onion"
+            },
+            {
+              "row": 16,
+              "col": 3,
+              "input": "1"
+            },
+            {
+              "row": 16,
+              "col": 4,
+              "input": "cup"
+            },
+            {
+              "row": 17,
+              "col": 0,
+              "input": "SUN"
+            },
+            {
+              "row": 17,
+              "col": 1,
+              "input": "Vegetable fried rice"
+            },
+            {
+              "row": 17,
+              "col": 2,
+              "input": "Rice"
+            },
+            {
+              "row": 17,
+              "col": 3,
+              "input": "3"
+            },
+            {
+              "row": 17,
+              "col": 4,
+              "input": "cups"
+            },
+            {
+              "row": 18,
+              "col": 0,
+              "input": "SUN"
+            },
+            {
+              "row": 18,
+              "col": 1,
+              "input": "Vegetable fried rice"
+            },
+            {
+              "row": 18,
+              "col": 2,
+              "input": "Eggs"
+            },
+            {
+              "row": 18,
+              "col": 3,
+              "input": "4"
+            },
+            {
+              "row": 18,
+              "col": 4,
+              "input": "each"
+            },
+            {
+              "row": 19,
+              "col": 0,
+              "input": "SUN"
+            },
+            {
+              "row": 19,
+              "col": 1,
+              "input": "Vegetable fried rice"
+            },
+            {
+              "row": 19,
+              "col": 2,
+              "input": "Peas"
+            },
+            {
+              "row": 19,
+              "col": 3,
+              "input": "1"
+            },
+            {
+              "row": 19,
+              "col": 4,
+              "input": "cup"
+            },
+            {
+              "row": 20,
+              "col": 0,
+              "input": "SUN"
+            },
+            {
+              "row": 20,
+              "col": 1,
+              "input": "Vegetable fried rice"
+            },
+            {
+              "row": 20,
+              "col": 2,
+              "input": "Carrots"
+            },
+            {
+              "row": 20,
+              "col": 3,
+              "input": "1"
+            },
+            {
+              "row": 20,
+              "col": 4,
+              "input": "each"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 3,
+              "endCol": 3,
+              "format": {
+                "numberFormat": "0.##"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 7,
+              "endCol": 7,
+              "format": {
+                "numberFormat": "0.##"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pantry and shopping",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Shopping overview",
+          "source": "# Shopping list\n\nNeeded quantities combine the scheduled recipe lines and subtract current pantry stock. The shared onion and rice entries are consolidated across recipes. The purchase queue is a refreshable, editable copy; check off items as they are bought.\n\n{% let count = COUNTIF(Shopping[ToBuy], \">0\") %}\nThere are **{{ count }}** ingredients to buy. Use **Build purchase queue** after changing servings or pantry stock. It replaces the queue with the current list."
+        },
+        {
+          "type": "table",
+          "name": "Pantry",
+          "rowCount": 17,
+          "colCount": 4,
+          "columns": [
+            {
+              "name": "Ingredient",
+              "type": "text"
+            },
+            {
+              "name": "OnHand",
+              "type": "number"
+            },
+            {
+              "name": "Unit",
+              "type": "text"
+            },
+            {
+              "name": "Store",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Chickpeas"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "1"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "cans"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Coconut milk"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "0"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "can"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Rice"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "0.5"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "cups"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Onion"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "1.5"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "cup"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "Spinach"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "0"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "cups"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "Black beans"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "1"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "cans"
+            },
+            {
+              "row": 5,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 6,
+              "col": 0,
+              "input": "Tortillas"
+            },
+            {
+              "row": 6,
+              "col": 1,
+              "input": "4"
+            },
+            {
+              "row": 6,
+              "col": 2,
+              "input": "each"
+            },
+            {
+              "row": 6,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 7,
+              "col": 0,
+              "input": "Salsa"
+            },
+            {
+              "row": 7,
+              "col": 1,
+              "input": "0"
+            },
+            {
+              "row": 7,
+              "col": 2,
+              "input": "cup"
+            },
+            {
+              "row": 7,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 8,
+              "col": 0,
+              "input": "Chicken"
+            },
+            {
+              "row": 8,
+              "col": 1,
+              "input": "0"
+            },
+            {
+              "row": 8,
+              "col": 2,
+              "input": "lb"
+            },
+            {
+              "row": 8,
+              "col": 3,
+              "input": "Butcher"
+            },
+            {
+              "row": 9,
+              "col": 0,
+              "input": "Potatoes"
+            },
+            {
+              "row": 9,
+              "col": 1,
+              "input": "1"
+            },
+            {
+              "row": 9,
+              "col": 2,
+              "input": "lb"
+            },
+            {
+              "row": 9,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 10,
+              "col": 0,
+              "input": "Broccoli"
+            },
+            {
+              "row": 10,
+              "col": 1,
+              "input": "0"
+            },
+            {
+              "row": 10,
+              "col": 2,
+              "input": "head"
+            },
+            {
+              "row": 10,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 11,
+              "col": 0,
+              "input": "Lentils"
+            },
+            {
+              "row": 11,
+              "col": 1,
+              "input": "1"
+            },
+            {
+              "row": 11,
+              "col": 2,
+              "input": "cups"
+            },
+            {
+              "row": 11,
+              "col": 3,
+              "input": "Bulk aisle"
+            },
+            {
+              "row": 12,
+              "col": 0,
+              "input": "Carrots"
+            },
+            {
+              "row": 12,
+              "col": 1,
+              "input": "1"
+            },
+            {
+              "row": 12,
+              "col": 2,
+              "input": "each"
+            },
+            {
+              "row": 12,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 13,
+              "col": 0,
+              "input": "Celery"
+            },
+            {
+              "row": 13,
+              "col": 1,
+              "input": "0"
+            },
+            {
+              "row": 13,
+              "col": 2,
+              "input": "stalks"
+            },
+            {
+              "row": 13,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 14,
+              "col": 0,
+              "input": "Broth"
+            },
+            {
+              "row": 14,
+              "col": 1,
+              "input": "2"
+            },
+            {
+              "row": 14,
+              "col": 2,
+              "input": "cups"
+            },
+            {
+              "row": 14,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 15,
+              "col": 0,
+              "input": "Eggs"
+            },
+            {
+              "row": 15,
+              "col": 1,
+              "input": "2"
+            },
+            {
+              "row": 15,
+              "col": 2,
+              "input": "each"
+            },
+            {
+              "row": 15,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 16,
+              "col": 0,
+              "input": "Peas"
+            },
+            {
+              "row": 16,
+              "col": 1,
+              "input": "0"
+            },
+            {
+              "row": 16,
+              "col": 2,
+              "input": "cup"
+            },
+            {
+              "row": 16,
+              "col": 3,
+              "input": "Market"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Shopping",
+          "rowCount": 17,
+          "colCount": 7,
+          "columns": [
+            {
+              "name": "Ingredient",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Pantry and shopping",
+                "table": "Pantry",
+                "column": "Ingredient"
+              }
+            },
+            {
+              "name": "Unit",
+              "type": "formula",
+              "formula": "=XLOOKUP([Ingredient],Pantry[Ingredient],Pantry[Unit])"
+            },
+            {
+              "name": "Store",
+              "type": "formula",
+              "formula": "=XLOOKUP([Ingredient],Pantry[Ingredient],Pantry[Store])"
+            },
+            {
+              "name": "Needed",
+              "type": "formula",
+              "formula": "=SUMIF('This week'!IngredientNeeds[Ingredient],[Ingredient],'This week'!IngredientNeeds[Required])"
+            },
+            {
+              "name": "OnHand",
+              "type": "formula",
+              "formula": "=XLOOKUP([Ingredient],Pantry[Ingredient],Pantry[OnHand])"
+            },
+            {
+              "name": "ToBuy",
+              "type": "formula",
+              "formula": "=MAX(0,[Needed]-[OnHand])"
+            },
+            {
+              "name": "Bought",
+              "type": "checkbox"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Chickpeas"
+            },
+            {
+              "row": 0,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Coconut milk"
+            },
+            {
+              "row": 1,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Rice"
+            },
+            {
+              "row": 2,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Onion"
+            },
+            {
+              "row": 3,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "Spinach"
+            },
+            {
+              "row": 4,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "Black beans"
+            },
+            {
+              "row": 5,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 6,
+              "col": 0,
+              "input": "Tortillas"
+            },
+            {
+              "row": 6,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 7,
+              "col": 0,
+              "input": "Salsa"
+            },
+            {
+              "row": 7,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 8,
+              "col": 0,
+              "input": "Chicken"
+            },
+            {
+              "row": 8,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 9,
+              "col": 0,
+              "input": "Potatoes"
+            },
+            {
+              "row": 9,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 10,
+              "col": 0,
+              "input": "Broccoli"
+            },
+            {
+              "row": 10,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 11,
+              "col": 0,
+              "input": "Lentils"
+            },
+            {
+              "row": 11,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 12,
+              "col": 0,
+              "input": "Carrots"
+            },
+            {
+              "row": 12,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 13,
+              "col": 0,
+              "input": "Celery"
+            },
+            {
+              "row": 13,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 14,
+              "col": 0,
+              "input": "Broth"
+            },
+            {
+              "row": 14,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 15,
+              "col": 0,
+              "input": "Eggs"
+            },
+            {
+              "row": 15,
+              "col": 6,
+              "input": "FALSE"
+            },
+            {
+              "row": 16,
+              "col": 0,
+              "input": "Peas"
+            },
+            {
+              "row": 16,
+              "col": 6,
+              "input": "FALSE"
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 5,
+                "descending": true
+              }
+            ]
+          },
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 3,
+              "endCol": 5,
+              "format": {
+                "numberFormat": "0.##"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Queue actions",
+          "rowCount": 1,
+          "colCount": 2,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Build purchase queue"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "=BUTTON(\"Build purchase queue\",OVERWRITE(FILTER(HSTACK(Shopping[Ingredient],Shopping[ToBuy],Shopping[Unit],Shopping[Store],Shopping[Bought]),MAP(Shopping[ToBuy],LAMBDA(amount,amount>0))),PurchaseQueue!A:E))"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "PurchaseQueue",
+          "rowCount": 0,
+          "colCount": 5,
+          "columns": [
+            {
+              "name": "Ingredient",
+              "type": "text"
+            },
+            {
+              "name": "Quantity",
+              "type": "number"
+            },
+            {
+              "name": "Unit",
+              "type": "text"
+            },
+            {
+              "name": "Store",
+              "type": "text"
+            },
+            {
+              "name": "Bought",
+              "type": "checkbox"
+            }
+          ],
+          "cells": []
+        },
+        {
+          "type": "table",
+          "name": "PantryPurchases",
+          "rowCount": 1,
+          "colCount": 5,
+          "columns": [
+            {
+              "name": "Date",
+              "type": "date"
+            },
+            {
+              "name": "Ingredient",
+              "type": "text"
+            },
+            {
+              "name": "Quantity",
+              "type": "number"
+            },
+            {
+              "name": "Store",
+              "type": "text"
+            },
+            {
+              "name": "Note",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "2026-10-02"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Rice"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "2"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "Market"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "Used the last of the old bag for lunches"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 0,
+              "endCol": 0,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 2,
+              "format": {
+                "numberFormat": "0.##"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

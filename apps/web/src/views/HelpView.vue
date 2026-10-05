@@ -877,7 +877,8 @@ const OPERATORS = [
           row.
         </li>
         <li>
-          This version records each email in the server's log and does not deliver it. The server
+          When <code>SMTP_URL</code> is set, the server sends email through that mail server.
+          Without it, the server records each message in its log and sends nothing. The server
           limits how many emails one person's clicks can send in an hour.
         </li>
         <li>

@@ -33,7 +33,7 @@ The aim is to do what a traditional spreadsheet does, and do it better. I build 
 ### Features of other spreadsheets
 
 - **Layout:** merged cells, borders, wrapping text in a cell, hiding rows and columns, and freezing header rows.
-- **Working with data:** sorting and filtering a table in place, pivot tables (`QUERY` has a `pivot` clause), find and replace, conditional formats, and validation of what a cell accepts.
+- **Working with data:** a dedicated pivot-table editor, find and replace, and validation of what a cell accepts. Tables already support sorting, filtering, conditional formats, and `QUERY` pivot clauses.
 - **Functions:** coverage follows what I use. Less common financial, statistical, and scientific functions are missing or lightly tested. There are no regular expressions, no random numbers, and no `INDIRECT` or `OFFSET`.
 - **Charts:** four kinds, with no axis titles, colors, or stacking.
 - **Files:** rowz does not open or save Excel files. It has no layout for printing.

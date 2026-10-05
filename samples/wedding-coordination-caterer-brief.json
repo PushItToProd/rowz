@@ -1,0 +1,1241 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "Wedding Guest List & Caterer Brief",
+  "pages": [
+    {
+      "name": "Guest list",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Guest overview",
+          "source": "# Wedding coordination\n\nThe reception is November 14, 2026. This workbook connects households, guest responses, meal counts, seating, contribution payments, and near-term tasks. Pending guests are not included in the confirmed caterer count.\n\n{% let confirmed = COUNTIF(Guests[RSVP], \"Yes\") %}\n**{{ confirmed }} confirmed guests**, **{{ COUNTIF(Guests[RSVP], \"Pending\") }} pending replies**, and **{{ COUNTIF(Guests[DietaryNotes], \"<>\") }} dietary notes** need to be reflected in the brief. Three tables currently have open seats. Follow up with the three households marked Pending before the October 17 RSVP deadline."
+        },
+        {
+          "type": "table",
+          "name": "Households",
+          "rowCount": 5,
+          "colCount": 5,
+          "columns": [
+            {
+              "name": "Household",
+              "type": "text"
+            },
+            {
+              "name": "Invited",
+              "type": "number"
+            },
+            {
+              "name": "ContributionDue",
+              "type": "number"
+            },
+            {
+              "name": "Received",
+              "type": "formula",
+              "formula": "=SUMIF(Payments[Household],[Household],Payments[Amount])"
+            },
+            {
+              "name": "Balance",
+              "type": "formula",
+              "formula": "=MAX(0,[ContributionDue]-[Received])"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Chen"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "4"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "500"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Patel"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "3"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "400"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Gomez"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "4"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "500"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Brooks"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "3"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "400"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "Ross"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "3"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "400"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "0"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 4,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Guests",
+          "rowCount": 17,
+          "colCount": 7,
+          "columns": [
+            {
+              "name": "GuestID",
+              "type": "text"
+            },
+            {
+              "name": "Household",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Guest list",
+                "table": "Households",
+                "column": "Household"
+              }
+            },
+            {
+              "name": "Guest",
+              "type": "text"
+            },
+            {
+              "name": "RSVP",
+              "type": "choice",
+              "choices": [
+                "Yes",
+                "No",
+                "Pending"
+              ]
+            },
+            {
+              "name": "Meal",
+              "type": "choice",
+              "choices": [
+                "Chicken",
+                "Vegetarian",
+                "Kids meal"
+              ]
+            },
+            {
+              "name": "TableName",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Reception",
+                "table": "ReceptionTables",
+                "column": "TableName"
+              }
+            },
+            {
+              "name": "DietaryNotes",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "G-001"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Chen"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "Ava Chen"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "Chicken"
+            },
+            {
+              "row": 0,
+              "col": 5,
+              "input": "A"
+            },
+            {
+              "row": 0,
+              "col": 6,
+              "input": "Tree nuts"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "G-002"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "Chen"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "Eli Chen"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "Vegetarian"
+            },
+            {
+              "row": 1,
+              "col": 5,
+              "input": "A"
+            },
+            {
+              "row": 1,
+              "col": 6,
+              "input": "Tree nuts"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "G-003"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "Chen"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "Jo Chen"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "Pending"
+            },
+            {
+              "row": 2,
+              "col": 5,
+              "input": "A"
+            },
+            {
+              "row": 2,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "G-004"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "Chen"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "Sam Chen"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "No"
+            },
+            {
+              "row": 3,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "G-005"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "Patel"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "Mira Patel"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 4,
+              "col": 4,
+              "input": "Chicken"
+            },
+            {
+              "row": 4,
+              "col": 5,
+              "input": "B"
+            },
+            {
+              "row": 4,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "G-006"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "Patel"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "Raj Patel"
+            },
+            {
+              "row": 5,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 5,
+              "col": 4,
+              "input": "Vegetarian"
+            },
+            {
+              "row": 5,
+              "col": 5,
+              "input": "B"
+            },
+            {
+              "row": 5,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 6,
+              "col": 0,
+              "input": "G-007"
+            },
+            {
+              "row": 6,
+              "col": 1,
+              "input": "Patel"
+            },
+            {
+              "row": 6,
+              "col": 2,
+              "input": "Tara Patel"
+            },
+            {
+              "row": 6,
+              "col": 3,
+              "input": "Pending"
+            },
+            {
+              "row": 6,
+              "col": 5,
+              "input": "B"
+            },
+            {
+              "row": 6,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 7,
+              "col": 0,
+              "input": "G-008"
+            },
+            {
+              "row": 7,
+              "col": 1,
+              "input": "Gomez"
+            },
+            {
+              "row": 7,
+              "col": 2,
+              "input": "Luis Gomez"
+            },
+            {
+              "row": 7,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 7,
+              "col": 4,
+              "input": "Kids meal"
+            },
+            {
+              "row": 7,
+              "col": 5,
+              "input": "C"
+            },
+            {
+              "row": 7,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 8,
+              "col": 0,
+              "input": "G-009"
+            },
+            {
+              "row": 8,
+              "col": 1,
+              "input": "Gomez"
+            },
+            {
+              "row": 8,
+              "col": 2,
+              "input": "Ana Gomez"
+            },
+            {
+              "row": 8,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 8,
+              "col": 4,
+              "input": "Chicken"
+            },
+            {
+              "row": 8,
+              "col": 5,
+              "input": "C"
+            },
+            {
+              "row": 8,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 9,
+              "col": 0,
+              "input": "G-010"
+            },
+            {
+              "row": 9,
+              "col": 1,
+              "input": "Gomez"
+            },
+            {
+              "row": 9,
+              "col": 2,
+              "input": "Sofia Gomez"
+            },
+            {
+              "row": 9,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 9,
+              "col": 4,
+              "input": "Vegetarian"
+            },
+            {
+              "row": 9,
+              "col": 5,
+              "input": "C"
+            },
+            {
+              "row": 9,
+              "col": 6,
+              "input": "Gluten"
+            },
+            {
+              "row": 10,
+              "col": 0,
+              "input": "G-011"
+            },
+            {
+              "row": 10,
+              "col": 1,
+              "input": "Gomez"
+            },
+            {
+              "row": 10,
+              "col": 2,
+              "input": "Max Gomez"
+            },
+            {
+              "row": 10,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 10,
+              "col": 4,
+              "input": "Chicken"
+            },
+            {
+              "row": 10,
+              "col": 5,
+              "input": "C"
+            },
+            {
+              "row": 10,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 11,
+              "col": 0,
+              "input": "G-012"
+            },
+            {
+              "row": 11,
+              "col": 1,
+              "input": "Brooks"
+            },
+            {
+              "row": 11,
+              "col": 2,
+              "input": "Theo Brooks"
+            },
+            {
+              "row": 11,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 11,
+              "col": 4,
+              "input": "Chicken"
+            },
+            {
+              "row": 11,
+              "col": 5,
+              "input": "A"
+            },
+            {
+              "row": 11,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 12,
+              "col": 0,
+              "input": "G-013"
+            },
+            {
+              "row": 12,
+              "col": 1,
+              "input": "Brooks"
+            },
+            {
+              "row": 12,
+              "col": 2,
+              "input": "Grace Brooks"
+            },
+            {
+              "row": 12,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 12,
+              "col": 4,
+              "input": "Vegetarian"
+            },
+            {
+              "row": 12,
+              "col": 5,
+              "input": "A"
+            },
+            {
+              "row": 12,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 13,
+              "col": 0,
+              "input": "G-014"
+            },
+            {
+              "row": 13,
+              "col": 1,
+              "input": "Brooks"
+            },
+            {
+              "row": 13,
+              "col": 2,
+              "input": "Ivy Brooks"
+            },
+            {
+              "row": 13,
+              "col": 3,
+              "input": "No"
+            },
+            {
+              "row": 13,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 14,
+              "col": 0,
+              "input": "G-015"
+            },
+            {
+              "row": 14,
+              "col": 1,
+              "input": "Ross"
+            },
+            {
+              "row": 14,
+              "col": 2,
+              "input": "Devon Ross"
+            },
+            {
+              "row": 14,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 14,
+              "col": 4,
+              "input": "Chicken"
+            },
+            {
+              "row": 14,
+              "col": 5,
+              "input": "B"
+            },
+            {
+              "row": 14,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 15,
+              "col": 0,
+              "input": "G-016"
+            },
+            {
+              "row": 15,
+              "col": 1,
+              "input": "Ross"
+            },
+            {
+              "row": 15,
+              "col": 2,
+              "input": "Dana Ross"
+            },
+            {
+              "row": 15,
+              "col": 3,
+              "input": "Yes"
+            },
+            {
+              "row": 15,
+              "col": 4,
+              "input": "Chicken"
+            },
+            {
+              "row": 15,
+              "col": 5,
+              "input": "B"
+            },
+            {
+              "row": 15,
+              "col": 6,
+              "input": ""
+            },
+            {
+              "row": 16,
+              "col": 0,
+              "input": "G-017"
+            },
+            {
+              "row": 16,
+              "col": 1,
+              "input": "Ross"
+            },
+            {
+              "row": 16,
+              "col": 2,
+              "input": "Finn Ross"
+            },
+            {
+              "row": 16,
+              "col": 3,
+              "input": "Pending"
+            },
+            {
+              "row": 16,
+              "col": 5,
+              "input": "B"
+            },
+            {
+              "row": 16,
+              "col": 6,
+              "input": ""
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 1,
+                "descending": false
+              },
+              {
+                "column": 2,
+                "descending": false
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "name": "Payments",
+          "rowCount": 5,
+          "colCount": 4,
+          "columns": [
+            {
+              "name": "Date",
+              "type": "date"
+            },
+            {
+              "name": "Household",
+              "type": "choice",
+              "choicesFrom": {
+                "page": "Guest list",
+                "table": "Households",
+                "column": "Household"
+              }
+            },
+            {
+              "name": "Amount",
+              "type": "number"
+            },
+            {
+              "name": "Note",
+              "type": "text"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "2026-09-10"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Chen"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "400"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "Deposit; $100 remains"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "2026-09-13"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "Patel"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "400"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "Paid in full"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "2026-09-18"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "Gomez"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "300"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "Deposit; $200 remains"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "2026-09-20"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "Brooks"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "400"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "Paid in full"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "2026-09-28"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "Ross"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "200"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "Deposit; $200 remains"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 0,
+              "endCol": 0,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 2,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Reception",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Seating and menu",
+          "source": "# Reception checks\n\nConfirmed guests count against each table's capacity. Pending guests have provisional assignments but do not consume a confirmed seat. Resolve any over-capacity status before sharing the seating plan.\n\n{{ HSTACK('Guest list'!Guests[Guest],'Guest list'!Guests[Meal],'Guest list'!Guests[TableName],'Guest list'!Guests[DietaryNotes]) }}"
+        },
+        {
+          "type": "table",
+          "name": "ReceptionTables",
+          "rowCount": 3,
+          "colCount": 5,
+          "columns": [
+            {
+              "name": "TableName",
+              "type": "text"
+            },
+            {
+              "name": "Capacity",
+              "type": "number"
+            },
+            {
+              "name": "ConfirmedSeats",
+              "type": "formula",
+              "formula": "=COUNTIFS('Guest list'!Guests[TableName],[TableName],'Guest list'!Guests[RSVP],\"Yes\")"
+            },
+            {
+              "name": "Remaining",
+              "type": "formula",
+              "formula": "=[Capacity]-[ConfirmedSeats]"
+            },
+            {
+              "name": "CapacityStatus",
+              "type": "formula",
+              "formula": "=IF([Remaining]<0,\"Over capacity\",\"Seats available\")"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "A"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "6"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "B"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "6"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "C"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "6"
+            }
+          ],
+          "conditionalFormats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 4,
+              "endCol": 4,
+              "kind": "criterion",
+              "criterion": "Over capacity",
+              "format": {
+                "fill": "red",
+                "bold": true
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "Tasks",
+          "rowCount": 4,
+          "colCount": 4,
+          "columns": [
+            {
+              "name": "Task",
+              "type": "text"
+            },
+            {
+              "name": "Owner",
+              "type": "text"
+            },
+            {
+              "name": "DueDate",
+              "type": "date"
+            },
+            {
+              "name": "Status",
+              "type": "choice",
+              "choices": [
+                "Open",
+                "In progress",
+                "Done"
+              ]
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Confirm final menu and allergy handling"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Maya"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "2026-10-07"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "In progress"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Follow up on pending RSVPs"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "Maya"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "2026-10-10"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "Open"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Send confirmed headcount to caterer"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "Jordan"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "2026-10-17"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "Open"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "Finalize seating cards"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "Jordan"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "2026-10-20"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "In progress"
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 2,
+                "descending": false
+              }
+            ]
+          },
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 2,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "BriefForm",
+          "rowCount": 3,
+          "colCount": 2,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Brief date"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "2026-10-04"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "Save caterer brief"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "=BUTTON(\"Save caterer brief\",APPEND_ROW('Caterer brief'!BriefSnapshots!A:H,B1,COUNTIF('Guest list'!Guests[RSVP],\"Yes\"),COUNTIF('Guest list'!Guests[RSVP],\"Pending\"),COUNTIFS('Guest list'!Guests[RSVP],\"Yes\",'Guest list'!Guests[Meal],\"Chicken\"),COUNTIFS('Guest list'!Guests[RSVP],\"Yes\",'Guest list'!Guests[Meal],\"Vegetarian\"),COUNTIFS('Guest list'!Guests[RSVP],\"Yes\",'Guest list'!Guests[Meal],\"Kids meal\"),COUNTIF('Guest list'!Guests[DietaryNotes],\"<>\"),SUM('Guest list'!Households[Balance])))"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Caterer brief",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Caterer report",
+          "source": "# Caterer brief preview\n\n**Confirmed headcount:** {{ COUNTIF('Guest list'!Guests[RSVP], \"Yes\") }}  \n**Pending replies:** {{ COUNTIF('Guest list'!Guests[RSVP], \"Pending\") }}\n\n| Meal | Confirmed count |\n| --- | ---: |\n| Chicken | {{ COUNTIFS('Guest list'!Guests[RSVP], \"Yes\", 'Guest list'!Guests[Meal], \"Chicken\") }} |\n| Vegetarian | {{ COUNTIFS('Guest list'!Guests[RSVP], \"Yes\", 'Guest list'!Guests[Meal], \"Vegetarian\") }} |\n| Kids meal | {{ COUNTIFS('Guest list'!Guests[RSVP], \"Yes\", 'Guest list'!Guests[Meal], \"Kids meal\") }} |\n\n**Dietary notes to verify with the caterer:**\n\n{{ FILTER(HSTACK('Guest list'!Guests[Guest],'Guest list'!Guests[Meal],'Guest list'!Guests[DietaryNotes]),'Guest list'!Guests[DietaryNotes]<>\"\") }}\n\n{% let pending = FILTER(HSTACK('Guest list'!Guests[Guest],'Guest list'!Guests[Household]),'Guest list'!Guests[RSVP]=\"Pending\") %}\n**RSVP follow-up:**\n{% for guest, household in pending %}\n- {{ guest }} — {{ household }}\n{% end %}\n\nRecord the date-stamped counts with **Save caterer brief** on the Reception page. The saved row keeps the headcount and meal mix even after later RSVP edits."
+        },
+        {
+          "type": "table",
+          "name": "BriefSnapshots",
+          "rowCount": 0,
+          "colCount": 8,
+          "columns": [
+            {
+              "name": "BriefDate",
+              "type": "date"
+            },
+            {
+              "name": "ConfirmedGuests",
+              "type": "number"
+            },
+            {
+              "name": "PendingReplies",
+              "type": "number"
+            },
+            {
+              "name": "ChickenMeals",
+              "type": "number"
+            },
+            {
+              "name": "VegetarianMeals",
+              "type": "number"
+            },
+            {
+              "name": "KidsMeals",
+              "type": "number"
+            },
+            {
+              "name": "DietaryNotes",
+              "type": "number"
+            },
+            {
+              "name": "HouseholdBalance",
+              "type": "number"
+            }
+          ],
+          "cells": [],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 0,
+              "endCol": 0,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 7,
+              "endCol": 7,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

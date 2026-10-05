@@ -1,0 +1,447 @@
+{
+  "format": "spreadsheet-app",
+  "version": 1,
+  "name": "Payday Cash Planner",
+  "pages": [
+    {
+      "name": "Cash plan",
+      "blocks": [
+        {
+          "type": "text",
+          "name": "Plan summary",
+          "source": "# Payday cash plan\n\nUse the editable **As of** date and opening cash to plan known deposits and bills. Amounts are signed: income is positive and spending is negative. The two projected balances use the same calendar with a baseline and a lean grocery and discretionary scenario.\n\n{% let reserve = Assumptions!B2 %}\n{% let baselineLow = MIN(CashEvents[BaselineBalance]) %}\n{% let leanLow = MIN(CashEvents[LeanBalance]) %}\n**Baseline low:** {{ TEXT(baselineLow, \"$#,##0.00\") }} on {{ TEXT(INDEX(CashEvents[Date], MATCH(baselineLow, CashEvents[BaselineBalance], 0)), \"mmm d\") }}. **Lean low:** {{ TEXT(leanLow, \"$#,##0.00\") }}. The reserve target is {{ TEXT(reserve, \"$#,##0.00\") }}.\n\nThe brake repair brings the baseline below the reserve target. Try changing the October 14 **LeanAmount** from -170 to -140; the lean low should rise by $30 and clear the target. Update the opening cash and event estimates when your real dates or balances change."
+        },
+        {
+          "type": "table",
+          "name": "Assumptions",
+          "rowCount": 3,
+          "colCount": 2,
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "Opening cash"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "1500"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "Reserve target"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "1000"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "As of"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "2026-10-04"
+            }
+          ],
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": 1,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            },
+            {
+              "startRow": 2,
+              "endRow": 2,
+              "startCol": 1,
+              "endCol": 1,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "name": "CashEvents",
+          "rowCount": 11,
+          "colCount": 7,
+          "columns": [
+            {
+              "name": "Date",
+              "type": "date"
+            },
+            {
+              "name": "Event",
+              "type": "text"
+            },
+            {
+              "name": "BaselineAmount",
+              "type": "number"
+            },
+            {
+              "name": "LeanAmount",
+              "type": "number"
+            },
+            {
+              "name": "Kind",
+              "type": "text"
+            },
+            {
+              "name": "BaselineBalance",
+              "type": "formula",
+              "formula": "=Assumptions!B1+SUMIFS(CashEvents[BaselineAmount],CashEvents[Date],\"<=\"&[Date])"
+            },
+            {
+              "name": "LeanBalance",
+              "type": "formula",
+              "formula": "=Assumptions!B1+SUMIFS(CashEvents[LeanAmount],CashEvents[Date],\"<=\"&[Date])"
+            }
+          ],
+          "cells": [
+            {
+              "row": 0,
+              "col": 0,
+              "input": "2026-10-09"
+            },
+            {
+              "row": 0,
+              "col": 1,
+              "input": "Paycheck"
+            },
+            {
+              "row": 0,
+              "col": 2,
+              "input": "2100"
+            },
+            {
+              "row": 0,
+              "col": 3,
+              "input": "2100"
+            },
+            {
+              "row": 0,
+              "col": 4,
+              "input": "Income"
+            },
+            {
+              "row": 1,
+              "col": 0,
+              "input": "2026-10-10"
+            },
+            {
+              "row": 1,
+              "col": 1,
+              "input": "Rent"
+            },
+            {
+              "row": 1,
+              "col": 2,
+              "input": "-1550"
+            },
+            {
+              "row": 1,
+              "col": 3,
+              "input": "-1550"
+            },
+            {
+              "row": 1,
+              "col": 4,
+              "input": "Fixed bill"
+            },
+            {
+              "row": 2,
+              "col": 0,
+              "input": "2026-10-11"
+            },
+            {
+              "row": 2,
+              "col": 1,
+              "input": "Electric and water"
+            },
+            {
+              "row": 2,
+              "col": 2,
+              "input": "-175"
+            },
+            {
+              "row": 2,
+              "col": 3,
+              "input": "-175"
+            },
+            {
+              "row": 2,
+              "col": 4,
+              "input": "Fixed bill"
+            },
+            {
+              "row": 3,
+              "col": 0,
+              "input": "2026-10-14"
+            },
+            {
+              "row": 3,
+              "col": 1,
+              "input": "Groceries"
+            },
+            {
+              "row": 3,
+              "col": 2,
+              "input": "-210"
+            },
+            {
+              "row": 3,
+              "col": 3,
+              "input": "-170"
+            },
+            {
+              "row": 3,
+              "col": 4,
+              "input": "Flexible"
+            },
+            {
+              "row": 4,
+              "col": 0,
+              "input": "2026-10-16"
+            },
+            {
+              "row": 4,
+              "col": 1,
+              "input": "Brake repair estimate"
+            },
+            {
+              "row": 4,
+              "col": 2,
+              "input": "-690"
+            },
+            {
+              "row": 4,
+              "col": 3,
+              "input": "-690"
+            },
+            {
+              "row": 4,
+              "col": 4,
+              "input": "Repair"
+            },
+            {
+              "row": 5,
+              "col": 0,
+              "input": "2026-10-18"
+            },
+            {
+              "row": 5,
+              "col": 1,
+              "input": "Client reimbursement"
+            },
+            {
+              "row": 5,
+              "col": 2,
+              "input": "350"
+            },
+            {
+              "row": 5,
+              "col": 3,
+              "input": "350"
+            },
+            {
+              "row": 5,
+              "col": 4,
+              "input": "Income"
+            },
+            {
+              "row": 6,
+              "col": 0,
+              "input": "2026-10-20"
+            },
+            {
+              "row": 6,
+              "col": 1,
+              "input": "Internet and mobile"
+            },
+            {
+              "row": 6,
+              "col": 2,
+              "input": "-105"
+            },
+            {
+              "row": 6,
+              "col": 3,
+              "input": "-105"
+            },
+            {
+              "row": 6,
+              "col": 4,
+              "input": "Fixed bill"
+            },
+            {
+              "row": 7,
+              "col": 0,
+              "input": "2026-10-22"
+            },
+            {
+              "row": 7,
+              "col": 1,
+              "input": "Groceries"
+            },
+            {
+              "row": 7,
+              "col": 2,
+              "input": "-210"
+            },
+            {
+              "row": 7,
+              "col": 3,
+              "input": "-170"
+            },
+            {
+              "row": 7,
+              "col": 4,
+              "input": "Flexible"
+            },
+            {
+              "row": 8,
+              "col": 0,
+              "input": "2026-10-23"
+            },
+            {
+              "row": 8,
+              "col": 1,
+              "input": "Paycheck"
+            },
+            {
+              "row": 8,
+              "col": 2,
+              "input": "2100"
+            },
+            {
+              "row": 8,
+              "col": 3,
+              "input": "2100"
+            },
+            {
+              "row": 8,
+              "col": 4,
+              "input": "Income"
+            },
+            {
+              "row": 9,
+              "col": 0,
+              "input": "2026-10-27"
+            },
+            {
+              "row": 9,
+              "col": 1,
+              "input": "Auto insurance"
+            },
+            {
+              "row": 9,
+              "col": 2,
+              "input": "-420"
+            },
+            {
+              "row": 9,
+              "col": 3,
+              "input": "-420"
+            },
+            {
+              "row": 9,
+              "col": 4,
+              "input": "Fixed bill"
+            },
+            {
+              "row": 10,
+              "col": 0,
+              "input": "2026-10-29"
+            },
+            {
+              "row": 10,
+              "col": 1,
+              "input": "Annual club membership"
+            },
+            {
+              "row": 10,
+              "col": 2,
+              "input": "-150"
+            },
+            {
+              "row": 10,
+              "col": 3,
+              "input": "0"
+            },
+            {
+              "row": 10,
+              "col": 4,
+              "input": "Optional"
+            }
+          ],
+          "display": {
+            "sort": [
+              {
+                "column": 0,
+                "descending": false
+              }
+            ]
+          },
+          "formats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 0,
+              "endCol": 0,
+              "format": {
+                "numberFormat": "mmm d, yyyy"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 2,
+              "endCol": 3,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            },
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 5,
+              "endCol": 6,
+              "format": {
+                "numberFormat": "$#,##0.00"
+              }
+            }
+          ],
+          "conditionalFormats": [
+            {
+              "startRow": 0,
+              "endRow": null,
+              "startCol": 5,
+              "endCol": 6,
+              "kind": "criterion",
+              "criterion": "<1000",
+              "format": {
+                "fill": "red",
+                "bold": true
+              }
+            }
+          ]
+        },
+        {
+          "type": "chart",
+          "name": "Cash by event date",
+          "source": "HSTACK(CashEvents[Date],CashEvents[BaselineBalance],CashEvents[LeanBalance])",
+          "chartType": "line"
+        }
+      ]
+    }
+  ]
+}
