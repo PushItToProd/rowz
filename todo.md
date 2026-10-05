@@ -24,12 +24,22 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 - [x] "Save as"/"Save a copy" for duplicating an existing document
 - [x] when errors appear in a rendered markdown block, show the errors as a chip with the error message. e.g. writing `{{ A+nonexistentvar }}` currently just renders `#NAME?` verbatim, but not even what name is invalid
 
+- [ ] explore Yjs + Hocuspocus for sync
+- [ ] entering a value like `$10,000` (verbatim) into a numeric data table column produces a `#VALUE!` error (`$10,000 is not a number`)
+- [ ] Claude took my `CLAMP` example literally in a way I didn't expect. undo its change to make `CLAMP` lazy
+  - its prompt for luna: "The author's spec for CLAMP is that it is exactly equivalent to `IFS(val < min, min, val > max, max, 1=1, val)`. Review findings to fix: (1) CLAMP is registered `eager` and evaluates all arguments, so `=CLAMP(-1, 0, 1/0)` returns #DIV/0! while the IFS form returns 0 (the first condition succeeds without evaluating max). Make CLAMP lazy like IFS (see how IFS/IF are registered with `lazy()`) so that an unused min/max argument that errors is not evaluated, including in the array/elementwise case if it applies. "
+- [ ] in data tables, conditional formatting should be a column property
+  - okay, I guess when I create rules covering a whole column of a data table it does intelligently set it to e.g. `F1:F` so it covers the whole thing, but that behavior doesn't feel obvious from the way it's presented
+- [ ] create context menu item to add conditional formatting to the selected cell or range
+
 ## Plans
 
 - [x] **P1** implement [persistent row identity](plans/persistent-row-identity.md)
 - [x] implement [data tables](plans/data-tables.md): sort and filter, dropdown columns, conditional formats, and the Gran Turismo 7 sample
 
 ## Bugs
+
+- [ ] **P2** conditional formatting criteria doesn't handle strings -- I made a conditional format with a condition like `="foobar"` but it didn't apply (maybe b/c it was a data table column with formula values)
 
 - [ ] `QUERY` treats single quotes as delimiting string literals which contradicts the outer formula languge syntax. this isn't exactly a bug but I consider it a severe enough misfeature I'm classing it as one - we should probably have single quotes delimit identifiers in `QUERY` syntax instead so you can write queries like `=QUERY(People, "select 'Favorite food', count(*) group by 'Favorite food'")`. (as this is a pre-production app I don't care if this breaks anything)
 
@@ -114,6 +124,15 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] consider having a rename qualify the bare words it would make ambiguous. Renaming the name `Y` to `X` while a table `X` exists would first rewrite each bare `X` to `'Page 1'!X`
 - [ ] (Claude) consider Excel's structured references for parts of a data table: `Sales[#Data]`, `Sales[#Headers]`, and `Sales[#All]`. The bare table name already means the data rows (see [plans/names-and-scripts.md](plans/names-and-scripts.md))
 - [ ] **P99** `FLOOKUP`
+
+
+- [ ] `CHOOSECOLS`
+- [ ] `SORTBY`
+- [ ] `SCAN` for running totals, balances, and cumulative state
+- [ ] more text processing: "regex matching, extraction, replacement; literal substring predicates; text-before/text-after helpers"
+- [ ] `GROUPBY` -- bad idea: `GROUPBY(Sales, [Category], AVERAGE, [Amount])` for `select 'Category', avg('Amount') as AvgAmount group by 'Category'`
+- [ ] reusable function ergonomics: parameter help for user defined functions and better arg-specific errors
+- [ ] formula-checking: "array-aware assertions and explicit approximate numeric comparison"
 
 ## Grid editing and navigation
 
@@ -250,7 +269,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] **P7** pages
   - [ ] **P6** rows and cols by dragging and dropping their headers (including when a range of them is selected) (but no need to handle dragging and dropping a selected range of cells - only do it if the user has specifically selected full rows or columns)
   - [ ] **P7** blocks
-- [ ] add context menus when right clicking on pages tab and block headers/margins
+- [ ] **P5** add context menus when right clicking on pages tab and block headers/margins
   - [ ] page actions: delete, move left/right
   - [ ] block actions: whatever each block supports
     - block context menu should appear when right clocking on the card around it but not the controls within it. keep a button in the upper right with a vertical ellipsis that I can click to show the same menu as well
