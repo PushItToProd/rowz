@@ -62,7 +62,7 @@ interface FormulaSpan extends Span {
   bound: ReadonlySet<string>;
 }
 
-interface Tag extends Span {
+export interface TemplateTag extends Span {
   kind: "output" | "statement" | "comment";
   /** The text between the delimiters, and where it starts in the template. */
   inner: string;
@@ -100,8 +100,12 @@ function closeOf(source: string, from: number, closer: string, quotes: boolean):
   return -1;
 }
 
-function findTags(source: string): Tag[] {
-  const tags: Tag[] = [];
+export function scanTemplateTags(source: string, tolerant = false): TemplateTag[] {
+  const tags: TemplateTag[] = [];
+  const lastCommentClose = tolerant ? source.lastIndexOf("#}") : -1;
+  const lastQuote = tolerant
+    ? { '"': source.lastIndexOf('"'), "'": source.lastIndexOf("'") }
+    : undefined;
   for (let index = source.indexOf("{"); index !== -1; index = source.indexOf("{", index)) {
     const opener = source.slice(index, index + 2);
     if (!(opener in OPENERS)) {
@@ -110,17 +114,62 @@ function findTags(source: string): Tag[] {
     }
     const kind = OPENERS[opener as keyof typeof OPENERS];
     const closer = CLOSERS[kind];
-    const close = closeOf(source, index + 2, closer, kind !== "comment");
-    if (close === -1)
-      throw new TemplateSyntaxError(`${opener} is never closed`, lineAt(source, index));
+    let close: number;
+    let closed = true;
+    if (tolerant) {
+      let quote: string | undefined;
+      let following: number | undefined;
+      close = -1;
+      if (kind === "comment" && lastCommentClose < index + 2) {
+        const next = /\{[{%#]/g;
+        next.lastIndex = index + 2;
+        following = next.exec(source)?.index;
+      }
+      for (
+        let at = index + 2;
+        at < source.length && !(kind === "comment" && lastCommentClose < index + 2);
+        at += 1
+      ) {
+        const char = source[at];
+        const openerAt =
+          char === "{" && source[at + 1] !== undefined && "{%#".includes(source[at + 1] ?? "");
+        if (openerAt && following === undefined) following = at;
+        if (quote) {
+          if (char === quote) quote = undefined;
+        } else if (kind !== "comment" && (char === '"' || char === "'")) {
+          if (lastQuote?.[char] === at) {
+            const next = /\{[{%#]/g;
+            next.lastIndex = at + 1;
+            following = next.exec(source)?.index;
+            break;
+          }
+          quote = char;
+        } else if (source.startsWith(closer, at)) {
+          close = at;
+          break;
+        } else if (openerAt && kind !== "comment") {
+          close = at;
+          closed = false;
+          break;
+        }
+      }
+      if (close === -1) {
+        close = following ?? source.length;
+        closed = false;
+      }
+    } else {
+      close = closeOf(source, index + 2, closer, kind !== "comment");
+      if (close === -1)
+        throw new TemplateSyntaxError(`${opener} is never closed`, lineAt(source, index));
+    }
     tags.push({
       kind,
       from: index,
-      to: close + closer.length,
+      to: close + (closed ? closer.length : 0),
       inner: source.slice(index + 2, close),
       innerFrom: index + 2,
     });
-    index = close + closer.length;
+    index = close + (closed ? closer.length : 0);
   }
   return tags;
 }
@@ -129,7 +178,7 @@ function findTags(source: string): Tag[] {
  * The text between tags. A statement or comment that has a line to itself
  * takes that whole line with it, so it leaves no blank line behind.
  */
-function textBetween(source: string, tags: readonly Tag[]): string[] {
+function textBetween(source: string, tags: readonly TemplateTag[]): string[] {
   const texts: string[] = [];
   let from = 0;
   for (const tag of tags) {
@@ -158,7 +207,7 @@ type Statement =
   | { type: "else" }
   | { type: "end" };
 
-function parseStatement(source: string, tag: Tag): Statement {
+function parseStatement(source: string, tag: TemplateTag): Statement {
   const line = lineAt(source, tag.from);
   const word = tag.inner.trim();
   if (word === "else") return { type: "else" };
@@ -205,7 +254,7 @@ function expressionSpans(source: string): FormulaSpan[] {
   const spans: FormulaSpan[] = [];
   let bound = new Set<string>();
   const open: { type: "for" | "if"; outer: Set<string> }[] = [];
-  for (const tag of findTags(source)) {
+  for (const tag of scanTemplateTags(source)) {
     if (tag.kind === "comment") continue;
     if (tag.kind === "output") {
       spans.push({
@@ -252,7 +301,7 @@ function expressionSpans(source: string): FormulaSpan[] {
  * @throws TemplateSyntaxError when a tag is malformed or a block is not closed.
  */
 export function parseTemplate(source: string): TemplateNode[] {
-  const tags = findTags(source);
+  const tags = scanTemplateTags(source);
   const texts = textBetween(source, tags);
   const root: TemplateNode[] = [];
   /** The blocks the parser is inside, innermost last. `into` is where nodes go now. */

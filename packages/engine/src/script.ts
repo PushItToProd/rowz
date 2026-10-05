@@ -40,7 +40,11 @@ const HEAD = new RegExp(
  * the result are offsets in the source. `//` inside text in double quotes or
  * a name in single quotes is not a comment.
  */
-function blankComments(source: string): string {
+export function scanScriptComments(source: string): {
+  text: string;
+  comments: { from: number; to: number }[];
+} {
+  const comments: { from: number; to: number }[] = [];
   let result = "";
   let quote: string | undefined;
   for (let index = 0; index < source.length; index += 1) {
@@ -51,6 +55,7 @@ function blankComments(source: string): string {
     else if (char === "/" && source[index + 1] === "/") {
       const end = source.indexOf("\n", index);
       const stop = end === -1 ? source.length : end;
+      comments.push({ from: index, to: stop });
       result += " ".repeat(stop - index);
       index = stop - 1;
       continue;
@@ -59,7 +64,7 @@ function blankComments(source: string): string {
     if (char === "\n") quote = undefined;
     result += char;
   }
-  return result;
+  return { text: result, comments };
 }
 
 function unquote(name: string): string {
@@ -68,7 +73,7 @@ function unquote(name: string): string {
 
 /** Splits a script into its statements. A statement's formula is not parsed here. */
 export function parseScript(source: string): ScriptStatement[] {
-  const text = blankComments(source);
+  const { text } = scanScriptComments(source);
   const statements: ScriptStatement[] = [];
   let start: { line: number; offset: number } | undefined;
   let offset = 0;

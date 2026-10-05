@@ -152,6 +152,7 @@ onBeforeUnmount(() => {
       :key="item.label"
       type="button"
       role="menuitem"
+      :data-formula-field="item.keepDraft ? '' : undefined"
       :class="{ danger: item.danger, 'context-menu__item--separated': item.separated }"
       :disabled="item.disabled"
       @click="choose(item)"

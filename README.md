@@ -122,6 +122,8 @@ We sold **{{ total }}** in all.
 
 `{{ }}` shows one value in the sentence, a range as a table, and the result of `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, or `SCATTER_CHART` as a chart. A failed formula appears as an error chip with its code and message. A formula in a chart or text view is written on a page and not in a table, so it names the table of every cell it reads.
 
+Formula inputs share completion and local undo history. Scripts and Markdown templates use multiline editors: Enter inserts a newline, Done or Ctrl/Cmd+Enter saves, and Cancel discards the draft. Escape dismisses completion without discarding multiline edits. Tab accepts a suggestion when one is open; otherwise it saves and moves focus. Formula drafts retain their history while browsing pages and appear in a labeled draft editor when their original field is unavailable.
+
 ### Names and scripts
 
 A plain table or script can hold named formulas. A script is a block whose lines define names, functions, or checks:

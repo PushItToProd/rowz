@@ -2,7 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { EditorState, StateEffect, StateField, Prec } from "@codemirror/state";
 import { Decoration, EditorView, keymap, type DecorationSet } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  insertNewlineAndIndent,
+} from "@codemirror/commands";
 import {
   acceptCompletion,
   autocompletion,
@@ -10,7 +15,7 @@ import {
   completionStatus,
   moveCompletionSelection,
 } from "@codemirror/autocomplete";
-import { analyzeFormula } from "@spreadsheet-app/engine";
+import { analyzeSource } from "@spreadsheet-app/engine";
 import { applySuggestion, signatureAt, suggestionsAt, type NamingContext } from "../formula/assist";
 import type { FormulaMode } from "../formula/session";
 
@@ -34,25 +39,34 @@ const host = ref<HTMLElement>();
 const current = shallowRef(props.state);
 let view: EditorView | undefined;
 let navigated = false;
+let publishedState: EditorState | undefined;
+let keyboardCharacter = false;
 const signature = computed(() =>
   signatureAt(current.value.doc.toString(), current.value.selection.main.head, props.mode),
 );
 
 function highlight(state: EditorState): DecorationSet {
-  const source = state.doc.toString();
-  if (props.mode === "cell" && !source.startsWith("=")) return Decoration.none;
-  const analysis = analyzeFormula(source, {
-    from: props.mode === "cell" ? 1 : 0,
-    to: source.length,
-  });
+  const analysis = analyzeSource(state.doc.toString(), props.mode);
+  const spans = [
+    ...analysis.regions.flatMap((region) =>
+      region.tokens.map((token) => ({
+        from: token.position,
+        to: token.end,
+        type: token.type,
+      })),
+    ),
+    ...analysis.decorations,
+  ];
   return Decoration.set(
-    analysis.tokens
-      .filter((token) => token.end > token.position)
-      .map((token) =>
-        Decoration.mark({ class: `formula-token--${token.type}` }).range(token.position, token.end),
+    spans
+      .filter((span) => span.to > span.from)
+      .map((span) =>
+        Decoration.mark({ class: `formula-token--${span.type}` }).range(span.from, span.to),
       ),
+    true,
   );
 }
+const multiline = computed(() => props.mode === "script" || props.mode === "markdown");
 
 const tokens = StateField.define<DecorationSet>({
   create: highlight,
@@ -64,19 +78,22 @@ const tokens = StateField.define<DecorationSet>({
 function extensions() {
   return [
     history(),
+    ...(multiline.value ? [EditorView.lineWrapping] : []),
     tokens,
     EditorState.readOnly.of(props.readonly),
     EditorView.editable.of(!props.readonly),
     EditorView.contentAttributes.of({
       "aria-label": props.label,
-      "aria-multiline": "false",
+      "aria-multiline": String(multiline.value),
       tabindex: "0",
     }),
     EditorState.transactionFilter.of((transaction) => {
       if (!transaction.docChanged) return transaction;
       if (props.readonly) return [];
       const text = transaction.newDoc.toString();
-      return text.length <= props.maxLength && !/[\r\n]/.test(text) ? transaction : [];
+      return text.length <= props.maxLength && (multiline.value || !/[\r\n]/.test(text))
+        ? transaction
+        : [];
     }),
     autocompletion({
       defaultKeymap: false,
@@ -124,6 +141,14 @@ function extensions() {
     Prec.highest(
       keymap.of([
         {
+          key: "Mod-Enter",
+          run: (editor) => {
+            if (!multiline.value) return false;
+            if (!editor.composing && !props.readonly) emit("commit", "Enter", false);
+            return true;
+          },
+        },
+        {
           key: "ArrowDown",
           run: (editor) => {
             if (completionStatus(editor.state) !== "active") return false;
@@ -144,6 +169,7 @@ function extensions() {
           run: (editor) => {
             if (editor.composing) return false;
             if (navigated && acceptCompletion(editor)) return true;
+            if (multiline.value) return props.readonly ? true : insertNewlineAndIndent(editor);
             if (!props.readonly) emit("commit", "Enter", false);
             return true;
           },
@@ -168,7 +194,7 @@ function extensions() {
             if (editor.composing) return false;
             if (completionStatus(editor.state) === "active" && closeCompletion(editor)) return true;
             closeCompletion(editor);
-            if (!props.readonly) emit("cancel");
+            if (!props.readonly && !multiline.value) emit("cancel");
             return true;
           },
         },
@@ -176,6 +202,35 @@ function extensions() {
     ),
     keymap.of([...historyKeymap, ...defaultKeymap]),
     EditorView.domEventHandlers({
+      keydown: (event) => {
+        keyboardCharacter =
+          event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.isComposing;
+        return false;
+      },
+      keyup: () => {
+        keyboardCharacter = false;
+        return false;
+      },
+      beforeinput: (event, editor) => {
+        const typing = keyboardCharacter;
+        keyboardCharacter = false;
+        // Browser target ranges can lag behind syntax decorations during rapid typing.
+        // Keyboard characters use the editor selection; IME, paste, and fill stay native.
+        if (
+          !typing ||
+          props.readonly ||
+          event.isComposing ||
+          editor.composing ||
+          event.inputType !== "insertText" ||
+          event.data?.length !== 1
+        )
+          return false;
+        editor.dispatch(editor.state.replaceSelection(event.data), {
+          userEvent: "input.type",
+          scrollIntoView: true,
+        });
+        return true;
+      },
       focus: () => {
         emit("focus");
       },
@@ -184,16 +239,26 @@ function extensions() {
       },
     }),
     EditorView.updateListener.of((update) => {
-      if (update.docChanged || update.selectionSet) {
-        navigated = false;
-        current.value = update.state;
-        emit("update:state", update.state);
-      }
+      if (update.docChanged || update.selectionSet) navigated = false;
+      current.value = update.state;
+      publishedState = update.state;
+      emit("update:state", update.state);
     }),
     EditorView.theme({
       "&": { fontSize: "inherit" },
-      ".cm-content": { fontFamily: "inherit", padding: "2px 0", whiteSpace: "pre" },
+      ".cm-content": {
+        fontFamily: "inherit",
+        padding: "2px 0",
+        whiteSpace: multiline.value ? "pre-wrap" : "pre",
+        minHeight: multiline.value ? "10em" : "0",
+      },
       ".cm-line": { padding: "0 4px" },
+      ".formula-token--comment": { color: "#667085", fontStyle: "italic" },
+      ".formula-token--definition, .formula-token--keyword": {
+        color: "#6543a1",
+        fontWeight: "600",
+      },
+      ".formula-token--delimiter": { color: "#176b87", fontWeight: "600" },
       ".formula-token--number": { color: "#176b87" },
       ".formula-token--string": { color: "#8b4513" },
       ".formula-token--identifier, .formula-token--quotedName, .formula-token--column": {
@@ -214,7 +279,7 @@ onMounted(() => {
 watch(
   () => props.state,
   (state) => {
-    if (view && state !== view.state) {
+    if (view && state !== view.state && state !== publishedState) {
       view.setState(state.update({ effects: StateEffect.reconfigure.of(extensions()) }).state);
       current.value = view.state;
       emit("update:state", view.state);
@@ -222,7 +287,7 @@ watch(
   },
 );
 watch(
-  () => [props.mode, props.context, props.label, props.readonly, props.maxLength],
+  () => [props.mode, props.label, props.readonly, props.maxLength],
   () => {
     view?.dispatch({ effects: StateEffect.reconfigure.of(extensions()) });
   },
@@ -237,7 +302,12 @@ function onKeydownCapture(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <div class="formula-editor" @keydown.capture="onKeydownCapture" @keydown.stop>
+  <div
+    class="formula-editor"
+    :class="{ 'formula-editor--multiline': multiline }"
+    @keydown.capture="onKeydownCapture"
+    @keydown.stop
+  >
     <div ref="host"></div>
     <span v-if="signature" class="formula-editor__signature">{{ signature.syntax }}</span>
   </div>

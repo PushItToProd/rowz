@@ -80,7 +80,8 @@ async function returnToEditor(pageId: string): Promise<void> {
   if (store.pages.some((item) => item.id === pageId)) {
     await router.push({ name: "editor", params: { spreadsheetId: props.spreadsheetId, pageId } });
     await nextTick();
-    formulas.focus();
+    if (formulas.active) formulas.focus();
+    else store.focusGrid();
   }
 }
 
@@ -363,7 +364,7 @@ watch(
         <RouterLink :to="{ name: 'help' }" target="_blank" class="editor__help">Help</RouterLink>
       </header>
       <template v-if="loaded && page">
-        <FormulaBar />
+        <FormulaBar :page-id="page?.id" />
         <FormatBar v-if="store.canEdit" />
         <PageTabs :spreadsheet-id="spreadsheetId" :active-page-id="page.id" />
       </template>

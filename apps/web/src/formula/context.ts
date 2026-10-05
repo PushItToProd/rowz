@@ -11,5 +11,9 @@ export function namingContext(context: EditingContext): NamingContext {
     pageId: context.pageId,
     columns: store.tables.find((table) => table.id === context.tableId)?.columns,
     names: store.documentNames,
+    holderId: context.holderId,
+    holder:
+      store.views.find((view) => view.id === context.holderId)?.name ??
+      store.tables.find((table) => table.id === context.holderId)?.name,
   };
 }

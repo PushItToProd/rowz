@@ -1,3 +1,4 @@
+import { EditorView } from "@codemirror/view";
 import { wireSnapshot, changeWith } from "../testing";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -25,6 +26,20 @@ const TEXT: ViewRecord = {
 const CELLS = { A1: "apples", B1: "3", A2: "pears", B2: "5" };
 
 let wrapper: VueWrapper;
+async function editorView(): Promise<EditorView> {
+  await flushPromises();
+  return EditorView.findFromDOM(wrapper.get(".cm-content").element as HTMLElement)!;
+}
+async function replaceDraft(text: string): Promise<void> {
+  const editor = await editorView();
+  editor.dispatch({
+    changes: { from: 0, to: editor.state.doc.length, insert: text },
+    selection: { anchor: text.length },
+    userEvent: "input.type",
+  });
+  await flushPromises();
+}
+
 const confirm = vi.spyOn(window, "confirm");
 
 async function render(source: string, role = "owner"): Promise<void> {
@@ -228,58 +243,56 @@ describe("TextCard", () => {
 
   it("previews what is typed while editing, and saves on Done", async () => {
     await render("old");
-    expect(wrapper.find("textarea").exists()).toBe(false);
+    expect(wrapper.find(".cm-content").exists()).toBe(false);
 
     await button("Edit").trigger("click");
-    const editor = wrapper.get<HTMLTextAreaElement>("textarea");
-    expect(editor.element.value).toBe("old");
-    await editor.setValue("new {{ 1 + 1 }}");
+    const editor = await editorView();
+    expect(editor.state.doc.toString()).toBe("old");
+    await replaceDraft("new {{ 1 + 1 }}");
     expect(shown().text()).toBe("new 2");
     expect(server.updateView).not.toHaveBeenCalled();
 
     await button("Done").trigger("click");
     await flushPromises();
     expect(server.updateView).toHaveBeenCalledWith("v1", {
-      revision: expect.any(Number),
       source: "new {{ 1 + 1 }}",
     });
-    expect(wrapper.find("textarea").exists()).toBe(false);
+    expect(wrapper.find(".cm-content").exists()).toBe(false);
     expect(shown().text()).toBe("new 2");
   });
 
   it("saves and stops editing when the editor loses focus", async () => {
     await render("old");
     await button("Edit").trigger("click");
-    const editor = wrapper.get<HTMLTextAreaElement>("textarea");
-    expect(document.activeElement).toBe(editor.element);
-    await editor.setValue("new");
-    editor.element.blur();
+    const editor = await editorView();
+    expect(document.activeElement).toBe(editor.contentDOM);
+    await replaceDraft("new");
+    editor.contentDOM.blur();
     await flushPromises();
     expect(server.updateView).toHaveBeenCalledExactlyOnceWith("v1", {
-      revision: expect.any(Number),
       source: "new",
     });
-    expect(wrapper.find("textarea").exists()).toBe(false);
+    expect(wrapper.find(".cm-content").exists()).toBe(false);
     expect(button("Edit").exists()).toBe(true);
   });
 
   it("goes on editing when it is the window that loses focus", async () => {
     await render("old");
     await button("Edit").trigger("click");
-    await wrapper.get("textarea").setValue("new");
+    await replaceDraft("new");
     // The browser sends a blur and leaves the editor as the document's active element.
-    await wrapper.get("textarea").trigger("blur");
+    (await editorView()).contentDOM.dispatchEvent(new FocusEvent("blur"));
     await flushPromises();
-    expect(server.updateView).toHaveBeenCalledOnce();
-    expect(wrapper.find("textarea").exists()).toBe(true);
+    expect(server.updateView).not.toHaveBeenCalled();
+    expect(wrapper.find(".cm-content").exists()).toBe(true);
   });
 
   it("starts editing on a double click of the text", async () => {
     await render("old");
     await shown().trigger("dblclick");
-    const editor = wrapper.get<HTMLTextAreaElement>("textarea");
-    expect(editor.element.value).toBe("old");
-    expect(document.activeElement).toBe(editor.element);
+    const editor = await editorView();
+    expect(editor.state.doc.toString()).toBe("old");
+    expect(document.activeElement).toBe(editor.contentDOM);
     expect(button("Done").exists()).toBe(true);
   });
 
@@ -306,6 +319,19 @@ describe("TextCard", () => {
     expect(shown().text()).toBe("hello");
     expect(wrapper.find("button").exists()).toBe(false);
     await shown().trigger("dblclick");
-    expect(wrapper.find("textarea").exists()).toBe(false);
+    expect(wrapper.find(".cm-content").exists()).toBe(false);
   });
+});
+
+it("Cancel restores the saved preview and Escape retains a multiline draft", async () => {
+  await render("saved {{ 1 }}");
+  await button("Edit").trigger("click");
+  await replaceDraft("draft {{ 2 }}");
+  expect(shown().text()).toBe("draft 2");
+  await wrapper.get(".cm-content").trigger("keydown", { key: "Escape" });
+  expect(wrapper.find(".cm-content").exists()).toBe(true);
+  await button("Cancel").trigger("click");
+  await flushPromises();
+  expect(shown().text()).toBe("saved 1");
+  expect(server.updateView).not.toHaveBeenCalled();
 });

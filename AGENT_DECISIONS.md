@@ -695,3 +695,25 @@ Named-formula submission uses a targeted PATCH request with the table ID and cas
 **Why.** The plan makes unfinished new names an exception to automatic submission: moving between controls retains both fields, and closing the form discards them. A local state implements that lifetime without assigning a nonexistent named target to the shared session. Reading saved contents after submission prevents a following list or sort update from restoring an older formula.
 
 **To change.** `NamesPanel.vue` owns the unfinished entry. `TableDisplayBar.vue` saves shared drafts before changing display settings. Both components reuse `FormulaEditor.vue` and `SessionFormulaField.vue`.
+
+## 2026-10-04: Cell drafts and formula-column editing
+
+**Decision.** Cells, the formula bar, and the column popover share one session and its CodeMirror history. Formula-column editors identify the whole-column effect and retain the original row context even when another editor takes ownership. Clicking another field for the same target transfers ownership on mousedown so blur cannot save the draft first.
+
+New-row drafts allocate a row ID when editing starts and reuse it on submission and retry. The row is created only when a nonempty draft is saved. Navigation waits for submission, then resolves that ID before moving to the next cell. Page changes save literal cell drafts; formula drafts, including a bare equals sign, remain open in the dock.
+
+**Why.** Stable IDs preserve the destination through structural edits and prevent duplicate appended rows on retry. One session preserves local undo history across editor and page changes. Explicit ownership transfer avoids browser focus ordering causing an unintended save.
+
+**To change.** `formula/cells.ts`, `formula/session.ts`, the workbook submission adapter, `SessionFormulaField.vue`, `GridView.vue`, `FormulaBar.vue`, `ColumnFormulaPopover.vue`, and the router implement these behaviors.
+
+## 2026-10-04: Multiline formula sessions and tolerant source scanning
+
+**Decision.** Scripts and Markdown templates use the persistent editing session through `ViewSourceEditor.vue`. Source saves use the view ID and current records, without a starting revision. Draft Markdown previews continue using the existing template renderer. Script results continue showing saved definitions until submission. Editor history survives page navigation and remounting.
+
+The strict script parser and editing analysis share comment scanning. The template scanner has a tolerant mode that recovers at a following tag after unfinished syntax; strict parsing retains its existing errors. Editing analysis records original-source offsets, script parameters, draft definitions, template variables, and lexical formula bindings. It does not evaluate sources to discover names. Completion excludes stale saved definitions from the edited script and qualifies ambiguous or cross-page document names.
+
+Ordinary keyboard character input uses `EditorState.replaceSelection` from `beforeinput`. Native target ranges intermittently displaced punctuation during rapid Chromium typing with syntax decorations. Composition, paste, and fill retain CodeMirror’s native input handling. Browser helpers verify exact draft text before committing.
+
+**Why.** Shared scanning keeps editing syntax consistent with evaluation while preserving assistance around incomplete text. A persistent source session provides the existing draft retention and submit-time deleted-target recovery for multiline sources. Reading draft definitions prevents completion from offering names the user has removed while editing.
+
+**To change.** `packages/engine/src/editing-source.ts`, the scanners in `script.ts` and `template.ts`, `formula/assist.ts`, `ViewSourceEditor.vue`, and the source-save adapter implement these behaviors. Markdown prose highlighting still awaits the requested language packages.

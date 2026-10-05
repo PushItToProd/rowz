@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { LIMITS } from "@spreadsheet-app/shared";
+import { editingLabel } from "../formula/cells";
 import { namingContext } from "../formula/context";
 import { useFormulaSessionStore } from "../formula/session";
 import { useWorkbookStore } from "../stores/workbook";
@@ -11,6 +12,11 @@ const emit = defineEmits<{ return: [pageId: string] }>();
 const store = useWorkbookStore();
 const fallback = computed(() =>
   sessions.active && !sessions.hasField() ? sessions.active : undefined,
+);
+const fallbackLabel = computed(() =>
+  fallback.value
+    ? (editingLabel(fallback.value.target) ?? fallback.value.label ?? "Editing formula")
+    : "Editing formula",
 );
 const context = computed(() => namingContext(sessions.active?.context ?? { pageId: "" }));
 const editor = ref<{ focus(): void }>();
@@ -61,13 +67,13 @@ function trap(event: KeyboardEvent): void {
     class="formula-session-fallback"
     aria-label="Formula draft"
   >
-    <strong>{{ fallback.label ?? "Editing formula" }}</strong>
+    <strong>{{ fallbackLabel }}</strong>
     <FormulaEditor
       ref="editor"
       :state="fallback.state"
       :mode="fallback.mode"
       :context="context"
-      :label="fallback.label ?? 'Formula draft'"
+      :label="fallbackLabel"
       :max-length="fallback.maxLength ?? LIMITS.inputLength"
       :readonly="fallback.saving || !store.canEdit"
       @update:state="sessions.updateState"
@@ -75,7 +81,9 @@ function trap(event: KeyboardEvent): void {
       @cancel="cancel"
     />
     <p v-if="fallback.error" class="notice notice--error" role="alert">{{ fallback.error }}</p>
-    <button type="button" :disabled="fallback.saving" @click="submit">Apply</button>
+    <button type="button" :disabled="fallback.saving" @click="submit">
+      {{ fallback.mode === "script" || fallback.mode === "markdown" ? "Done" : "Apply" }}
+    </button>
     <button type="button" :disabled="fallback.saving" @click="cancel">Cancel</button>
     <button type="button" @click="emit('return', fallback.context.pageId)">Return to editor</button>
   </section>

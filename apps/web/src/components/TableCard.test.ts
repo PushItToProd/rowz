@@ -11,6 +11,9 @@ import { useWorkbookStore } from "../stores/workbook";
 import { at, snapshotWith, TABLE, type MockedApi } from "../testing";
 import { EditorView } from "@codemirror/view";
 import { useFormulaSessionStore } from "../formula/session";
+import FormulaBar from "./FormulaBar.vue";
+import FormulaSessionHost from "./FormulaSessionHost.vue";
+import { undo } from "@codemirror/commands";
 import TableCard from "./TableCard.vue";
 
 vi.mock("../api/client", async () => {
@@ -556,7 +559,6 @@ describe("files", () => {
 });
 
 describe("column names", () => {
-  const prompt = vi.spyOn(window, "prompt");
   const COLUMNS = [
     { name: "Price", type: "number" as const },
     { name: "Qty", type: "any" as const },
@@ -567,7 +569,15 @@ describe("column names", () => {
   async function renderData(): Promise<void> {
     server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(), tables: [DATA_TABLE] }));
     await useWorkbookStore().load("s1");
-    wrapper = mount(TableCard, { props: { table: DATA_TABLE }, attachTo: document.body });
+    const store = useWorkbookStore();
+    wrapper = mount(
+      {
+        components: { TableCard, FormulaBar, FormulaSessionHost },
+        setup: () => ({ store }),
+        template: '<FormulaBar /><TableCard :table="store.tables[0]" /><FormulaSessionHost />',
+      },
+      { attachTo: document.body },
+    );
     server.updateColumn.mockResolvedValue(
       changeWith({ table: DATA_TABLE, cells: [], views: [], tables: [] }),
     );
@@ -631,29 +641,144 @@ describe("column names", () => {
     });
   });
 
-  it("asks for the formula of a formula column, starting from the one it has", async () => {
+  function columnEditor(): EditorView {
+    return EditorView.findFromDOM(
+      wrapper.get(".column-formula-popover .cm-content").element as HTMLElement,
+    )!;
+  }
+  async function openFormula(address = "C1"): Promise<EditorView> {
+    await wrapper.get(`[data-cell="${address}"]`).trigger("contextmenu");
+    await flushPromises();
+    await item(
+      address === "C1" ? "✓ Column holds: A formula…" : "Column holds: A formula…",
+    ).trigger("click");
+    await flushPromises();
+    return columnEditor();
+  }
+  it("opens a nonmodal formula editor with the whole-column label and saves on Apply", async () => {
     await renderData();
-    await wrapper.get('[data-cell="C1"]').trigger("contextmenu");
-    prompt.mockReturnValue("=[Price] + 1");
-    await item("✓ Column holds: A formula…").trigger("click");
-    expect(prompt.mock.calls[0]?.[1]).toBe("=[Price] * [Qty]");
+    const view = await openFormula();
+    expect(view.state.doc.toString()).toBe("=[Price] * [Qty]");
+    expect(wrapper.get(".column-formula-popover").text()).toContain(
+      "Editing formula for every row in Table 1[Total]",
+    );
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "=[Price] + 1" } });
+    await wrapper.get(".column-formula-popover button").trigger("click");
+    await flushPromises();
     expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c3", {
-      revision: expect.any(Number),
       type: "formula",
       formula: "=[Price] + 1",
     });
+    expect(wrapper.find(".column-formula-popover").exists()).toBe(false);
   });
-
-  it.each([null, "", " = "])(
-    "leaves the column alone when the formula prompt gives %j",
-    async (answer) => {
-      await renderData();
-      await wrapper.get('[data-cell="B1"]').trigger("contextmenu");
-      prompt.mockReturnValue(answer);
-      await item("Column holds: A formula…").trigger("click");
-      expect(server.updateColumn).not.toHaveBeenCalled();
-    },
-  );
+  it("retains a failed column draft and discards it on Cancel without retrying", async () => {
+    await renderData();
+    const view = await openFormula();
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "=[Price] + 1" } });
+    server.updateColumn.mockRejectedValueOnce(new Error("Offline"));
+    await wrapper.get(".column-formula-popover button").trigger("click");
+    await flushPromises();
+    expect(document.activeElement).toBe(view.contentDOM);
+    expect(view.state.doc.toString()).toBe("=[Price] + 1");
+    expect(wrapper.get('.column-formula-popover [role="alert"]').text()).toBe("Offline");
+    await wrapper.findAll(".column-formula-popover button")[1]!.trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".column-formula-popover").exists()).toBe(false);
+    expect(server.updateColumn).toHaveBeenCalledTimes(1);
+  });
+  it("transfers the column draft and undo history between inline, bar, and popover editors without saves", async () => {
+    await renderData();
+    const store = useWorkbookStore();
+    store.selection = at("C1");
+    await flushPromises();
+    await wrapper.get(".grid").trigger("keydown", { key: "F2" });
+    await flushPromises();
+    const inline = EditorView.findFromDOM(
+      wrapper.get(".grid__editor .cm-content").element as HTMLElement,
+    )!;
+    expect(inline.contentDOM.getAttribute("aria-label")).toContain(
+      "Editing formula for every row in Table 1[Total]",
+    );
+    inline.dispatch({
+      changes: { from: inline.state.doc.length, insert: "+1" },
+      selection: { anchor: 2 },
+      userEvent: "input.type",
+    });
+    await flushPromises();
+    (wrapper.get(".formula-bar input").element as HTMLInputElement).focus();
+    await flushPromises();
+    const bar = EditorView.findFromDOM(
+      wrapper.get(".formula-bar .cm-content").element as HTMLElement,
+    )!;
+    expect(bar.state.selection.main.anchor).toBe(2);
+    await wrapper.get("button[data-formula-field]").trigger("click");
+    await flushPromises();
+    const popover = columnEditor();
+    expect(popover.state.doc.toString()).toBe("=[Price] * [Qty]+1");
+    expect(popover.state.selection.main.anchor).toBe(2);
+    expect(wrapper.findAll(".cm-editor")).toHaveLength(1);
+    expect(undo(popover)).toBe(true);
+    await flushPromises();
+    expect(popover.state.doc.toString()).toBe("=[Price] * [Qty]");
+    expect(server.updateColumn).not.toHaveBeenCalled();
+    expect(useFormulaSessionStore().active?.target).toMatchObject({
+      kind: "column",
+      tableId: "t1",
+      colId: "c3",
+    });
+  });
+  it("retains a column draft after its originating row is deleted and recovers a deleted column on submission", async () => {
+    await renderData();
+    const view = await openFormula();
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "=[Price]+9" } });
+    const store = useWorkbookStore();
+    await store.receiveChange(
+      changeWith({ table: { ...DATA_TABLE, rows: DATA_TABLE.rows.slice(1), rowCount: 3 } }),
+    );
+    await flushPromises();
+    expect(view.state.doc.toString()).toBe("=[Price]+9");
+    expect(useFormulaSessionStore().active?.deleted).toBeUndefined();
+    await store.receiveChange(
+      changeWith({
+        table: { ...DATA_TABLE, colCount: 2, colIds: ["c1", "c2"], columns: COLUMNS.slice(0, 2) },
+      }),
+    );
+    await flushPromises();
+    expect(useFormulaSessionStore().active?.deleted).toBeUndefined();
+    await wrapper.get(".column-formula-popover button").trigger("click");
+    await flushPromises();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      "The editing target was deleted",
+    );
+    const copy = EditorView.findFromDOM(
+      document.querySelector<HTMLElement>('[aria-label="Unsaved formula for copying"]')!,
+    )!;
+    expect(copy.state.doc.toString()).toBe("=[Price]+9");
+    expect(server.updateColumn).not.toHaveBeenCalled();
+  });
+  it("confirms removal of stored inputs when converting and can decline it", async () => {
+    await renderData();
+    await useWorkbookStore().setCell(at("B1"), "4");
+    await flushPromises();
+    confirm.mockReturnValueOnce(false);
+    await wrapper.get('[data-cell="B1"]').trigger("contextmenu");
+    await item("Column holds: A formula…").trigger("click");
+    await flushPromises();
+    expect(confirm).toHaveBeenCalledWith(
+      "Make Table 1[Qty] a formula column and remove its stored inputs?",
+    );
+    expect(wrapper.find(".column-formula-popover").exists()).toBe(false);
+    expect(server.updateColumn).not.toHaveBeenCalled();
+    confirm.mockReturnValueOnce(true);
+    const view = await openFormula("B1");
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "[Price] * 2" } });
+    await wrapper.get(".column-formula-popover button").trigger("click");
+    await flushPromises();
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c2", {
+      type: "formula",
+      formula: "[Price] * 2",
+    });
+  });
 
   it("has no column items in the menu of a plain table", async () => {
     await render();

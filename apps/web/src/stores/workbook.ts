@@ -671,6 +671,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
         scriptNames(script.id, script.source).map(({ name }) => ({
           name,
           holder: script.name,
+          holderId: script.id,
           pageId: script.pageId,
         })),
       ),
@@ -1009,15 +1010,39 @@ export const useWorkbookStore = defineStore("workbook", () => {
       try {
         let change: Change;
         switch (target.kind) {
-          case "cell":
-            if (!positionOf(target)) return "deleted";
-            change = await api.setCells(target.tableId, [
-              { rowId: target.rowId, colId: target.colId, input: text },
-            ]);
+          case "cell": {
+            const position = positionOf(target);
+            if (!position) return "deleted";
+            if (text === inputOf(position)) return "saved";
+            change = await api.setCells(
+              target.tableId,
+              [{ rowId: target.rowId, colId: target.colId, input: text }],
+              crypto.randomUUID(),
+              revision.value,
+              [],
+            );
             break;
-          case "column":
+          }
+          case "append": {
             if (!table?.colIds.includes(target.colId)) return "deleted";
-            change = await api.updateColumn(target.tableId, target.colId, { formula: text });
+            if (text === "") return "saved";
+            const rowId = target.rowId ?? crypto.randomUUID();
+            const existing = table.rows.some((row) => row.id === rowId);
+            change = await api.setCells(
+              table.id,
+              [{ rowId, colId: target.colId, input: text }],
+              crypto.randomUUID(),
+              revision.value,
+              existing ? [] : [rowId],
+            );
+            break;
+          }
+          case "column":
+            if (!table?.columns?.[table.colIds.indexOf(target.colId)]) return "deleted";
+            change = await api.updateColumn(target.tableId, target.colId, {
+              formula: text,
+              type: "formula",
+            });
             break;
           case "name": {
             change = await api.updateNamedFormula(target.tableId, target.name, text);
@@ -1027,6 +1052,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
             if (!table) return "deleted";
             change = await api.setTableDisplay(target.tableId, { ...table.display, filter: text });
             break;
+          case "script":
+          case "markdown":
           case "chart":
             {
               const view = views.value.find((item) => item.id === target.viewId);

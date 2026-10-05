@@ -1,3 +1,4 @@
+import { EditorView } from "@codemirror/view";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,6 +25,19 @@ const SCRIPT: ViewRecord = {
 };
 
 let wrapper: VueWrapper;
+async function editorView(): Promise<EditorView> {
+  await flushPromises();
+  return EditorView.findFromDOM(wrapper.get(".cm-content").element as HTMLElement)!;
+}
+async function replaceDraft(text: string): Promise<void> {
+  const editor = await editorView();
+  editor.dispatch({
+    changes: { from: 0, to: editor.state.doc.length, insert: text },
+    selection: { anchor: text.length },
+    userEvent: "input.type",
+  });
+  await flushPromises();
+}
 
 async function render(source: string, cells: Record<string, string> = {}): Promise<void> {
   server.getSnapshot.mockResolvedValue(
@@ -101,7 +115,7 @@ describe("ScriptCard", () => {
   it("saves the source when the edit ends", async () => {
     await render("Total = 1");
     await wrapper.get("table").trigger("dblclick");
-    await wrapper.get("textarea").setValue("Total = 2");
+    await replaceDraft("Total = 2");
     await wrapper
       .findAll("button")
       .find((button) => button.text() === "Done")!
@@ -140,9 +154,9 @@ it("saving on blur preserves the selected cell without scrolling to it", async (
     store.selection = at("A1");
     await wrapper.vm.$nextTick();
     await wrapper.get("table").trigger("dblclick");
-    await wrapper.get("textarea").setValue("Total = 2");
+    await replaceDraft("Total = 2");
     vi.mocked(Element.prototype.scrollIntoView).mockClear();
-    wrapper.get<HTMLTextAreaElement>("textarea").element.blur();
+    (await editorView()).contentDOM.blur();
     await flushPromises();
     expect(rows()).toEqual([["Total", "2"]]);
     expect(store.selection).toEqual(at("A1"));
@@ -151,4 +165,27 @@ it("saving on blur preserves the selected cell without scrolling to it", async (
   } finally {
     grid.unmount();
   }
+});
+
+it("retains a failed source save and Cancel discards without retrying", async () => {
+  await render("Total = 1");
+  await wrapper.get("table").trigger("dblclick");
+  await replaceDraft("Total = 9");
+  server.updateView.mockRejectedValueOnce(new Error("Offline"));
+  await wrapper
+    .findAll("button")
+    .find((button) => button.text() === "Done")!
+    .trigger("click");
+  await flushPromises();
+  expect(wrapper.get('[role="alert"]').text()).toBe("Offline");
+  expect((await editorView()).state.doc.toString()).toBe("Total = 9");
+  expect(document.activeElement).toBe((await editorView()).contentDOM);
+  await wrapper
+    .findAll("button")
+    .find((button) => button.text() === "Cancel")!
+    .trigger("click");
+  await flushPromises();
+  expect(wrapper.find(".cm-editor").exists()).toBe(false);
+  expect(rows()).toEqual([["Total", "1"]]);
+  expect(server.updateView).toHaveBeenCalledOnce();
 });

@@ -1,11 +1,16 @@
 import {
   analyzeFormula,
+  analyzeSource,
+  formulaAt,
+  type EditingMode,
   bindingsAt,
   functionDocs,
   isFormulaInput,
   quoteName,
   type FunctionDoc,
 } from "@spreadsheet-app/engine";
+
+export type FunctionSignature = Pick<FunctionDoc, "name" | "syntax" | "summary">;
 
 export interface Suggestion {
   kind: "function" | "table" | "page" | "name" | "column";
@@ -37,12 +42,20 @@ export interface NamingContext {
   /** The named columns of the table that holds the formula, which `[Name]` reads. */
   columns?: readonly { name: string }[] | null;
   /** The names the document defines, each with the name and page of the script that holds it. */
-  names?: readonly { name: string; holder: string; pageId: string }[];
+  names?: readonly {
+    name: string;
+    holder: string;
+    pageId: string;
+    holderId?: string;
+    params?: string[];
+  }[];
+  holderId?: string;
+  holder?: string;
+  locals?: readonly { name: string; params?: string[] }[];
 }
 
 const MAX_SUGGESTIONS = 8;
 const WORD_AT_END = /[A-Za-z_][A-Za-z0-9_.]*$/;
-const QUALIFIER_AT_END = /(?:'((?:[^']|'')*)'|([A-Za-z_][A-Za-z0-9_]*))!$/;
 // An open `[` with a table name before it, or none: `Sales[Pr`, `'Table 1'[`, `[Pr`.
 const COLUMN_AT_END = /(?:'((?:[^']|'')*)'|([A-Za-z_][A-Za-z0-9_]*))?\[([^[\]]*)$/;
 
@@ -85,6 +98,28 @@ function qualifier(name: string, kind: "table" | "page", detail: string): Sugges
   return { kind, label: name, insert: `${quoteName(name)}!`, detail };
 }
 
+/** The qualifier chain immediately before a token, including its source offset. */
+function qualifierChain(before: string): { names: string[]; from: number } | undefined {
+  const chain = /(?:(?:'(?:[^']|'')*'|[A-Za-z_][A-Za-z0-9_]*)!){1,2}$/.exec(before);
+  if (!chain) return;
+  const names = [...chain[0].matchAll(/(?:'((?:[^']|'')*)'|([A-Za-z_][A-Za-z0-9_]*))!/g)].map(
+    (part) => part[1]?.replaceAll("''", "'") ?? part[2] ?? "",
+  );
+  return { names, from: chain.index };
+}
+
+function writtenName(
+  named: NonNullable<NamingContext["names"]>[number],
+  context: NamingContext,
+  occurrences: ReadonlyMap<string, number>,
+): string {
+  const page = context.pages.find((page) => page.id === named.pageId);
+  const ambiguous = (occurrences.get(named.name.toLowerCase()) ?? 0) > 1;
+  return (named.pageId !== context.pageId || ambiguous) && page
+    ? [page.name, named.holder, named.name].map(quoteName).join("!")
+    : quoteName(named.name);
+}
+
 /**
  * What could complete the word being typed at the caret: function names,
  * the names of tables and pages, and names the formula already uses.
@@ -94,10 +129,52 @@ export function suggestionsAt(
   text: string,
   caret: number,
   context: NamingContext,
-  mode: "cell" | "formula" = "cell",
+  mode: EditingMode = "cell",
 ): Suggestions {
   const none = { from: caret, items: [] };
+  if (mode === "script" || mode === "markdown") {
+    const analysis = analyzeSource(text, mode);
+    const formula = formulaAt(analysis, caret);
+    if (!formula) return none;
+    const locals = [
+      ...(context.holder ? [] : analysis.definitions),
+      ...bindingsAt(formula, caret).map((name) => ({ name })),
+    ];
+    const currentNames =
+      mode === "script" && context.holderId
+        ? context.names?.filter((named) => named.holderId !== context.holderId)
+        : context.names;
+    const names =
+      context.holder && context.pageId
+        ? [
+            ...(currentNames ?? []),
+            ...analysis.definitions.map((definition) => ({
+              ...definition,
+              holder: context.holder ?? "",
+              holderId: context.holderId,
+              pageId: context.pageId ?? "",
+            })),
+          ]
+        : currentNames;
+    const found = suggestionsAt(
+      analysis.text.slice(formula.region.from, formula.region.to),
+      caret - formula.region.from,
+      {
+        ...context,
+        locals,
+        names,
+      },
+      "formula",
+    );
+    return { ...found, from: found.from + formula.region.from };
+  }
+
   if (mode === "cell" && !isFormulaInput(text) && text !== "=") return none;
+  const occurrences = new Map<string, number>();
+  for (const item of [...(context.names ?? []), ...context.tables]) {
+    const key = item.name.toLowerCase();
+    occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
+  }
   const before = text.slice(0, caret);
   const { quote, quoteStart } = scan(text, caret);
   if (quote === '"') return none;
@@ -107,22 +184,49 @@ export function suggestionsAt(
       .filter((table) => table.pageId === pageId)
       .map((table) => qualifier(table.name, "table", "table"));
 
-  // Inside a quoted name only pages and tables can be meant.
+  // A quoted token may name a document definition as well as a page or table.
   if (quote === "'" && quoteStart !== undefined) {
-    const typed = before.slice(quoteStart);
-    const page = QUALIFIER_AT_END.exec(before.slice(0, quoteStart - 1));
-    const named = page
-      ? pageNamed(context, page[1]?.replaceAll("''", "'") ?? page[2] ?? "")
-      : undefined;
-    const candidates = page
-      ? tablesOn(named?.id)
-      : [
-          ...tablesOn(context.pageId),
-          ...context.pages.map((p) => qualifier(p.name, "page", "page")),
-        ];
+    const typed = before.slice(quoteStart).replaceAll("''", "'");
+    const chain = qualifierChain(before.slice(0, quoteStart - 1));
+    const [first = "", second] = chain?.names ?? [];
+    const page = chain ? pageNamed(context, first) : undefined;
+    const held = (context.names ?? [])
+      .filter(
+        (named) =>
+          !chain ||
+          (named.pageId === (second ? page?.id : context.pageId) &&
+            named.holder.toLowerCase() === (second ?? first).toLowerCase()),
+      )
+      .map((named): Suggestion => ({
+        kind: "name",
+        label: named.name,
+        insert: second ? quoteName(named.name) : writtenName(named, context, occurrences),
+        detail: `name in ${named.holder}`,
+      }));
+    const candidates = [
+      ...held,
+      ...(chain
+        ? second
+          ? []
+          : tablesOn(page?.id)
+        : [
+            ...tablesOn(context.pageId),
+            ...context.pages.map((p) => qualifier(p.name, "page", "page")),
+          ]),
+    ].filter((item) => startsWith(item.label, typed));
+    const replaceChain =
+      chain && candidates.some((item) => item.kind === "name" && item.insert.includes("!"));
     return {
-      from: quoteStart - 1,
-      items: candidates.filter((item) => startsWith(item.label, typed)).slice(0, MAX_SUGGESTIONS),
+      from: replaceChain ? chain.from : quoteStart - 1,
+      items: candidates
+        .map((item) => ({
+          ...item,
+          insert:
+            replaceChain && !item.insert.includes("!")
+              ? before.slice(chain.from, quoteStart - 1) + item.insert
+              : item.insert,
+        }))
+        .slice(0, MAX_SUGGESTIONS),
     };
   }
 
@@ -131,13 +235,16 @@ export function suggestionsAt(
   if (bracket) {
     const [, quotedTable, bareTable, typedColumn = ""] = bracket;
     const tableName = quotedTable?.replaceAll("''", "'") ?? bareTable;
+    const pageQualifier = qualifierChain(before.slice(0, bracket.index));
+    const columnPage = pageQualifier
+      ? pageNamed(context, pageQualifier.names.at(-1) ?? "")?.id
+      : context.pageId;
     const columns =
       tableName === undefined
         ? context.columns
         : context.tables.find(
             (table) =>
-              table.pageId === context.pageId &&
-              table.name.toLowerCase() === tableName.toLowerCase(),
+              table.pageId === columnPage && table.name.toLowerCase() === tableName.toLowerCase(),
           )?.columns;
     const where = tableName === undefined ? "column of this row" : `column of ${tableName}`;
     return {
@@ -160,26 +267,39 @@ export function suggestionsAt(
   // A word glued to a digit or a quote, as in `1e5` or `'x'y`, is not a new word.
   if (/[0-9.'"]/.test(before[from - 1] ?? "")) return none;
 
-  const qualified = QUALIFIER_AT_END.exec(before.slice(0, from));
+  const qualified = qualifierChain(before.slice(0, from));
   if (qualified) {
-    const word = qualified[1]?.replaceAll("''", "'") ?? qualified[2] ?? "";
-    const page = pageNamed(context, word);
-    // `Summary!` names a script on the formula's page, whose names can follow.
+    const [first = "", second] = qualified.names;
+    const page = pageNamed(context, first);
+    const holder = second ?? first;
     const held = (context.names ?? [])
       .filter(
         (named) =>
-          named.pageId === context.pageId && named.holder.toLowerCase() === word.toLowerCase(),
+          named.pageId === (second ? page?.id : context.pageId) &&
+          named.holder.toLowerCase() === holder.toLowerCase(),
       )
       .map((named): Suggestion => ({
         kind: "name",
         label: named.name,
-        insert: quoteName(named.name),
+        insert: second ? quoteName(named.name) : writtenName(named, context, occurrences),
         detail: `name in ${named.holder}`,
       }));
-    const items = [...held, ...(page ? tablesOn(page.id) : [])].filter((item) =>
-      startsWith(item.label, typed),
-    );
-    return { from, items: items.slice(0, MAX_SUGGESTIONS) };
+    const candidates = [...held, ...(second ? [] : page ? tablesOn(page.id) : [])];
+    // A completed qualified name can replace the whole prefix when disambiguation needs a page.
+    const replaceChain = held.some((item) => item.insert.includes("!"));
+    return {
+      from: replaceChain ? qualified.from : from,
+      items: candidates
+        .filter((item) => startsWith(item.label, typed))
+        .map((item) => ({
+          ...item,
+          insert:
+            replaceChain && !item.insert.includes("!")
+              ? before.slice(qualified.from, from) + item.insert
+              : item.insert,
+        }))
+        .slice(0, MAX_SUGGESTIONS),
+    };
   }
 
   const functions = functionDocs
@@ -191,23 +311,33 @@ export function suggestionsAt(
       detail: doc.syntax,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
-  const bound = bindingsAt(
+  const scoped = new Map((context.locals ?? []).map((local) => [local.name.toLowerCase(), local]));
+  for (const name of bindingsAt(
     analyzeFormula(text, { from: mode === "cell" ? 1 : 0, to: text.length }),
     caret,
-  );
-  const boundNames = new Set(bound.map((name) => name.toLowerCase()));
+  ))
+    scoped.set(name.toLowerCase(), { name });
+  const bound = [...scoped.values()];
+  const boundNames = new Set(bound.map(({ name }) => name.toLowerCase()));
   const defined = (context.names ?? [])
     .filter((named) => startsWith(named.name, typed) && !boundNames.has(named.name.toLowerCase()))
     .map((named): Suggestion => ({
-      kind: "name",
+      kind: named.params ? "function" : "name",
       label: named.name,
-      insert: quoteName(named.name),
-      detail: `name in ${named.holder}`,
+      insert: writtenName(named, context, occurrences) + (named.params ? "(" : ""),
+      detail: named.params
+        ? `${named.name}(${named.params.join(", ")})`
+        : `name in ${named.holder}`,
     }));
   const names = [
     ...bound
-      .filter((name) => startsWith(name, typed))
-      .map((name): Suggestion => ({ kind: "name", label: name, insert: name, detail: "name" })),
+      .filter(({ name }) => startsWith(name, typed))
+      .map(({ name, params }): Suggestion => ({
+        kind: params ? "function" : "name",
+        label: name,
+        insert: params ? `${quoteName(name)}(` : quoteName(name),
+        detail: params ? `${name}(${params.join(", ")})` : "name",
+      })),
     ...defined,
   ];
   const places = [
@@ -230,8 +360,28 @@ function pageNamed(context: NamingContext, name: string): { id: string; name: st
 export function signatureAt(
   text: string,
   caret: number,
-  mode: "cell" | "formula" = "cell",
-): FunctionDoc | undefined {
+  mode: EditingMode = "cell",
+): FunctionSignature | undefined {
+  if (mode === "script" || mode === "markdown") {
+    const analysis = analyzeSource(text, mode);
+    const formula = formulaAt(analysis, caret);
+    if (!formula) return undefined;
+    const fragment = analysis.text.slice(formula.region.from, formula.region.to);
+    const localCaret = caret - formula.region.from;
+    const { quote, calls } = scan(fragment, localCaret);
+    if (quote === '"') return undefined;
+    const called = calls.findLast((name) => name !== "");
+    const definition = analysis.definitions.find(
+      (definition) => definition.params !== undefined && definition.name.toUpperCase() === called,
+    );
+    return definition
+      ? {
+          name: definition.name,
+          syntax: `${definition.name}(${definition.params?.join(", ") ?? ""})`,
+          summary: "Function defined in this script.",
+        }
+      : signatureAt(fragment, localCaret, "formula");
+  }
   if (mode === "cell" && !isFormulaInput(text)) return undefined;
   const { quote, calls } = scan(text, caret);
   if (quote === '"') return undefined;
@@ -253,12 +403,14 @@ export function applySuggestion(
   if (text[from] === "[") {
     const close = text.indexOf("]", caret);
     if (close !== -1 && !/[()[\]]/.test(text.slice(caret, close))) end = close + 1;
-  } else if (text[from] === "'") {
-    const token = analyzeFormula(text).tokens.find((token) => token.position === from);
-    if (token?.type === "quotedName") end = token.end;
   } else {
-    end += /^[A-Za-z0-9_.]*/.exec(text.slice(caret))?.[0].length ?? 0;
+    const token = analyzeFormula(text).tokens.findLast(
+      (token) => token.position <= caret && token.end >= caret && token.end > token.position,
+    );
+    if (token?.type === "quotedName") end = token.end;
+    else end += /^[A-Za-z0-9_.]*/.exec(text.slice(caret))?.[0].length ?? 0;
   }
+
   const after = text.slice(end);
   const insert =
     suggestion.insert.endsWith("(") && after.startsWith("(")

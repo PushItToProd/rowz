@@ -293,3 +293,109 @@ describe("column names", () => {
     ]);
   });
 });
+
+describe("multiline formula assistance", () => {
+  it("offers draft script definitions and parameters only inside their body", () => {
+    const source = "Rate = 2\nScale(amount) = amo\nScale(Ra";
+    const inside = source.indexOf("amo\n") + 3;
+    expect(
+      suggestionsAt(source, inside, context, "script").items.map((item) => item.label),
+    ).toContain("amount");
+    expect(
+      suggestionsAt(source, source.length, context, "script").items.map((item) => item.label),
+    ).toContain("Rate");
+    expect(suggestionsAt(source, source.indexOf("amount") + 3, context, "script").items).toEqual(
+      [],
+    );
+    const call = suggestionsAt("Scale(amount) = amount * 2\nSc", 28, context, "script").items.find(
+      (item) => item.label === "Scale",
+    );
+    expect(call?.insert).toBe("Scale(");
+  });
+
+  it("suppresses assistance in comments and preserves it after comments with quotes", () => {
+    const source = 'Value = SUM(1, // "comment\n  rou';
+    expect(suggestionsAt(source, source.indexOf("comment") + 2, context, "script").items).toEqual(
+      [],
+    );
+    expect(
+      suggestionsAt(source, source.length, context, "script").items.map((item) => item.label),
+    ).toEqual(["ROUND", "ROUNDDOWN", "ROUNDUP"]);
+    expect(signatureAt(source, source.length, "script")?.name).toBe("SUM");
+  });
+
+  it("offers template locals inside formulas, including unfinished tags, and replaces suffixes", () => {
+    const source = "{% for Item in Sales[Price] %}{{ It";
+    const result = suggestionsAt(source, source.length, context, "markdown");
+    expect(result.items[0]?.label).toBe("Item");
+    expect(result.from).toBe(source.length - 2);
+    expect(suggestionsAt("prose rou", 9, context, "markdown").items).toEqual([]);
+    expect(suggestionsAt("{% for Ite", 10, context, "markdown").items).toEqual([]);
+    expect(suggestionsAt("{# rou #}", 6, context, "markdown").items).toEqual([]);
+    const expression = "{{ rouND(1) }}";
+    const found = suggestionsAt(expression, 6, context, "markdown");
+    expect(applySuggestion(expression, found, 6, found.items[0]!)).toEqual({
+      text: "{{ ROUND(1) }}",
+      caret: 8,
+    });
+  });
+});
+
+describe("qualified document completion", () => {
+  const named: NamingContext = {
+    ...context,
+    names: [
+      { name: "Total", holder: "Rates", pageId: "p1" },
+      { name: "Total", holder: "Other report", pageId: "p2" },
+      { name: "Remote", holder: "Joe's report", pageId: "p2" },
+    ],
+    tables: [
+      ...context.tables,
+      { pageId: "p2", name: "Sales", columns: [{ name: "Remote amount" }] },
+    ],
+  };
+  it("qualifies ambiguous names and unique cross-page names", () => {
+    expect(
+      suggestionsAt("=Tot", 4, named)
+        .items.filter((item) => item.kind === "name")
+        .map((item) => item.insert),
+    ).toEqual(["Summary!Rates!Total", "'Raw Data'!'Other report'!Total"]);
+    const result = suggestionsAt("=Rem", 4, named);
+    expect(applySuggestion("=Rem", result, 4, result.items[0]!).text).toBe(
+      "='Raw Data'!'Joe''s report'!Remote",
+    );
+  });
+  it("completes a fully qualified holder and a cross-page column using that page", () => {
+    const expression = "='Raw Data'!'Other report'!To";
+    const result = suggestionsAt(expression, expression.length, named);
+    expect(result.items[0]?.insert).toBe("Total");
+    expect(applySuggestion(expression, result, expression.length, result.items[0]!).text).toBe(
+      "='Raw Data'!'Other report'!Total",
+    );
+    const column = "='Raw Data'!Sales[Re";
+    expect(suggestionsAt(column, column.length, named).items.map((item) => item.label)).toEqual([
+      "Remote amount",
+    ]);
+  });
+});
+
+it("shows draft function parameters as signature help", () => {
+  const source = "Scale(amount, tax) = amount * tax\nScale(";
+  expect(signatureAt(source, source.length, "script")?.syntax).toBe("Scale(amount, tax)");
+});
+
+it("replaces the complete final token when qualification replaces a quoted holder", () => {
+  const named: NamingContext = {
+    ...context,
+    names: [
+      { name: "Total", holder: "Rates bank", pageId: "p1" },
+      { name: "Total", holder: "Other", pageId: "p2" },
+    ],
+  };
+  const source = "='Rates bank'!Total + 1";
+  const caret = source.indexOf("Total") + 2;
+  const found = suggestionsAt(source, caret, named);
+  expect(applySuggestion(source, found, caret, found.items[0]!).text).toBe(
+    "=Summary!'Rates bank'!Total + 1",
+  );
+});

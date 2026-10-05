@@ -1,3 +1,4 @@
+import { markRaw } from "vue";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
@@ -48,6 +49,19 @@ describe("shared formula editor", () => {
     expect(wrapper.get(".cm-content").attributes("aria-label")).toBe(
       "Editing formula for every row in Sales[Amount]",
     );
+  });
+
+  it("publishes completion-only state changes and accepts external replacement states", async () => {
+    const { wrapper, view } = render("=sq");
+    await complete(view);
+    const emitted = wrapper.emitted<[EditorState]>("update:state")!;
+    expect(emitted.at(-1)![0]).toBe(view.state);
+    const completed = view.state;
+    await wrapper.setProps({ state: markRaw(completed) });
+    expect(view.state).toBe(completed);
+    expect(completionStatus(view.state)).toBe("active");
+    await wrapper.setProps({ state: EditorState.create({ doc: "=B2" }) });
+    expect(view.state.doc.toString()).toBe("=B2");
   });
 
   it("retains caret and local undo when mounted into a different component", async () => {
@@ -140,4 +154,84 @@ describe("shared formula editor", () => {
     await wrapper.get(".cm-content").trigger("keydown", { key: "Enter", keyCode: 13 });
     expect(wrapper.emitted("commit")).toEqual([["Enter", false]]);
   });
+});
+
+describe("multiline keyboard behavior", () => {
+  it.each(["script", "markdown"] as const)(
+    "inserts newlines, retains Escape drafts, and explicitly commits %s",
+    async (mode) => {
+      const { wrapper, view } = render(mode === "script" ? "Value = 1" : "# Heading", { mode });
+      expect(view.contentDOM.getAttribute("aria-multiline")).toBe("true");
+      await wrapper.get(".cm-content").trigger("keydown", { key: "Enter" });
+      expect(view.state.doc.toString()).toContain("\n");
+      expect(wrapper.emitted("commit")).toBeUndefined();
+      await wrapper.get(".cm-content").trigger("keydown", { key: "Escape" });
+      expect(wrapper.emitted("cancel")).toBeUndefined();
+      await wrapper.get(".cm-content").trigger("keydown", { key: "Enter", ctrlKey: true });
+      expect(wrapper.emitted("commit")).toEqual([["Enter", false]]);
+      await wrapper.get(".cm-content").trigger("keydown", { key: "Tab", shiftKey: true });
+      expect(wrapper.emitted("commit")?.at(-1)).toEqual(["Tab", true]);
+    },
+  );
+
+  it("highlights script definitions and comments and template delimiters independently of formulas", () => {
+    const script = render("// comment\nScale(amount) = SUM(amount, 2)", { mode: "script" }).wrapper;
+    expect(script.get(".formula-token--comment").text()).toBe("// comment");
+    expect(script.get(".formula-token--definition").text()).toContain("Scale(amount)");
+    const template = render("Prose {% let Count = 2 %}{{ Count + 1 }}", {
+      mode: "markdown",
+    }).wrapper;
+    expect(template.get(".formula-token--keyword").text()).toBe("let");
+    expect(template.findAll(".formula-token--delimiter").map((span) => span.text())).toEqual([
+      "{%",
+      "%}",
+      "{{",
+      "}}",
+    ]);
+  });
+
+  it("accepts a 50,000-character multiline draft and refuses larger changes", () => {
+    const { view } = render("", { mode: "script" });
+    const source = "// comment\n".repeat(4_545) + "     ";
+    expect(source.length).toBe(50_000);
+    view.dispatch({ changes: { from: 0, insert: source } });
+    expect(view.state.doc.length).toBe(50_000);
+    view.dispatch({ changes: { from: view.state.doc.length, insert: "x" } });
+    expect(view.state.doc.length).toBe(50_000);
+  });
+});
+
+it("applies keyboard characters through editor selection while retaining native composition and fill", async () => {
+  const { wrapper, view } = render('="ab"');
+  view.dispatch({ selection: { anchor: 3 } });
+  await wrapper.get(".cm-content").trigger("keydown", { key: "X" });
+  const input = new InputEvent("beforeinput", {
+    bubbles: true,
+    cancelable: true,
+    inputType: "insertText",
+    data: "X",
+  });
+  view.contentDOM.dispatchEvent(input);
+  expect(input.defaultPrevented).toBe(true);
+  expect(view.state.doc.toString()).toBe('="aXb"');
+  expect(view.state.selection.main.anchor).toBe(4);
+  await wrapper.get(".cm-content").trigger("keydown", { key: "Y" });
+  const composing = new InputEvent("beforeinput", {
+    bubbles: true,
+    cancelable: true,
+    inputType: "insertText",
+    data: "Y",
+    isComposing: true,
+  });
+  view.contentDOM.dispatchEvent(composing);
+  expect(composing.defaultPrevented).toBe(false);
+  expect(view.state.doc.toString()).toBe('="aXb"');
+  const fill = new InputEvent("beforeinput", {
+    bubbles: true,
+    cancelable: true,
+    inputType: "insertText",
+    data: "Z",
+  });
+  view.contentDOM.dispatchEvent(fill);
+  expect(fill.defaultPrevented).toBe(false);
 });

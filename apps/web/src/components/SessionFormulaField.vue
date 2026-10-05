@@ -21,6 +21,8 @@ const props = defineProps<{
   maxLength: number;
   readonly?: boolean;
   mode?: FormulaMode;
+  cellNavigation?: boolean;
+  showLabel?: boolean;
 }>();
 const store = useWorkbookStore();
 const sessions = useFormulaSessionStore();
@@ -51,6 +53,16 @@ watch(
     );
   },
   { immediate: true, deep: true },
+);
+
+watch(
+  ownsEditor,
+  async (owns) => {
+    if (!owns) return;
+    await nextTick();
+    if (mounted && ownsEditor.value && !sessions.active?.deleted) editor.value?.focus();
+  },
+  { immediate: true },
 );
 
 async function begin(): Promise<void> {
@@ -93,7 +105,26 @@ async function submit(): Promise<boolean> {
 }
 
 async function commit(key: "Enter" | "Tab", backwards: boolean): Promise<void> {
+  const controlsBefore = [
+    ...document.querySelectorAll<HTMLElement>(
+      'input:not(:disabled), select:not(:disabled), button:not(:disabled), a[href], [tabindex="0"]',
+    ),
+  ];
+  const indexBefore = controlsBefore.indexOf(document.activeElement as HTMLElement);
+  const target = sessions.active?.target;
+  const move = props.cellNavigation ? store.prepareCellMove(key, backwards) : undefined;
   if (!(await submit())) return;
+  if (move) {
+    if (target?.kind === "append") {
+      const table = store.tables.find((table) => table.id === target.tableId);
+      const row = table?.rows.findIndex((row) => row.id === target.rowId) ?? -1;
+      const col = table?.colIds.indexOf(target.colId) ?? -1;
+      if (table && row >= 0 && col >= 0) store.selection = { tableId: table.id, row, col };
+      store.prepareCellMove(key, backwards)();
+    } else move();
+    store.focusGrid();
+    return;
+  }
   await nextTick();
   if (key === "Tab") {
     const controls = [
@@ -102,34 +133,52 @@ async function commit(key: "Enter" | "Tab", backwards: boolean): Promise<void> {
       ),
     ];
     const index = input.value ? controls.indexOf(input.value) : -1;
-    controls[index + (backwards ? -1 : 1)]?.focus();
+    if (index >= 0) controls[index + (backwards ? -1 : 1)]?.focus();
+    else {
+      const following = backwards
+        ? controlsBefore.slice(0, indexBefore).reverse()
+        : controlsBefore.slice(indexBefore + 1);
+      following.find((control) => control.isConnected && !control.matches(":disabled"))?.focus();
+    }
   }
 }
 
 function cancel(): void {
-  sessions.cancel();
+  if (sessions.cancel() && props.cellNavigation) store.focusGrid();
+}
+function transfer(event: MouseEvent): void {
+  if (!session.value || props.readonly) return;
+  event.preventDefault();
+  void begin();
 }
 function blur(): void {
   // Completion clicks and focus transfers within this field keep the session open.
   void nextTick(() => {
-    if (mounted && ownsEditor.value && !root.value?.contains(document.activeElement)) void submit();
+    if (
+      mounted &&
+      ownsEditor.value &&
+      !root.value?.contains(document.activeElement) &&
+      !document.activeElement?.closest(".context-menu")
+    )
+      void submit();
   });
 }
 onBeforeUnmount(() => {
   mounted = false;
 });
-defineExpose({ submit });
+defineExpose({ submit, begin });
 </script>
 
 <template>
   <div ref="root" class="session-formula-field" data-formula-field>
+    <strong v-if="showLabel" class="formula-column-label">{{ targetLabel }}</strong>
     <FormulaEditor
       v-if="ownsEditor && session"
       ref="editor"
       :state="session.state"
       :mode="session.mode"
       :context="context"
-      :label="label"
+      :label="showLabel ? `${label} · ${targetLabel}` : label"
       :readonly="readonly || session.saving"
       :max-length="maxLength"
       @update:state="sessions.updateState"
@@ -147,6 +196,7 @@ defineExpose({ submit });
       readonly
       :maxlength="maxLength"
       spellcheck="false"
+      @mousedown="transfer"
       @focus="begin"
     />
     <p v-if="session?.error && !session.deleted" class="notice notice--error" role="alert">

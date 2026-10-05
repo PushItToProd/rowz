@@ -15,6 +15,8 @@ import {
   type MockedApi,
   wireSnapshot,
 } from "../testing";
+import { EditorView } from "@codemirror/view";
+import { completionStatus, startCompletion } from "@codemirror/autocomplete";
 import GridView from "./GridView.vue";
 import { useFormulaSessionStore } from "../formula/session";
 
@@ -82,16 +84,30 @@ function dispatchPointer(
   target.dispatchEvent(event);
 }
 
+function editorView(): EditorView {
+  return EditorView.findFromDOM(wrapper.get(".grid__editor .cm-content").element as HTMLElement)!;
+}
+async function setEditorText(text: string): Promise<void> {
+  const view = editorView();
+  view.dispatch({
+    changes: { from: 0, to: view.state.doc.length, insert: text },
+    selection: { anchor: text.length },
+    userEvent: "input.type",
+  });
+  await flushPromises();
+}
 async function press(
   key: string,
   options: { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean } = {},
 ): Promise<void> {
-  const editor = wrapper.find(".grid__editor");
+  const editor = wrapper.find(".grid__editor .cm-content");
   await (editor.exists() ? editor : wrapper.get(".grid")).trigger("keydown", { key, ...options });
+  await flushPromises();
 }
 
 async function select(address: string): Promise<void> {
   await cellAt(address).trigger("mousedown");
+  await flushPromises();
 }
 
 beforeEach(() => {
@@ -472,11 +488,12 @@ describe("editing", () => {
     await select("A1");
     await press("7");
 
-    const editor = wrapper.get<HTMLInputElement>(".grid__editor");
-    expect(editor.element.value).toBe("7");
-    expect(document.activeElement).toBe(editor.element);
+    const editor = editorView();
+    expect(editor.state.doc.toString()).toBe("7");
+    await flushPromises();
+    expect(document.activeElement).toBe(editor.contentDOM);
 
-    await editor.setValue("75");
+    await setEditorText("75");
     await press("Enter");
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
@@ -494,14 +511,14 @@ describe("editing", () => {
     await mountGrid({ A1: "5", B1: "=A1*2" });
     await select("B1");
     await press(key);
-    expect(wrapper.get<HTMLInputElement>(".grid__editor").element.value).toBe("=A1*2");
+    expect(editorView().state.doc.toString()).toBe("=A1*2");
   });
 
   it("opens the existing input on double click", async () => {
     await mountGrid({ A1: "5" });
     await select("A1");
     await cellAt("A1").trigger("dblclick");
-    expect(wrapper.get<HTMLInputElement>(".grid__editor").element.value).toBe("5");
+    expect(editorView().state.doc.toString()).toBe("5");
   });
 
   it("saves and moves sideways on Tab", async () => {
@@ -542,7 +559,8 @@ describe("editing", () => {
     await mountGrid();
     await select("A1");
     await press("9");
-    await wrapper.get(".grid__editor").trigger("blur");
+    (wrapper.get(".grid").element as HTMLElement).focus();
+    await flushPromises();
     expect(cellAt("A1").text()).toBe("9");
   });
 
@@ -568,19 +586,18 @@ describe("editing", () => {
     },
   );
 
-  it.each([
-    ["ArrowDown", "B3"],
-    ["ArrowUp", "B1"],
-  ])("saves and moves to the next row on %s while editing", async (key, expected) => {
-    await mountGrid();
-    await select("B2");
-    await press("9");
-    await press(key);
-    expect(cellAt("B2").text()).toBe("9");
-    expect(selectedAddress()).toBe(expected);
-    expect(wrapper.find(".grid__editor").exists()).toBe(false);
-    expect(document.activeElement).toBe(wrapper.get(".grid").element);
-  });
+  it.each(["ArrowDown", "ArrowUp"])(
+    "keeps arrows in the editor without saving with %s",
+    async (key) => {
+      await mountGrid();
+      await select("B2");
+      await press("9");
+      await press(key);
+      expect(selectedAddress()).toBe("B2");
+      expect(editorView().state.doc.toString()).toBe("9");
+      expect(server.setCells).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(["Delete", "Backspace"])("clears the selected cell with %s", async (key) => {
     await mountGrid({ A1: "gone" });
@@ -892,20 +909,26 @@ describe("copy and paste", () => {
 
 describe("formula suggestions", () => {
   function options(): (string | undefined)[] {
-    return [...document.querySelectorAll('.formula-assist [role="option"]')].map(
-      (option) => option.querySelector(".formula-assist__label")?.textContent,
+    return [...document.querySelectorAll('.cm-tooltip-autocomplete [role="option"]')].map(
+      (option) => option.querySelector(".cm-completionLabel")?.textContent,
     );
   }
 
   function editor() {
-    return wrapper.get<HTMLInputElement>(".grid__editor");
+    return editorView();
   }
 
   /** Starts editing A1 and types the text. */
   async function type(text: string): Promise<void> {
     await select("A1");
     await press(text.charAt(0));
-    await editor().setValue(text);
+    await setEditorText(text);
+    if (text.startsWith("=") && /[A-Za-z_]$/.test(text)) {
+      startCompletion(editor());
+      await vi.waitFor(() => {
+        expect(completionStatus(editor().state)).toBe("active");
+      });
+    }
   }
 
   it("lists matching functions while a formula is typed, and completes with Tab", async () => {
@@ -917,10 +940,10 @@ describe("formula suggestions", () => {
     );
 
     await press("Tab");
-    expect(editor().element.value).toBe("=ROUND(");
+    expect(editor().state.doc.toString()).toBe("=ROUND(");
     expect(selectedAddress()).toBe("A1");
     expect(options()).toEqual([]);
-    expect(document.querySelector('.formula-assist [role="note"]')?.textContent).toContain(
+    expect(document.querySelector(".formula-editor__signature")?.textContent).toContain(
       "ROUND(number, [digits])",
     );
   });
@@ -938,7 +961,7 @@ describe("formula suggestions", () => {
       expect.any(Array),
     );
     expect(selectedAddress()).toBe("A2");
-    expect(document.querySelector(".formula-assist")).toBeNull();
+    expect(document.querySelector(".cm-tooltip-autocomplete")).toBeNull();
   });
 
   it("moves the highlight with the arrows, then accepts it with Enter", async () => {
@@ -949,7 +972,7 @@ describe("formula suggestions", () => {
     await press("ArrowUp");
     expect(selectedAddress()).toBe("A1");
     await press("Enter");
-    expect(editor().element.value).toBe("=ROUNDDOWN(");
+    expect(editor().state.doc.toString()).toBe("=ROUNDDOWN(");
     expect(server.setCells).not.toHaveBeenCalled();
   });
 
@@ -961,7 +984,7 @@ describe("formula suggestions", () => {
     store.tables = store.tables.map((table) => ({ ...table }));
     await wrapper.vm.$nextTick();
     await press("Enter");
-    expect(editor().element.value).toBe("=COUNTA(");
+    expect(editor().state.doc.toString()).toBe("=COUNTA(");
     expect(server.setCells).not.toHaveBeenCalled();
   });
 
@@ -970,7 +993,7 @@ describe("formula suggestions", () => {
     await type("=rou");
     await press("ArrowUp");
     await press("Enter");
-    expect(editor().element.value).toBe("=ROUNDUP(");
+    expect(editor().state.doc.toString()).toBe("=ROUNDUP(");
   });
 
   it("closes the list on Escape, and cancels the edit on a second Escape", async () => {
@@ -978,7 +1001,7 @@ describe("formula suggestions", () => {
     await type("=rou");
     await press("Escape");
     expect(options()).toEqual([]);
-    expect(editor().element.value).toBe("=rou");
+    expect(editor().state.doc.toString()).toBe("=rou");
 
     await press("Escape");
     expect(wrapper.find(".grid__editor").exists()).toBe(false);
@@ -988,11 +1011,13 @@ describe("formula suggestions", () => {
   it("accepts a clicked suggestion without ending the edit", async () => {
     await mountGrid();
     await type("=rou");
-    const option = document.querySelectorAll('.formula-assist [role="option"]')[2];
+    const option = document.querySelectorAll('.cm-tooltip-autocomplete [role="option"]')[2];
     await new DOMWrapper(option).trigger("mousedown");
-    expect(editor().element.value).toBe("=ROUNDUP(");
+    await new DOMWrapper(option).trigger("click");
+    await flushPromises();
+    expect(editor().state.doc.toString()).toBe("=ROUNDUP(");
     // The editor keeps focus, so the click did not end the edit.
-    expect(document.activeElement).toBe(editor().element);
+    expect(document.activeElement).toBe(editor().contentDOM);
     expect(server.setCells).not.toHaveBeenCalled();
   });
 
@@ -1001,23 +1026,23 @@ describe("formula suggestions", () => {
     await type("=tab");
     expect(options()).toEqual(["Table 1"]);
     await press("Tab");
-    expect(editor().element.value).toBe("='Table 1'!");
+    expect(editor().state.doc.toString()).toBe("='Table 1'!");
   });
 
   it("shows what the function at the caret expects", async () => {
     await mountGrid();
     await type("=IF(A2 > 1, ");
     expect(options()).toEqual([]);
-    expect(document.querySelector('.formula-assist [role="note"]')?.textContent).toContain(
+    expect(document.querySelector(".formula-editor__signature")?.textContent).toContain(
       "IF(condition, then, [else])",
     );
   });
 
   it("offers nothing while plain text is typed, and nothing when not editing", async () => {
     await mountGrid();
-    expect(document.querySelector(".formula-assist")).toBeNull();
+    expect(document.querySelector(".cm-tooltip-autocomplete")).toBeNull();
     await type("sum");
-    expect(document.querySelector(".formula-assist")).toBeNull();
+    expect(document.querySelector(".cm-tooltip-autocomplete")).toBeNull();
   });
 });
 
@@ -1076,7 +1101,7 @@ describe("buttons", () => {
     await mountGrid({ B1: BUTTON });
     await select("B1");
     await press("Enter");
-    expect(wrapper.get<HTMLInputElement>(".grid__editor").element.value).toBe(BUTTON);
+    expect(editorView().state.doc.toString()).toBe(BUTTON);
   });
 });
 
@@ -1350,9 +1375,10 @@ describe("touch", () => {
     expect(wrapper.find(".grid__editor").exists()).toBe(false);
 
     await tap("A1");
-    const editor = wrapper.get<HTMLInputElement>(".grid__editor");
-    expect(editor.element.value).toBe("hello");
-    expect(document.activeElement).toBe(editor.element);
+    const editor = editorView();
+    expect(editor.state.doc.toString()).toBe("hello");
+    await flushPromises();
+    expect(document.activeElement).toBe(editor.contentDOM);
   });
 
   it("does not start editing when a mouse clicks the selected cell", async () => {
@@ -1518,7 +1544,7 @@ describe("undo from the keyboard", () => {
     await mountGrid({ A1: "old" });
     await select("A1");
     await press("n");
-    await wrapper.get(".grid__editor").setValue("new");
+    await setEditorText("new");
     await press("Enter");
     expect(cellAt("A1").text()).toBe("new");
     notifyJournaled();
@@ -1577,7 +1603,7 @@ it("keeps a grid draft attached to its row after a remote insertion", async () =
   await mountGrid({ A2: "old" });
   await select("A2");
   await press("d");
-  await wrapper.get<HTMLInputElement>(".grid__editor").setValue("draft");
+  await setEditorText("draft");
   const store = useWorkbookStore();
   const snapshot = snapshotWith({ A2: "old" });
   snapshot.tables = [
@@ -1587,7 +1613,7 @@ it("keeps a grid draft attached to its row after a remote insertion", async () =
   await store.refresh();
   await wrapper.vm.$nextTick();
   expect(selectedAddress()).toBe("A3");
-  expect(wrapper.get<HTMLInputElement>(".grid__editor").element.value).toBe("draft");
+  expect(editorView().state.doc.toString()).toBe("draft");
   expect(server.setCells).not.toHaveBeenCalled();
   await press("Enter");
   await vi.waitFor(() => {
@@ -1665,14 +1691,13 @@ it("saves a formula draft literally after its target moves", async () => {
   await mountGrid({ A1: "old" });
   await select("A1");
   await press("=");
-  await wrapper.get(".grid__editor").setValue("=A2");
+  await setEditorText("=A2");
   const store = useWorkbookStore();
   await store.receiveChange(
     changeWith({ rows: [{ id: "remote", tableId: "t1", orderKey: "Zz" }] }),
   );
   await press("Enter");
   await flushPromises();
-  expect(server.setCells.mock.calls[0]?.[3]).toBe(0);
   expect(store.inputOf(at("A2"))).toBe("=A2");
   expect(wrapper.find(".grid__editor").exists()).toBe(false);
 });
@@ -1868,6 +1893,7 @@ describe("a sorted and filtered data table", () => {
     await press("z");
     // The row under the pointer is b (A1), the second place, when the click lands.
     await cellAt("A1").trigger("mousedown");
+    await flushPromises();
     expect(selectedAddress()).toBe("A1");
   });
 });

@@ -1,15 +1,17 @@
+import type { EditingMode } from "@spreadsheet-app/engine";
 import { EditorState } from "@codemirror/state";
 import { defineStore } from "pinia";
 import { shallowRef } from "vue";
 
-export type FormulaMode = "cell" | "formula";
+export type FormulaMode = EditingMode;
 
 export type EditingTarget =
   | { kind: "cell"; tableId: string; rowId: string; colId: string }
   | { kind: "column"; tableId: string; colId: string }
+  | { kind: "append"; tableId: string; colId: string; rowId?: string }
   | { kind: "filter"; tableId: string }
   | { kind: "name"; tableId: string; name: string }
-  | { kind: "chart"; viewId: string };
+  | { kind: "chart" | "script" | "markdown"; viewId: string };
 
 /** Original formula resolution context; structural changes must not rewrite the draft. */
 export interface EditingContext {
@@ -53,6 +55,10 @@ export function sameEditingTarget(left: EditingTarget, right: EditingTarget): bo
         left.rowId === right.rowId &&
         left.colId === right.colId
       );
+    case "append":
+      return (
+        right.kind === "append" && left.tableId === right.tableId && left.colId === right.colId
+      );
     case "column":
       return (
         right.kind === "column" && left.tableId === right.tableId && left.colId === right.colId
@@ -65,8 +71,10 @@ export function sameEditingTarget(left: EditingTarget, right: EditingTarget): bo
         left.tableId === right.tableId &&
         left.name.toLowerCase() === right.name.toLowerCase()
       );
+    case "script":
+    case "markdown":
     case "chart":
-      return right.kind === "chart" && left.viewId === right.viewId;
+      return right.kind === left.kind && left.viewId === right.viewId;
   }
 }
 
@@ -74,6 +82,7 @@ export function sameEditingTarget(left: EditingTarget, right: EditingTarget): bo
 export const useFormulaSessionStore = defineStore("formulaEditing", () => {
   const active = shallowRef<FormulaSession>();
   const owner = shallowRef<symbol>();
+  const columnPopover = shallowRef<{ tableId: string; colId: string }>();
   const fields = shallowRef<readonly { token: symbol; target: EditingTarget; focus: () => void }[]>(
     [],
   );
@@ -117,7 +126,12 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
 
   function updateState(state: EditorState): void {
     const session = active.value;
-    if (session && !session.saving) active.value = { ...session, state, error: undefined };
+    if (session && !session.saving)
+      active.value = {
+        ...session,
+        state,
+        error: state.doc.eq(session.state.doc) ? session.error : undefined,
+      };
   }
 
   /** Deduplicates Enter/Apply followed by blur. The caller runs its transition only on success. */
@@ -140,6 +154,7 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
         }
         active.value = undefined;
         owner.value = undefined;
+        columnPopover.value = undefined;
         return true;
       } catch (error) {
         active.value = {
@@ -162,7 +177,10 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
     // Another request may have opened a target while this one was waiting for the save.
     if (active.value) return sameEditingTarget(active.value.target, request.target);
     active.value = {
-      target: { ...request.target },
+      target:
+        request.target.kind === "append"
+          ? { ...request.target, rowId: crypto.randomUUID() }
+          : { ...request.target },
       context: { ...request.context },
       mode: request.mode,
       initialText: request.text,
@@ -182,12 +200,14 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
     if (pending) return false;
     active.value = undefined;
     owner.value = undefined;
+    columnPopover.value = undefined;
     return true;
   }
 
   return {
     active,
     owner,
+    columnPopover,
     activateField,
     updateState,
     submit,

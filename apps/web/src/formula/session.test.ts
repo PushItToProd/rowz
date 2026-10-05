@@ -94,6 +94,10 @@ describe("formula editing sessions", () => {
     ).toBe(false);
     expect(store.active).toMatchObject({ target: request.target, saving: false, error: "Offline" });
     expect(store.active!.state.doc.toString()).toBe("=B2");
+    store.updateState(store.active!.state.update({ selection: { anchor: 1 } }).state);
+    expect(store.active!.error).toBe("Offline");
+    store.updateState(store.active!.state.update({ changes: { from: 3, insert: "+1" } }).state);
+    expect(store.active!.error).toBeUndefined();
     expect(await store.submit(save)).toBe(true);
     expect(store.active).toBeUndefined();
   });

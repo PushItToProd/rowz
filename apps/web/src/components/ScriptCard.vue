@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { parseScript } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed } from "vue";
 import type { ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
+import ViewSourceEditor from "./ViewSourceEditor.vue";
+import { sameEditingTarget, useFormulaSessionStore } from "../formula/session";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
 import { shown } from "./shownValue";
@@ -11,48 +13,28 @@ import { shown } from "./shownValue";
 const props = defineProps<{ view: ViewRecord }>();
 const store = useWorkbookStore();
 
-const editing = ref(false);
-let editRevision = store.revision;
-const draft = ref(props.view.source);
-// Follow changes made elsewhere, such as a table rename rewriting a reference.
-watch(
-  () => props.view.source,
-  (source) => {
-    if (!editing.value) draft.value = source;
-  },
+const sessions = useFormulaSessionStore();
+const target = { kind: "script" as const, viewId: props.view.id };
+const active = computed(() =>
+  sessions.active && sameEditingTarget(sessions.active.target, target)
+    ? sessions.active
+    : undefined,
 );
-
-const editor = ref<HTMLTextAreaElement>();
-
-async function save(): Promise<boolean> {
-  if (draft.value === props.view.source) return true;
-  const saved = await store.updateView(props.view.id, { source: draft.value }, editRevision);
-  if (!saved) {
-    editing.value = true;
-    editRevision = store.revision;
-    await nextTick();
-    editor.value?.focus();
-  }
-  return saved;
-}
-
+const editing = computed(() => !!active.value);
 async function edit(): Promise<void> {
-  if (!store.canEdit || editing.value) return;
-  editRevision = store.revision;
-  editing.value = true;
-  await nextTick();
-  editor.value?.focus();
-}
-
-async function finish(): Promise<void> {
-  if (await save()) editing.value = false;
-}
-
-/** Leaving the source saves it and ends the edit. */
-function onBlur(): void {
-  void save();
-  // The source still has the keyboard when it is the window that lost focus, and the edit goes on.
-  if (document.activeElement !== editor.value) editing.value = false;
+  if (!store.canEdit) return;
+  await sessions.start(
+    {
+      target,
+      context: { pageId: props.view.pageId, holderId: props.view.id },
+      mode: "script",
+      text: props.view.source,
+      label: `${store.pages.find((page) => page.id === props.view.pageId)?.name ?? ""} · ${props.view.name} · Script source`,
+      maxLength: LIMITS.viewSourceLength,
+    },
+    store.submitFormulaDraft,
+  );
+  sessions.focus();
 }
 
 function remove(): void {
@@ -98,24 +80,12 @@ const statements = computed(() =>
         />
       </h2>
       <div v-if="store.canEdit" class="view-card__actions">
-        <!-- A press on Done leaves the keyboard in the source, so the edit ends once, on the click. -->
-        <button v-if="editing" type="button" @mousedown.prevent @click="finish">Done</button>
-        <button v-else type="button" @click="edit">Edit</button>
+        <button v-if="!editing" type="button" @click="edit">Edit</button>
         <button type="button" class="danger" @click="remove">Delete script</button>
       </div>
     </header>
 
-    <textarea
-      v-if="editing"
-      ref="editor"
-      v-model="draft"
-      class="text-view__source"
-      aria-label="Script source"
-      rows="10"
-      spellcheck="false"
-      :maxlength="LIMITS.viewSourceLength"
-      @blur="onBlur"
-    ></textarea>
+    <ViewSourceEditor v-if="editing" :view="view" mode="script" label="Script source" />
 
     <table
       class="script"

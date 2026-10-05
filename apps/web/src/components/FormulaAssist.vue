@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import type { FunctionDoc } from "@spreadsheet-app/engine";
 import { computed } from "vue";
-import type { Suggestion } from "../formula/assist";
+import type { Suggestion, FunctionSignature } from "../formula/assist";
 
 const props = defineProps<{
   items: readonly Suggestion[];
   active: number;
-  signature: FunctionDoc | undefined;
+  signature: FunctionSignature | undefined;
   /** The input being typed into. The list opens under it. */
   anchor: HTMLElement | undefined;
 }>();

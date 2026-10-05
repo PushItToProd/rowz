@@ -190,3 +190,10 @@ export {
 } from "./workbook";
 
 export { documentErrors, type DocumentError } from "./diagnostics";
+export {
+  analyzeSource,
+  formulaAt,
+  type EditingMode,
+  type SourceAnalysis,
+  type SourceDecoration,
+} from "./editing-source";

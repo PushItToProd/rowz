@@ -1111,7 +1111,7 @@ select.cell-control--dropdown {
   text-align: center;
 }
 
-.text-view__source {
+.view-source-editor .formula-editor {
   width: 100%;
   margin-bottom: 12px;
   padding: 8px;
@@ -1119,7 +1119,14 @@ select.cell-control--dropdown {
   border-radius: var(--radius);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.92rem;
-  resize: vertical;
+}
+
+.view-source-editor {
+  margin-bottom: 12px;
+}
+.view-source-editor .cm-scroller {
+  max-height: 30rem;
+  overflow: auto;
 }
 
 .text-view {
@@ -1879,4 +1886,26 @@ select.cell-control--dropdown {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
+}
+
+.formula-bar__input input,
+.grid__editor input {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  box-sizing: border-box;
+  font: inherit;
+}
+.formula-column-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.grid__editor:has(.formula-column-label) {
+  inset: auto 0 0;
+  width: max(100%, 24rem);
+  height: auto;
+  z-index: 2;
+  padding: 4px 6px;
+  box-shadow: 0 0 0 1px var(--accent);
 }

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type Router, type RouterHistory } from "vue-router";
+import { useWorkbookStore } from "./stores/workbook";
 import { useSessionStore } from "./stores/session";
 import { useFormulaSessionStore } from "./formula/session";
 import AuthView from "./views/AuthView.vue";
@@ -37,6 +38,20 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
         return false;
       }
       if (!formulas.cancel()) return false;
+    }
+    if (
+      formulas.active &&
+      from.name === "editor" &&
+      to.name === "editor" &&
+      to.params.spreadsheetId === from.params.spreadsheetId &&
+      to.params.pageId !== from.params.pageId &&
+      formulas.active.mode === "cell" &&
+      !formulas.active.state.doc.toString().startsWith("=")
+    ) {
+      if (!(await formulas.submit(useWorkbookStore().submitFormulaDraft))) {
+        formulas.focus();
+        return false;
+      }
     }
     const name = typeof to.name === "string" ? to.name : "";
     if (OPEN.has(name)) return true;

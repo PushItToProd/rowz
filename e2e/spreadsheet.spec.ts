@@ -49,8 +49,13 @@ async function expectCellSize(
 /** Types into a cell the way a person does: click it, type, press Enter. */
 async function enter(page: Page, address: string, text: string, table = "Table 1"): Promise<void> {
   await cell(page, address, table).click();
+  await expect(cell(page, address, table)).toHaveAttribute("aria-selected", "true");
+  const grid = page.getByRole("grid", { name: table, exact: true });
   await page.keyboard.type(text);
+  const editing = page.getByLabel("Cell content");
+  await expect(editing).toHaveText(text);
   await page.keyboard.press("Enter");
+  await expect(grid).toBeFocused();
 }
 
 /**
@@ -251,7 +256,9 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
   // The same actions are on the menu a right-click opens.
   await cell(page, "A2").click({ button: "right" });
   const menu = page.getByRole("menu", { name: "Actions for A2" });
+  const rowsBeforeInsert = await page.locator('[data-table="Table 1"] tbody tr').count();
   await menu.getByRole("menuitem", { name: "Insert row below" }).click();
+  await expect(page.locator('[data-table="Table 1"] tbody tr')).toHaveCount(rowsBeforeInsert + 1);
   await expect(menu).toHaveCount(0);
   await expect(cell(page, "A3")).toHaveText("");
   await enter(page, "A3", "10");
@@ -407,11 +414,11 @@ test("typing a formula offers completions and shows what a function expects", as
 
   await cell(page, "B1").click();
   await page.keyboard.type("=sq");
-  const suggestions = page.getByRole("listbox", { name: "Suggestions" });
+  const suggestions = page.getByRole("listbox");
   await expect(suggestions.getByRole("option")).toHaveText([/SQRT/]);
 
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("note")).toContainText("SQRT(number)");
+  await expect(page.locator(".formula-editor__signature")).toContainText("SQRT(number)");
   await page.keyboard.type("A1)");
   await page.keyboard.press("Enter");
   await expect(cell(page, "B1")).toHaveText("2");
@@ -419,6 +426,7 @@ test("typing a formula offers completions and shows what a function expects", as
   // The arrows pick from the list, and a click works too.
   await cell(page, "B2").click();
   await page.keyboard.type("=cou");
+  await expect(suggestions).toBeVisible();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await page.keyboard.type("A1:B1)");
@@ -705,8 +713,12 @@ test("a table with named columns has typed columns, a formula column, and column
   await cell(page, "D2").getByRole("checkbox").check();
 
   // A formula column computes every row from the columns it names.
-  page.once("dialog", (dialog) => void dialog.accept("=[Price] * [Qty]"));
   await choose("Column 1", "Column holds: A formula…");
+  await page.getByLabel("Column formula").fill("=[Price] * [Qty]");
+  await page
+    .locator(".column-formula-popover")
+    .getByRole("button", { name: "Apply", exact: true })
+    .click();
   await expect(cell(page, "E1")).toHaveText("20");
   await expect(cell(page, "E2")).toHaveText("15");
 
@@ -720,11 +732,45 @@ test("a table with named columns has typed columns, a formula column, and column
   await cell(page, "E2").click();
   await expect(page.getByLabel("Formula")).toHaveValue("=[Unit price] * [Qty]");
 
+  // Inline, bar, and popover editors share a column draft and its undo history.
+  let formulaWrites = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "PATCH" &&
+      request.url().includes("/columns/") &&
+      (request.postDataJSON() as { formula?: unknown } | null)?.formula !== undefined
+    )
+      formulaWrites += 1;
+  });
+  await cell(page, "E2").dblclick();
+  await expect(cell(page, "E2").locator(".formula-column-label")).toHaveText(
+    "Editing formula for every row in Table 1[Total]",
+  );
+  await page.getByLabel("Cell content").fill("=[Unit price] * [Qty] + 10");
+  await page.locator(".formula-bar").getByRole("textbox").click();
+  await expect(page.locator(".formula-bar").getByRole("textbox")).toHaveText(
+    "=[Unit price] * [Qty] + 10",
+  );
+  await page.getByRole("button", { name: "Edit column formula", exact: true }).click();
+  const columnDraft = page.getByLabel("Column formula");
+  await expect(columnDraft).toHaveText("=[Unit price] * [Qty] + 10");
+  await columnDraft.press("Control+z");
+  await expect(columnDraft).toHaveText("=[Unit price] * [Qty]");
+  expect(formulaWrites).toBe(0);
+  await page
+    .locator(".column-formula-popover")
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await expect(page.locator(".column-formula-popover")).toHaveCount(0);
+  expect(formulaWrites).toBe(0);
+
   // Typing a formula into a formula column changes it for every row, and completes column names.
-  await page.getByLabel("Formula").fill("=[Unit price] * [Qty] + [");
+  await page.locator(".formula-bar").getByRole("textbox").click();
+  await page.locator(".formula-bar").getByRole("textbox").fill("=[Unit price] * [Qty] + [");
   await expect(page.getByRole("option", { name: /Qty/ })).toBeVisible();
-  await page.getByLabel("Formula").fill("=[Unit price] * [Qty] + 1");
-  await page.getByLabel("Formula").press("Enter");
+  await page.locator(".formula-bar").getByRole("textbox").click();
+  await page.locator(".formula-bar").getByRole("textbox").fill("=[Unit price] * [Qty] + 1");
+  await page.locator(".formula-bar").getByRole("textbox").press("Enter");
   await expect(cell(page, "E1")).toHaveText("21");
   await expect(cell(page, "E2")).toHaveText("16");
 
@@ -1073,7 +1119,9 @@ test("the header says when a change is on its way to the server", async ({ page 
     await held;
     await route.continue();
   });
-  await enter(page, "A1", "kept");
+  await cell(page, "A1").click();
+  await page.keyboard.type("kept");
+  await page.keyboard.press("Enter");
   await expect(status).toHaveText("Saving…");
   release();
   await expect(status).toHaveText("Saved");
@@ -1124,6 +1172,7 @@ test("editing shows errors, the formula bar, and keyboard navigation", async ({ 
   // Enter moved the selection down, so typing continues in A2. Tab moves right.
   await page.keyboard.type("4");
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
   await page.keyboard.type("=A2*A2");
   await page.keyboard.press("Enter");
   await expect(cell(page, "A2")).toHaveText("4");
@@ -1132,6 +1181,7 @@ test("editing shows errors, the formula bar, and keyboard navigation", async ({ 
   await cell(page, "B2").click();
   const formula = page.getByLabel("Formula");
   await expect(formula).toHaveValue("=A2*A2");
+  await formula.click();
   await formula.fill("=A2+1");
   await formula.press("Enter");
   await expect(cell(page, "B2")).toHaveText("5");
@@ -1141,9 +1191,11 @@ test("editing shows errors, the formula bar, and keyboard navigation", async ({ 
   await page.keyboard.type("typed in the grid");
   await page.keyboard.press("Enter");
   await expect(cell(page, "B3")).toHaveText("typed in the grid");
+  await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
 
   // What is typed in the formula bar is saved when another cell is clicked.
   await cell(page, "B2").click();
+  await formula.click();
   await formula.fill("=A2+2");
   await cell(page, "A1").click();
   await expect(cell(page, "B2")).toHaveText("6");
@@ -1300,6 +1352,7 @@ test.describe("on a phone", () => {
 
     // The formula bar edits the selected cell too.
     await cell(page, "B1").tap();
+    await page.getByLabel("Formula").click();
     await page.getByLabel("Formula").fill("=A1+1");
     await page.keyboard.press("Enter");
     await expect(cell(page, "B1")).toHaveText("43");
@@ -1326,7 +1379,7 @@ test("an open draft follows its row when another tab inserts above it", async ({
   await cell(other, "A1").click();
   await other.getByRole("button", { name: "Insert row above" }).click();
   await expect(cell(other, "A3")).toHaveText("before");
-  await expect(cell(page, "A3").getByLabel("Cell content")).toHaveValue("mine");
+  await expect(cell(page, "A3").getByLabel("Cell content")).toHaveText("mine");
   await cell(page, "A3").getByLabel("Cell content").press("Enter");
   await expect(cell(other, "A3")).toHaveText("mine");
   await reload(page);
@@ -1340,7 +1393,9 @@ test("Tab traversal works across the grid and formula bar", async ({ page }) => 
   await page.keyboard.press("Tab");
   await page.keyboard.type("12");
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
   const formula = page.getByLabel("Formula");
+  await formula.click();
   await formula.fill("13");
   await formula.press("Tab");
   await expect(cell(page, "F3")).toHaveAttribute("aria-selected", "true");
@@ -1350,6 +1405,7 @@ test("Tab traversal works across the grid and formula bar", async ({ page }) => 
   await expect(cell(page, "C4")).toHaveAttribute("aria-selected", "true");
   await expect(cell(page, "D3")).toHaveText("12");
   await expect(cell(page, "E3")).toHaveText("13");
+  await formula.click();
   await formula.fill("14");
   await formula.press("Shift+Tab");
   await expect(cell(page, "B4")).toHaveAttribute("aria-selected", "true");
@@ -1371,6 +1427,44 @@ test("saving a script does not scroll to the selected cell", async ({ page }) =>
   });
   await expect(script.locator(".script")).toContainText("42");
   await expect(cell(page, "A1")).not.toBeInViewport();
+});
+
+test("cell drafts keep history across pages and save literal text before navigation", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add page", exact: true }).click();
+  const pages = page.getByRole("navigation", { name: "Pages" });
+  await expect(pages.locator('[aria-current="page"]')).toContainText("Page 2");
+  await pages.getByText("Page 1", { exact: true }).click();
+  await expect(pages.locator('[aria-current="page"]')).toContainText("Page 1");
+  let writes = 0;
+  page.on("request", (request) => {
+    if (request.method() === "PUT" && request.url().endsWith("/cells")) writes += 1;
+  });
+  await cell(page, "A1").click();
+  await page.keyboard.type("1");
+  await page.getByLabel("Formula").click();
+  await page.getByLabel("Formula").fill("=");
+  await pages.getByText("Page 2", { exact: true }).click();
+  const dock = page.getByRole("region", { name: "Formula draft" });
+  await expect(dock).toContainText("Page 1 · Table 1 · A1");
+  await expect(dock.locator(".cm-content")).toHaveText("=");
+  expect(writes).toBe(0);
+  await dock.getByRole("button", { name: "Return to editor", exact: true }).click();
+  await expect(page.getByLabel("Formula")).toBeFocused();
+  await page.getByLabel("Formula").fill("=B2");
+  await pages.getByText("Page 2", { exact: true }).click();
+  await dock.locator(".cm-content").press("Control+z");
+  await expect(dock.locator(".cm-content")).toHaveText("=");
+  await dock.locator(".cm-content").press("Control+y");
+  await expect(dock.locator(".cm-content")).toHaveText("=B2");
+  expect(writes).toBe(0);
+  await dock.locator(".cm-content").fill("1");
+  await pages.getByText("Page 1", { exact: true }).click();
+  await expect(dock).toHaveCount(0);
+  await expect(cell(page, "A1")).toHaveText("1");
+  expect(writes).toBe(1);
 });
 
 test("named formulas use shared editing while new names require an explicit submission", async ({
@@ -1413,6 +1507,7 @@ test("named formulas use shared editing while new names require an explicit subm
     else await route.continue();
   });
   const formula = panel.getByLabel("Formula of the name", { exact: true });
+  await formula.click();
   await formula.click();
   await formula.fill("4 + 5");
   await formula.press("Tab");
@@ -1561,4 +1656,88 @@ test("invalid button plans appear in document errors before clicking the button"
   await enter(page, "A1", '=BUTTON("Send", SEND_EMAIL("valid@example.com", "subject", "body"))');
   await expect(errors).not.toContainText("not an email address");
   await expect(page.getByRole("button", { name: "1 error", exact: true })).toHaveCount(0);
+});
+
+test("script drafts complete parameters, keep history across pages, and retain failed saves", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add page", exact: true }).click();
+  const pages = page.getByRole("navigation", { name: "Pages" });
+  await expect(pages.locator('[aria-current="page"]')).toContainText("Page 2");
+  await pages.getByText("Page 1", { exact: true }).click();
+  await page.getByRole("button", { name: "Add script", exact: true }).last().click();
+  const script = page.locator('[data-view="Script 1"]');
+  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  const source = script.getByLabel("Script source");
+  await source.fill("Double(amount) = am");
+  await expect(page.getByRole("option", { name: /^amount/ })).toBeVisible();
+  await source.press("Tab");
+  await expect(source).toHaveText("Double(amount) = amount");
+  await source.press("Escape");
+  await expect(source).toBeVisible();
+  await source.fill("Double(amount) = amount * 2");
+  await source.press("Enter");
+  await page.keyboard.type("Total = Double(2)");
+  await source.press("Control+Enter");
+  await expect(source).toHaveCount(0);
+  await expect(script.locator(".script tr").last()).toContainText("4");
+  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  await source.fill("Total = 77");
+  await pages.getByText("Page 2", { exact: true }).click();
+  const dock = page.getByRole("region", { name: "Formula draft" });
+  await expect(dock).toContainText("Page 1 · Script 1 · Script source");
+  await dock.locator(".cm-content").press("Control+z");
+  await expect(dock.locator(".cm-line")).toHaveText([
+    "Double(amount) = amount * 2",
+    "Total = Double(2)",
+  ]);
+  await dock.locator(".cm-content").press("Control+y");
+  await expect(dock.locator(".cm-content")).toHaveText("Total = 77");
+  await dock.getByRole("button", { name: "Return to editor", exact: true }).click();
+  await expect(source).toBeFocused();
+  let writes = 0;
+  await page.route("**/api/views/*", async (route) => {
+    if (route.request().method() === "PATCH") {
+      writes += 1;
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "test_failure", message: "Offline" } }),
+      });
+    } else await route.continue();
+  });
+  await script.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(script.getByRole("alert")).toHaveText("Offline");
+  await expect(source).toBeFocused();
+  await script.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(source).toHaveCount(0);
+  expect(writes).toBe(1);
+  await expect(script.locator(".script tr").last()).toContainText("4");
+});
+
+test("Markdown drafts complete only template expressions and Cancel restores the preview", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add text", exact: true }).last().click();
+  const text = page.locator('[data-view="Text 1"]');
+  await text.getByRole("button", { name: "Edit", exact: true }).click();
+  const source = text.getByLabel("Text view source");
+  await source.fill("Prose rou");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+  await source.fill("{% let Amount = 2 %}{{ Am");
+  await expect(page.getByRole("option", { name: /^Amount/ })).toBeVisible();
+  await source.press("Tab");
+  await page.keyboard.type(" }}");
+  await expect(text.locator(".text-view")).toHaveText("2");
+  await source.press("Control+Enter");
+  await expect(source).toHaveCount(0);
+  await text.getByRole("button", { name: "Edit", exact: true }).click();
+  await source.fill("Draft {{ 9 }}");
+  await expect(text.locator(".text-view")).toHaveText("Draft 9");
+  await source.press("Escape");
+  await expect(source).toBeVisible();
+  await text.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(text.locator(".text-view")).toHaveText("2");
 });

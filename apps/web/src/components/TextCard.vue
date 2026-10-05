@@ -7,60 +7,42 @@ import {
   type TemplateInline,
 } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed } from "vue";
 import type { ViewRecord } from "../api/client";
 import { markdown } from "../markdown";
 import { useWorkbookStore } from "../stores/workbook";
 import ChartView from "./ChartView.vue";
+import ViewSourceEditor from "./ViewSourceEditor.vue";
+import { sameEditingTarget, useFormulaSessionStore } from "../formula/session";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
 
 const props = defineProps<{ view: ViewRecord }>();
 const store = useWorkbookStore();
 
-const editing = ref(false);
-let editRevision = store.revision;
-const draft = ref(props.view.source);
-// Follow changes made elsewhere, such as a table rename rewriting an expression.
-watch(
-  () => props.view.source,
-  (source) => {
-    if (!editing.value) draft.value = source;
-  },
+const sessions = useFormulaSessionStore();
+const target = { kind: "markdown" as const, viewId: props.view.id };
+const active = computed(() =>
+  sessions.active && sameEditingTarget(sessions.active.target, target)
+    ? sessions.active
+    : undefined,
 );
-
-async function save(): Promise<boolean> {
-  if (draft.value === props.view.source) return true;
-  const saved = await store.updateView(props.view.id, { source: draft.value }, editRevision);
-  if (!saved) {
-    editing.value = true;
-    editRevision = store.revision;
-    await nextTick();
-    editor.value?.focus();
-  }
-  return saved;
-}
-
-const editor = ref<HTMLTextAreaElement>();
-
-/** Opens the source for editing, with the keyboard in it. */
+const editing = computed(() => !!active.value);
+const draft = computed(() => active.value?.state.doc.toString() ?? props.view.source);
 async function edit(): Promise<void> {
-  if (!store.canEdit || editing.value) return;
-  editRevision = store.revision;
-  editing.value = true;
-  await nextTick();
-  editor.value?.focus();
-}
-
-async function finish(): Promise<void> {
-  if (await save()) editing.value = false;
-}
-
-/** Leaving the source saves it and ends the edit. */
-function onBlur(): void {
-  void save();
-  // The source still has the keyboard when it is the window that lost focus, and the edit goes on.
-  if (document.activeElement !== editor.value) editing.value = false;
+  if (!store.canEdit) return;
+  await sessions.start(
+    {
+      target,
+      context: { pageId: props.view.pageId, holderId: props.view.id },
+      mode: "markdown",
+      text: props.view.source,
+      label: `${store.pages.find((page) => page.id === props.view.pageId)?.name ?? ""} · ${props.view.name} · Text view source`,
+      maxLength: LIMITS.viewSourceLength,
+    },
+    store.submitFormulaDraft,
+  );
+  sessions.focus();
 }
 
 function remove(): void {
@@ -224,24 +206,12 @@ const parts = computed(() =>
         />
       </h2>
       <div v-if="store.canEdit" class="view-card__actions">
-        <!-- A press on Done leaves the keyboard in the source, so the edit ends once, on the click. -->
-        <button v-if="editing" type="button" @mousedown.prevent @click="finish">Done</button>
-        <button v-else type="button" @click="edit">Edit</button>
+        <button v-if="!editing" type="button" @click="edit">Edit</button>
         <button type="button" class="danger" @click="remove">Delete text</button>
       </div>
     </header>
 
-    <textarea
-      v-if="editing"
-      ref="editor"
-      v-model="draft"
-      class="text-view__source"
-      aria-label="Text view source"
-      rows="10"
-      spellcheck="false"
-      :maxlength="LIMITS.viewSourceLength"
-      @blur="onBlur"
-    ></textarea>
+    <ViewSourceEditor v-if="editing" :view="view" mode="markdown" label="Text view source" />
 
     <div
       class="text-view"

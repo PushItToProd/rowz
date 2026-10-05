@@ -5,15 +5,15 @@ import {
   signatureAt,
   suggestionsAt,
   type NamingContext,
+  type FunctionSignature,
   type Suggestion,
   type Suggestions,
 } from "./assist";
-import type { FunctionDoc } from "@spreadsheet-app/engine";
 
 export interface FormulaAssist {
   suggestions: ComputedRef<Suggestions>;
   /** The function the caret is inside, shown when there is nothing to suggest. */
-  signature: ComputedRef<FunctionDoc | undefined>;
+  signature: ComputedRef<FunctionSignature | undefined>;
   /** Index of the highlighted suggestion. */
   active: Ref<number>;
   /** Reads the caret position from the input. Call it whenever the caret may have moved. */

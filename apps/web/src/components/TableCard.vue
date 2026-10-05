@@ -5,6 +5,7 @@ import { computed, nextTick, ref } from "vue";
 import { parseCsv, toCsv } from "../files/csv";
 import { download, fileName } from "../files/download";
 import type { TableRecord } from "../api/client";
+import { useFormulaSessionStore } from "../formula/session";
 import { useWorkbookStore } from "../stores/workbook";
 import ContextMenu from "./ContextMenu.vue";
 import ChoicesPanel from "./ChoicesPanel.vue";
@@ -12,6 +13,7 @@ import ConditionalFormatsPanel from "./ConditionalFormatsPanel.vue";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
 import GridView from "./GridView.vue";
+import ColumnFormulaPopover from "./ColumnFormulaPopover.vue";
 import NamesPanel from "./NamesPanel.vue";
 import ResizeTable from "./ResizeTable.vue";
 import ResizeLines from "./ResizeLines.vue";
@@ -20,6 +22,7 @@ import type { MenuItem, MenuScope } from "./menu";
 
 const props = defineProps<{ table: TableRecord }>();
 const store = useWorkbookStore();
+const sessions = useFormulaSessionStore();
 
 /** The selected cell when it is in this table. Row and column actions apply to it. */
 const selected = computed(() =>
@@ -143,6 +146,9 @@ function resize({ rowCount, colCount }: { rowCount: number; colCount: number }):
 const conditionalOpen = ref(false);
 
 /** Whether the panel of the table's names is open, and the formula a new name starts with. */
+const formulaFor = computed(() =>
+  sessions.columnPopover?.tableId === props.table.id ? sessions.columnPopover.colId : undefined,
+);
 const namesOpen = ref(false);
 const nameSuggestion = ref<string>();
 
@@ -253,14 +259,24 @@ function columnItems(col: number): MenuItem[] {
     },
     {
       label: `${column.type === "formula" ? "✓ " : ""}Column holds: A formula…`,
+      keepDraft:
+        sessions.active?.target.kind === "column" &&
+        sessions.active.target.tableId === id &&
+        sessions.active.target.colId === props.table.colIds[col],
       run: () => {
-        const formula = window.prompt(
-          `The formula for every row of ${column.name}. Name a column of the same row in square brackets, as in =[Price] * [Qty]`,
-          column.formula ?? "=",
-        );
-        if (formula !== null && formula.trim() !== "" && formula.trim() !== "=") {
-          void store.updateColumn(id, col, { type: "formula", formula });
-        }
+        const colId = props.table.colIds[col];
+        if (!colId) return;
+        const holdsInputs =
+          column.type !== "formula" &&
+          props.table.rows.some((_row, row) => store.inputOf({ tableId: id, row, col }) !== "");
+        if (
+          holdsInputs &&
+          !window.confirm(
+            `Make ${props.table.name}[${column.name}] a formula column and remove its stored inputs?`,
+          )
+        )
+          return;
+        sessions.columnPopover = { tableId: id, colId };
       },
     },
   ];
@@ -540,6 +556,13 @@ const menuLabel = computed(() => {
       </div>
       <ResizeTable v-if="resizing" :table="table" @close="resizing = false" @resize="resize" />
     </header>
+
+    <ColumnFormulaPopover
+      v-if="formulaFor"
+      :table="table"
+      :col-id="formulaFor"
+      @close="sessions.columnPopover = undefined"
+    />
 
     <NamesPanel
       v-if="namesOpen && !table.columns"

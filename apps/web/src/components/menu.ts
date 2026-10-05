@@ -5,6 +5,8 @@ export interface MenuItem {
   disabled?: boolean;
   /** Runs without closing the menu, for actions that reveal more menu content. */
   keepOpen?: boolean;
+  /** Transfers an existing formula draft to another editor without submitting it. */
+  keepDraft?: boolean;
   /** Draws a line above this item, to set a group apart. */
   separated?: boolean;
   run(): void;

@@ -129,12 +129,13 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P4** one formula editor for every place a formula is typed: cells, the formula bar, formula columns, names, filters, chart sources, scripts, and Markdown templates
   - [x] plan shared editing support across single-formula inputs, multiline scripts, and formulas embedded in Markdown; use CodeMirror as specified in [the implementation plan](plans/formula-editing.md)
   - [x] implement tolerant formula-fragment analysis, a shared single-line CodeMirror component, and persistent session primitives with retained editor history and failed-save handling
-  - [ ] connect the shared session to page transitions and migrate single-formula fields, including deleted-target recovery and removal of revision-based save restrictions
+  - [x] connect the shared session to page transitions and migrate single-formula fields, including deleted-target recovery and removal of revision-based save restrictions
     - [x] remove revision-based formula-write refusals from request validation and the server; update stale-write client handling and tests
     - [x] migrate chart sources, retain unmounted drafts, add deleted-target recovery, and block actions after failed shared-draft saves
     - [x] migrate existing named formulas and filters; use CodeMirror in the new-name form with explicit creation rules
-    - [ ] migrate cells, the formula bar, and formula-column definitions
-  - [ ] syntax highlighting for formulas in scripts and Markdown
+    - [x] migrate cells, the formula bar, and formula-column definitions with shared history, whole-column labels, and a nonmodal popover
+  - [x] syntax highlighting for formulas in scripts and Markdown
+  - [ ] add CodeMirror Markdown language support for prose highlighting (packages requested for installation)
   - Coordinate completion, reference picking, reference colors, and keyboard behavior across these editors. The formula-column prompt replacement below is part of this work.
 - [x] hitting tab with the formula bar focused should have the same effect as hitting tab with the cell itself selected
 - [x] show cell errors in a popover on hover instead of using a native browser tooltip
@@ -225,7 +226,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] explore adding a generated, dynamically sized data table block type defined by the output of a formula, so changing the result's row or column count does not require manually managing table dimensions; the implementation approach is open and needs to consider conditional formatting and other proprrties as well (may also be addressed by the proposal to support conditional formatting and sorting when rendering data tables in markdown)
 - [ ] (Claude) consider deleting a data table's row when its last cell is cleared. `plans/persistent-row-identity.md` keeps such a row, so that its id stays valid for a relation that points at it, and deletes empty rows only at the end of a table when its columns are named
 - [ ] **P6** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable
-- [ ] **P4** when updating a formula column's formula, use an in-page editor with proper formula support (modal or popover or maybe just hijack the formula bar), not a browser `input` popup
+- [x] **P4** when updating a formula column's formula, use an in-page editor with proper formula support (modal or popover or maybe just hijack the formula bar), not a browser `input` popup
 - [ ] (Claude) pivot tables as a block or table feature (`QUERY` already has a `pivot` clause)
 - [x] move a table, chart, or text view to another page, and reorder pages
 - [ ] support chart formulas in tables

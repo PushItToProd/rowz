@@ -8,27 +8,19 @@ import {
   type CellId,
   type ColumnDefinition,
 } from "@spreadsheet-app/engine";
-import { GRID_SIZE, LIMITS, type IdentifiedCell } from "@spreadsheet-app/shared";
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  shallowRef,
-  watch,
-  type ComponentPublicInstance,
-} from "vue";
+import { GRID_SIZE, LIMITS } from "@spreadsheet-app/shared";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import type { ComponentPublicInstance } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import { useFormulaSessionStore } from "../formula/session";
 import { cellStyle } from "../formatStyle";
 import { contains, fillTarget, type GridRange } from "../formula/fill";
 import type { MenuScope } from "./menu";
-import { useFormulaAssist } from "../formula/useFormulaAssist";
+import { cellEditingRequest, editingLabel } from "../formula/cells";
+import SessionFormulaField from "./SessionFormulaField.vue";
 import CellView from "./CellView.vue";
 import EditableName from "./EditableName.vue";
-import FormulaAssist from "./FormulaAssist.vue";
 
 const props = defineProps<{ table: TableRecord }>();
 /**
@@ -40,11 +32,41 @@ const emit = defineEmits<{ menu: [at: { x: number; y: number; scope: MenuScope }
 const store = useWorkbookStore();
 
 const grid = ref<HTMLElement>();
-/** The text being typed into the selected cell, or `null` when not editing. */
-const draft = ref<string | null>(null);
-const editing = shallowRef<IdentifiedCell | null>(null);
-let editRevision = 0;
-let newRowColumn: string | undefined;
+const sessions = useFormulaSessionStore();
+const active = computed(() =>
+  sessions.active &&
+  "tableId" in sessions.active.target &&
+  sessions.active.target.tableId === props.table.id
+    ? sessions.active
+    : undefined,
+);
+const editingPosition = computed(() => {
+  const session = active.value;
+  if (!session) return undefined;
+  const target = session.target;
+  if (target.kind === "cell") return store.positionOf(target);
+  if (target.kind === "append")
+    return { row: props.table.rowCount, col: props.table.colIds.indexOf(target.colId) };
+  if (target.kind === "column")
+    return {
+      row: session.context.rowId
+        ? props.table.rows.findIndex((row) => row.id === session.context.rowId)
+        : props.table.rowCount,
+      col: props.table.colIds.indexOf(target.colId),
+    };
+  return undefined;
+});
+const draft = computed(() =>
+  editingPosition.value ? (active.value?.state.doc.toString() ?? null) : null,
+);
+const cellField = ref<InstanceType<typeof SessionFormulaField> | null>();
+function captureField(field: Element | ComponentPublicInstance | null): void {
+  cellField.value = field as InstanceType<typeof SessionFormulaField> | null;
+}
+function isEditing(place: number, col: number): boolean {
+  const position = editingPosition.value;
+  return !!position && position.row === storedRow(place) && position.col === col;
+}
 /**
  * The rows the table shows, in the order it shows them. A row is addressed by
  * its place here, and by its stored row everywhere else: the selection, the
@@ -73,28 +95,6 @@ function cellAt(place: number, col: number): CellId {
 function stored({ row, col }: CellAddress): CellAddress {
   return { row: storedRow(row), col };
 }
-watch(
-  () => store.rejectedDraft,
-  (rejected) => {
-    if (rejected?.id.tableId !== props.table.id) return;
-    const position = store.positionOf(rejected.id);
-    if (!position) return;
-    store.selection = position;
-    editing.value = rejected.id;
-    editRevision = store.revision;
-    draft.value = rejected.input;
-    store.rejectedDraft = null;
-  },
-);
-
-/** The input of the cell being edited, while there is one. */
-const editor = shallowRef<HTMLInputElement>();
-const assist = useFormulaAssist(
-  draft,
-  () => editor.value,
-  () => props.table.id,
-);
-
 const selected = computed(() =>
   store.selection?.tableId === props.table.id ? store.selection : null,
 );
@@ -135,30 +135,6 @@ const selectedPlace = computed<CellAddress | null>(() =>
   selected.value ? { row: placeOf(selected.value.row), col: selected.value.col } : null,
 );
 
-function commit(): void {
-  const input = draft.value;
-  draft.value = null;
-  if (input !== null && editing.value)
-    void store.setIdentifiedCell(editing.value, input, editRevision);
-  else if (input !== null && newRowColumn)
-    void store.appendCell(props.table.id, newRowColumn, input, editRevision);
-  newRowColumn = undefined;
-  editing.value = null;
-}
-
-/** A structural refresh may remove this input and mount the same draft at its new address. */
-function onEditorBlur(event: FocusEvent): void {
-  const field = event.target;
-  if (!(field instanceof HTMLInputElement) || !field.isConnected) return;
-  const position = editing.value && store.positionOf(editing.value);
-  if (
-    position &&
-    field.closest("[data-cell]")?.getAttribute("data-cell") !== formatAddress(position)
-  )
-    return;
-  commit();
-}
-
 /** The selected cells, when the selection is in this table. */
 const range = computed(() => (selected.value ? store.selectedRange : null));
 
@@ -170,9 +146,7 @@ function select(place: number, col: number): void {
   store.resetTabTraversal();
   // Clicking the cell being edited keeps the edit. Clicking it as part of a range selects it alone.
   if (isSelected(place, col) && store.selectionEnd === null) return;
-  // Committing can re-sort the rows, and the cell clicked is the one that was under the pointer.
   const target = cellAt(place, col);
-  commit();
   store.selection = target;
 }
 
@@ -215,7 +189,6 @@ function startResize(event: PointerEvent, axis: Axis, index: number): void {
   const handle = event.currentTarget;
   if (!(handle instanceof HTMLElement)) return;
   const original = lineSize(axis, index);
-  commit();
   resizeDrag.value = {
     axis,
     id,
@@ -329,7 +302,6 @@ function selectLines(axis: Axis, from: number, to: number): void {
   const last = { row: Math.max(0, shownRows.value - 1), col: props.table.colCount - 1 };
   const anchor = axis === "row" ? cellAt(from, 0) : cellAt(0, from);
   const end = stored(axis === "row" ? { row: to, col: last.col } : { row: last.row, col: to });
-  commit();
   store.selection = anchor;
   store.extendSelection(end);
   focusGrid();
@@ -367,6 +339,14 @@ async function onCellContextMenu(event: MouseEvent, row: number, col: number): P
   if (!store.canEdit) return;
   event.preventDefault();
   const sessions = useFormulaSessionStore();
+  if (
+    sessions.active?.target.kind === "column" &&
+    sessions.active.target.tableId === props.table.id &&
+    sessions.active.target.colId === props.table.colIds[col]
+  ) {
+    emit("menu", { x: event.clientX, y: event.clientY, scope: "cells" });
+    return;
+  }
   if (sessions.active) {
     const target = store.identityOf(cellAt(row, col));
     if (!(await sessions.submit(store.submitFormulaDraft))) {
@@ -392,6 +372,15 @@ async function onHeaderContextMenu(event: MouseEvent, axis: Axis, index: number)
   if (!store.canEdit) return;
   event.preventDefault();
   const sessions = useFormulaSessionStore();
+  if (
+    axis === "col" &&
+    sessions.active?.target.kind === "column" &&
+    sessions.active.target.tableId === props.table.id &&
+    sessions.active.target.colId === props.table.colIds[index]
+  ) {
+    emit("menu", { x: event.clientX, y: event.clientY, scope: axis });
+    return;
+  }
   if (sessions.active) {
     const id = lineId(axis, index);
     if (!(await sessions.submit(store.submitFormulaDraft))) {
@@ -478,7 +467,7 @@ function onCellPointerdown(event: PointerEvent, place: number, col: number): voi
 }
 
 function onCellClick(): void {
-  if (tapOnSelected && draft.value === null) edit();
+  if (tapOnSelected && draft.value === null) void edit();
   tapOnSelected = false;
 }
 
@@ -487,13 +476,23 @@ async function onCellMousedown(event: MouseEvent, place: number, col: number): P
   const sessions = useFormulaSessionStore();
   if (sessions.active) {
     event.preventDefault();
-    const target = store.identityOf(cellAt(place, col));
+    if (isEditing(place, col)) {
+      await cellField.value?.begin();
+      return;
+    }
+    const clicked = cellAt(place, col);
+    const target = store.identityOf(clicked);
     if (!(await sessions.submit(store.submitFormulaDraft))) {
       sessions.focus();
       return;
     }
     const position = target && store.positionOf(target);
+    if (!position && clicked.row === props.table.rowCount && props.table.columns) {
+      store.selection = clicked;
+      focusGrid();
+    }
     if (position) {
+      store.selectionEnd = null;
       store.selection = position;
       focusGrid();
     }
@@ -502,11 +501,11 @@ async function onCellMousedown(event: MouseEvent, place: number, col: number): P
   store.resetTabTraversal();
   if (event.shiftKey && selected.value) {
     const end = stored({ row: place, col });
-    commit();
     store.extendSelection(end);
   } else {
     select(place, col);
   }
+  focusGrid();
   drag.value = { kind: "select" };
   window.addEventListener("mouseup", endDrag, { once: true });
 }
@@ -585,22 +584,23 @@ onBeforeUnmount(() => {
   window.removeEventListener("mouseup", endDrag);
 });
 
-function edit(initial?: string): void {
+async function edit(initial?: string): Promise<void> {
   if (!store.canEdit || !selected.value) return;
-  editRevision = store.revision;
-  newRowColumn =
-    selected.value.row === props.table.rowCount && props.table.columns
-      ? props.table.colIds[selected.value.col]
-      : undefined;
-  editing.value = store.identityOf(selected.value) ?? null;
-  draft.value = initial ?? store.inputOf(selected.value);
+  const request = cellEditingRequest(selected.value, initial);
+  if (!request) return;
+  if (!(await sessions.start(request, store.submitFormulaDraft))) {
+    sessions.focus();
+    return;
+  }
+  await nextTick();
+  await cellField.value?.begin();
 }
-
 watch(
   () => props.table.rowCount,
   () => {
-    if (draft.value === null || !newRowColumn) return;
-    const col = props.table.colIds.indexOf(newRowColumn);
+    const target = active.value?.target;
+    if (target?.kind !== "append") return;
+    const col = props.table.colIds.indexOf(target.colId);
     if (col >= 0) store.selection = cell(props.table.rowCount, col);
   },
 );
@@ -647,14 +647,6 @@ watch(
 // Keep the selected cell in view when the keyboard moves it past the visible part of the table.
 watch(selected, async (current, previous) => {
   if (!current) {
-    if (editing.value) {
-      editing.value = null;
-      draft.value = null;
-      store.notice = {
-        kind: "error",
-        text: "The row or column being edited was deleted. Your text was not saved.",
-      };
-    }
     return;
   }
   if (
@@ -684,29 +676,6 @@ function run(place: number, col: number): void {
   void store.click(cellAt(place, col));
 }
 
-/**
- * Saves the edit and moves on. The next cell is picked before the edit is
- * committed, because committing can move the row: Enter goes down from where
- * the row was, to the row that was below it.
- */
-async function finish(
-  key: "Enter" | "Tab" | "ArrowUp" | "ArrowDown",
-  backwards = false,
-): Promise<void> {
-  const move = store.prepareCellMove(key, backwards);
-  commit();
-  move();
-  await nextTick();
-  focusGrid();
-  scrollSelection();
-}
-
-async function cancel(): Promise<void> {
-  draft.value = null;
-  await nextTick();
-  focusGrid();
-}
-
 const MOVES: Record<string, [rows: number, cols: number]> = {
   ArrowUp: [-1, 0],
   ArrowDown: [1, 0],
@@ -728,7 +697,7 @@ function onGridKeydown(event: KeyboardEvent): void {
   else if (step && event.shiftKey) extend(...step);
   else if (step) move(...step);
   else if (key === "Tab") store.prepareCellMove("Tab", event.shiftKey)();
-  else if (key === "Enter" || key === "F2") edit();
+  else if (key === "Enter" || key === "F2") void edit();
   else if (key === "Delete" || key === "Backspace") void store.clearSelection();
   else if (key === "ContextMenu" || (key === "F10" && event.shiftKey)) openMenuAtSelection();
   else if (command && key.toLowerCase() === "a") selectAll();
@@ -738,31 +707,9 @@ function onGridKeydown(event: KeyboardEvent): void {
   else if (command && key.toLowerCase() === "r") fillSelection("right");
   else if (key.length === 1 && !command && !event.altKey) {
     // Typing replaces the cell's content, starting with the typed character.
-    edit(key);
+    void edit(key);
   } else return;
   event.preventDefault();
-}
-
-function onEditorKeydown(event: KeyboardEvent): void {
-  // An open suggestion list takes the arrows, Tab, and Escape first.
-  if (assist.onKeydown(event)) return;
-  // Up and down save and move, as Enter does. Left and right stay with the
-  // editor, where they move the caret through the text.
-  if (event.key === "Enter" || event.key === "ArrowDown")
-    void finish(event.key === "Enter" ? "Enter" : "ArrowDown");
-  else if (event.key === "ArrowUp") void finish("ArrowUp");
-  else if (event.key === "Tab") void finish("Tab", event.shiftKey);
-  else if (event.key === "Escape") void cancel();
-  else return;
-  event.preventDefault();
-}
-
-function focusEditor(element: Element | ComponentPublicInstance | null): void {
-  editor.value = element instanceof HTMLInputElement ? element : undefined;
-  if (element instanceof HTMLInputElement && document.activeElement !== element) {
-    element.focus({ preventScroll: true });
-    element.setSelectionRange(element.value.length, element.value.length);
-  }
 }
 </script>
 
@@ -867,18 +814,22 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
             @contextmenu="onCellContextMenu($event, row - 1, col - 1)"
             @dblclick="edit()"
           >
-            <input
-              v-if="draft !== null && isSelected(row - 1, col - 1)"
-              :ref="focusEditor"
-              v-model="draft"
+            <SessionFormulaField
+              v-if="active && isEditing(row - 1, col - 1)"
+              :ref="captureField"
               class="grid__editor"
-              aria-label="Cell content"
-              :maxlength="LIMITS.inputLength"
-              @keydown.stop="onEditorKeydown"
-              @input="assist.track"
-              @keyup="assist.track"
-              @click="assist.track"
-              @blur="onEditorBlur"
+              :target="active.target"
+              :context="active.context"
+              :mode="active.mode"
+              :value="active.state.doc.toString()"
+              label="Cell content"
+              :target-label="editingLabel(active.target) ?? active.label"
+              :show-label="active.target.kind === 'column'"
+              :readonly="!store.canEdit"
+              :max-length="LIMITS.inputLength"
+              cell-navigation
+              @mousedown.stop
+              @click.stop
             />
             <CellView
               v-else
@@ -905,13 +856,5 @@ function focusEditor(element: Element | ComponentPublicInstance | null): void {
         </tr>
       </tbody>
     </table>
-    <FormulaAssist
-      v-if="draft !== null"
-      :items="assist.suggestions.value.items"
-      :active="assist.active.value"
-      :signature="assist.signature.value"
-      :anchor="editor"
-      @pick="assist.accept($event)"
-    />
   </div>
 </template>
