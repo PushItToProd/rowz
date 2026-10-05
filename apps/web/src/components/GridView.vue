@@ -18,6 +18,8 @@ import { cellStyle } from "../formatStyle";
 import { contains, fillTarget, type GridRange } from "../formula/fill";
 import type { MenuScope } from "./menu";
 import { cellEditingRequest, editingLabel } from "../formula/cells";
+import { namingContext } from "../formula/context";
+import { referenceHighlights, referenceOutlines } from "../formula/references";
 import SessionFormulaField from "./SessionFormulaField.vue";
 import CellView from "./CellView.vue";
 import EditableName from "./EditableName.vue";
@@ -73,6 +75,21 @@ function isEditing(place: number, col: number): boolean {
  * cell addresses, and the formulas that name it.
  */
 const view = computed(() => store.rowView(props.table.id));
+const outlines = computed(() => {
+  const session = sessions.active;
+  if (!session) return new Map<string, { boxShadow: string; color: string }>();
+  return referenceOutlines(
+    referenceHighlights(
+      session.state.doc.toString(),
+      session.mode,
+      session.state.selection.main.head,
+      namingContext(session.context),
+    ),
+    props.table.id,
+    view.value.rows,
+    props.table.colCount,
+  );
+});
 const shownRows = computed(() => view.value.rows.length);
 const displayedRows = computed(
   () => shownRows.value + (props.table.columns && props.table.rowCount < LIMITS.tableRows ? 1 : 0),
@@ -806,7 +823,11 @@ function onGridKeydown(event: KeyboardEvent): void {
               'grid__cell--filled': store.filledBy(cellAt(row - 1, col - 1)) !== undefined,
               'grid__cell--computed': columnAt(col - 1)?.type === 'formula',
             }"
-            :style="cellStyle(store.formatOf(cellAt(row - 1, col - 1)))"
+            :style="[
+              cellStyle(store.formatOf(cellAt(row - 1, col - 1))),
+              { boxShadow: outlines.get(`${row - 1}:${col - 1}`)?.boxShadow },
+            ]"
+            :data-reference-color="outlines.get(`${row - 1}:${col - 1}`)?.color"
             @pointerdown="onCellPointerdown($event, row - 1, col - 1)"
             @mousedown="onCellMousedown($event, row - 1, col - 1)"
             @click="onCellClick"

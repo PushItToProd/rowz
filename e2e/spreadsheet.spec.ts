@@ -1724,6 +1724,11 @@ test("Markdown drafts complete only template expressions and Cancel restores the
   const text = page.locator('[data-view="Text 1"]');
   await text.getByRole("button", { name: "Edit", exact: true }).click();
   const source = text.getByLabel("Text view source");
+  await source.fill("# Heading\n**bold** and `{{ A1 + 2 }}`");
+  await expect(text.locator(".formula-prose--heading").last()).toContainText("Heading");
+  await expect(text.locator(".formula-prose--strong").filter({ hasText: "bold" })).toBeVisible();
+  await expect(text.locator(".formula-prose--code").filter({ hasText: "A1" })).toHaveCount(0);
+  await expect(text.locator(".formula-token--identifier").filter({ hasText: "A1" })).toBeVisible();
   await source.fill("Prose rou");
   await expect(page.getByRole("listbox")).toHaveCount(0);
   await source.fill("{% let Amount = 2 %}{{ Am");
@@ -1740,4 +1745,32 @@ test("Markdown drafts complete only template expressions and Cancel restores the
   await expect(source).toBeVisible();
   await text.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(text.locator(".text-view")).toHaveText("2");
+});
+
+test("direct formula references and visible grid outlines share colors without changing selection", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await cell(page, "C3").click();
+  await page.keyboard.type("=A1 + $A$1 + B2");
+  const source = page.getByLabel("Cell content");
+  await expect(source).toHaveText("=A1 + $A$1 + B2");
+  const references = source.locator(".formula-reference");
+  await expect(references).toHaveCount(3);
+  const firstColor = await references.nth(0).getAttribute("data-reference-color");
+  const secondColor = await references.nth(2).getAttribute("data-reference-color");
+  if (!firstColor || !secondColor) throw new Error("Reference colors are missing");
+  expect(firstColor).not.toBe(secondColor);
+  await expect(references.nth(1)).toHaveAttribute("data-reference-color", firstColor);
+  await expect(cell(page, "A1")).toHaveAttribute("data-reference-color", firstColor);
+  await expect(cell(page, "B2")).toHaveAttribute("data-reference-color", secondColor);
+  const renderedColor = await references
+    .nth(0)
+    .evaluate((element) => getComputedStyle(element.lastElementChild ?? element).color);
+  expect(
+    await cell(page, "A1").evaluate((element) => getComputedStyle(element).boxShadow),
+  ).toContain(renderedColor);
+  await expect(cell(page, "C3")).toHaveAttribute("aria-selected", "true");
+  await source.press("Escape");
+  await expect(page.locator("td[data-reference-color]")).toHaveCount(0);
 });

@@ -13,6 +13,8 @@ export interface SourceAnalysis {
   regions: FormulaAnalysis[];
   decorations: SourceDecoration[];
   definitions: { name: string; params?: string[] }[];
+  /** Complete and unfinished template tags, including non-expression headers. */
+  templateTags?: EditingSpan[];
 }
 
 /** Tolerant editing analysis uses source offsets and never evaluates a draft. */
@@ -88,7 +90,8 @@ function analyzeTemplate(source: string): SourceAnalysis {
   const bind = (name: string): void => {
     if (!/^[A-Za-z]{1,3}[0-9]+$/.test(name)) bound.set(name.toLowerCase(), name);
   };
-  for (const tag of scanTemplateTags(source, true)) {
+  const tags = scanTemplateTags(source, true);
+  for (const tag of tags) {
     if (tag.kind === "comment") {
       decorations.push({ from: tag.from, to: tag.to, type: "comment" });
       continue;
@@ -145,5 +148,11 @@ function analyzeTemplate(source: string): SourceAnalysis {
       if (block) bound = new Map(block.outer);
     }
   }
-  return { text: source, regions, decorations, definitions: [] };
+  return {
+    text: source,
+    regions,
+    decorations,
+    definitions: [],
+    templateTags: tags.map(({ from, to }) => ({ from, to })),
+  };
 }

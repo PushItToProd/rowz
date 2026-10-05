@@ -9,6 +9,12 @@ export function namingContext(context: EditingContext): NamingContext {
     pages: store.pages,
     tables: store.tables,
     pageId: context.pageId,
+    tableId: context.tableId,
+    row: context.rowId
+      ? store.tables
+          .find((table) => table.id === context.tableId)
+          ?.rows.findIndex((row) => row.id === context.rowId)
+      : undefined,
     columns: store.tables.find((table) => table.id === context.tableId)?.columns,
     names: store.documentNames,
     holderId: context.holderId,

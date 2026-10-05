@@ -190,14 +190,78 @@ describe("multiline keyboard behavior", () => {
     ]);
   });
 
-  it("accepts a 50,000-character multiline draft and refuses larger changes", () => {
-    const { view } = render("", { mode: "script" });
-    const source = "// comment\n".repeat(4_545) + "     ";
-    expect(source.length).toBe(50_000);
-    view.dispatch({ changes: { from: 0, insert: source } });
-    expect(view.state.doc.length).toBe(50_000);
-    view.dispatch({ changes: { from: view.state.doc.length, insert: "x" } });
-    expect(view.state.doc.length).toBe(50_000);
+  it.each(["script", "markdown"] as const)(
+    "accepts a 50,000-character %s draft and refuses larger changes",
+    (mode) => {
+      const { view } = render("", { mode });
+      const source =
+        mode === "script" ? "// comment\n".repeat(4_545) + "     " : "# Heading\n".repeat(5_000);
+      expect(source.length).toBe(50_000);
+      view.dispatch({ changes: { from: 0, insert: source } });
+      expect(view.state.doc.length).toBe(50_000);
+      view.dispatch({ changes: { from: view.state.doc.length, insert: "x" } });
+      expect(view.state.doc.length).toBe(50_000);
+    },
+  );
+
+  it("highlights Markdown prose but excludes template tags inside code and emphasis", async () => {
+    const { wrapper, view } = render(
+      "# Heading\n**bold** *italic* [link](https://example.com)\n`{{ A1 + 2 }}`\n```\n{{ B2 }}\n```\n**{% let Value = 3 %}**",
+      { mode: "markdown" },
+    );
+    expect(
+      wrapper
+        .findAll(".formula-prose--heading")
+        .map((span) => span.text())
+        .join(""),
+    ).toContain("Heading");
+    expect(
+      wrapper.findAll(".formula-prose--strong").some((span) => span.text().includes("bold")),
+    ).toBe(true);
+    expect(
+      wrapper.findAll(".formula-prose--emphasis").some((span) => span.text().includes("italic")),
+    ).toBe(true);
+    expect(wrapper.findAll(".formula-prose--link").length).toBeGreaterThan(0);
+    expect(
+      wrapper
+        .findAll('[class*="formula-prose--"]')
+        .every(
+          (span) =>
+            !span.text().includes("A1") &&
+            !span.text().includes("B2") &&
+            !span.text().includes("Value"),
+        ),
+    ).toBe(true);
+    expect(wrapper.findAll(".formula-token--identifier").map((span) => span.text())).toContain(
+      "B2",
+    );
+    await wrapper.setProps({ mode: "script" });
+    expect(wrapper.find('[class*="formula-prose--"]').exists()).toBe(false);
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "Value = 2" } });
+    expect(wrapper.get(".formula-token--definition").text()).toContain("Value");
+  });
+
+  it("colors only direct references in the active expression and updates after caret movement", () => {
+    const { wrapper, view } = render("{{ A1 + A1 }}\n{{ B2 }}", { mode: "markdown" });
+    expect(wrapper.findAll(".formula-reference").map((span) => span.text())).toEqual([]);
+    view.dispatch({ selection: { anchor: 5 } });
+    const references = wrapper.findAll(".formula-reference");
+    expect(references.map((span) => span.text())).toEqual(["A1", "A1"]);
+    expect(references[0]!.attributes("data-reference-color")).toBe(
+      references[1]!.attributes("data-reference-color"),
+    );
+    view.dispatch({ selection: { anchor: 18 } });
+    expect(wrapper.findAll(".formula-reference").map((span) => span.text())).toEqual(["B2"]);
+  });
+
+  it("does not publish another editor state when context objects change without changing their contents", async () => {
+    const context = { pages: [], tables: [], pageId: "p" };
+    const { wrapper } = render("=A1", { context });
+    const count = wrapper.emitted("update:state")!.length;
+    await wrapper.setProps({ context: { ...context, pages: [], tables: [] } });
+    expect(wrapper.emitted("update:state")!).toHaveLength(count);
+    await wrapper.setProps({ context: { ...context, pageId: "other" } });
+    expect(wrapper.emitted("update:state")!).toHaveLength(count + 1);
   });
 });
 

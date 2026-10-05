@@ -16,6 +16,9 @@ import {
   moveCompletionSelection,
 } from "@codemirror/autocomplete";
 import { analyzeSource } from "@spreadsheet-app/engine";
+import { syntaxTree } from "@codemirror/language";
+import { markdownDecorations, markdownLanguage } from "../formula/markdown";
+import { referenceHighlights } from "../formula/references";
 import { applySuggestion, signatureAt, suggestionsAt, type NamingContext } from "../formula/assist";
 import type { FormulaMode } from "../formula/session";
 
@@ -62,6 +65,20 @@ function highlight(state: EditorState): DecorationSet {
       .filter((span) => span.to > span.from)
       .map((span) =>
         Decoration.mark({ class: `formula-token--${span.type}` }).range(span.from, span.to),
+      )
+      .concat(
+        props.mode === "markdown" ? markdownDecorations(state, analysis) : [],
+        referenceHighlights(
+          state.doc.toString(),
+          props.mode,
+          state.selection.main.head,
+          props.context,
+        ).map(({ from, to, color }) =>
+          Decoration.mark({
+            class: "formula-reference",
+            attributes: { style: `color: ${color}`, "data-reference-color": color },
+          }).range(from, to),
+        ),
       ),
     true,
   );
@@ -71,7 +88,12 @@ const multiline = computed(() => props.mode === "script" || props.mode === "mark
 const tokens = StateField.define<DecorationSet>({
   create: highlight,
   update: (decorations, transaction) =>
-    transaction.docChanged || transaction.reconfigured ? highlight(transaction.state) : decorations,
+    transaction.docChanged ||
+    transaction.selection ||
+    transaction.reconfigured ||
+    syntaxTree(transaction.startState) !== syntaxTree(transaction.state)
+      ? highlight(transaction.state)
+      : decorations,
   provide: (field) => EditorView.decorations.from(field),
 });
 
@@ -79,6 +101,7 @@ function extensions() {
   return [
     history(),
     ...(multiline.value ? [EditorView.lineWrapping] : []),
+    ...(props.mode === "markdown" ? [markdownLanguage] : []),
     tokens,
     EditorState.readOnly.of(props.readonly),
     EditorView.editable.of(!props.readonly),
@@ -254,6 +277,13 @@ function extensions() {
       },
       ".cm-line": { padding: "0 4px" },
       ".formula-token--comment": { color: "#667085", fontStyle: "italic" },
+      ".formula-prose--heading": { color: "#175cd3", fontWeight: "600" },
+      ".formula-prose--strong": { fontWeight: "700" },
+      ".formula-prose--emphasis": { fontStyle: "italic" },
+      ".formula-prose--link": { color: "#175cd3", textDecoration: "underline" },
+      ".formula-prose--code": { color: "#8b4513", backgroundColor: "#f2f4f7" },
+      ".formula-prose--quote": { color: "#667085", fontStyle: "italic" },
+      ".formula-prose--list, .formula-prose--punctuation": { color: "#667085" },
       ".formula-token--definition, .formula-token--keyword": {
         color: "#6543a1",
         fontWeight: "600",
@@ -266,6 +296,7 @@ function extensions() {
       },
       ".formula-token--operator, .formula-token--punctuation": { color: "#596373" },
       ".formula-token--error, .formula-token--invalid": { color: "#b42318" },
+      ".formula-reference, .formula-reference [class*='formula-token--']": { color: "inherit" },
     }),
   ];
 }
@@ -287,7 +318,13 @@ watch(
   },
 );
 watch(
-  () => [props.mode, props.label, props.readonly, props.maxLength],
+  [
+    () => props.mode,
+    () => props.label,
+    () => props.readonly,
+    () => props.maxLength,
+    () => JSON.stringify(props.context),
+  ],
   () => {
     view?.dispatch({ effects: StateEffect.reconfigure.of(extensions()) });
   },

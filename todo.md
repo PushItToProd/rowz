@@ -135,7 +135,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
     - [x] migrate existing named formulas and filters; use CodeMirror in the new-name form with explicit creation rules
     - [x] migrate cells, the formula bar, and formula-column definitions with shared history, whole-column labels, and a nonmodal popover
   - [x] syntax highlighting for formulas in scripts and Markdown
-  - [ ] add CodeMirror Markdown language support for prose highlighting (packages requested for installation)
+  - [x] add CodeMirror Markdown language support for prose highlighting
   - Coordinate completion, reference picking, reference colors, and keyboard behavior across these editors. The formula-column prompt replacement below is part of this work.
 - [x] hitting tab with the formula bar focused should have the same effect as hitting tab with the cell itself selected
 - [x] show cell errors in a popover on hover instead of using a native browser tooltip

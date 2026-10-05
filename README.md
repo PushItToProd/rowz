@@ -124,6 +124,8 @@ We sold **{{ total }}** in all.
 
 Formula inputs share completion and local undo history. Scripts and Markdown templates use multiline editors: Enter inserts a newline, Done or Ctrl/Cmd+Enter saves, and Cancel discards the draft. Escape dismisses completion without discarding multiline edits. Tab accepts a suggestion when one is open; otherwise it saves and moves focus. Formula drafts retain their history while browsing pages and appear in a labeled draft editor when their original field is unavailable.
 
+Direct references in the active formula, script statement, or template expression use matching colors in the source and grid outlines. Repeated references to the same cells share a color. Markdown prose and embedded formulas have separate syntax highlighting, including template tags inside code spans and fences.
+
 ### Names and scripts
 
 A plain table or script can hold named formulas. A script is a block whose lines define names, functions, or checks:

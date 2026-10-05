@@ -32,13 +32,18 @@ export interface Suggestions {
 export interface NamingContext {
   pages: readonly { id: string; name: string }[];
   tables: readonly {
+    id?: string;
     pageId: string;
     name: string;
+    rowCount?: number;
+    colCount?: number;
     /** The named columns of a data table. */
     columns?: readonly { name: string }[] | null;
   }[];
   /** The page of the table that holds the formula. */
   pageId: string | undefined;
+  tableId?: string;
+  row?: number;
   /** The named columns of the table that holds the formula, which `[Name]` reads. */
   columns?: readonly { name: string }[] | null;
   /** The names the document defines, each with the name and page of the script that holds it. */

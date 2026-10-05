@@ -717,3 +717,11 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 **Why.** Shared scanning keeps editing syntax consistent with evaluation while preserving assistance around incomplete text. A persistent source session provides the existing draft retention and submit-time deleted-target recovery for multiline sources. Reading draft definitions prevents completion from offering names the user has removed while editing.
 
 **To change.** `packages/engine/src/editing-source.ts`, the scanners in `script.ts` and `template.ts`, `formula/assist.ts`, `ViewSourceEditor.vue`, and the source-save adapter implement these behaviors. Markdown prose highlighting still awaits the requested language packages.
+
+## Markdown prose and direct reference colors
+
+**Choice.** Use CodeMirror’s Markdown parser for prose and subtract complete or unfinished engine-recognized template tag spans from its decorations. Formula styling takes precedence in tags, including tags inside Markdown code spans and fences. Keep the shared editor’s existing keymap.
+
+**Choice.** Resolve direct addresses and structured columns from the original editing context and current table records without evaluating any names. Canonical stored rectangles determine repeated-reference colors; absolute markers and qualifier spellings do not change a resolved target’s color. Grid outlines use neighboring displayed rows to mark only visible portions of the stored range.
+
+**Cost.** The production JavaScript bundle is about 418 KB gzipped after adding the Markdown language packages, compared with about 332 KB before this increment. Reference picking is the remaining part of step 3.
