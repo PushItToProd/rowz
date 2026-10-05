@@ -107,7 +107,7 @@ async function submit(): Promise<boolean> {
 async function commit(key: "Enter" | "Tab", backwards: boolean): Promise<void> {
   const controlsBefore = [
     ...document.querySelectorAll<HTMLElement>(
-      'input:not(:disabled), select:not(:disabled), button:not(:disabled), a[href], [tabindex="0"]',
+      'input:not(:disabled), select:not(:disabled), button:not(:disabled):not(.formula-editor__pick), a[href], [tabindex="0"]',
     ),
   ];
   const indexBefore = controlsBefore.indexOf(document.activeElement as HTMLElement);
@@ -129,7 +129,7 @@ async function commit(key: "Enter" | "Tab", backwards: boolean): Promise<void> {
   if (key === "Tab") {
     const controls = [
       ...document.querySelectorAll<HTMLElement>(
-        'input:not(:disabled), select:not(:disabled), button:not(:disabled), a[href], [tabindex="0"]',
+        'input:not(:disabled), select:not(:disabled), button:not(:disabled):not(.formula-editor__pick), a[href], [tabindex="0"]',
       ),
     ];
     const index = input.value ? controls.indexOf(input.value) : -1;
@@ -176,6 +176,9 @@ defineExpose({ submit, begin });
       v-if="ownsEditor && session"
       ref="editor"
       :state="session.state"
+      :picking-key="session.id"
+      :show-picking-control="!cellNavigation"
+      :same-row-picking="session.target.kind === 'column' || session.target.kind === 'filter'"
       :mode="session.mode"
       :context="context"
       :label="showLabel ? `${label} · ${targetLabel}` : label"

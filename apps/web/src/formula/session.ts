@@ -22,6 +22,7 @@ export interface EditingContext {
 }
 
 export interface FormulaSession {
+  id: string;
   target: EditingTarget;
   context: EditingContext;
   mode: FormulaMode;
@@ -177,6 +178,7 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
     // Another request may have opened a target while this one was waiting for the save.
     if (active.value) return sameEditingTarget(active.value.target, request.target);
     active.value = {
+      id: crypto.randomUUID(),
       target:
         request.target.kind === "append"
           ? { ...request.target, rowId: crypto.randomUUID() }

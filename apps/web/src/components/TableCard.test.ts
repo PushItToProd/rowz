@@ -663,7 +663,7 @@ describe("column names", () => {
       "Editing formula for every row in Table 1[Total]",
     );
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "=[Price] + 1" } });
-    await wrapper.get(".column-formula-popover button").trigger("click");
+    await button("Apply").trigger("click");
     await flushPromises();
     expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c3", {
       type: "formula",
@@ -676,12 +676,12 @@ describe("column names", () => {
     const view = await openFormula();
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "=[Price] + 1" } });
     server.updateColumn.mockRejectedValueOnce(new Error("Offline"));
-    await wrapper.get(".column-formula-popover button").trigger("click");
+    await button("Apply").trigger("click");
     await flushPromises();
     expect(document.activeElement).toBe(view.contentDOM);
     expect(view.state.doc.toString()).toBe("=[Price] + 1");
     expect(wrapper.get('.column-formula-popover [role="alert"]').text()).toBe("Offline");
-    await wrapper.findAll(".column-formula-popover button")[1]!.trigger("click");
+    await button("Cancel").trigger("click");
     await flushPromises();
     expect(wrapper.find(".column-formula-popover").exists()).toBe(false);
     expect(server.updateColumn).toHaveBeenCalledTimes(1);
@@ -711,7 +711,7 @@ describe("column names", () => {
       wrapper.get(".formula-bar .cm-content").element as HTMLElement,
     )!;
     expect(bar.state.selection.main.anchor).toBe(2);
-    await wrapper.get("button[data-formula-field]").trigger("click");
+    await button("Edit column formula").trigger("click");
     await flushPromises();
     const popover = columnEditor();
     expect(popover.state.doc.toString()).toBe("=[Price] * [Qty]+1");
@@ -726,6 +726,12 @@ describe("column names", () => {
       tableId: "t1",
       colId: "c3",
     });
+    (wrapper.get(".formula-bar input").element as HTMLInputElement).focus();
+    await flushPromises();
+    expect(wrapper.findAll(".formula-bar button").map((control) => control.text())).toContain(
+      "Pick reference",
+    );
+    expect(wrapper.find(".column-formula-popover .formula-editor__pick").exists()).toBe(false);
   });
   it("retains a column draft after its originating row is deleted and recovers a deleted column on submission", async () => {
     await renderData();
@@ -745,7 +751,7 @@ describe("column names", () => {
     );
     await flushPromises();
     expect(useFormulaSessionStore().active?.deleted).toBeUndefined();
-    await wrapper.get(".column-formula-popover button").trigger("click");
+    await button("Apply").trigger("click");
     await flushPromises();
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
       "The editing target was deleted",
@@ -772,7 +778,7 @@ describe("column names", () => {
     confirm.mockReturnValueOnce(true);
     const view = await openFormula("B1");
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "[Price] * 2" } });
-    await wrapper.get(".column-formula-popover button").trigger("click");
+    await button("Apply").trigger("click");
     await flushPromises();
     expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c2", {
       type: "formula",

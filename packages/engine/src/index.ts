@@ -15,6 +15,7 @@ export {
   isSingleCell,
   printNode,
   type CellReference,
+  type ReferenceCell,
   type ColumnReference,
   type Node,
   type Reference,

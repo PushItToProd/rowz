@@ -2,8 +2,20 @@
 import { FORMAT_ALIGNMENTS, FORMAT_COLORS, type FormatPatch } from "@spreadsheet-app/engine";
 import { computed } from "vue";
 import { useWorkbookStore } from "../stores/workbook";
+import { useFormulaSessionStore } from "../formula/session";
+import { useReferencePickingStore } from "../formula/picking";
 
 const store = useWorkbookStore();
+const sessions = useFormulaSessionStore();
+const picking = useReferencePickingStore();
+const draftActive = computed(() => Boolean(sessions.active) || picking.connected);
+function history(direction: "undo" | "redo"): void {
+  if (draftActive.value) picking.draftHistory(direction);
+  else void store[direction]();
+}
+function preserveDraftFocus(event: MouseEvent): void {
+  if (draftActive.value) event.preventDefault();
+}
 
 /** The format of the selected cell, which is what the controls show. */
 const current = computed(() => (store.selection ? store.formatOf(store.selection) : {}));
@@ -42,8 +54,10 @@ function choose(property: "align" | "numberFormat" | "color" | "fill", event: Ev
       type="button"
       title="Undo (Ctrl+Z)"
       aria-label="Undo"
-      :disabled="!store.canUndo"
-      @click="store.undo()"
+      :disabled="draftActive ? !picking.canUndo : !store.canUndo"
+      :data-formula-field="draftActive ? '' : undefined"
+      @mousedown="preserveDraftFocus"
+      @click="history('undo')"
     >
       ↶
     </button>
@@ -51,8 +65,10 @@ function choose(property: "align" | "numberFormat" | "color" | "fill", event: Ev
       type="button"
       title="Redo (Ctrl+Y)"
       aria-label="Redo"
-      :disabled="!store.canRedo"
-      @click="store.redo()"
+      :disabled="draftActive ? !picking.canRedo : !store.canRedo"
+      :data-formula-field="draftActive ? '' : undefined"
+      @mousedown="preserveDraftFocus"
+      @click="history('redo')"
     >
       ↷
     </button>

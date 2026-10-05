@@ -143,20 +143,32 @@ onBeforeUnmount(() => {
 });
 
 const KEYS = [
-  ["Arrow keys", "Move the selection."],
+  ["Arrow keys, outside an editor", "Move the selection."],
   ["Any character", "Start typing over the selected cell."],
   ["Enter or F2", "Edit the selected cell, keeping what it holds."],
   ["Alt+Enter, on a table-size spill error", "Focus the Resize table to fit button."],
-  ["Enter or Down, while editing", "Save and move down."],
-  ["Up, while editing", "Save and move up."],
+  [
+    "Enter, while editing a cell",
+    "Save and move down, unless accepting an arrow-selected suggestion.",
+  ],
+  ["Arrow keys, while editing", "Move the caret or navigate completion suggestions."],
   ["Tab, Shift+Tab", "Save and move right or left."],
-  ["Escape", "Stop editing and discard what was typed."],
+  [
+    "Escape, while editing",
+    "Dismiss completion, then cancel picking. Otherwise discard a single-line draft; retain scripts and text views.",
+  ],
   ["Tab, while a list of suggestions shows", "Complete the word with the highlighted suggestion."],
   ["Up or Down, while suggestions show", "Move the highlight. Enter then accepts it."],
   ["Delete or Backspace", "Clear the selected cells."],
   ["Shift with an arrow key", "Select a range of cells."],
   ["Ctrl+C, Ctrl+X, Ctrl+V", "Copy, cut, and paste the selected cells."],
-  ["Ctrl+Z, Ctrl+Y", "Undo or redo the last change made since this page was opened."],
+  [
+    "Ctrl/Cmd+Z, Ctrl/Cmd+Y",
+    "Undo or redo the active draft; otherwise undo or redo workbook changes.",
+  ],
+  ["Enter, in scripts and text views", "Insert a newline."],
+  ["Ctrl/Cmd+Enter, in scripts and text views", "Save the source."],
+  ["Ctrl/Cmd+[ or Ctrl/Cmd+], in scripts and text views", "Indent or unindent lines."],
   ["Ctrl+A", "Select every cell of the table."],
   ["Shift+F10", "Open the menu of row, column, and cell actions."],
   ["Ctrl+D, Ctrl+R", "Copy the first row of the selection down, or its first column across."],
@@ -323,8 +335,8 @@ const OPERATORS = [
         <code>3/4/2026</code> mean different days in different countries.
       </p>
       <p>
-        Changes are saved as you make them. Someone else with the spreadsheet open sees them after
-        reloading the page.
+        Cell edits save when you commit or leave the editor. Other open sessions receive saved
+        changes.
       </p>
 
       <h3>Keyboard</h3>
@@ -336,6 +348,13 @@ const OPERATORS = [
           </tr>
         </tbody>
       </table>
+      <p>
+        Scripts and text views have <strong>Done</strong> and <strong>Cancel</strong> buttons. Done
+        saves; Cancel discards the draft. Tab accepts completion or saves and leaves the source.
+        Formula drafts keep their text, caret, and undo history while you browse other pages. The
+        draft editor labels the original target; applying or canceling returns to its original page.
+        A literal cell draft saves before a page change.
+      </p>
     </section>
 
     <section id="filling">
@@ -484,6 +503,29 @@ const OPERATORS = [
     <section id="references">
       <h2>References</h2>
       <p>A formula reads other cells by naming them.</p>
+      <p>
+        At an unfinished operand such as <code>=B3+</code>, click a cell or drag a range to insert
+        its reference. Selecting a complete reference lets a grid pick replace it. For other formula
+        positions, use <strong>Pick reference</strong>: it replaces selected text, otherwise the
+        reference under the caret, otherwise inserts at the caret. It adds no operators. Further
+        picks replace that insertion until you type or move the caret.
+      </p>
+      <p>
+        Picking keeps the editing target and does not run buttons or change cell controls. A drag
+        makes one undoable change; Escape cancels it and restores the pre-drag text. Picked
+        addresses are relative, even when replacing a reference containing <code>$</code>. Type any
+        desired absolute markers afterward. Reference colors match outlines of visible cells. Names
+        are highlighted without evaluating them to find outlines.
+      </p>
+      <p>
+        Ordinary row and column headers pick whole rows or columns. A named-column header inserts
+        <code>[Column]</code> in its table's filter or formula-column definition; elsewhere it
+        inserts <code>Table[Column]</code>. Whole-column references include filtered-out rows.
+        Dragging across multiple named-column headers is not supported. A cell drag through sorted
+        or filtered rows must name exactly one stored rectangle; otherwise pick a whole column or
+        clear sorting and filtering. Page-scoped sources name the table, and cross-page picks name
+        both the page and table.
+      </p>
       <table>
         <thead>
           <tr>
@@ -598,6 +640,12 @@ const OPERATORS = [
 
     <section id="names">
       <h2>Names and your own functions</h2>
+      <p>
+        The new-name form creates a name only with <strong>Add name</strong> or Enter. Tab and
+        clicking outside retain the unfinished name and formula. Cancel or closing the form discards
+        them. Its formula supports the same completion and reference picking as other formula
+        editors.
+      </p>
       <p>
         <code>LET</code> gives a name to a value so a formula can use it more than once:
         <code>=LET(total, SUM(A1:A3), total / COUNT(A1:A3))</code>. A name is any word that is not a
@@ -1047,8 +1095,9 @@ const OPERATORS = [
         <strong>Add text</strong> puts a text view on a page. Double-click the text, or choose
         <strong>Edit</strong>, to write it. The text is
         <a href="https://commonmark.org/help/" target="_blank" rel="noreferrer">Markdown</a>, and
-        tags put values from the spreadsheet into it. The view shows the result as you type.
-        Clicking anywhere else, or choosing <strong>Done</strong>, saves the text.
+        tags put values from the spreadsheet into it. The view shows the result as you type. Leaving
+        the source normally saves the text. Reference picks and browsing pages keep the draft open.
+        <strong>Done</strong> or Ctrl/Cmd+Enter saves; <strong>Cancel</strong> discards.
       </p>
       <table>
         <thead>

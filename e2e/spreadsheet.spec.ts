@@ -29,6 +29,17 @@ function cell(page: Page, address: string, table = "Table 1"): Locator {
   return page.locator(`[data-table="${table}"] [data-cell="${address}"]`);
 }
 
+async function dragReference(page: Page, from: Locator, to: Locator): Promise<void> {
+  await from.scrollIntoViewIfNeeded();
+  const start = await from.boundingBox(),
+    end = await to.boundingBox();
+  if (!start || !end) throw new Error("The reference drag endpoints are not visible");
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 5 });
+  await page.mouse.up();
+}
+
 /** Collapsed table borders can make the rendered size differ by a fraction of a pixel. */
 async function expectCellSize(
   page: Page,
@@ -1773,4 +1784,241 @@ test("direct formula references and visible grid outlines share colors without c
   await expect(cell(page, "C3")).toHaveAttribute("aria-selected", "true");
   await source.press("Escape");
   await expect(page.locator("td[data-reference-color]")).toHaveCount(0);
+});
+
+test("automatic reference picks keep the target, replace further picks, and suppress cell buttons", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", '=BUTTON("Write", EXECUTE(9,A2))');
+  await enter(page, "B1", "=CHECKBOX(A2)");
+  let writes = 0;
+  page.on("request", (request) => {
+    if (request.method() === "PUT" && request.url().endsWith("/cells")) writes++;
+  });
+  await cell(page, "D4").click();
+  await page.keyboard.type("=");
+  const source = page.getByLabel("Cell content");
+  await cell(page, "A1").getByRole("button", { name: "Write", exact: true }).click();
+  await expect(source).toHaveText("=A1");
+  await expect(cell(page, "A2")).toHaveText("");
+  await cell(page, "B1").getByRole("checkbox").click();
+  await expect(source).toHaveText("=B1");
+  await expect(cell(page, "B1").getByRole("checkbox")).not.toBeChecked();
+  await cell(page, "B2").click();
+  await expect(source).toHaveText("=B2");
+  await expect(cell(page, "D4")).toHaveAttribute("aria-selected", "true");
+  await expect(source).toBeFocused();
+  expect(writes).toBe(0);
+  await source.press("ArrowLeft");
+  await expect(source).toHaveText("=B2");
+  await cell(page, "C3").click();
+  await expect(cell(page, "C3")).toHaveAttribute("aria-selected", "true");
+  expect(writes).toBe(1);
+});
+
+test("explicit picking replaces selections and complete references, and a drag has one undo step", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await cell(page, "E5").click();
+  await page.keyboard.type("=10+B2");
+  const source = page.getByLabel("Cell content");
+  await source.press("Home");
+  await source.press("ArrowRight");
+  await source.press("Shift+ArrowRight");
+  await source.press("Shift+ArrowRight");
+  await page.getByRole("button", { name: "Pick reference", exact: true }).click();
+  await cell(page, "A1").click();
+  await expect(source).toHaveText("=A1+B2");
+  await source.fill("=$A1");
+  await source.press("Home");
+  await source.press("ArrowRight");
+  await source.press("Shift+End");
+  await dragReference(page, cell(page, "B2"), cell(page, "D4"));
+  await expect(source).toHaveText("=B2:D4");
+  await source.press("Control+z");
+  await expect(source).toHaveText("=$A1");
+  await source.press("Control+y");
+  await expect(source).toHaveText("=B2:D4");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(source).toHaveText("=$A1");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(source).toHaveText("=B2:D4");
+  await source.fill("=SUM(");
+  await dragReference(page, cell(page, "B2"), cell(page, "E5"));
+  await expect(source).toHaveText("=SUM(B2:E5");
+  await source.press("Control+z");
+  await expect(source).toHaveText("=SUM(");
+  await source.fill("=A1+1");
+  await source.press("Home");
+  await source.press("ArrowRight");
+  await source.press("ArrowRight");
+  await page.getByRole("button", { name: "Pick reference", exact: true }).click();
+  await cell(page, "C3").click();
+  await expect(source).toHaveText("=C3+1");
+  await source.fill("=B3+");
+  const start = await cell(page, "A1").boundingBox(),
+    end = await cell(page, "B2").boundingBox();
+  if (!start || !end) throw new Error("The reference drag endpoints are not visible");
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2);
+  await expect(source).toHaveText("=B3+A1:B2");
+  await source.press("Escape");
+  await page.mouse.up();
+  await expect(source).toHaveText("=B3+");
+  await expect(source).toBeFocused();
+  await source.press("ArrowLeft");
+  await expect(cell(page, "E5")).toHaveAttribute("aria-selected", "true");
+  await cell(page, "C3").click();
+  await expect(cell(page, "C3")).toHaveAttribute("aria-selected", "true");
+});
+
+test("cross-page picking preserves the original cell and draft history without intermediate writes", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add page", exact: true }).click();
+  const pages = page.getByRole("navigation", { name: "Pages" });
+  await expect(pages.locator('[aria-current="page"]')).toContainText("Page 2");
+  await enter(page, "B2", "7");
+  await pages.getByText("Page 1", { exact: true }).click();
+  let writes = 0;
+  page.on("request", (request) => {
+    if (request.method() === "PUT" && request.url().endsWith("/cells")) writes++;
+  });
+  await cell(page, "C3").click();
+  await page.keyboard.type("=");
+  await cell(page, "A1").click();
+  await pages.getByText("Page 2", { exact: true }).click();
+  const dock = page.getByRole("region", { name: "Formula draft" });
+  await expect(dock).toContainText("Page 1 · Table 1 · C3");
+  await cell(page, "B2").click();
+  await expect(dock.locator(".cm-content")).toHaveText("='Page 2'!'Table 1'!B2");
+  expect(writes).toBe(0);
+  await dock.locator(".cm-content").press("Control+z");
+  await expect(dock.locator(".cm-content")).toHaveText("=A1");
+  await dock.locator(".cm-content").press("Control+y");
+  await dock.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(pages.locator('[aria-current="page"]')).toContainText("Page 1");
+  await expect(cell(page, "C3")).toHaveText("7");
+  expect(writes).toBe(1);
+});
+
+test("multiline sources pick only in expressions, and unfinished new names pick without being created", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add text", exact: true }).last().click();
+  const text = page.locator('[data-view="Text 1"]');
+  await text.getByRole("button", { name: "Edit", exact: true }).click();
+  const source = text.getByLabel("Text view source");
+  await source.fill("Prose");
+  await expect(text.getByRole("button", { name: "Pick reference", exact: true })).toBeDisabled();
+  await source.fill("Prose {{ ");
+  await cell(page, "A1").click();
+  await expect(source).toHaveText("Prose {{ 'Table 1'!A1");
+  await page.keyboard.type(" }}");
+  await source.press("Control+Enter");
+  await page.getByRole("button", { name: "Add script", exact: true }).last().click();
+  const script = page.locator('[data-view="Script 1"]');
+  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  const scriptSource = script.getByLabel("Script source");
+  await scriptSource.fill("// Comment");
+  await expect(script.getByRole("button", { name: "Pick reference", exact: true })).toBeDisabled();
+  await scriptSource.fill("Total = ");
+  await cell(page, "A1").click();
+  await expect(scriptSource).toHaveText("Total = 'Table 1'!A1");
+  await scriptSource.press("Control+Enter");
+  await page.locator("[data-open-names]").click();
+  const panel = page.getByRole("region", { name: "Names in Table 1" });
+  await panel.getByLabel("New name", { exact: true }).fill("Total");
+  const formula = panel.getByLabel("Formula of the new name", { exact: true });
+  await formula.fill("SUM(");
+  await cell(page, "B2").click();
+  await expect(formula).toHaveText("SUM(B2");
+  await expect(panel.locator("[data-name]")).toHaveCount(0);
+  await page.keyboard.type(")");
+  await formula.press("Enter");
+  await expect(panel.locator('[data-name="Total"]')).toBeVisible();
+});
+
+test("ordinary headers pick whole rows and columns without selecting or resizing them", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await cell(page, "E5").click();
+  await page.keyboard.type("=SUM(");
+  const source = page.getByLabel("Cell content");
+  const headers = page.locator('[data-table="Table 1"] thead th[data-pick-kind="col"]');
+  await dragReference(page, headers.nth(0), headers.nth(2));
+  await expect(source).toHaveText("=SUM(A:C");
+  await expect(cell(page, "E5")).toHaveAttribute("aria-selected", "true");
+  await source.press("Control+z");
+  await expect(source).toHaveText("=SUM(");
+  const rowHeaders = page.locator('[data-table="Table 1"] tbody th[data-pick-kind="row"]');
+  await dragReference(page, rowHeaders.nth(1), rowHeaders.nth(3));
+  await expect(source).toHaveText("=SUM(2:4");
+  await source.press("Escape");
+  await expect(source).toBeVisible();
+  await source.press("Escape");
+  await expect(source).toHaveCount(0);
+});
+
+test("named headers use same-row filters, reject multiple columns, and keep hidden rows in whole-column references", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  for (const [row, inputs] of [
+    ["Item", "Qty"],
+    ["pear", "3"],
+    ["apple", "1"],
+    ["fig", "2"],
+  ].entries()) {
+    for (const [col, text] of inputs.entries())
+      await enter(page, `${"AB"[col] ?? ""}${String(row + 1)}`, text);
+  }
+  await page.getByRole("button", { name: "Name columns", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Use the first row as the names", exact: true }).click();
+  const item = page.locator('[data-table="Table 1"] thead th[data-column="Item"]');
+  const qty = page.locator('[data-table="Table 1"] thead th[data-column="Qty"]');
+  await item.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Sort ascending", exact: true }).click();
+  const filter = page.getByLabel("Table filter");
+  await filter.click();
+  await filter.fill("=");
+  await qty.click();
+  await expect(filter).toHaveText("=[Qty]");
+  await page.keyboard.type(" > 1");
+  await filter.press("Enter");
+  await expect(cell(page, "A2")).toHaveCount(0);
+  await cell(page, "C1").click();
+  await page.keyboard.type("=SUM(");
+  const source = page.getByLabel("Cell content");
+  await dragReference(page, cell(page, "B3"), cell(page, "B1"));
+  await expect(source).toHaveText("=SUM(");
+  await expect(page.getByRole("status").filter({ hasText: "stored rectangle" })).toBeVisible();
+  await dragReference(page, item, qty);
+  await expect(source).toHaveText("=SUM(");
+  await expect(page.getByRole("status").filter({ hasText: "one named column" })).toBeVisible();
+  await qty.click();
+  await expect(source).toHaveText("=SUM('Table 1'[Qty]");
+  await page.keyboard.type(")");
+  await source.press("Enter");
+  await expect(cell(page, "C1")).toHaveText("6");
+  // Formula-column popovers also insert the same-row column form.
+  const computed = page.locator('[data-table="Table 1"] thead th[data-column="Column 2"]');
+  await computed.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Column holds: A formula…", exact: true }).click();
+  const column = page.getByLabel("Column formula");
+  await column.fill("=");
+  await qty.click();
+  await expect(column).toHaveText("=[Qty]");
+  await page.keyboard.type(" * 2");
+  await page
+    .locator(".column-formula-popover")
+    .getByRole("button", { name: "Apply", exact: true })
+    .click();
+  await expect(cell(page, "D1")).toHaveText("6");
 });

@@ -1,4 +1,5 @@
 import { markRaw } from "vue";
+import { createPinia } from "pinia";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
@@ -6,6 +7,7 @@ import { undo } from "@codemirror/commands";
 import { startCompletion, completionStatus } from "@codemirror/autocomplete";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import FormulaEditor from "./FormulaEditor.vue";
+import { useReferencePickingStore } from "../formula/picking";
 
 const mounted: VueWrapper[] = [];
 afterEach(() => {
@@ -14,6 +16,7 @@ afterEach(() => {
 
 function render(text: string, extra = {}) {
   const wrapper = mount(FormulaEditor, {
+    global: { plugins: [createPinia()] },
     attachTo: document.body,
     props: {
       state: EditorState.create({ doc: text, selection: { anchor: text.length } }),
@@ -262,6 +265,24 @@ describe("multiline keyboard behavior", () => {
     expect(wrapper.emitted("update:state")!).toHaveLength(count);
     await wrapper.setProps({ context: { ...context, pageId: "other" } });
     expect(wrapper.emitted("update:state")!).toHaveLength(count + 1);
+  });
+
+  it("uses the active editor history for draft controls even while completion is open", async () => {
+    const { wrapper, view } = render("=r", { pickingKey: "session" });
+    view.dispatch({
+      changes: { from: 2, insert: "ou" },
+      selection: { anchor: 4 },
+      userEvent: "input.type",
+    });
+    await complete(view);
+    const picking = useReferencePickingStore();
+    expect(picking.canUndo).toBe(true);
+    picking.draftHistory("undo");
+    expect(view.state.doc.toString()).toBe("=r");
+    expect(picking.canRedo).toBe(true);
+    picking.draftHistory("redo");
+    expect(view.state.doc.toString()).toBe("=rou");
+    expect(wrapper.emitted("commit")).toBeUndefined();
   });
 });
 

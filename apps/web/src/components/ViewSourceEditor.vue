@@ -48,7 +48,7 @@ function blur(): void {
 async function commit(key: "Enter" | "Tab", backwards: boolean): Promise<void> {
   const controls = [
     ...document.querySelectorAll<HTMLElement>(
-      'input:not(:disabled), select:not(:disabled), button:not(:disabled), a[href], [tabindex="0"]',
+      'input:not(:disabled), select:not(:disabled), button:not(:disabled):not(.formula-editor__pick), a[href], [tabindex="0"]',
     ),
   ];
   const index = controls.indexOf(document.activeElement as HTMLElement);
@@ -70,6 +70,7 @@ async function commit(key: "Enter" | "Tab", backwards: boolean): Promise<void> {
     <FormulaEditor
       ref="editor"
       :state="session.state"
+      :picking-key="session.id"
       :mode="mode"
       :context="context"
       :label="label"

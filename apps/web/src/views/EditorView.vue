@@ -7,6 +7,7 @@ import AddBlockRow from "../components/AddBlockRow.vue";
 import FormulaBar from "../components/FormulaBar.vue";
 import FormulaSessionHost from "../components/FormulaSessionHost.vue";
 import { useFormulaSessionStore } from "../formula/session";
+import { useReferencePickingStore } from "../formula/picking";
 import PageTabs from "../components/PageTabs.vue";
 import ChartCard from "../components/ChartCard.vue";
 import ContextMenu from "../components/ContextMenu.vue";
@@ -33,6 +34,7 @@ const props = defineProps<{ spreadsheetId: string; pageId?: string }>();
 const store = useWorkbookStore();
 const router = useRouter();
 const formulas = useFormulaSessionStore();
+const picking = useReferencePickingStore();
 const replayed = new WeakSet<Event>();
 
 function pageNavigation(target: Element): boolean {
@@ -49,6 +51,14 @@ function preserveNavigationFocus(event: MouseEvent): void {
 /** Page-control clicks run only after the draft save succeeds. */
 function guardControl(event: MouseEvent): void {
   const target = event.target;
+  if (target instanceof Element && picking.suppressClick && target.closest(".grid")) return;
+  if (
+    target instanceof Element &&
+    !target.closest(".formula-editor") &&
+    target.closest("[data-pick-kind]") &&
+    (picking.available || picking.suppressClick)
+  )
+    return;
   if (!formulas.active || replayed.has(event) || !(target instanceof HTMLElement)) return;
   if (
     target.closest("[data-formula-field], .formula-session-fallback, .editor__back") ||

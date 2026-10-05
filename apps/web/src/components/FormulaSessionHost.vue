@@ -71,6 +71,8 @@ function trap(event: KeyboardEvent): void {
     <FormulaEditor
       ref="editor"
       :state="fallback.state"
+      :picking-key="fallback.id"
+      :same-row-picking="fallback.target.kind === 'column' || fallback.target.kind === 'filter'"
       :mode="fallback.mode"
       :context="context"
       :label="fallbackLabel"

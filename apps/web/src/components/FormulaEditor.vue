@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { EditorState, StateEffect, StateField, Prec } from "@codemirror/state";
 import { Decoration, EditorView, keymap, type DecorationSet } from "@codemirror/view";
 import {
@@ -19,17 +19,24 @@ import { analyzeSource } from "@spreadsheet-app/engine";
 import { syntaxTree } from "@codemirror/language";
 import { markdownDecorations, markdownLanguage } from "../formula/markdown";
 import { referenceHighlights } from "../formula/references";
+import { pickingSpan, useReferencePickingStore } from "../formula/picking";
 import { applySuggestion, signatureAt, suggestionsAt, type NamingContext } from "../formula/assist";
 import type { FormulaMode } from "../formula/session";
 
-const props = defineProps<{
-  state: EditorState;
-  mode: FormulaMode;
-  context: NamingContext;
-  label: string;
-  readonly?: boolean;
-  maxLength: number;
-}>();
+const props = withDefaults(
+  defineProps<{
+    state: EditorState;
+    mode: FormulaMode;
+    context: NamingContext;
+    label: string;
+    readonly?: boolean;
+    maxLength: number;
+    pickingKey?: string;
+    sameRowPicking?: boolean;
+    showPickingControl?: boolean;
+  }>(),
+  { showPickingControl: true, pickingKey: undefined },
+);
 const emit = defineEmits<{
   "update:state": [state: EditorState];
   commit: [key: "Enter" | "Tab", backwards: boolean];
@@ -39,7 +46,14 @@ const emit = defineEmits<{
 }>();
 
 const host = ref<HTMLElement>();
+const picking = useReferencePickingStore();
+const localPickingKey = Symbol();
+const pickingKey = computed(() => props.pickingKey ?? localPickingKey);
 const current = shallowRef(props.state);
+const canPick = computed(
+  () => !props.readonly && pickingSpan(current.value, props.mode, true) !== undefined,
+);
+const ownsPicking = computed(() => picking.key === pickingKey.value);
 let view: EditorView | undefined;
 let navigated = false;
 let publishedState: EditorState | undefined;
@@ -217,6 +231,7 @@ function extensions() {
             if (editor.composing) return false;
             if (completionStatus(editor.state) === "active" && closeCompletion(editor)) return true;
             closeCompletion(editor);
+            if (ownsPicking.value && picking.cancel()) return true;
             if (!props.readonly && !multiline.value) emit("cancel");
             return true;
           },
@@ -225,6 +240,10 @@ function extensions() {
     ),
     keymap.of([...historyKeymap, ...defaultKeymap]),
     EditorView.domEventHandlers({
+      compositionstart: () => {
+        if (ownsPicking.value && picking.drag) picking.cancel();
+        return false;
+      },
       keydown: (event) => {
         keyboardCharacter =
           event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.isComposing;
@@ -255,15 +274,24 @@ function extensions() {
         return true;
       },
       focus: () => {
+        connectPicking();
         emit("focus");
       },
       blur: () => {
         emit("blur");
+        if (!props.pickingKey)
+          void nextTick(() => {
+            if (ownsPicking.value && !host.value?.parentElement?.contains(document.activeElement)) {
+              picking.cancel();
+              picking.disconnect(pickingKey.value, localPickingKey);
+            }
+          });
       },
     }),
     EditorView.updateListener.of((update) => {
       if (update.docChanged || update.selectionSet) navigated = false;
       current.value = update.state;
+      picking.update(pickingKey.value, update.state);
       publishedState = update.state;
       emit("update:state", update.state);
     }),
@@ -274,6 +302,7 @@ function extensions() {
         padding: "2px 0",
         whiteSpace: multiline.value ? "pre-wrap" : "pre",
         minHeight: multiline.value ? "10em" : "0",
+        paddingRight: props.readonly || !props.showPickingControl ? "0" : "96px",
       },
       ".cm-line": { padding: "0 4px" },
       ".formula-token--comment": { color: "#667085", fontStyle: "italic" },
@@ -306,6 +335,7 @@ onMounted(() => {
   view.dispatch({ effects: StateEffect.reconfigure.of(extensions()) });
   current.value = view.state;
   emit("update:state", view.state);
+  if (props.pickingKey && !props.readonly) connectPicking();
 });
 watch(
   () => props.state,
@@ -313,8 +343,15 @@ watch(
     if (view && state !== view.state && state !== publishedState) {
       view.setState(state.update({ effects: StateEffect.reconfigure.of(extensions()) }).state);
       current.value = view.state;
+      picking.update(pickingKey.value, view.state);
       emit("update:state", view.state);
     }
+  },
+);
+watch(
+  () => props.pickingKey,
+  () => {
+    connectPicking();
   },
 );
 watch(
@@ -323,18 +360,60 @@ watch(
     () => props.label,
     () => props.readonly,
     () => props.maxLength,
+    () => props.showPickingControl,
     () => JSON.stringify(props.context),
   ],
   () => {
     view?.dispatch({ effects: StateEffect.reconfigure.of(extensions()) });
   },
 );
-onBeforeUnmount(() => view?.destroy());
+onBeforeUnmount(() => {
+  picking.disconnect(pickingKey.value, localPickingKey);
+  view?.destroy();
+});
 defineExpose({ focus: () => view?.focus() });
 
 function onKeydownCapture(event: KeyboardEvent): void {
   // Let the browser finish composition without invoking CodeMirror's commit keymap.
   if (event.isComposing) event.stopPropagation();
+  // Restore the pre-drag document before an ordinary key edits it.
+  else if (event.key !== "Escape" && ownsPicking.value && picking.drag) picking.cancel();
+}
+
+function connectPicking(): void {
+  const editor = view;
+  if (!editor || props.readonly) return;
+  picking.connect(
+    pickingKey.value,
+    {
+      state: () => editor.state,
+      mode: () => props.mode,
+      readonly: () => props.readonly || editor.composing,
+      maxLength: () => props.maxLength,
+      context: () => props.context,
+      sameRow: () => props.sameRowPicking,
+      hasControl: () => props.showPickingControl && !props.readonly,
+      dispatch: (spec) => {
+        editor.dispatch(spec);
+        closeCompletion(editor);
+      },
+      restore: (state) => {
+        editor.setState(state);
+        current.value = state;
+        publishedState = state;
+        picking.update(pickingKey.value, state);
+        emit("update:state", state);
+      },
+      focus: () => {
+        editor.focus();
+      },
+    },
+    localPickingKey,
+  );
+}
+function requestPicking(): void {
+  connectPicking();
+  picking.request();
 }
 </script>
 
@@ -346,6 +425,51 @@ function onKeydownCapture(event: KeyboardEvent): void {
     @keydown.stop
   >
     <div ref="host"></div>
+    <button
+      v-if="!readonly && showPickingControl"
+      type="button"
+      class="formula-editor__pick"
+      :disabled="!canPick"
+      :aria-pressed="ownsPicking && picking.explicit"
+      @mousedown.prevent
+      @click.stop="requestPicking"
+    >
+      Pick reference
+    </button>
+    <span
+      v-if="ownsPicking && picking.message"
+      class="formula-editor__pick-message"
+      role="status"
+      >{{ picking.message }}</span
+    >
     <span v-if="signature" class="formula-editor__signature">{{ signature.syntax }}</span>
   </div>
 </template>
+
+<style scoped>
+.formula-editor {
+  position: relative;
+}
+.formula-editor__pick {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 20px;
+}
+.formula-editor__pick[aria-pressed="true"] {
+  background: #dbeafe;
+}
+.formula-editor__pick-message {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  background: #fff7e6;
+  color: #7a2e0e;
+  padding: 6px;
+  border: 1px solid #e7b45c;
+  min-width: 240px;
+}
+</style>

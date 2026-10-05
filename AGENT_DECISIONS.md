@@ -725,3 +725,11 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 **Choice.** Resolve direct addresses and structured columns from the original editing context and current table records without evaluating any names. Canonical stored rectangles determine repeated-reference colors; absolute markers and qualifier spellings do not change a resolved target’s color. Grid outlines use neighboring displayed rows to mark only visible portions of the stored range.
 
 **Cost.** The production JavaScript bundle is about 418 KB gzipped after adding the Markdown language packages, compared with about 332 KB before this increment. Reference picking is the remaining part of step 3.
+
+## Reference picking and draft history controls
+
+**Choice.** A Pinia picking controller connects to the active CodeMirror editor, including the local unfinished new-name form. Shared sessions have a unique session identity, so ownership transfers and page browsing preserve the current pick without treating a later edit of the same target as the same session. Each component also has an ownership token, so an old editor cannot detach a replacement editor.
+
+**Choice.** Pointer previews make changes outside history and retain the exact pre-drag editor state. Release restores that state and commits one isolated history event; cancellation restores it without a text change in history. The grid intercepts pointer events before controls, resizing, fill, and selection. It suppresses the gesture’s final click even when Chromium sends that click to the table’s common ancestor.
+
+**Choice.** The formula bar provides the pick control for cell editors, preserving space for text inside narrow grid cells. Other formula editors provide their own control. The existing toolbar Undo and Redo buttons use the connected editor’s local history while a draft is active; workbook history resumes when editing ends. Help documents these controls and the author-confirmed reference rules already recorded in `DECISIONS.md`.

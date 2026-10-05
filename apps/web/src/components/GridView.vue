@@ -18,8 +18,9 @@ import { cellStyle } from "../formatStyle";
 import { contains, fillTarget, type GridRange } from "../formula/fill";
 import type { MenuScope } from "./menu";
 import { cellEditingRequest, editingLabel } from "../formula/cells";
-import { namingContext } from "../formula/context";
-import { referenceHighlights, referenceOutlines } from "../formula/references";
+import { referenceOutlines } from "../formula/references";
+import { useReferencePickingStore } from "../formula/picking";
+import { useGridPicking } from "../formula/useGridPicking";
 import SessionFormulaField from "./SessionFormulaField.vue";
 import CellView from "./CellView.vue";
 import EditableName from "./EditableName.vue";
@@ -35,6 +36,7 @@ const store = useWorkbookStore();
 
 const grid = ref<HTMLElement>();
 const sessions = useFormulaSessionStore();
+const referencePicking = useReferencePickingStore();
 const active = computed(() =>
   sessions.active &&
   "tableId" in sessions.active.target &&
@@ -75,16 +77,13 @@ function isEditing(place: number, col: number): boolean {
  * cell addresses, and the formulas that name it.
  */
 const view = computed(() => store.rowView(props.table.id));
+const picking = useGridPicking(
+  () => props.table,
+  () => view.value.rows,
+);
 const outlines = computed(() => {
-  const session = sessions.active;
-  if (!session) return new Map<string, { boxShadow: string; color: string }>();
   return referenceOutlines(
-    referenceHighlights(
-      session.state.doc.toString(),
-      session.mode,
-      session.state.selection.main.head,
-      namingContext(session.context),
-    ),
+    referencePicking.highlights,
     props.table.id,
     view.value.rows,
     props.table.colCount,
@@ -737,6 +736,11 @@ function onGridKeydown(event: KeyboardEvent): void {
     role="grid"
     tabindex="0"
     :aria-label="table.name"
+    :data-pick-table="table.id"
+    @pointerdown.capture="picking.start"
+    @mousedown.capture="picking.start"
+    @click.capture="picking.click"
+    @dblclick.capture="picking.click"
     @keydown="onGridKeydown"
   >
     <table :style="{ width: `${tableWidth}px` }">
@@ -760,6 +764,8 @@ function onGridKeydown(event: KeyboardEvent): void {
               'grid__header--selected': isLineSelected('col', col - 1),
             }"
             :data-column="columnAt(col - 1)?.name"
+            data-pick-kind="col"
+            :data-pick-index="col - 1"
             @mousedown.left="onColumnMousedown($event, col - 1)"
             @mouseenter="onHeaderMouseenter('col', col - 1)"
             @contextmenu="onHeaderContextMenu($event, 'col', col - 1)"
@@ -796,6 +802,8 @@ function onGridKeydown(event: KeyboardEvent): void {
         >
           <th
             scope="row"
+            data-pick-kind="row"
+            :data-pick-index="row - 1"
             :class="{ 'grid__header--selected': isLineSelected('row', row - 1) }"
             @mousedown.left.prevent="onHeaderMousedown($event, 'row', row - 1)"
             @mouseenter="onHeaderMouseenter('row', row - 1)"
@@ -814,6 +822,9 @@ function onGridKeydown(event: KeyboardEvent): void {
             v-for="col in table.colCount"
             :key="table.colIds[col - 1]"
             role="gridcell"
+            data-pick-kind="cells"
+            :data-pick-row="row - 1"
+            :data-pick-col="col - 1"
             :data-cell="formatAddress({ row: storedRow(row - 1), col: col - 1 })"
             :aria-selected="isSelected(row - 1, col - 1)"
             :class="{

@@ -4,12 +4,21 @@ import { formatAddress } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
 import { useWorkbookStore } from "../stores/workbook";
 import { useFormulaSessionStore } from "../formula/session";
+import { pickingSpan, useReferencePickingStore } from "../formula/picking";
 import { cellEditingRequest, editingLabel } from "../formula/cells";
 import SessionFormulaField from "./SessionFormulaField.vue";
 
 const props = defineProps<{ pageId?: string }>();
 const store = useWorkbookStore();
 const sessions = useFormulaSessionStore();
+const picking = useReferencePickingStore();
+const canPick = computed(
+  () =>
+    sessions.active &&
+    !sessions.active.saving &&
+    picking.current &&
+    pickingSpan(picking.current, sessions.active.mode, true) !== undefined,
+);
 const request = computed(() => {
   const active = sessions.active;
   if (
@@ -67,6 +76,23 @@ const placeholder = computed(() => {
       disabled
       value=""
     />
+    <button
+      v-if="
+        request &&
+        sessions.active &&
+        picking.key === sessions.active.id &&
+        !picking.hasControl &&
+        store.canEdit
+      "
+      type="button"
+      data-formula-field
+      :disabled="!canPick"
+      :aria-pressed="picking.explicit"
+      @mousedown.prevent
+      @click="picking.request"
+    >
+      Pick reference
+    </button>
     <button
       v-if="request?.target.kind === 'column' && store.canEdit"
       type="button"

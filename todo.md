@@ -126,7 +126,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 
 - [x] bug: the formula bar doesn't save changes when it loses focus
 - [x] hitting enter with the formula bar focused should return focus to the cell -- you can type input and try to hit enter and it'll just stay focused instead of acting like you hit enter in the cell input (I suspect possibly b/c of a conflict with the suggestion behavior)
-- [ ] **P4** one formula editor for every place a formula is typed: cells, the formula bar, formula columns, names, filters, chart sources, scripts, and Markdown templates
+- [x] **P4** one formula editor for every place a formula is typed: cells, the formula bar, formula columns, names, filters, chart sources, scripts, and Markdown templates
   - [x] plan shared editing support across single-formula inputs, multiline scripts, and formulas embedded in Markdown; use CodeMirror as specified in [the implementation plan](plans/formula-editing.md)
   - [x] implement tolerant formula-fragment analysis, a shared single-line CodeMirror component, and persistent session primitives with retained editor history and failed-save handling
   - [x] connect the shared session to page transitions and migrate single-formula fields, including deleted-target recovery and removal of revision-based save restrictions
@@ -136,11 +136,11 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
     - [x] migrate cells, the formula bar, and formula-column definitions with shared history, whole-column labels, and a nonmodal popover
   - [x] syntax highlighting for formulas in scripts and Markdown
   - [x] add CodeMirror Markdown language support for prose highlighting
-  - Coordinate completion, reference picking, reference colors, and keyboard behavior across these editors. The formula-column prompt replacement below is part of this work.
+  - [x] coordinate completion, reference picking, reference colors, and keyboard behavior across these editors, including replacing the formula-column prompt
 - [x] hitting tab with the formula bar focused should have the same effect as hitting tab with the cell itself selected
 - [x] show cell errors in a popover on hover instead of using a native browser tooltip
-- [ ] **P4** (Claude) clicking a cell or dragging over a range while a formula is being typed writes its reference at the caret, as Excel and Sheets do. A formula's references are typed by hand today
-- [ ] **P4** (Claude) color each reference in the formula being edited, and outline the cells it names in the same color
+- [x] **P4** (Claude) clicking a cell or dragging over a range while a formula is being typed writes its reference at the caret, as Excel and Sheets do
+- [x] **P4** (Claude) color each reference in the formula being edited, and outline the cells it names in the same color
 - [ ] (GPT) Support reference picking by dragging across multiple named-column headers. Deferred from [the shared formula editor](plans/formula-editing.md); choose how a range of named columns is represented before implementing.
 - [ ] (GPT) Add nested-language editing assistance inside formula strings, such as the query text passed to `QUERY`. Deferred from [the shared formula editor](plans/formula-editing.md).
 - [ ] (GPT) Add automatic bracket insertion to the shared formula editor. Deferred from [the initial implementation](plans/formula-editing.md).
