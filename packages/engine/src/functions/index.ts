@@ -11,6 +11,7 @@ import { lookupFunctions } from "./lookup";
 import { mathFunctions } from "./math";
 import { nameFunctions } from "./names";
 import { queryFunctions } from "./query";
+import { regexFunctions } from "./regex";
 import type { FunctionRegistry } from "./registry";
 import { statisticsFunctions } from "./statistics";
 import { textFunctions } from "./text";
@@ -27,6 +28,7 @@ export const defaultFunctions: FunctionRegistry = new Map(
     ...nameFunctions,
     ...arrayFunctions,
     ...queryFunctions,
+    ...regexFunctions,
     ...textFunctions,
     ...dateFunctions,
     ...chartFunctions,

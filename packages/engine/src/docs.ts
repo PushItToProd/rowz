@@ -418,6 +418,29 @@ const ENTRIES: readonly FunctionDoc[] = [
     example: 'SEARCH("L", "hello")',
   },
   {
+    name: "REGEXMATCH",
+    category: "Text",
+    syntax: "REGEXMATCH(text, pattern)",
+    summary: "Whether the text contains a match for a regular expression.",
+    example: 'REGEXMATCH("AB-123", "^[A-Z][A-Z]-[0-9][0-9][0-9]$")',
+  },
+  {
+    name: "REGEXEXTRACT",
+    category: "Text",
+    syntax: "REGEXEXTRACT(text, pattern)",
+    summary:
+      "The first text matched, or the first capture group when the pattern has one. Gives #N/A when there is no match.",
+    example: 'REGEXEXTRACT("Order 123", "[0-9]+")',
+  },
+  {
+    name: "REGEXREPLACE",
+    category: "Text",
+    syntax: "REGEXREPLACE(text, pattern, replacement)",
+    summary:
+      "Replaces every non-overlapping match. Use $1, $2, and so on for capture groups, or $& for the whole match. Results are limited to 2 million characters.",
+    example: 'REGEXREPLACE("Ada Lovelace", "([A-Z][a-z]+) ([A-Z][a-z]+)", "$2, $1")',
+  },
+  {
     name: "SUBSTITUTE",
     category: "Text",
     syntax: "SUBSTITUTE(text, old, new)",
@@ -1537,7 +1560,7 @@ export const errorDocs: Record<ErrorCode, string> = {
     "A value is the wrong kind: text where a number is needed, or a range where a single value is needed.",
   "#REF!": "The formula names a page or table that does not exist.",
   "#NAME?": "The formula uses a function or a word that is not known.",
-  "#N/A": "A lookup found no match, or no case of IFS or SWITCH applied.",
+  "#N/A": "A lookup or regular expression found no match, or no case of IFS or SWITCH applied.",
   "#SPILL!":
     "The result is several values, but the table may not have enough room or cells in the result range may already have values.",
   "#CYCLE!": "The formula depends on its own cell, directly or through other cells.",
