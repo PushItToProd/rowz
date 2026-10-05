@@ -39,13 +39,15 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 
 ## Bugs
 
+- [ ] Criteria `>""` and `<""` (quoted empty text) take the blank-criterion shortcut and match every non-empty cell; let an explicitly quoted empty operand reach comparison (`packages/engine/src/functions/criteria.ts`)
+- [ ] A quoted criteria literal containing `*` or `?` still goes through `wildcard()`, so a 255-character quoted literal throws `#VALUE!` from the wildcard length limit even though quoted text is literal
 - [ ] A `NUMBERBOX` (cell and text view) sends an empty string when the browser reports an empty value for incomplete input such as `-` or `e` (`validity.badInput`), and an empty string clears the target; refuse the commit instead (`CellView.vue`, `TextCard.vue`)
 - [ ] `TEXTBOX`/`NUMBERBOX` do not check the target column's type: `abc` into a number column succeeds and leaves a `#VALUE!` cell, and `007` is stored as the number 7 despite the documented text-preserving behavior (`packages/engine/src/workbook.ts`)
 - [ ] A text-view input commit can overwrite a newer value written from another tab, because its fingerprint names the target but not the value it was rendered with; include the rendered value and answer 409 on mismatch
 - [ ] A `TEXTBOX` commit of exactly 8,192 formula-like or numeric-looking characters gains a leading apostrophe and exceeds the stored-cell limit, so the write fails; make the control's limit one less than the cell limit
 - [ ] A text-view `BUTTON` click sends only its occurrence index, so a stale view whose conditional content shifted can run a different button; send a render token or the button's label/action fingerprint and answer 409 on mismatch
 - [ ] A text-view `BUTTON` inside a template loop loses the loop's bound names when the action is planned (`ActionValue` keeps the page but not the template bindings), so an action body that uses a loop variable fails with `#NAME?`; preserve the bindings for the selected occurrence
-- [ ] **P2** conditional formatting criteria doesn't handle strings -- I made a conditional format with a condition like `="foobar"` but it didn't apply (maybe b/c it was a data table column with formula values)
+- [x] **P2** conditional formatting criteria doesn't handle strings -- I made a conditional format with a condition like `="foobar"` but it didn't apply (maybe b/c it was a data table column with formula values)
 
 - [ ] `QUERY` treats single quotes as delimiting string literals which contradicts the outer formula languge syntax. this isn't exactly a bug but I consider it a severe enough misfeature I'm classing it as one - we should probably have single quotes delimit identifiers in `QUERY` syntax instead so you can write queries like `=QUERY(People, "select 'Favorite food', count(*) group by 'Favorite food'")`. (as this is a pre-production app I don't care if this breaks anything)
 

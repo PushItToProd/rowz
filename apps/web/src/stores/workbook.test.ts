@@ -2418,6 +2418,81 @@ describe("conditional formats", () => {
     return store;
   }
 
+  async function openConditionalRule(
+    inputs: Record<string, string>,
+    rule: ConditionalRule,
+    columns: ColumnDefinition[] | null = null,
+  ) {
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith(inputs),
+        tables: [{ ...TABLE, columns, conditionalFormats: [rule] }],
+      }),
+    );
+    const store = useWorkbookStore();
+    await store.load("s1");
+    return store;
+  }
+
+  it("matches quoted string equality on a stored text cell, ignoring case", async () => {
+    const store = await openConditionalRule(
+      { A1: "foobar", A2: "FOOBAR", A3: "other" },
+      {
+        startRow: 0,
+        endRow: null,
+        startCol: 0,
+        endCol: 0,
+        kind: "criterion",
+        criterion: '="foobar"',
+        format: { fill: "green" },
+      },
+    );
+    expect(store.formatOf(at("A1"))).toEqual({ fill: "green" });
+    expect(store.formatOf(at("A2"))).toEqual({ fill: "green" });
+    expect(store.formatOf(at("A3"))).toEqual({});
+  });
+
+  it("matches quoted string equality on formula-column values", async () => {
+    const store = await openConditionalRule(
+      { A1: "foobar", A2: "other" },
+      {
+        startRow: 0,
+        endRow: null,
+        startCol: 1,
+        endCol: 1,
+        kind: "criterion",
+        criterion: '="foobar"',
+        format: { fill: "green" },
+      },
+      [
+        { name: "Source", type: "any" },
+        { name: "Output", type: "formula", formula: "=[Source]" },
+      ],
+    );
+    expect(store.valueOf(at("B1"))).toBe("foobar");
+    expect(store.formatOf(at("B1"))).toEqual({ fill: "green" });
+    expect(store.formatOf(at("B2"))).toEqual({});
+  });
+
+  it("does not match a number against quoted text equality", async () => {
+    const store = await openConditionalRule(
+      { A1: "12", A2: "'12" },
+      {
+        startRow: 0,
+        endRow: null,
+        startCol: 0,
+        endCol: 0,
+        kind: "criterion",
+        criterion: '="12"',
+        format: { fill: "green" },
+      },
+    );
+    expect(store.valueOf(at("A1"))).toBe(12);
+    expect(store.valueOf(at("A2"))).toBe("12");
+    expect(store.formatOf(at("A1"))).toEqual({});
+    expect(store.formatOf(at("A2"))).toEqual({ fill: "green" });
+  });
+
   it("lays the conditional format over the plain one where the value meets the criterion", async () => {
     const store = await openRules({ A1: "5", A2: "1", B1: "10", B2: "30" });
     expect(store.formatOf(at("A1"))).toEqual({ fill: "yellow", bold: true, color: "red" });

@@ -19,14 +19,21 @@ const HOLDS: Record<Comparison, (order: number) => boolean> = {
   ">=": (order) => order >= 0,
 };
 
-/** Reads the text after an operator the way a cell entry is read: a number, TRUE or FALSE, or text. */
-function operand(text: string): Scalar {
+interface Operand {
+  value: Scalar;
+  quotedText: boolean;
+}
+
+/** Reads text after an operator as a cell entry; double quotes mark a text literal and `""` escapes a quote. */
+function operand(text: string): Operand {
+  const quoted = /^"((?:""|[^"])*)"$/.exec(text.trim())?.[1];
+  if (quoted !== undefined) return { value: quoted.replaceAll('""', '"'), quotedText: true };
   const number = parseNumber(text);
-  if (number !== undefined) return number;
+  if (number !== undefined) return { value: number, quotedText: false };
   const upper = text.trim().toUpperCase();
-  if (upper === "TRUE") return true;
-  if (upper === "FALSE") return false;
-  return parseDate(text) ?? text;
+  if (upper === "TRUE") return { value: true, quotedText: false };
+  if (upper === "FALSE") return { value: false, quotedText: false };
+  return { value: parseDate(text) ?? text, quotedText: false };
 }
 
 /** The characters of text without their letter case, so that `?` stands for one whole character. */
@@ -91,7 +98,8 @@ export function criterion(given: Scalar): (cell: CellValue) => boolean {
   const [, written, rest = ""] =
     typeof given === "string" ? (OPERATOR.exec(given) ?? []) : [undefined, undefined, ""];
   const comparison = (written ?? "=") as Comparison;
-  const target = typeof given === "string" ? operand(rest) : given;
+  const parsed = typeof given === "string" ? operand(rest) : { value: given, quotedText: false };
+  const target = parsed.value;
   const equality = comparison === "=" || comparison === "<>";
 
   if (target === null || target === "") {
@@ -103,7 +111,9 @@ export function criterion(given: Scalar): (cell: CellValue) => boolean {
   if (typeof target === "string" && equality) {
     const matches = wildcard(target);
     const wantsMatch = comparison === "=";
-    return (cell) => (typeof cell === "string" && matches(cell)) === wantsMatch;
+    return (cell) =>
+      (typeof cell === "string" &&
+        (parsed.quotedText ? compare(cell, target) === 0 : matches(cell))) === wantsMatch;
   }
 
   return (cell) => {

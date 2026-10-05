@@ -57,3 +57,21 @@ describe("wildcards in a criterion", () => {
     expect(() => criterion(`${"a".repeat(255)}*`)).toThrow(Failure);
   });
 });
+
+describe("quoted text criteria", () => {
+  it("matches a quoted string equality criterion like the formula equality operator", () => {
+    const matches = criterion('="foobar"');
+    expect(matches("foobar")).toBe(true);
+    expect(matches("FOOBAR")).toBe(true);
+    expect(matches("foo")).toBe(false);
+    expect(criterion('="foo""bar"')('foo"bar')).toBe(true);
+    expect(criterion('="foo*"')("foo*")).toBe(true);
+    expect(criterion('="foo*"')("foobar")).toBe(false);
+  });
+
+  it("does not coerce a number to the same text", () => {
+    const matches = criterion('="12"');
+    expect(matches(12)).toBe(false);
+    expect(matches("12")).toBe(true);
+  });
+});

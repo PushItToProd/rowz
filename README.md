@@ -95,7 +95,7 @@ A unique table name by itself refers to all of its rows. `QUERY(Sales, "select C
 
 The toolbar under the formula bar gives the selected cells bold, italic, an alignment, a number format, a text color, or a fill color. Formats are stored per table as rules over ranges, so a whole column is one rule.
 
-Conditional formats give cells a fill, a text color, or bold when their own value meets a `COUNTIF`-style criterion such as `>100`, or shade a range of numbers with a two-color scale. They are stored per table, follow rows and columns as they are inserted and deleted, and are laid over the plain formats.
+Conditional formats give cells a fill, a text color, or bold when their own value meets a `COUNTIF`-style criterion such as `>100`, or shade a range of numbers with a two-color scale. A quoted text criterion such as `="foobar"` compares the cell's value to a string using the formula language's text equality. Rules are stored per table, follow rows and columns as they are inserted and deleted, and are laid over the plain formats.
 
 Each table also exports to CSV (the values shown) and imports from CSV.
 
@@ -175,6 +175,8 @@ Typing a formula offers the functions and names that match, with what each funct
 | Errors      | `#DIV/0! #VALUE! #REF! #NAME? #N/A #SPILL! #CYCLE! #ERROR!`                                                                                                                                                                                                                                                                          |
 
 `CLAMP(value, min, max)` is equivalent to `IFS(value < min, min, value > max, max, 1=1, value)`. It uses the comparison operators' type ordering and returns the selected input unchanged.
+
+Comparison operators ignore letter case when comparing text. A number and text with the same digits, such as `12` and `"12"`, do not compare equal.
 
 `REGEXMATCH(text, pattern)` checks for a match, `REGEXEXTRACT(text, pattern)` returns the first match (or first capture group), and `REGEXREPLACE(text, pattern, replacement)` replaces every non-overlapping match. Replacement text supports `$1` and later capture references, `$&` for the whole match, and `$$` for a literal dollar sign. Patterns support literals, `.`, character classes, common character escapes, word boundaries, `^` and `$`, capturing and noncapturing groups, alternation, and greedy or lazy `*`, `+`, `?`, and `{n,m}` quantifiers. Backreferences and lookaround are unsupported. Patterns are limited to 256 characters, replacements are limited to 2,000,000 output characters, and evaluation stops at a fixed step budget.
 
