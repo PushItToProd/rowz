@@ -66,14 +66,14 @@ export type Scalar = number | string | boolean | DateValue | null;
  */
 export interface ControlValue {
   kind: "control";
-  control: "checkbox" | "dropdown";
+  control: "checkbox" | "dropdown" | "textbox" | "numberbox";
   /** The cell the control reads and writes. */
   target: CellId;
   /** The target cell's value when the control was computed. */
   value: Scalar;
-  /** The choices of a dropdown. Empty for a checkbox. */
+  /** The choices of a dropdown. Empty for controls without a list. */
   options: Scalar[];
-  /** Text shown beside a checkbox. */
+  /** Text shown beside a checkbox or input. */
   label: string;
 }
 

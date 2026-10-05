@@ -438,6 +438,95 @@ describe("clicking a text view button", () => {
   });
 });
 
+describe("changing an input in a text view", () => {
+  it("re-evaluates the occurrence, checks its identity, and writes through the journal", async () => {
+    const sheet = await sheetWith({ A1: "'123", A2: "1.5" });
+    const view = await addView(user, sheet.pageId);
+    await user.json("PATCH", `/views/${view.id}`, {
+      source: `{{ TEXTBOX('Table 1'!A1) }} {{ NUMBERBOX('Table 1'!A2) }}`,
+    });
+    const snapshot = await readSnapshot(user, sheet.spreadsheetId);
+    const table = snapshot.tables.find(({ id }) => id === sheet.tableId)!;
+    const target = (row: number) => ({
+      tableId: table.id,
+      rowId: rowIds(snapshot, table.id)[row]!,
+      colId: table.colIds[0]!,
+    });
+    const textbox = {
+      fingerprint: { control: "textbox", target: target(0) },
+      value: "456",
+    } as const;
+
+    const textResult = await user.json<ClickResult>("POST", `/views/${view.id}/inputs/0`, textbox);
+    expect(await clicked(sheet, textResult, user)).toMatchObject({
+      status: "succeeded",
+      cells: [{ row: 0, col: 0, input: "'456" }],
+    });
+
+    const numberResult = await user.json<ClickResult>("POST", `/views/${view.id}/inputs/1`, {
+      fingerprint: { control: "numberbox", target: target(1) },
+      value: "2.75",
+    });
+    expect(await clicked(sheet, numberResult, user)).toMatchObject({
+      status: "succeeded",
+      cells: [{ row: 1, col: 0, input: "2.75" }],
+    });
+
+    const invalid = await user.json<ClickResult>("POST", `/views/${view.id}/inputs/1`, {
+      fingerprint: { control: "numberbox", target: target(1) },
+      value: "many",
+    });
+    expect(invalid).toMatchObject({
+      status: "failed",
+      error: "#VALUE! A number box takes a number",
+      change: null,
+    });
+
+    const stale = await user.request("POST", `/views/${view.id}/inputs/0`, {
+      fingerprint: { control: "numberbox", target: target(0) },
+      value: "9",
+    });
+    expect(stale.status).toBe(409);
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "0:0": "'456",
+      "1:0": "2.75",
+    });
+    const runs = await runsFor(sheet);
+    expect(runs).toHaveLength(3);
+    expect(runs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ viewId: view.id, buttonIndex: 1, status: "failed" }),
+        expect.objectContaining({ viewId: view.id, buttonIndex: 1, status: "succeeded" }),
+        expect.objectContaining({ viewId: view.id, buttonIndex: 0, status: "succeeded" }),
+      ]),
+    );
+  });
+
+  it("answers 409 when the occurrence target changed", async () => {
+    const sheet = await sheetWith({ A1: "one", A2: "two" });
+    const view = await addView(user, sheet.pageId);
+    await user.json("PATCH", `/views/${view.id}`, {
+      source: "{{ TEXTBOX('Table 1'!A1) }}",
+    });
+    const snapshot = await readSnapshot(user, sheet.spreadsheetId);
+    const table = snapshot.tables.find(({ id }) => id === sheet.tableId)!;
+    const request = {
+      fingerprint: {
+        control: "textbox",
+        target: {
+          tableId: table.id,
+          rowId: rowIds(snapshot, table.id)[0]!,
+          colId: table.colIds[0]!,
+        },
+      },
+      value: "changed",
+    };
+    await user.json("PATCH", `/views/${view.id}`, { source: "{{ TEXTBOX('Table 1'!A2) }}" });
+    const response = await user.request("POST", `/views/${view.id}/inputs/0`, request);
+    expect(response.status).toBe(409);
+  });
+});
+
 describe("actions that add rows, clear cells, and combine", () => {
   it("appends a row, growing the table when it is full", async () => {
     const sheet = await sheetWith({
@@ -608,6 +697,39 @@ describe("changing a control", () => {
       "0:0": "FALSE",
     });
     expect(await runsFor(sheet)).toHaveLength(2);
+  });
+
+  it("writes text as text and requires numbers for NUMBERBOX", async () => {
+    const sheet = await sheetWith({
+      A1: "'123",
+      B1: "=TEXTBOX(A1)",
+      C1: "1.5",
+      D1: "=NUMBERBOX(C1)",
+    });
+    expect(await choose(sheet, 0, 1, "456")).toMatchObject({
+      status: "succeeded",
+      cells: [{ row: 0, col: 0, input: "'456" }],
+    });
+    expect(await choose(sheet, 0, 3, "many")).toMatchObject({
+      status: "failed",
+      error: "#VALUE! A number box takes a number",
+      change: null,
+    });
+    expect(await choose(sheet, 0, 3, "2.75")).toMatchObject({
+      status: "succeeded",
+      cells: [{ row: 0, col: 2, input: "2.75" }],
+    });
+  });
+
+  it("does not offer an input bound to a formula cell", async () => {
+    const sheet = await sheetWith({ A1: "=1", B1: "=TEXTBOX(A1)" });
+    expect(await choose(sheet, 0, 1, "replace formula", 422)).toMatchObject({
+      error: { code: "not_a_control" },
+    });
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "0:0": "=1",
+      "0:1": "=TEXTBOX(A1)",
+    });
   });
 
   it("writes a dropdown's choice, and refuses a value that is not a choice", async () => {

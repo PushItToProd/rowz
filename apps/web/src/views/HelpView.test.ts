@@ -54,6 +54,8 @@ describe("HelpView", () => {
     expect(wrapper.get('[data-function="DROPDOWN"]').text()).toContain(
       "gives a list offering apple, banana, cherry",
     );
+    expect(wrapper.get('[data-function="TEXTBOX"]').text()).toContain("gives a text input");
+    expect(wrapper.get('[data-function="NUMBERBOX"]').text()).toContain("gives a number input");
     expect(wrapper.get('[data-function="FILTER"]').text()).toContain(
       "gives banana, cherry down a column",
     );
@@ -84,6 +86,8 @@ describe("HelpView", () => {
     expect(wrapper.get("#text-views").text()).toContain(
       "A formula that gives BUTTON shows a clickable button",
     );
+    expect(wrapper.get("#text-views").text()).toContain("TEXTBOX or NUMBERBOX");
+    expect(wrapper.get("#controls").text()).toContain("Enter or by leaving the input");
   });
 
   it("explains every error code", () => {

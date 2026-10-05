@@ -13,7 +13,7 @@ import {
   type TemplateInline,
   type Workbook,
 } from "@spreadsheet-app/engine";
-import type { IdentifiedCell } from "@spreadsheet-app/shared";
+import type { IdentifiedCell, ViewInputBody } from "@spreadsheet-app/shared";
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { actionRuns, type RunStatus } from "../db/schema";
@@ -154,6 +154,70 @@ export function runViewButton(
 }
 
 /**
+ * Stores text from a rendered text-view control. The request names its
+ * occurrence and stable target identity; the current control is re-evaluated
+ * under the spreadsheet lock before the server plans the write.
+ */
+export function runViewInput(
+  dependencies: ActionDependencies,
+  userId: string,
+  viewId: string,
+  inputIndex: number,
+  body: ViewInputBody,
+  now: () => number,
+): Promise<ClickResult> {
+  return runAction(dependencies, userId, now, async (repository) => {
+    let view = await repository.findViewForClick(viewId);
+    if (view.kind !== "text") throw conflict("This text view no longer exists");
+    try {
+      await repository.lockSpreadsheet(view.spreadsheetId);
+    } catch (cause) {
+      if (cause instanceof ApiFailure && cause.status === 404) {
+        await repository.findViewForClick(viewId);
+      }
+      throw cause;
+    }
+
+    view = await repository.findViewForClick(viewId);
+    if (view.kind !== "text") throw conflict("This text view no longer exists");
+
+    const contents = await repository.read(view.spreadsheetId);
+    const workbook = createWorkbook(contents.data, { now });
+    const rendered = renderTemplate(view.source, (expression, names) =>
+      workbook.evaluateOnPage(view.pageId, expression, names),
+    );
+    const input = inputAt(rendered, inputIndex);
+    if (!input) throw conflict("This input no longer exists");
+
+    const identified = contents.identify({
+      ...input.control.target,
+      input: "",
+    });
+    const target: IdentifiedCell = {
+      tableId: identified.tableId,
+      rowId: identified.rowId,
+      colId: identified.colId,
+    };
+    if (
+      input.control.control !== body.fingerprint.control ||
+      !sameCell(target, body.fingerprint.target)
+    ) {
+      throw conflict("This input changed. Refresh the view and try again");
+    }
+
+    return {
+      spreadsheetId: view.spreadsheetId,
+      target: { viewId, buttonIndex: inputIndex },
+      plan: workbook.planInput(input.control, body.value),
+    };
+  });
+}
+
+function sameCell(left: IdentifiedCell, right: IdentifiedCell): boolean {
+  return left.tableId === right.tableId && left.rowId === right.rowId && left.colId === right.colId;
+}
+
+/**
  * Stores a value chosen through the control in a cell, such as a checkbox.
  * The control's formula says which cell the value goes to and which values
  * are allowed, so the client supplies only the choice.
@@ -167,19 +231,16 @@ export function runControl(
 ): Promise<ClickResult> {
   return runCell(dependencies, userId, cell, now, (workbook, value) => {
     if (!isControl(value)) {
-      throw unprocessable(
-        "not_a_control",
-        "The selected cell does not hold a checkbox or a dropdown",
-      );
+      throw unprocessable("not_a_control", "The selected cell does not hold an input control");
     }
     return workbook.planInput(value, input);
   });
 }
 
 /**
- * Carries out what a button asks for. What the action writes to the spreadsheet
- * is one change, and it commits together with the audit record. Email is sent
- * after the commit, so a rolled-back run never sends mail.
+ * Applies the plan from a button or input control. Spreadsheet changes and the
+ * audit record commit together. Email is sent after the commit, so a rolled-back
+ * run never sends mail.
  */
 async function runCell(
   dependencies: ActionDependencies,
@@ -224,6 +285,21 @@ function buttonAt(
         part.type === "button" && part.occurrence === occurrence,
     );
     if (button) return button;
+  }
+  return undefined;
+}
+
+function inputAt(
+  blocks: readonly TemplateBlock[],
+  occurrence: number,
+): Extract<TemplateInline, { type: "input" }> | undefined {
+  for (const block of blocks) {
+    if (block.type !== "markdown") continue;
+    const input = block.parts.find(
+      (part): part is Extract<TemplateInline, { type: "input" }> =>
+        part.type === "input" && part.occurrence === occurrence,
+    );
+    if (input) return input;
   }
   return undefined;
 }

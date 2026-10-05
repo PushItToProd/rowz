@@ -354,6 +354,30 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "commit a text view input and journal its cell write",
+    async prepare({ id, pageId, tableId }) {
+      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "before" }), 200);
+      const view = await createView(owner, pageId);
+      await owner.json("PATCH", `/views/${view.id}`, {
+        source: "{{ TEXTBOX('Table 1'!A1) }}",
+      });
+      const snapshot = await readSnapshot(owner, id);
+      const table = snapshot.tables.find(({ id: candidate }) => candidate === tableId)!;
+      return {
+        method: "POST",
+        path: `/views/${view.id}/inputs/0`,
+        body: {
+          fingerprint: {
+            control: "textbox",
+            target: { tableId, rowId: rowIds(snapshot, tableId)[0]!, colId: table.colIds[0]! },
+          },
+          value: "after",
+        },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "write a cell into a new row",
     async prepare({ id, tableId }) {
       await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "first" }));

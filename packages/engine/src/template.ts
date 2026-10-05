@@ -4,6 +4,7 @@ import {
   formatValue,
   isButton,
   isChart,
+  isControl,
   isError,
   isMarkdown,
   isRange,
@@ -14,6 +15,7 @@ import {
   type Evaluated,
   type ErrorValue,
   type ActionValue,
+  type ControlValue,
 } from "./values";
 
 /**
@@ -50,7 +52,8 @@ export class TemplateSyntaxError extends Error {
 export type TemplateInline =
   | { type: "text"; text: string }
   | { type: "error"; error: ErrorValue }
-  | { type: "button"; label: string; occurrence: number; action: ActionValue };
+  | { type: "button"; label: string; occurrence: number; action: ActionValue }
+  | { type: "input"; occurrence: number; control: ControlValue };
 
 export type TemplateBlock =
   | { type: "markdown"; parts: TemplateInline[] }
@@ -399,6 +402,7 @@ export function renderNodes(
   let markdown: TemplateInline[] = [];
   let iterations = 0;
   let buttonOccurrence = 0;
+  let inputOccurrence = 0;
   const appendMarkdown = (text: string): void => {
     if (text === "") return;
     const last = markdown.at(-1);
@@ -425,6 +429,9 @@ export function renderNodes(
           action: single.action,
         });
         buttonOccurrence += 1;
+      } else if (isControl(single)) {
+        markdown.push({ type: "input", occurrence: inputOccurrence, control: single });
+        inputOccurrence += 1;
       } else if (isMarkdown(single)) appendMarkdown(single.text);
       else if (isError(single)) markdown.push({ type: "error", error: single });
       else if (!isChart(single)) appendMarkdown(escapeMarkdown(formatValue(single)));

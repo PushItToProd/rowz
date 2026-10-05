@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Effect } from "../effects";
-import { at, workbookWith } from "../testing";
+import { at, STRUCTURE, workbookWith } from "../testing";
 import { formatValue, isControl, type ControlValue, type ErrorValue, type Scalar } from "../values";
-import type { Workbook } from "../workbook";
+import { Workbook } from "../workbook";
 
 function control(workbook: Workbook, address: string): ControlValue {
   const value = workbook.getValue(at(address));
@@ -56,9 +56,15 @@ describe("CHECKBOX", () => {
     });
   });
 
-  it("treats a target that holds an error or a button as empty", () => {
-    const workbook = workbookWith({ t1: { A1: "=1/0", B1: "=CHECKBOX(A1)" } });
-    expect(control(workbook, "B1").value).toBeNull();
+  it("refuses a formula target even when its result is an error or button", () => {
+    const errorTarget = workbookWith({ t1: { A1: "=1/0", B1: "=CHECKBOX(A1)" } }).getValue(
+      at("B1"),
+    );
+    const buttonTarget = workbookWith({
+      t1: { A1: '=BUTTON("Go", EXECUTE(1, B1))', C1: "=CHECKBOX(A1)" },
+    }).getValue(at("C1"));
+    expect(errorTarget).toMatchObject({ kind: "error", code: "#VALUE!" });
+    expect(buttonTarget).toMatchObject({ kind: "error", code: "#VALUE!" });
   });
 
   it.each([
@@ -77,7 +83,17 @@ describe("CHECKBOX", () => {
 
   it("cannot be bound to its own cell", () => {
     expect(workbookWith({ t1: { A1: "=CHECKBOX(A1)" } }).getValue(at("A1"))).toMatchObject({
-      code: "#CYCLE!",
+      code: "#VALUE!",
+      message: "A1 has a formula and cannot be used as a control target",
+    });
+  });
+
+  it("refuses a formula cell as its target", () => {
+    expect(
+      workbookWith({ t1: { A1: "=1", B1: "=CHECKBOX(A1)" } }).getValue(at("B1")),
+    ).toMatchObject({
+      code: "#VALUE!",
+      message: "A1 has a formula and cannot be used as a control target",
     });
   });
 });
@@ -161,6 +177,80 @@ describe("DROPDOWN", () => {
       kind: "error",
       code,
       message,
+    });
+  });
+});
+
+describe("TEXTBOX", () => {
+  it("shows the target value and label, and writes committed text as text", () => {
+    const workbook = workbookWith({ t1: { A1: "'123", B1: '=TEXTBOX(A1, "Name")' } });
+    expect(control(workbook, "B1")).toMatchObject({
+      control: "textbox",
+      target: at("A1"),
+      value: "123",
+      label: "Name",
+    });
+    expect(choose(workbook, "B1", "456")).toMatchObject([{ input: "'456" }]);
+    expect(choose(workbook, "B1", "")).toMatchObject([{ input: "" }]);
+    expect(choose(workbook, "B1", 4)).toMatchObject({
+      code: "#VALUE!",
+      message: "A text box takes text",
+    });
+  });
+
+  it("refuses a formula target", () => {
+    expect(workbookWith({ t1: { A1: "=1", B1: "=TEXTBOX(A1)" } }).getValue(at("B1"))).toMatchObject(
+      {
+        kind: "error",
+        code: "#VALUE!",
+        message: "A1 has a formula and cannot be used as a control target",
+      },
+    );
+  });
+});
+
+describe("NUMBERBOX", () => {
+  it("shows the target value, parses a committed number, and clears on empty", () => {
+    const workbook = workbookWith({ t1: { A1: "1.5", B1: '=NUMBERBOX(A1, "Count")' } });
+    expect(control(workbook, "B1")).toMatchObject({
+      control: "numberbox",
+      target: at("A1"),
+      value: 1.5,
+      label: "Count",
+    });
+    expect(choose(workbook, "B1", "12.25")).toEqual([
+      { type: "setCell", tableId: "t1", row: 0, col: 0, input: "12.25" },
+    ]);
+    expect(choose(workbook, "B1", "")).toMatchObject([{ input: "" }]);
+    expect(choose(workbook, "B1", "many")).toMatchObject({
+      code: "#VALUE!",
+      message: "A number box takes a number",
+    });
+  });
+
+  it("refuses a formula-column target", () => {
+    const workbook = new Workbook();
+    workbook.setStructure({
+      ...STRUCTURE,
+      tables: STRUCTURE.tables.map((table) =>
+        table.id === "t1"
+          ? {
+              ...table,
+              rowCount: 2,
+              colCount: 2,
+              columns: [
+                { name: "Computed", type: "formula", formula: "=1" },
+                { name: "Input", type: "any" },
+              ],
+            }
+          : table,
+      ),
+    });
+    workbook.setCell(at("B1"), "=NUMBERBOX(A1)");
+    expect(workbook.getValue(at("B1"))).toMatchObject({
+      kind: "error",
+      code: "#VALUE!",
+      message: "Computed is a formula column and cannot be written to",
     });
   });
 });

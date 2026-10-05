@@ -5,7 +5,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, clickResult, snapshotWith, type MockedApi } from "../testing";
+import { at, clickResult, identifiedAt, snapshotWith, type MockedApi } from "../testing";
 import TextCard from "./TextCard.vue";
 
 vi.mock("../api/client", async () => {
@@ -173,6 +173,68 @@ describe("TextCard", () => {
     await flushPromises();
     expect(button("Run").attributes("disabled")).toBeUndefined();
     expect(useWorkbookStore().notice).toEqual({ kind: "error", text: "The action failed" });
+  });
+
+  it("renders safe text and number inputs and commits them with their target fingerprints", async () => {
+    await render(`Name: {{ TEXTBOX('Table 1'!A1, "Name") }} Count: {{ NUMBERBOX('Table 1'!B1) }}`);
+    const textInput = shown().get<HTMLInputElement>(".text-view__input--textbox");
+    const numberInput = shown().get<HTMLInputElement>(".text-view__input--numberbox");
+    expect(textInput.element.type).toBe("text");
+    expect(textInput.element.value).toBe("apples");
+    expect(numberInput.element.type).toBe("number");
+    expect(numberInput.element.value).toBe("3");
+
+    const html = '<img src=x onerror="alert(1)">';
+    server.inputViewControl.mockImplementation((_viewId, occurrence, input) =>
+      Promise.resolve(
+        clickResult({
+          cells: [
+            {
+              ...at(occurrence === 0 ? "A1" : "B1"),
+              input: occurrence === 0 ? `'${html}` : String(input.value),
+            },
+          ],
+        }),
+      ),
+    );
+    await textInput.setValue(html);
+    await textInput.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+    expect(server.inputViewControl).toHaveBeenCalledExactlyOnceWith("v1", 0, {
+      fingerprint: { control: "textbox", target: identifiedAt("A1") },
+      value: html,
+    });
+    expect(shown().find("img").exists()).toBe(false);
+    expect(textInput.element.value).toBe(html);
+
+    const refreshedNumberInput = shown().get<HTMLInputElement>(".text-view__input--numberbox");
+    await refreshedNumberInput.setValue("4.5");
+    await refreshedNumberInput.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+    expect(server.inputViewControl).toHaveBeenNthCalledWith(2, "v1", 1, {
+      fingerprint: { control: "numberbox", target: identifiedAt("B1") },
+      value: 4.5,
+    });
+  });
+
+  it("shows an error beside a text-view input when its commit is refused", async () => {
+    await render("{{ TEXTBOX('Table 1'!A1) }}");
+    server.inputViewControl.mockResolvedValue(
+      clickResult({
+        status: "failed",
+        error: "This input changed. Refresh the view and try again",
+      }),
+    );
+    const input = shown().get<HTMLInputElement>("input");
+    await input.setValue("new name");
+    await input.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+
+    expect(shown().get(".text-view__input-error").text()).toBe(
+      "This input changed. Refresh the view and try again",
+    );
+    expect(shown().get("input").attributes("aria-invalid")).toBe("true");
+    expect(shown().get("input").element.value).toBe("new name");
   });
 
   it("shows HTML in the source and in cell values as text, and does not run it", async () => {

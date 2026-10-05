@@ -863,7 +863,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     syntax: "CHECKBOX(cell, [label])",
     summary:
       "Shows a checkbox that is ticked when the cell holds TRUE. Ticking or clearing it writes TRUE or FALSE to the cell.",
-    example: 'CHECKBOX(C1, "Done")',
+    example: 'CHECKBOX(A1, "Done")',
   },
   {
     name: "DROPDOWN",
@@ -871,7 +871,23 @@ const ENTRIES: readonly FunctionDoc[] = [
     syntax: "DROPDOWN(choices, cell)",
     summary:
       'Shows a list to choose from and writes the choice to the cell. The choices are the values of a range, or text with commas between them such as "low, medium, high".',
-    example: "DROPDOWN(B1:B3, C1)",
+    example: "DROPDOWN(B1:B3, A1)",
+  },
+  {
+    name: "TEXTBOX",
+    category: "Controls",
+    syntax: "TEXTBOX(cell, [label])",
+    summary:
+      "Shows the cell's value in a text input. Committing text writes it as text to the cell.",
+    example: 'TEXTBOX(B1, "Fruit")',
+  },
+  {
+    name: "NUMBERBOX",
+    category: "Controls",
+    syntax: "NUMBERBOX(cell, [label])",
+    summary:
+      "Shows the cell's value in a number input. Committing a number writes it to the cell; an empty input clears it.",
+    example: 'NUMBERBOX(A1, "Count")',
   },
   {
     name: "BUTTON",

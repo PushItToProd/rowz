@@ -54,9 +54,10 @@ function describeResult(rows: CellValue[][]): string {
         : `a ${single.chart} chart titled “${single.title}”`;
     }
     if (!isControl(single)) return formatValue(single);
-    return single.control === "checkbox"
-      ? `a checkbox labeled “${single.label}”`
-      : `a list offering ${single.options.map(formatValue).join(", ")}`;
+    if (single.control === "checkbox") return `a checkbox labeled “${single.label}”`;
+    if (single.control === "dropdown")
+      return `a list offering ${single.options.map(formatValue).join(", ")}`;
+    return single.control === "numberbox" ? "a number input" : "a text input";
   }
   const lines = rows.map((cells) => cells.map(formatValue).join(", "));
   if (rows.length === 1) return `${lines.join("")} across a row`;
@@ -91,7 +92,7 @@ const SECTIONS = [
   ["arrays", "Formulas that fill several cells"],
   ["query", "Queries"],
   ["actions", "Buttons and actions"],
-  ["controls", "Checkboxes and dropdowns"],
+  ["controls", "Input controls"],
   ["formats", "Formats"],
   ["conditional", "Conditional formats"],
   ["sharing", "Sharing"],
@@ -898,10 +899,10 @@ const OPERATORS = [
     </section>
 
     <section id="controls">
-      <h2>Checkboxes and dropdowns</h2>
+      <h2>Input controls</h2>
       <p>
         A control is a cell that shows an input bound to another cell. It shows that cell's value,
-        and changing the control writes the new value there.
+        and committing a change with Enter or by leaving the input writes the new value there.
       </p>
       <ul>
         <li>
@@ -913,9 +914,16 @@ const OPERATORS = [
           B2. The choices can also be written out: <code>=DROPDOWN("low, medium, high", B2)</code>.
         </li>
         <li>
+          <code>=TEXTBOX(B1, "Name")</code> shows B1 in a text input and stores committed text as
+          text. <code>=NUMBERBOX(C1, "Count")</code> accepts a number and clears C1 when left empty.
+        </li>
+        <li>
           Formulas read the bound cell, not the control: <code>=IF(B1, "thanks", "waiting")</code>.
         </li>
-        <li>A control cannot be bound to its own cell.</li>
+        <li>
+          A control must target a stored cell without a formula. It cannot target a formula column
+          or a cell filled by an array formula.
+        </li>
       </ul>
     </section>
 
@@ -1130,6 +1138,11 @@ const OPERATORS = [
           A formula that gives <code>BUTTON</code> shows a clickable button. For example,
           <code>{{ TEMPLATE_BUTTON_EXAMPLE }}</code> writes TRUE to <code>Sales!D2</code> when
           clicked. A button inside a loop appears once for each row.
+        </li>
+        <li>
+          A formula that gives <code>TEXTBOX</code> or <code>NUMBERBOX</code> shows an input. Enter
+          commits its value, and leaving the input commits it too. The view sends its control
+          occurrence and target cell identity to the server, which checks the stored template again.
         </li>
         <li>
           A formula that fails shows an error chip with its code and message where its value would

@@ -373,6 +373,57 @@ export class Workbook {
     return this.tables.table(id.tableId)?.columns?.[id.col];
   }
 
+  /** Why a cell cannot be used as the stored target of an input control. */
+  private controlTargetError({ tableId, row, col }: CellId): string | undefined {
+    const table = this.tables.table(tableId);
+    if (!table) return "The cell to read and write does not exist";
+    if (
+      row < 0 ||
+      col < 0 ||
+      (table.rowCount !== undefined && row >= table.rowCount) ||
+      (table.colCount !== undefined && col >= table.colCount)
+    ) {
+      return `${formatAddress({ row, col })} is outside the table`;
+    }
+
+    const column = this.columnOf({ tableId, row, col });
+    if (column?.type === "formula") {
+      return `${column.name} is a formula column and cannot be written to`;
+    }
+    const record = this.record({ tableId, row, col });
+    if (record && isFormulaInput(record.input)) {
+      return `${formatAddress({ row, col })} has a formula and cannot be used as a control target`;
+    }
+    if (this.spillAnchor({ tableId, row, col })) {
+      return `${formatAddress({ row, col })} is filled by an array formula and cannot be used as a control target`;
+    }
+    return undefined;
+  }
+
+  /** A cycle can hide the error from a control whose direct target is a formula cell. */
+  private invalidControlTarget(record: CellRecord): ErrorValue | undefined {
+    if (record.content.type !== "formula" || record.content.ast.type !== "call") return undefined;
+    const call = record.content.ast;
+    const name = call.name.toUpperCase();
+    const targetIndex =
+      name === "DROPDOWN"
+        ? 1
+        : name === "CHECKBOX" || name === "TEXTBOX" || name === "NUMBERBOX"
+          ? 0
+          : undefined;
+    if (targetIndex === undefined) return undefined;
+    const node = call.args[targetIndex];
+    if (node?.type !== "reference" || !isSingleCell(node.reference)) return undefined;
+    const range = this.resolve(node.reference, record.id);
+    if (!range) return undefined;
+    const message = this.controlTargetError({
+      tableId: range.tableId,
+      row: range.startRow,
+      col: range.startCol,
+    });
+    return message === undefined ? undefined : error("#VALUE!", message);
+  }
+
   /**
    * Sets what the user typed into a cell. An empty input clears the cell. A
    * cell of a formula column is left alone: its formula belongs to the column.
@@ -591,8 +642,40 @@ export class Workbook {
       ok: false,
       error: error("#VALUE!", message),
     });
+    const targetError = this.controlTargetError(control.target);
+    if (targetError) return refuse(targetError);
     if (control.control === "checkbox" && typeof value !== "boolean") {
       return refuse("A checkbox takes TRUE or FALSE");
+    }
+    if (control.control === "textbox") {
+      if (typeof value !== "string") return refuse("A text box takes text");
+      return {
+        ok: true,
+        effects: [
+          { type: "setCell", ...control.target, input: value === "" ? "" : literalInput(value) },
+        ],
+      };
+    }
+    if (control.control === "numberbox") {
+      if (value === null || value === "") {
+        return {
+          ok: true,
+          effects: [{ type: "setCell", ...control.target, input: "" }],
+        };
+      }
+      const parsed =
+        typeof value === "number"
+          ? value
+          : typeof value === "string"
+            ? parseNumber(value)
+            : undefined;
+      if (parsed === undefined || !Number.isFinite(parsed)) {
+        return refuse("A number box takes a number");
+      }
+      return {
+        ok: true,
+        effects: [{ type: "setCell", ...control.target, input: literalInput(parsed) }],
+      };
     }
     // A date choice arrives as text, because the request that carries it has no date type.
     const given = typeof value === "string" ? value.trim() : value;
@@ -1032,6 +1115,7 @@ export class Workbook {
       functions: this.functions,
       resolve: (reference) => this.resolve(reference, origin),
       read: (cell) => this.current(cell),
+      controlTargetError: (cell) => this.controlTargetError(cell),
       extent: (tableId) => this.extent(tableId),
       columnNames: (tableId) => this.tables.table(tableId)?.columns?.map((column) => column.name),
       now: this.now,
@@ -1048,6 +1132,7 @@ export class Workbook {
       functions: this.functions,
       resolve: (reference) => this.rangeOf(reference, this.tables.findFromPage(reference, pageId)),
       read: (cell) => this.current(cell),
+      controlTargetError: (cell) => this.controlTargetError(cell),
       extent: (tableId) => this.extent(tableId),
       columnNames: (tableId) => this.tables.table(tableId)?.columns?.map((column) => column.name),
       now: this.now,
@@ -1129,7 +1214,10 @@ export class Workbook {
       attempts.set(record, tries);
       this.pending.delete(record);
       let value: CellValue;
-      if (isCyclic) value = error("#CYCLE!", "The formula depends on its own cell");
+      if (isCyclic)
+        value =
+          this.invalidControlTarget(record) ??
+          error("#CYCLE!", "The formula depends on its own cell");
       else if (tries > MAX_ATTEMPTS) {
         value = error("#CYCLE!", "The formula and another keep changing each other's inputs");
       } else {

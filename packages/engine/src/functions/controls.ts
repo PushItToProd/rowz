@@ -26,8 +26,10 @@ function target(
   const range = context.resolve(node.reference);
   if (!range) return fail("#REF!", "The cell to read and write does not exist");
   const cell = { tableId: range.tableId, row: range.startRow, col: range.startCol };
+  const targetError = context.controlTargetError(cell);
+  if (targetError) fail("#VALUE!", targetError);
   const value = context.read(cell);
-  // A target holding an error or a button still gets a working control, shown as empty.
+  // A non-formula target with an invalid typed value is shown as empty.
   return { cell, value: isScalar(value) ? value : null };
 }
 
@@ -80,6 +82,36 @@ export const controlFunctions: Record<string, FunctionDefinition> = {
       const options = choicesNode ? choices(evaluate(choicesNode, context)) : [];
       if (options.length === 0) fail("#VALUE!", "DROPDOWN needs at least one choice");
       return { kind: "control", control: "dropdown", target: cell, value, options, label: "" };
+    },
+  },
+
+  /**
+   * `TEXTBOX(cell, [label])` shows the cell's value in a text input. Committing
+   * text writes it as text to the cell.
+   */
+  TEXTBOX: {
+    kind: "special",
+    minArgs: 1,
+    maxArgs: 2,
+    evaluate([cellNode, labelNode], context): ControlValue {
+      const { cell, value } = target(cellNode, context, "TEXTBOX");
+      const label = labelNode ? text(evaluate(labelNode, context)) : "";
+      return { kind: "control", control: "textbox", target: cell, value, options: [], label };
+    },
+  },
+
+  /**
+   * `NUMBERBOX(cell, [label])` shows the cell's value in a number input.
+   * Committing a number writes it to the cell.
+   */
+  NUMBERBOX: {
+    kind: "special",
+    minArgs: 1,
+    maxArgs: 2,
+    evaluate([cellNode, labelNode], context): ControlValue {
+      const { cell, value } = target(cellNode, context, "NUMBERBOX");
+      const label = labelNode ? text(evaluate(labelNode, context)) : "";
+      return { kind: "control", control: "numberbox", target: cell, value, options: [], label };
     },
   },
 };

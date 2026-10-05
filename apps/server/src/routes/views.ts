@@ -1,8 +1,16 @@
 import { zValidator } from "@hono/zod-validator";
-import { moveBlockBody, updateViewBody, viewButtonParam, viewParam } from "@spreadsheet-app/shared";
+import {
+  moveBlockBody,
+  updateViewBody,
+  viewButtonParam,
+  viewInputBody,
+  viewInputParam,
+  viewParam,
+} from "@spreadsheet-app/shared";
 import { Hono } from "hono";
 import {
   clientClock,
+  runViewInput,
   runViewButton,
   UTC_OFFSET_HEADER,
   type ActionDependencies,
@@ -24,6 +32,24 @@ export function viewRoutes(dependencies: ActionDependencies) {
               c.var.userId,
               viewId,
               buttonIndex,
+              clientClock(c.req.header(UTC_OFFSET_HEADER)),
+            ),
+          );
+        },
+      )
+      .post(
+        "/:viewId/inputs/:inputIndex",
+        zValidator("param", viewInputParam, onInvalid),
+        zValidator("json", viewInputBody, onInvalid),
+        async (c) => {
+          const { viewId, inputIndex } = c.req.valid("param");
+          return c.json(
+            await runViewInput(
+              dependencies,
+              c.var.userId,
+              viewId,
+              inputIndex,
+              c.req.valid("json"),
               clientClock(c.req.header(UTC_OFFSET_HEADER)),
             ),
           );

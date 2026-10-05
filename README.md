@@ -23,7 +23,7 @@ Expect bugs and breaking changes, and don't keep anything in it that you can't a
 - **Text computes.** A text view is a Markdown template whose tags hold formulas, with loops and conditions, so a report is written as prose and not laid out in cells.
 - **A chart's data is a formula.** A chart is a block that draws whatever its formula returns. It is not anchored to cells of a grid.
 - **A formula can describe a side effect.** `BUTTON`, `EXECUTE`, `SEND_EMAIL`, and the other action functions replace macros. Recalculation never runs an action. A click does, on the server, which keeps a record of it.
-- **A cell can be an input.** `CHECKBOX` and `DROPDOWN` show a control that writes to another cell, so a table can be a form.
+- **A cell can be an input.** `CHECKBOX`, `DROPDOWN`, `TEXTBOX`, and `NUMBERBOX` show a control that writes to another cell, so a table or text view can be a form.
 - **A function can live in a cell.** A cell that holds a `LAMBDA` is called by its address: `=D1(21)`.
 
 ## What's missing
@@ -215,7 +215,16 @@ An action's arguments are evaluated when the button is clicked, not when formula
 
 ### Controls
 
-A control is a cell that shows an input bound to another cell. `CHECKBOX(cell, label)` and `DROPDOWN(choices, cell)` show that cell's value and write a change back to it.
+A control is a cell that shows an input bound to another cell. `CHECKBOX(cell, [label])`, `DROPDOWN(choices, cell)`, `TEXTBOX(cell, [label])`, and `NUMBERBOX(cell, [label])` show that cell's value and write a committed change back to it. Text and number inputs commit when you press Enter or leave the input. A number input accepts a number; leaving it empty clears the target. Text inputs store text even when it looks like a number or formula. A control must target a stored cell that has no formula and is not in a formula column or filled by an array formula.
+
+The same controls work in Markdown text views:
+
+```
+Name: {{ TEXTBOX('Form'!A1, "Name") }}
+Count: {{ NUMBERBOX('Form'!A2, "Count") }}
+```
+
+The server re-evaluates the template under the spreadsheet lock and checks the control occurrence, type, and target cell identity before writing. The changed target cell is included in the response and in undo history.
 
 ![A form whose dropdown and checkbox fill cells, and a button that appends them to a log table](docs/screenshots/form.png)
 
@@ -256,7 +265,7 @@ The same engine runs in two places. The browser runs it to show values as soon a
 
 Cell writes and a record in `action_runs` commit in one transaction. Email is sent after the commit.
 
-Every change to what a document holds runs in a transaction that first locks the document's row, so changes to one document happen one at a time and each reads what the one before it left. A request that changes anything must also come from a page served at `BASE_URL`: the server refuses one whose `Origin` header names another origin. `action_runs` records who clicked a cell button or a text view button, the effects, and the outcome.
+Every change to what a document holds runs in a transaction that first locks the document's row, so changes to one document happen one at a time and each reads what the one before it left. A request that changes anything must also come from a page served at `BASE_URL`: the server refuses one whose `Origin` header names another origin. `action_runs` records who clicked a cell button or a text-view button, or changed a control, along with the effects and outcome.
 
 Every document belongs to a workspace, and users reach documents through workspace membership with a role of owner, editor, or viewer. All data access goes through `SpreadsheetRepository`, which checks membership in each query. A document outside the user's workspaces is reported as not found.
 

@@ -700,8 +700,8 @@ const MOVES: Record<string, [rows: number, cols: number]> = {
 };
 
 function onGridKeydown(event: KeyboardEvent): void {
-  // While editing, keys belong to the editor input. A checkbox or dropdown in
-  // a cell also keeps its own keys, such as the arrows that change a choice.
+  // While editing, keys belong to the editor input. An input control in a cell
+  // also keeps its own keys, such as the arrows that change a choice.
   const inControl =
     event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement;
   if (draft.value !== null || !selected.value || inControl) return;
@@ -876,6 +876,7 @@ function onGridKeydown(event: KeyboardEvent): void {
               @pick="store.setCell(cellAt(row - 1, col - 1), literalInput($event))"
               @run="run(row - 1, col - 1)"
               @choose="store.input(cellAt(row - 1, col - 1), $event)"
+              @edit="store.input(cellAt(row - 1, col - 1), $event)"
               @resize-table="resizeForSpill"
             />
             <span

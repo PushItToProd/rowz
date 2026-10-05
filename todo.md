@@ -39,6 +39,10 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 
 ## Bugs
 
+- [ ] A `NUMBERBOX` (cell and text view) sends an empty string when the browser reports an empty value for incomplete input such as `-` or `e` (`validity.badInput`), and an empty string clears the target; refuse the commit instead (`CellView.vue`, `TextCard.vue`)
+- [ ] `TEXTBOX`/`NUMBERBOX` do not check the target column's type: `abc` into a number column succeeds and leaves a `#VALUE!` cell, and `007` is stored as the number 7 despite the documented text-preserving behavior (`packages/engine/src/workbook.ts`)
+- [ ] A text-view input commit can overwrite a newer value written from another tab, because its fingerprint names the target but not the value it was rendered with; include the rendered value and answer 409 on mismatch
+- [ ] A `TEXTBOX` commit of exactly 8,192 formula-like or numeric-looking characters gains a leading apostrophe and exceeds the stored-cell limit, so the write fails; make the control's limit one less than the cell limit
 - [ ] A text-view `BUTTON` click sends only its occurrence index, so a stale view whose conditional content shifted can run a different button; send a render token or the button's label/action fingerprint and answer 409 on mismatch
 - [ ] A text-view `BUTTON` inside a template loop loses the loop's bound names when the action is planned (`ActionValue` keeps the page but not the template bindings), so an action body that uses a loop variable fails with `#NAME?`; preserve the bindings for the selected occurrence
 - [ ] **P2** conditional formatting criteria doesn't handle strings -- I made a conditional format with a condition like `="foobar"` but it didn't apply (maybe b/c it was a data table column with formula values)
@@ -336,7 +340,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P10** revamp the phone-width UI so it is less cramped. The editor header is the tightest part: it holds the back arrow, the spreadsheet's name, the saving indicator, Share, History, Export, and Help on one line.
 - [ ] allow checkboxes, inputs, and other controls to target a named range; require the target to contain exactly one cell
 - [ ] more controls:
-  - [ ] **P3** a text or number input bound to a cell (esp. useful in Markdown)
+  - [x] **P3** a text or number input bound to a cell (esp. useful in Markdown)
   - [ ] **P8** a date picker
   - [ ] **P8** a time picker
   - [ ] **P8** a combined date and time picker

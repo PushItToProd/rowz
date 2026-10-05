@@ -331,6 +331,7 @@ export function mockApi(): MockedApi {
     }),
     click: vi.fn().mockResolvedValue(clickResult()),
     clickViewButton: vi.fn().mockResolvedValue(clickResult()),
+    inputViewControl: vi.fn().mockResolvedValue(clickResult()),
     input: vi.fn().mockResolvedValue(clickResult()),
   };
 }

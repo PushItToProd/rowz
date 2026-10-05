@@ -7,7 +7,7 @@ import {
   type TemplateInline,
 } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import type { ViewRecord } from "../api/client";
 import { markdown } from "../markdown";
 import { useWorkbookStore } from "../stores/workbook";
@@ -29,6 +29,17 @@ const active = computed(() =>
 );
 const editing = computed(() => !!active.value);
 const draft = computed(() => active.value?.state.doc.toString() ?? props.view.source);
+// Drafts survive placeholder rerenders while a save is pending. The plain map
+// does not trigger a rerender for every keystroke; errors do.
+const inputDrafts = new Map<string, string>();
+const inputErrors = reactive(new Map<string, string>());
+const committingInputs = new Set<string>();
+const inputRenderVersion = ref(0);
+watch([() => props.view.id, () => props.view.source], () => {
+  inputDrafts.clear();
+  inputErrors.clear();
+  inputRenderVersion.value += 1;
+});
 async function edit(): Promise<void> {
   if (!store.canEdit) return;
   await sessions.start(
@@ -63,8 +74,8 @@ function errorChip(error: ErrorValue): HTMLSpanElement {
   return chip;
 }
 
-type InlineReplacement = Extract<TemplateInline, { type: "error" | "button" }>;
-const REPLACEMENT_MARKER = /ROWZ(?:ERROR|BUTTON)\d+END/g;
+type InlineReplacement = Extract<TemplateInline, { type: "error" | "button" | "input" }>;
+const REPLACEMENT_MARKER = /ROWZ(?:ERROR|BUTTON|INPUT)\d+END/g;
 
 function markersIn(
   text: string,
@@ -81,15 +92,64 @@ function markersIn(
 
 function inlineElement(part: InlineReplacement, viewId: string, isEditing: boolean): HTMLElement {
   if (part.type === "error") return errorChip(part.error);
-  const button = document.createElement("button");
-  const running = store.isViewButtonRunning(viewId, part.occurrence);
-  button.type = "button";
-  button.className = "text-view__button";
-  button.dataset.viewButton = String(part.occurrence);
-  button.disabled = isEditing || !store.canEdit || running;
-  if (running) button.setAttribute("aria-busy", "true");
-  button.textContent = running ? "Running…" : part.label;
-  return button;
+  if (part.type === "button") {
+    const button = document.createElement("button");
+    const running = store.isViewButtonRunning(viewId, part.occurrence);
+    button.type = "button";
+    button.className = "text-view__button";
+    button.dataset.viewButton = String(part.occurrence);
+    button.disabled = isEditing || !store.canEdit || running;
+    if (running) button.setAttribute("aria-busy", "true");
+    button.textContent = running ? "Running…" : part.label;
+    return button;
+  }
+
+  const { control, occurrence } = part;
+  const identity = store.identityOf(control.target);
+  const running = store.isViewInputRunning(viewId, occurrence);
+  const field = document.createElement("label");
+  const input = document.createElement("input");
+  field.className = "text-view__input-control";
+  field.dataset.renderVersion = String(inputRenderVersion.value);
+  input.type = control.control === "numberbox" ? "number" : "text";
+  input.className = `text-view__input text-view__input--${control.control}`;
+  input.dataset.viewInput = String(occurrence);
+  input.dataset.fingerprint =
+    identity === undefined ? "" : JSON.stringify({ control: control.control, target: identity });
+  input.setAttribute(
+    "aria-label",
+    control.label || (control.control === "numberbox" ? "Number input" : "Text input"),
+  );
+  input.step = control.control === "numberbox" ? "any" : "";
+  if (control.control === "textbox") input.maxLength = LIMITS.inputLength;
+  const value = control.value === null ? "" : formatValue(control.value);
+  if (control.control === "numberbox" && control.value !== null) input.placeholder = value;
+  input.dataset.current = value;
+  input.dataset.draftKey = `${String(occurrence)}:${input.dataset.fingerprint}`;
+  const message = inputErrors.get(input.dataset.draftKey);
+  input.defaultValue = inputDrafts.get(input.dataset.draftKey) ?? value;
+  input.value = input.defaultValue;
+  input.disabled = isEditing || !store.canEdit || !identity || running;
+  if (running) input.setAttribute("aria-busy", "true");
+  if (message) {
+    input.setAttribute("aria-invalid", "true");
+    input.title = message;
+  }
+  if (control.label) {
+    const label = document.createElement("span");
+    label.className = "text-view__input-label";
+    label.textContent = control.label;
+    field.append(label);
+  }
+  field.append(input);
+  if (message) {
+    const feedback = document.createElement("span");
+    feedback.className = "text-view__input-error";
+    feedback.setAttribute("role", "alert");
+    feedback.textContent = message;
+    field.append(feedback);
+  }
+  return field;
 }
 
 /** Renders Markdown, then inserts error chips and buttons through DOM nodes. */
@@ -116,7 +176,8 @@ function renderMarkdown(parts: TemplateInline[], viewId: string, isEditing: bool
     .map((part) => {
       if (part.type === "text") return part.text;
       let marker: string;
-      const prefix = part.type === "error" ? "ROWZERROR" : "ROWZBUTTON";
+      const prefix =
+        part.type === "error" ? "ROWZERROR" : part.type === "button" ? "ROWZBUTTON" : "ROWZINPUT";
       do {
         marker = `${prefix}${String(markerIndex)}END`;
         markerIndex += 1;
@@ -204,15 +265,15 @@ function renderMarkdown(parts: TemplateInline[], viewId: string, isEditing: bool
 }
 
 /** What the view shows. While editing, it follows what is being typed. */
-const parts = computed(() =>
-  renderTemplate(editing.value ? draft.value : props.view.source, (expression, names) =>
+const parts = computed(() => {
+  return renderTemplate(editing.value ? draft.value : props.view.source, (expression, names) =>
     store.evaluateOnPage(props.view.pageId, expression, names),
   ).map((part) =>
     part.type === "markdown"
       ? { ...part, html: renderMarkdown(part.parts, props.view.id, editing.value) }
       : part,
-  ),
-);
+  );
+});
 
 function runTextButton(event: MouseEvent): void {
   const target = event.target;
@@ -222,6 +283,81 @@ function runTextButton(event: MouseEvent): void {
   event.preventDefault();
   event.stopPropagation();
   void store.clickViewButton(props.view.id, Number(button.dataset.viewButton));
+}
+
+function inputFrom(event: Event): HTMLInputElement | undefined {
+  const target = event.target;
+  if (!(target instanceof Element)) return undefined;
+  return target.closest<HTMLInputElement>("input[data-view-input]") ?? undefined;
+}
+
+function rememberTextInput(event: Event): void {
+  const input = inputFrom(event);
+  if (!input) return;
+  const key = input.dataset.draftKey;
+  if (key) inputDrafts.set(key, input.value);
+}
+
+async function commitTextInput(event: Event): Promise<void> {
+  if (event.type === "keydown") {
+    const key = event as KeyboardEvent;
+    if (key.key !== "Enter") return;
+    key.preventDefault();
+    key.stopPropagation();
+  }
+  const input = inputFrom(event);
+  if (!input || !props.view.id) return;
+  const occurrence = Number(input.dataset.viewInput);
+  const key = input.dataset.draftKey;
+  if (!Number.isInteger(occurrence) || !key || committingInputs.has(key)) return;
+  const value = input.value;
+  const fingerprint = input.dataset.fingerprint;
+  if (!fingerprint) {
+    inputErrors.set(key, "This input changed. Refresh the view and try again");
+    return;
+  }
+  let parsed: {
+    control: "textbox" | "numberbox";
+    target: { tableId: string; rowId: string; colId: string };
+  };
+  try {
+    parsed = JSON.parse(fingerprint) as typeof parsed;
+  } catch {
+    inputErrors.set(key, "This input changed. Refresh the view and try again");
+    return;
+  }
+
+  if (inputDrafts.get(key) === undefined) return;
+  if (input.dataset.current === value) {
+    inputDrafts.delete(key);
+    inputErrors.delete(key);
+    return;
+  }
+
+  committingInputs.add(key);
+  const committed =
+    input.type === "number" && input.value !== "" && Number.isFinite(input.valueAsNumber)
+      ? input.valueAsNumber
+      : value;
+  const result = await store.inputViewControl(props.view.id, occurrence, {
+    fingerprint: parsed,
+    value: committed,
+  });
+  if (result?.status === "failed") {
+    inputErrors.set(key, result.error ?? "The input could not be saved");
+  } else if (result) {
+    inputDrafts.delete(key);
+    inputErrors.delete(key);
+    inputRenderVersion.value += 1;
+  } else {
+    inputErrors.set(key, store.notice?.text ?? "The input could not be saved");
+  }
+  committingInputs.delete(key);
+}
+
+function editFromText(event: MouseEvent): void {
+  if (inputFrom(event)) return;
+  void edit();
 }
 </script>
 
@@ -251,8 +387,11 @@ function runTextButton(event: MouseEvent): void {
     <div
       class="text-view"
       :title="store.canEdit && !editing ? 'Double-click to edit' : undefined"
+      @input="rememberTextInput"
+      @keydown="commitTextInput"
+      @focusout="commitTextInput"
       @click="runTextButton"
-      @dblclick="edit"
+      @dblclick="editFromText"
     >
       <template v-for="(part, index) in parts" :key="index">
         <!-- eslint-disable-next-line vue/no-v-html -- markdown-it output with raw HTML disabled -->

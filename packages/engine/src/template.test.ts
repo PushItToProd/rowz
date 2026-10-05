@@ -76,6 +76,38 @@ describe("output", () => {
     });
   });
 
+  it("keeps each rendered input control with its own occurrence index", () => {
+    const blocks = render(
+      "{% for label in Table1!A2:A3 %}{{ TEXTBOX(Table1!A1, label) }}{% end %} {{ NUMBERBOX(Table1!A1) }}",
+    );
+    const inputs = blocks.flatMap((block) =>
+      block.type === "markdown" ? block.parts.filter((part) => part.type === "input") : [],
+    );
+
+    expect(
+      inputs.map((part) => ({
+        occurrence: part.occurrence,
+        control: part.control.control,
+        target: part.control.target,
+        label: part.control.label,
+      })),
+    ).toEqual([
+      {
+        occurrence: 0,
+        control: "textbox",
+        target: { tableId: "t1", row: 0, col: 0 },
+        label: "apple",
+      },
+      {
+        occurrence: 1,
+        control: "textbox",
+        target: { tableId: "t1", row: 0, col: 0 },
+        label: "fig",
+      },
+      { occurrence: 2, control: "numberbox", target: { tableId: "t1", row: 0, col: 0 }, label: "" },
+    ]);
+  });
+
   it("leaves text without tags as it is", () => {
     expect(markdown("# Title\n\nSome *emphasis* and a { brace }.")).toBe(
       "# Title\n\nSome *emphasis* and a { brace }.",

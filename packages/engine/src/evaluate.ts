@@ -47,6 +47,8 @@ export interface EvaluationContext {
   /** Finds the cells a reference points at, or `undefined` if its table does not exist. */
   resolve(reference: Reference): CellRange | undefined;
   read(cell: CellId): CellValue;
+  /** Why a cell cannot be used as the stored target of an input control. */
+  controlTargetError(cell: CellId): string | undefined;
   /** The size of a table, which is where a range with an open side stops. */
   extent(tableId: string): { rows: number; cols: number };
   /** The names of a data table's columns, or `undefined` for a plain grid. */

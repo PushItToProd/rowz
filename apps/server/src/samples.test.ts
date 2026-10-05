@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createWorkbook, renderTemplate } from "@spreadsheet-app/engine";
+import { createWorkbook, formatValue, renderTemplate } from "@spreadsheet-app/engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ClickResult, SnapshotWithHistory, SpreadsheetSummary } from "./app";
 import { Contents } from "./repo/contents";
@@ -67,7 +67,9 @@ async function readSample(id: string): Promise<Sample> {
                     ? part.text
                     : part.type === "error"
                       ? `${part.error.code} ${part.error.message ?? part.error.code}`
-                      : part.label,
+                      : part.type === "input"
+                        ? formatValue(part.control)
+                        : part.label,
                 )
                 .join("")
             : `[${block.type}]`,

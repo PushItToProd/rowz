@@ -35,6 +35,7 @@ import {
   type IdentifiedCell,
   type IdentityCellInput,
   type IdentifiedStructuralEditBody,
+  type ViewInputBody,
   type IdentityConditionalRule,
   type IdentityFormatRange,
   type CellInput,
@@ -1505,11 +1506,28 @@ export const useWorkbookStore = defineStore("workbook", () => {
     if (result) notice.value = describe(result);
   }
 
+  /** Stores a value chosen through one input occurrence in a text view. */
+  async function inputViewControl(
+    viewId: string,
+    occurrence: number,
+    input: ViewInputBody,
+  ): Promise<ClickResult | undefined> {
+    const result = await runRequest(`view-input:${viewId}:${String(occurrence)}`, () =>
+      api.inputViewControl(viewId, occurrence, input),
+    );
+    if (result?.status === "failed") notice.value = describe(result);
+    return result;
+  }
+
   function isViewButtonRunning(viewId: string, occurrence: number): boolean {
     return running.has(`view:${viewId}:${String(occurrence)}`);
   }
 
-  /** Stores a value chosen through the checkbox or dropdown in a cell. Success is silent. */
+  function isViewInputRunning(viewId: string, occurrence: number): boolean {
+    return running.has(`view-input:${viewId}:${String(occurrence)}`);
+  }
+
+  /** Stores a value sent through a cell input control. Success is silent. */
   async function input(id: CellId, value: Scalar): Promise<void> {
     // JSON has no date, so a chosen date travels as its text and the server reads it back.
     const sent = isDate(value) ? formatDate(value) : value;
@@ -1914,6 +1932,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     receiveChange,
     isRunning,
     isViewButtonRunning,
+    isViewInputRunning,
     restoreVersion,
     spreadsheet,
     pages,
@@ -1961,6 +1980,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     setCell,
     click,
     clickViewButton,
+    inputViewControl,
     input,
     renameSpreadsheet,
     addPage,

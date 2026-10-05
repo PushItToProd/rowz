@@ -105,6 +105,30 @@ describe("CellView", () => {
     expect(wrapper.emitted("choose")).toEqual([[2]]);
   });
 
+  it.each([
+    ["textbox", "Name", "current text", "text"],
+    ["numberbox", "Count", "12.5", "number"],
+  ] as const)("shows and commits a %s", async (control, label, value, type) => {
+    const wrapper = render({
+      kind: "control",
+      control,
+      target: { tableId: "t1", row: 0, col: 0 },
+      value: control === "numberbox" ? 12.5 : "current text",
+      options: [],
+      label,
+    });
+    const input = wrapper.get<HTMLInputElement>("input");
+    expect(input.element.type).toBe(type);
+    expect(input.element.value).toBe(value);
+    expect(input.attributes("aria-label")).toBe(label);
+    await input.setValue(control === "numberbox" ? "3.25" : "edited text");
+    expect(wrapper.emitted("edit")).toBeUndefined();
+    await input.trigger("keydown", { key: "Enter" });
+    expect(wrapper.emitted("edit")).toEqual([[control === "numberbox" ? 3.25 : "edited text"]]);
+    await input.trigger("blur");
+    expect(wrapper.emitted("edit")).toHaveLength(1);
+  });
+
   it("shows Markdown with its formatting, on one line", () => {
     const wrapper = render({
       kind: "markdown",

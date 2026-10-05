@@ -345,7 +345,7 @@ export const journal = pgTable(
 
 export type RunStatus = "pending" | "succeeded" | "failed";
 
-/** The audit log of button clicks: who clicked, what it asked for, and how it ended. */
+/** The audit log of button clicks and control inputs: who acted, what it changed, and how it ended. */
 export const actionRuns = pgTable(
   "action_runs",
   {
@@ -356,7 +356,7 @@ export const actionRuns = pgTable(
     // Target IDs are not foreign keys: a run outlives the button it came from.
     tableId: uuid("table_id"),
     viewId: uuid("view_id"),
-    // A cell position, or the occurrence of a button in a text view.
+    // A cell position, or an action/control occurrence in a text view.
     row: integer("row_index"),
     col: integer("col_index"),
     buttonIndex: integer("button_index"),

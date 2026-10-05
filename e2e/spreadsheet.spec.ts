@@ -662,6 +662,40 @@ test("a text view button runs the selected stored action", async ({ page }) => {
   await expect(text.getByRole("button", { name: "Increment" })).toBeVisible();
 });
 
+test("text-view input controls commit to their bound cells", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "initial name");
+  await enter(page, "A2", "1.5");
+  await page.getByRole("button", { name: "Add text" }).last().click();
+  const text = page.locator('[data-view="Text 1"]');
+  await text.getByRole("button", { name: "Edit" }).click();
+  await text
+    .getByLabel("Text view source")
+    .fill(
+      [
+        `Name: {{ TEXTBOX('Table 1'!A1, "Name") }}`,
+        `Count: {{ NUMBERBOX('Table 1'!A2, "Count") }}`,
+      ].join("\n\n"),
+    );
+  await text.getByRole("button", { name: "Done" }).click();
+
+  const name = text.getByRole("textbox", { name: "Name" });
+  const count = text.getByRole("spinbutton", { name: "Count" });
+  await expect(name).toHaveValue("initial name");
+  await expect(count).toHaveValue("1.5");
+  await name.fill("updated name");
+  await name.press("Enter");
+  await expect(cell(page, "A1")).toHaveText("updated name");
+  await count.fill("3.25");
+  await count.blur();
+  await expect(cell(page, "A2")).toHaveText("3.25");
+
+  await reload(page);
+  const restoredText = page.locator('[data-view="Text 1"]');
+  await expect(restoredText.getByRole("textbox", { name: "Name" })).toHaveValue("updated name");
+  await expect(restoredText.getByRole("spinbutton", { name: "Count" })).toHaveValue("3.25");
+});
+
 test("a spreadsheet is exported to a file and imported again, and a table to and from CSV", async ({
   page,
 }, testInfo) => {

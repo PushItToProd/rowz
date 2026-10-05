@@ -13,7 +13,8 @@ import {
   type CellValue,
   type Scalar,
 } from "@spreadsheet-app/engine";
-import { computed } from "vue";
+import { LIMITS } from "@spreadsheet-app/shared";
+import { computed, ref, watch } from "vue";
 import { formattedText, textStyle } from "../formatStyle";
 import { markdown } from "../markdown";
 import CellError from "./CellError.vue";
@@ -36,6 +37,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   run: [];
   choose: [value: Scalar];
+  edit: [value: string | number];
   toggle: [checked: boolean];
   pick: [text: string];
   resizeTable: [size: { rowCount: number; colCount: number }];
@@ -81,6 +83,40 @@ const formatted = computed(() =>
 );
 
 const control = computed(() => (isControl(props.value) ? props.value : undefined));
+const inputControl = computed(() =>
+  control.value && (control.value.control === "textbox" || control.value.control === "numberbox")
+    ? control.value
+    : undefined,
+);
+const inputText = computed(() => {
+  const value = inputControl.value?.value;
+  return value === null || value === undefined ? "" : formatValue(value);
+});
+const inputPlaceholder = computed(() => {
+  const current = inputControl.value?.value;
+  return inputControl.value?.control === "numberbox" && current !== null && current !== undefined
+    ? formatValue(current)
+    : undefined;
+});
+const inputDraft = ref<string | number>("");
+let lastSubmitted: string | number | undefined;
+watch(
+  () => [inputControl.value?.control, inputControl.value?.value] as const,
+  () => {
+    inputDraft.value = inputText.value;
+    lastSubmitted = undefined;
+  },
+  { immediate: true },
+);
+watch(inputDraft, (value, previous) => {
+  if (value !== previous) lastSubmitted = undefined;
+});
+watch(
+  () => props.running,
+  (running, previous) => {
+    if (!running && previous) lastSubmitted = undefined;
+  },
+);
 /** Which dropdown choice the target cell holds, or -1 when it holds none of them. */
 const chosen = computed(() => {
   const current = control.value;
@@ -94,6 +130,23 @@ function resizeTable(): void {
 function onChoice(event: Event): void {
   const index = Number((event.target as HTMLSelectElement).value);
   emit("choose", control.value?.options[index] ?? null);
+}
+
+function commitInput(): void {
+  if (
+    !inputControl.value ||
+    String(inputDraft.value) === inputText.value ||
+    inputDraft.value === lastSubmitted
+  )
+    return;
+  lastSubmitted = inputDraft.value;
+  emit("edit", inputDraft.value);
+}
+
+function commitInputOnEnter(event: KeyboardEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+  commitInput();
 }
 </script>
 
@@ -121,6 +174,22 @@ function onChoice(event: Event): void {
     <option v-if="outside" :value="held">{{ held }}</option>
     <option v-for="choice in choices" :key="choice" :value="choice">{{ choice }}</option>
   </select>
+  <label v-else-if="inputControl" class="cell-control cell-control--input">
+    <span v-if="inputControl.label">{{ inputControl.label }}</span>
+    <input
+      v-model="inputDraft"
+      :type="inputControl.control === 'numberbox' ? 'number' : 'text'"
+      :step="inputControl.control === 'numberbox' ? 'any' : undefined"
+      :maxlength="inputControl.control === 'textbox' ? LIMITS.inputLength : undefined"
+      :placeholder="inputPlaceholder"
+      :aria-label="
+        inputControl.label || (inputControl.control === 'numberbox' ? 'Number input' : 'Text input')
+      "
+      :disabled="running || !canRun"
+      @keydown.enter="commitInputOnEnter"
+      @blur="commitInput"
+    />
+  </label>
   <label
     v-else-if="checkbox && (value === null || typeof value === 'boolean')"
     class="cell-control cell-control--column"

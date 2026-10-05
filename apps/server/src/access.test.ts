@@ -24,7 +24,7 @@ beforeAll(async () => {
   await owner.json(
     "PUT",
     `/tables/${created.tables[0]!.id}/cells`,
-    cellsBody({ A1: '=BUTTON("Go", EXECUTE(1, B1))', A2: "=CHECKBOX(B2)" }),
+    cellsBody({ A1: '=BUTTON("Go", EXECUTE(1, B1))', A2: "=CHECKBOX(B2)", C1: "text" }),
   );
   await owner.json("POST", `/pages/${created.pages[0]!.id}/views`, { kind: "chart" }, 201);
   const textView = await owner.json<{ view: { id: string } }>(
@@ -36,7 +36,10 @@ beforeAll(async () => {
   await owner.json(
     "PATCH",
     `/views/${textView.view.id}`,
-    { source: "{{ BUTTON(\"View action\", EXECUTE(2, 'Table 1'!B1)) }}" },
+    {
+      source:
+        "{{ BUTTON(\"View action\", EXECUTE(2, 'Table 1'!B1)) }} " + "{{ TEXTBOX('Table 1'!C1) }}",
+    },
     200,
   );
   snapshot = await owner.json<Snapshot>("GET", `/spreadsheets/${created.id}`);
@@ -88,6 +91,7 @@ const CHANGES_NO_SPREADSHEET = [
 function writeRoutes(): Route[] {
   const page = snapshot.pages[0]!.id;
   const table = snapshot.tables[0]!.id;
+  const tableRecord = snapshot.tables[0]!;
   const view = snapshot.views[0]!.id;
   const textView = snapshot.views.find(({ kind }) => kind === "text")!.id;
   return [
@@ -109,6 +113,21 @@ function writeRoutes(): Route[] {
     ["POST", `/tables/${table}/edits`, { axis: "row", kind: "insert", index: 5 }],
     ["POST", `/tables/${table}/cells/0/0/click`],
     ["POST", `/views/${textView}/buttons/0/click`],
+    [
+      "POST",
+      `/views/${textView}/inputs/0`,
+      {
+        fingerprint: {
+          control: "textbox",
+          target: {
+            tableId: table,
+            rowId: snapshot.rows.find((row) => row.tableId === table)!.id,
+            colId: tableRecord.colIds[2],
+          },
+        },
+        value: "updated",
+      },
+    ],
     ["POST", `/tables/${table}/cells/1/0/input`, { value: true }],
     [
       "POST",
@@ -311,7 +330,7 @@ describe("an editor", () => {
     // added, and each move names the page the block is on. Sharing and deleting are the owner's.
     expect(await statuses(editor, writeRoutes())).toEqual([
       404, 204, 201, 200, 200, 200, 200, 409, 422, 422, 201, 200, 200, 200, 200, 200, 200, 200, 200,
-      200, 200, 200, 200, 200, 200, 200, 201, 200, 200, 200, 200, 403, 403, 403,
+      200, 200, 200, 200, 200, 200, 200, 200, 201, 200, 200, 200, 200, 403, 403, 403,
     ]);
     await owner.json("DELETE", `/spreadsheets/${snapshot.id}`, undefined, 204);
     await editor.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);

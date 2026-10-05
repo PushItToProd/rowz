@@ -322,18 +322,18 @@ export const cellInput = z.object({
   input: z.string().max(LIMITS.inputLength),
 });
 
-export const identityCellInput = z.object({
+export const identifiedCell = z.object({
+  tableId: z.uuid(),
   rowId: z.uuid(),
   colId: z.uuid(),
+});
+export type IdentifiedCell = z.infer<typeof identifiedCell>;
+
+export const identityCellInput = identifiedCell.omit({ tableId: true }).extend({
   /** What the user typed. An empty string clears the cell. */
   input: z.string().max(LIMITS.inputLength),
 });
 export type IdentityCellInput = z.infer<typeof identityCellInput>;
-export interface IdentifiedCell {
-  tableId: string;
-  rowId: string;
-  colId: string;
-}
 
 export const setCellsBody = z
   .object({
@@ -354,7 +354,7 @@ export const setCellsBody = z
     message: "Give at least one cell or row",
   });
 
-/** A value chosen through a checkbox or dropdown. */
+/** A value sent by an input control in a cell. */
 export const controlInputBody = z.object({
   value: z.union([z.string().max(LIMITS.inputLength), z.number(), z.boolean(), z.null()]),
 });
@@ -386,6 +386,19 @@ export const viewButtonParam = z.object({
   viewId: z.uuid(),
   buttonIndex: z.coerce.number().int().nonnegative(),
 });
+/** Names a rendered text input occurrence, with a fingerprint of its control and target. */
+export const viewInputParam = z.object({
+  viewId: z.uuid(),
+  inputIndex: z.coerce.number().int().nonnegative(),
+});
+export const viewInputBody = z.object({
+  fingerprint: z.object({
+    control: z.enum(["textbox", "numberbox"]),
+    target: identifiedCell,
+  }),
+  value: z.union([z.string().max(LIMITS.inputLength), z.number()]),
+});
+export type ViewInputBody = z.infer<typeof viewInputBody>;
 
 /** Limits on a spreadsheet file, which a person can write by hand or another program can produce. */
 export const FILE_LIMITS = {

@@ -1138,6 +1138,38 @@ describe("controls", () => {
     expect(server.input).toHaveBeenCalledExactlyOnceWith(identifiedAt("C1"), "low");
   });
 
+  it("commits text and number inputs bound to stored cells", async () => {
+    await mountGrid({ A1: "name", A2: "1.5", B1: "=TEXTBOX(A1)", C1: "=NUMBERBOX(A2)" });
+    server.input.mockImplementation((_cell, value) =>
+      Promise.resolve(
+        clickResult({
+          cells: [
+            {
+              ...identifiedAt(value === "updated" ? "A1" : "A2"),
+              input: value === "updated" ? "updated" : String(value),
+            },
+          ],
+        }),
+      ),
+    );
+
+    const text = cellAt("B1").get<HTMLInputElement>('input[type="text"]');
+    await text.setValue("updated");
+    await text.trigger("keydown", { key: "Enter" });
+    await vi.waitFor(() => {
+      expect(cellAt("A1").text()).toBe("updated");
+    });
+    expect(server.input).toHaveBeenNthCalledWith(1, identifiedAt("B1"), "updated");
+
+    const number = cellAt("C1").get<HTMLInputElement>('input[type="number"]');
+    await number.setValue("2.75");
+    await number.trigger("blur");
+    await vi.waitFor(() => {
+      expect(cellAt("A2").text()).toBe("2.75");
+    });
+    expect(server.input).toHaveBeenNthCalledWith(2, identifiedAt("C1"), 2.75);
+  });
+
   it("sends an empty value when the blank choice is picked", async () => {
     await mountGrid({ B1: "x", C1: '=DROPDOWN("x, y", B1)' });
     await cellAt("C1").get("select").setValue("-1");

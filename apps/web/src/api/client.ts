@@ -20,6 +20,7 @@ import type {
   ApiError,
   IdentityCellInput,
   IdentifiedCell,
+  ViewInputBody,
   SpreadsheetFile,
   IdentifiedStructuralEditBody,
   IdentityConditionalRule,
@@ -389,7 +390,7 @@ export const api = {
       }),
     ),
 
-  /** Stores a value chosen through the checkbox or dropdown in a cell. */
+  /** Stores a value sent through an input control in a cell. */
   input: ({ tableId, rowId, colId }: IdentifiedCell, value: ControlInput): Promise<ClickResult> =>
     body(
       routes.tables[":tableId"].cells[":rowId"][":colId"].input.$post(
@@ -410,6 +411,18 @@ export const api = {
     body(
       routes.views[":viewId"].buttons[":buttonIndex"].click.$post(
         { param: { viewId, buttonIndex: String(buttonIndex) } },
+        clock(),
+      ),
+    ),
+
+  inputViewControl: (
+    viewId: string,
+    inputIndex: number,
+    input: ViewInputBody,
+  ): Promise<ClickResult> =>
+    body(
+      routes.views[":viewId"].inputs[":inputIndex"].$post(
+        { param: { viewId, inputIndex: String(inputIndex) }, json: input },
         clock(),
       ),
     ),
