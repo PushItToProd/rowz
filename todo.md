@@ -415,9 +415,9 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 
 ## Before sharing with others
 
-- [ ] `REGEXREPLACE` replacement expansion appends a part per `$n` reference even when it expands to empty, so a huge replacement cell (`"$1"` repeated millions of times) bypasses the step and output limits; count replacement parts against the step budget (packages/engine/src/functions/regex.ts)
 These items harden rowz for several users, hostile input, or a deployed server. They are parked while one person uses rowz on their own machine. Review findings of that kind go here.
 
+- [ ] `REGEXREPLACE` replacement expansion appends a part per `$n` reference even when it expands to empty, so a huge replacement cell (`"$1"` repeated millions of times) bypasses the step and output limits; count replacement parts against the step budget (packages/engine/src/functions/regex.ts)
 - [ ] **P10** (GPT) Notify the user during editing if the cell being edited has been edited or deleted elsewhere. The shared formula editor initially reports a deleted target only on submission, with a Vue error modal containing the draft in a read-only editor for copying. See [the formula-editing plan](plans/formula-editing.md).
 - [ ] **P10** (GPT) Add activity indicators showing other sessions' editing targets to help people coordinate parallel edits. Deferred from [the shared formula editor](plans/formula-editing.md). Follow the author's FAFO policy: indicators do not lock targets or block saves.
 
