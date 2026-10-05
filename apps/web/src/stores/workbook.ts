@@ -1004,7 +1004,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
   /** Saves exact draft text to its current target, without a starting-revision restriction. */
   function submitFormulaDraft(target: EditingTarget, text: string): Promise<"saved" | "deleted"> {
     return enqueueWrite(async () => {
-      if (!canEdit.value) throw new Error("You cannot edit this spreadsheet");
+      if (!canEdit.value) throw new Error("You cannot edit this document");
       const table =
         "tableId" in target ? tables.value.find((item) => item.id === target.tableId) : undefined;
       if ("tableId" in target && !table) return "deleted";
@@ -1554,7 +1554,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     await attempt(async () => {
       await api.renameSpreadsheet(current.id, name);
       spreadsheet.value = { ...current, name };
-    }, "The spreadsheet could not be renamed");
+    }, "The document could not be renamed");
   }
 
   async function addPage(): Promise<PageRecord | undefined> {

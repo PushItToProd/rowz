@@ -460,7 +460,7 @@ export class ContentWriter {
     if ((await countRows(this.db, this.spreadsheetId)) > LIMITS.spreadsheetRows) {
       throw unprocessable(
         "too_many_rows",
-        `A spreadsheet can have at most ${String(LIMITS.spreadsheetRows)} rows`,
+        `A document can have at most ${String(LIMITS.spreadsheetRows)} rows`,
       );
     }
     await markDeleted(

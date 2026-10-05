@@ -748,7 +748,7 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   // A file that is not a spreadsheet is refused with a message.
   await page.getByRole("link", { name: "← Documents" }).click();
   await page.getByLabel("Import").setInputFiles(csvPath);
-  await expect(page.getByRole("alert")).toContainText("not a spreadsheet exported from this app");
+  await expect(page.getByRole("alert")).toContainText("not a document exported from this app");
 });
 
 test("a table with named columns has typed columns, a formula column, and column references", async ({
@@ -1295,7 +1295,7 @@ test("spreadsheets are private to the account that made them", async ({ page }) 
   await signUp(page);
   await expect(page.getByText("No documents yet")).toBeVisible();
   await page.goto(privateUrl);
-  await expect(page.getByRole("alert")).toHaveText("Spreadsheet not found");
+  await expect(page.getByRole("alert")).toHaveText("Document not found");
 
   await page.goto("/");
   await page.getByRole("button", { name: "Sign out" }).click();
@@ -1423,8 +1423,8 @@ test("the browser tab names what is open, then the app", async ({ page }) => {
   await expect(page).toHaveTitle(`Untitled document | ${APP_NAME}`);
 
   await page.getByRole("heading", { level: 1 }).getByText("Untitled document").dblclick();
-  await page.getByLabel("Spreadsheet name").fill("My budget");
-  await page.getByLabel("Spreadsheet name").press("Enter");
+  await page.getByLabel("Document name").fill("My budget");
+  await page.getByLabel("Document name").press("Enter");
   await expect(page).toHaveTitle(`My budget | ${APP_NAME}`);
 });
 

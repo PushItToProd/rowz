@@ -16,13 +16,13 @@ export const unauthenticated = (): ApiFailure =>
   new ApiFailure(401, "unauthenticated", "Sign in to continue");
 
 export const forbidden = (): ApiFailure =>
-  new ApiFailure(403, "forbidden", "You can view this spreadsheet but not change it");
+  new ApiFailure(403, "forbidden", "You can view this document but not change it");
 
 export const crossOrigin = (): ApiFailure =>
   new ApiFailure(403, "cross_origin", "This request did not come from the app");
 
 export const ownerOnly = (): ApiFailure =>
-  new ApiFailure(403, "forbidden", "Only the owner of this spreadsheet can do that");
+  new ApiFailure(403, "forbidden", "Only the owner of this document can do that");
 
 export const notFound = (what: string): ApiFailure =>
   new ApiFailure(404, "not_found", `${what} not found`);

@@ -155,13 +155,13 @@ describe("readSpreadsheetFile", () => {
 
   it("refuses text that is not JSON", () => {
     expect(() => readSpreadsheetFile("a,b\n1,2")).toThrow(
-      "The file is not a spreadsheet exported from this app",
+      "The file is not a document exported from this app",
     );
   });
 
   it("refuses JSON that is not a spreadsheet, and says where it goes wrong", () => {
     expect(() => readSpreadsheetFile('{"some": "json"}')).toThrow(
-      /^The file is not a spreadsheet this app can read \(format: /,
+      /^The file is not a document this app can read \(format: /,
     );
     const broken = { ...file(), pages: [{ name: "P", blocks: [{ type: "table", name: "T" }] }] };
     expect(() => readSpreadsheetFile(JSON.stringify(broken))).toThrow(/pages\.0\.blocks\.0\./);

@@ -382,7 +382,7 @@ describe("reordering pages", () => {
     expect(await put(spoil(ids), 409)).toEqual({
       error: {
         code: "conflict",
-        message: "The pages have changed. Reload the spreadsheet and try again",
+        message: "The pages have changed. Reload the document and try again",
       },
     });
     expect(await order()).toEqual(ids);

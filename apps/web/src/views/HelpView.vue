@@ -404,15 +404,15 @@ const OPERATORS = [
     <section id="structure">
       <h2>Pages and tables</h2>
       <p>
-        A spreadsheet holds pages, shown as tabs. A page holds blocks: tables, charts, and text
-        views. Each table is its own grid, with its own column letters and row numbers, so every
-        table has a cell A1.
+        A document holds pages, shown as tabs. A page holds blocks: tables, charts, and text views.
+        Each table is its own grid, with its own column letters and row numbers, so every table has
+        a cell A1.
       </p>
       <ul>
         <li>
-          Use <strong>Add page</strong> and <strong>Add table</strong> to grow a spreadsheet. The
-          strip marked <strong>+</strong> under a table adds a row, and the one along its right edge
-          adds a column. A table can have up to {{ LIMITS.tableRows }} rows and
+          Use <strong>Add page</strong> and <strong>Add table</strong> to grow a document. The strip
+          marked <strong>+</strong> under a table adds a row, and the one along its right edge adds
+          a column. A table can have up to {{ LIMITS.tableRows }} rows and
           {{ LIMITS.tableCols }} columns.
         </li>
         <li>
@@ -430,9 +430,9 @@ const OPERATORS = [
           <code>#REF!</code>.
         </li>
         <li>
-          Double-click the name of a spreadsheet, page, or table to rename it. From the keyboard,
-          move to the name with Tab and press Enter. A page's name is also the link that opens the
-          page, so there Enter opens the page and F2 renames it.
+          Double-click the name of a document, page, or table to rename it. From the keyboard, move
+          to the name with Tab and press Enter. A page's name is also the link that opens the page,
+          so there Enter opens the page and F2 renames it.
         </li>
         <li>
           The arrows beside a block move it up or down its page, and the button under them moves it
@@ -441,8 +441,8 @@ const OPERATORS = [
         </li>
         <li>The arrows on the open page's tab move the page left or right among the tabs.</li>
         <li>
-          Two pages in a spreadsheet cannot share a name, and neither can two tables on a page.
-          Names are compared without regard to letter case.
+          Two pages in a document cannot share a name, and neither can two tables on a page. Names
+          are compared without regard to letter case.
         </li>
       </ul>
     </section>
@@ -885,9 +885,7 @@ const OPERATORS = [
           Without it, the server records each message in its log and sends nothing. The server
           limits how many emails one person's clicks can send in an hour.
         </li>
-        <li>
-          Someone who can only view a spreadsheet cannot run its buttons or change its controls.
-        </li>
+        <li>Someone who can only view a document cannot run its buttons or change its controls.</li>
         <li>
           An action typed without <code>BUTTON</code> around it shows its name in gray and never
           runs.
@@ -989,47 +987,47 @@ const OPERATORS = [
     <section id="sharing">
       <h2>Sharing</h2>
       <p>
-        <strong>Share</strong>, at the top of a spreadsheet, gives it to another person who has an
+        <strong>Share</strong>, at the top of a document, gives it to another person who has an
         account here. Type their email address and choose what they can do.
       </p>
       <ul>
         <li>
-          Someone who <strong>can edit</strong> can change everything in the spreadsheet and run its
+          Someone who <strong>can edit</strong> can change everything in the document and run its
           buttons. Someone who <strong>can view</strong> can read it and open copies from its
           history.
         </li>
         <li>
-          Only the owner can share the spreadsheet, change what someone can do, stop sharing, or
-          delete it. A person it is shared with can leave it.
+          Only the owner can share the document, change what someone can do, stop sharing, or delete
+          it. A person it is shared with can leave it.
         </li>
         <li>
-          A shared spreadsheet shows in the other person's list, marked as shared with them.
-          Everyone who has it open sees changes within a second. When two people change the same
-          cell, the later change stays.
+          A shared document shows in the other person's list, marked as shared with them. Everyone
+          who has it open sees changes within a second. When two people change the same cell, the
+          later change stays.
         </li>
-        <li>The person must sign up before the spreadsheet can be shared with them.</li>
+        <li>The person must sign up before the document can be shared with them.</li>
       </ul>
     </section>
 
     <section id="history">
       <h2>History</h2>
       <p>
-        The app keeps versions of a spreadsheet as it changes. <strong>History</strong>, at the top
-        of a spreadsheet, lists them.
+        The app keeps versions of a document as it changes. <strong>History</strong>, at the top of
+        a document, lists them.
       </p>
       <ul>
         <li>
           A version is kept before anything is deleted: a row, a column, a table, a chart, a text
           view, or a page. One is also kept before a paste or an import that changes many cells, and
-          every ten minutes while the spreadsheet is being changed.
+          every ten minutes while the document is being changed.
         </li>
         <li>
-          <strong>Restore</strong> puts the whole spreadsheet back as the version has it. What the
-          spreadsheet held is kept as a version first, so a restore can be undone by restoring that
+          <strong>Restore</strong> puts the whole document back as the version has it. What the
+          document held is kept as a version first, so a restore can be undone by restoring that
           one.
         </li>
         <li>
-          <strong>Open a copy</strong> makes a new spreadsheet of the version and leaves this one
+          <strong>Open a copy</strong> makes a new document from the version and leaves this one
           alone. Use it to look at an old version, or to take one table from it.
         </li>
         <li>The newest {{ LIMITS.versions }} versions are kept.</li>
@@ -1037,7 +1035,7 @@ const OPERATORS = [
           Ctrl+Z and Ctrl+Y undo and redo changes made since this page was opened, including cell
           edits, formatting, and structural changes. A later edit can make an undo unsafe; when that
           happens, the app explains why and moves to the next change. Use History to restore an
-          older version of the whole spreadsheet.
+          older version of the whole document.
         </li>
         <li>
           A change is sent to the server as soon as it is made. The top of the editor says
@@ -1051,10 +1049,9 @@ const OPERATORS = [
       <h2>Files</h2>
       <ul>
         <li>
-          <strong>Export</strong>, at the top of a spreadsheet, saves the whole spreadsheet as a
-          file: its pages, the blocks on them, and everything typed into cells, formulas included.
-          <strong>Import</strong>, on the list of spreadsheets, makes a new spreadsheet from such a
-          file.
+          <strong>Export</strong>, at the top of a document, saves the whole document as a file: its
+          pages, the blocks on them, and everything typed into cells, formulas included.
+          <strong>Import</strong>, on the list of documents, makes a new document from such a file.
         </li>
         <li>
           <strong>Export CSV</strong> saves one table as a CSV file that other spreadsheet apps
@@ -1107,7 +1104,7 @@ const OPERATORS = [
         <strong>Add text</strong> puts a text view on a page. Double-click the text, or choose
         <strong>Edit</strong>, to write it. The text is
         <a href="https://commonmark.org/help/" target="_blank" rel="noreferrer">Markdown</a>, and
-        tags put values from the spreadsheet into it. The view shows the result as you type. Leaving
+        tags put values from the document into it. The view shows the result as you type. Leaving
         the source normally saves the text. Reference picks and browsing pages keep the draft open.
         <strong>Done</strong> or Ctrl/Cmd+Enter saves; <strong>Cancel</strong> discards.
       </p>

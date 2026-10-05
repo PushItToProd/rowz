@@ -120,11 +120,9 @@ describe("row and column actions", () => {
     });
   });
 
-  it("appear only while a cell of the table is selected, and name its row and column", async () => {
+  it("show row and column actions after a cell is selected, and name its row and column", async () => {
     await render();
-    expect(wrapper.get(".table-card__lines").text()).toBe(
-      "Select a cell to insert or delete its row or column.",
-    );
+    expect(wrapper.get(".table-card__lines").text()).toBe("");
 
     await select("B3");
     expect(wrapper.get(".table-card__lines").text()).toContain("Row 3");

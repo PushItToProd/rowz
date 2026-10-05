@@ -59,7 +59,7 @@ function changeRole(member: MemberRecord, event: Event): Promise<void> {
 function remove(member: MemberRecord): Promise<void> {
   const own = member.userId === props.userId;
   const asked = own
-    ? "Leave this spreadsheet? You will need to be given it again to open it."
+    ? "Leave this document? You will need to be given it again to open it."
     : `Stop sharing with ${member.name}?`;
   if (!window.confirm(asked)) return Promise.resolve();
   return run(async () => {
@@ -104,7 +104,7 @@ onBeforeUnmount(() => {
       </select>
       <button type="submit" class="primary" :disabled="busy">Share</button>
     </form>
-    <p v-else class="history__about">Only the owner can share this spreadsheet.</p>
+    <p v-else class="history__about">Only the owner can share this document.</p>
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
     <p v-if="members === null && !error">Loading…</p>
@@ -131,7 +131,7 @@ onBeforeUnmount(() => {
           class="danger"
           :disabled="busy"
           :aria-label="
-            member.userId === userId ? 'Leave this spreadsheet' : `Stop sharing with ${member.name}`
+            member.userId === userId ? 'Leave this document' : `Stop sharing with ${member.name}`
           "
           @click="remove(member)"
         >

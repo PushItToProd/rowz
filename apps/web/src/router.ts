@@ -33,7 +33,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
       from.name === "editor" &&
       (to.name !== "editor" || to.params.spreadsheetId !== from.params.spreadsheetId)
     ) {
-      if (!window.confirm("Leave this spreadsheet and discard the unsaved formula draft?")) {
+      if (!window.confirm("Leave this document and discard the unsaved formula draft?")) {
         formulas.focus();
         return false;
       }

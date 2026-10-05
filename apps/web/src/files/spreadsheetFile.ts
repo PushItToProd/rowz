@@ -18,13 +18,13 @@ export function readSpreadsheetFile(text: string): SpreadsheetFile {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error("The file is not a spreadsheet exported from this app");
+    throw new Error("The file is not a document exported from this app");
   }
   const result = spreadsheetFile.safeParse(parsed);
   if (result.success) return result.data;
   const [issue] = result.error.issues;
   const where = issue?.path.join(".") ?? "";
   throw new Error(
-    `The file is not a spreadsheet this app can read${where === "" ? "" : ` (${where}: ${issue?.message ?? ""})`}`,
+    `The file is not a document this app can read${where === "" ? "" : ` (${where}: ${issue?.message ?? ""})`}`,
   );
 }

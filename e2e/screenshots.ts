@@ -71,7 +71,7 @@ test("capture the README screenshots", async ({ page }) => {
   await page.getByLabel("Email").fill(`ada-${crypto.randomUUID()}@example.com`);
   await page.getByLabel("Password").fill("correct horse battery staple");
   await page.getByRole("button", { name: "Sign up" }).click();
-  await page.getByRole("button", { name: "New spreadsheet" }).click();
+  await page.getByRole("button", { name: "New document" }).click();
   await expect(cell(page, "A1")).toBeVisible();
 
   const pages = page.getByRole("navigation", { name: "Pages" });

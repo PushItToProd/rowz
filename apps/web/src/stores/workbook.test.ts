@@ -102,7 +102,7 @@ describe("loading", () => {
     const first = store.load("s1");
     server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(), id: "s2" }));
     await store.load("s2");
-    gone.reject(new Error("Spreadsheet not found"));
+    gone.reject(new Error("Document not found"));
     await expect(first).resolves.toBeUndefined();
     expect(store.spreadsheet?.id).toBe("s2");
   });
@@ -2106,8 +2106,8 @@ describe("refreshing after a change made elsewhere", () => {
 
   it("passes on the failure when the spreadsheet can no longer be read", async () => {
     const store = await open();
-    server.getSnapshot.mockRejectedValue(new Error("Spreadsheet not found"));
-    await expect(store.refresh()).rejects.toThrow("Spreadsheet not found");
+    server.getSnapshot.mockRejectedValue(new Error("Document not found"));
+    await expect(store.refresh()).rejects.toThrow("Document not found");
   });
 
   it("does nothing before a spreadsheet is open", async () => {

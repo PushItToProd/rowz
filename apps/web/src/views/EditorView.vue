@@ -256,7 +256,7 @@ watch(
     } catch (cause) {
       if (isActive())
         loadError.value =
-          cause instanceof Error ? cause.message : "The spreadsheet could not be opened";
+          cause instanceof Error ? cause.message : "The document could not be opened";
       return;
     }
     if (!isActive()) return;
@@ -265,7 +265,7 @@ watch(
       if (change) {
         void store.receiveChange(change).catch((cause: unknown) => {
           loadError.value =
-            cause instanceof Error ? cause.message : "The spreadsheet could not be read again";
+            cause instanceof Error ? cause.message : "The document could not be read again";
         });
         return;
       }
@@ -274,7 +274,7 @@ watch(
         store.refresh().catch((cause: unknown) => {
           // The spreadsheet was deleted, or is no longer shared with this person.
           loadError.value =
-            cause instanceof Error ? cause.message : "The spreadsheet could not be read again";
+            cause instanceof Error ? cause.message : "The document could not be read again";
         });
       }, REFRESH_DELAY_MS);
     });
@@ -329,7 +329,7 @@ watch(
         <h1 v-if="store.spreadsheet && loaded">
           <EditableName
             :value="store.spreadsheet.name"
-            label="Spreadsheet name"
+            label="Document name"
             :disabled="!store.canEdit"
             @rename="store.renameSpreadsheet($event)"
           />

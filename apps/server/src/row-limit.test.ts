@@ -160,7 +160,7 @@ describe("spreadsheet row limit", { timeout: 15_000 }, () => {
     const result = await client.json<UndoResult>("POST", `/spreadsheets/${snapshot.id}/undo`);
     expect(result).toMatchObject({
       outcome: "refused",
-      error: "This change would exceed the spreadsheet row limit",
+      error: "This change would exceed the document row limit",
     });
     const current = await readSnapshot(user, snapshot.id);
     expect(current.tables.find((table) => table.id === tableId)?.rowCount).toBe(19);

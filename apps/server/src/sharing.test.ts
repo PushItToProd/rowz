@@ -68,7 +68,7 @@ describe("sharing a spreadsheet", () => {
       index: 0,
     });
     expect(await share("x@example.com", "viewer", 403, guest)).toEqual({
-      error: { code: "forbidden", message: "Only the owner of this spreadsheet can do that" },
+      error: { code: "forbidden", message: "Only the owner of this document can do that" },
     });
     await guest.json("DELETE", base, undefined, 403);
   });

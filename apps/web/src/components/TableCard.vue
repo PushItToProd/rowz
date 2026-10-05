@@ -579,9 +579,6 @@ const menuLabel = computed(() => {
 
     <!-- Always present, so selecting a cell does not push the grid down. -->
     <div v-if="store.canEdit" class="table-card__lines">
-      <span v-if="!selected" class="table-card__line">
-        Select a cell to insert or delete its row or column.
-      </span>
       <span v-if="selected" role="group" :aria-label="`Row ${selected.row + 1}`">
         <span class="table-card__line">Row {{ selected.row + 1 }}</span>
         <button

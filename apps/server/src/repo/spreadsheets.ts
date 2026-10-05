@@ -835,7 +835,7 @@ export class SpreadsheetRepository {
     }
     const members = await this.listMembers(spreadsheetId);
     if (members.some((member) => member.userId === user.id && !member.shared)) {
-      throw conflict(`${email} already has this spreadsheet through its workspace`);
+      throw conflict(`${email} already has this document through its workspace`);
     }
     // A guest whose role changes sees it without reloading.
     noteChange(spreadsheetId);
@@ -940,7 +940,7 @@ export class SpreadsheetRepository {
     if (fileTables.reduce((total, table) => total + table.rowCount, 0) > LIMITS.spreadsheetRows) {
       throw unprocessable(
         "too_many_rows",
-        `A spreadsheet can have at most ${String(LIMITS.spreadsheetRows)} rows`,
+        `A document can have at most ${String(LIMITS.spreadsheetRows)} rows`,
       );
     }
     const inserted: InsertedTable[] = [];
@@ -1205,7 +1205,7 @@ export class SpreadsheetRepository {
       })
       .where(eq(spreadsheets.id, spreadsheetId))
       .returning({ revision: spreadsheets.revision });
-    if (!touched) throw notFound("Spreadsheet");
+    if (!touched) throw notFound("Document");
     const [latest] = await db
       .select({ createdAt: versions.createdAt })
       .from(versions)
@@ -1323,7 +1323,7 @@ export class SpreadsheetRepository {
       if (siblings.length >= FILE_LIMITS.pages) {
         throw unprocessable(
           "too_many_pages",
-          `A spreadsheet can have at most ${String(FILE_LIMITS.pages)} pages`,
+          `A document can have at most ${String(FILE_LIMITS.pages)} pages`,
         );
       }
       const values = {
@@ -1401,7 +1401,7 @@ export class SpreadsheetRepository {
         new Set(order).size === order.length &&
         order.every((id) => present.has(id));
       if (!complete) {
-        throw conflict("The pages have changed. Reload the spreadsheet and try again");
+        throw conflict("The pages have changed. Reload the document and try again");
       }
       for (const [position, id] of order.entries()) {
         await writer.updatePage(id, { position });
@@ -1537,7 +1537,7 @@ export class SpreadsheetRepository {
     const { change } = await this.changePage(pageId, async (page, tx, writer) => {
       writer.setLabel(`Delete page ${page.name}`);
       const remaining = await tx.$count(pages, eq(pages.spreadsheetId, page.spreadsheetId));
-      if (remaining <= 1) throw conflict("A spreadsheet needs at least one page");
+      if (remaining <= 1) throw conflict("A document needs at least one page");
       await this.keepVersion(tx, page.spreadsheetId, `Before deleting the page ${page.name}`);
       await writer.deletePage(pageId);
     });
@@ -1983,7 +1983,7 @@ export class SpreadsheetRepository {
     if (found?.spreadsheetId !== table.spreadsheetId || !found.columns || found.id === table.id) {
       throw unprocessable(
         "invalid_choice_source",
-        "Choices can come from a column of another data table in this spreadsheet",
+        "Choices can come from a column of another data table in this document",
       );
     }
     if (!found.colIds.includes(source.colId)) throw columnDeleted();
@@ -2178,7 +2178,7 @@ export class SpreadsheetRepository {
     if ((counted?.filled ?? 0) > FILE_LIMITS.cells) {
       throw unprocessable(
         "too_many_cells",
-        `A spreadsheet can have at most ${String(FILE_LIMITS.cells)} filled cells`,
+        `A document can have at most ${String(FILE_LIMITS.cells)} filled cells`,
       );
     }
   }
@@ -2785,7 +2785,7 @@ export class SpreadsheetRepository {
       .select({ id: pages.id })
       .from(pages)
       .where(eq(pages.spreadsheetId, spreadsheetId));
-    if (pageRows.length === 0) throw new UndoRefusal("A spreadsheet needs at least one page");
+    if (pageRows.length === 0) throw new UndoRefusal("A document needs at least one page");
     if (pageRows.length > FILE_LIMITS.pages) {
       throw new UndoRefusal("This change would exceed the page limit");
     }
@@ -2806,7 +2806,7 @@ export class SpreadsheetRepository {
       .where(inSpreadsheet);
     const totalRows = tableRecords.reduce((total, table) => total + table.rowCount, 0);
     if (totalRows > LIMITS.spreadsheetRows && totalRows >= rowsBefore) {
-      throw new UndoRefusal("This change would exceed the spreadsheet row limit");
+      throw new UndoRefusal("This change would exceed the document row limit");
     }
     const outOfBounds = tableRecords.some(
       (table) =>
@@ -2824,7 +2824,7 @@ export class SpreadsheetRepository {
       .innerJoin(pages, eq(pages.id, tables.pageId))
       .where(inSpreadsheet);
     if ((cellCount?.filled ?? 0) > FILE_LIMITS.cells) {
-      throw new UndoRefusal("This change would exceed the spreadsheet cell limit");
+      throw new UndoRefusal("This change would exceed the document cell limit");
     }
     // The database keeps a cell's row in its table. Nothing but this keeps its column there.
     const outside = await db
@@ -2906,7 +2906,7 @@ export class SpreadsheetRepository {
       .from(spreadsheets)
       .innerJoin(this.access, this.granted())
       .where(eq(spreadsheets.id, spreadsheetId));
-    return authorize(row, access, "Spreadsheet");
+    return authorize(row, access, "Document");
   }
 
   async findPage(pageId: string, access: Access): Promise<Found<PageRecord>> {

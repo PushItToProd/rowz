@@ -115,7 +115,7 @@ describe("SharePanel", () => {
   it("gives a guest the list, no way to share, and a way to leave", async () => {
     await render({ owner: false, userId: "u2" });
     expect(wrapper.find("form").exists()).toBe(false);
-    expect(wrapper.text()).toContain("Only the owner can share this spreadsheet.");
+    expect(wrapper.text()).toContain("Only the owner can share this document.");
     expect(row("bo@example.com").find("select").exists()).toBe(false);
     expect(row("bo@example.com").get(".share__role").text()).toBe("Can edit");
 

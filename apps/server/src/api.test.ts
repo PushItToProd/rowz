@@ -175,7 +175,7 @@ describe("spreadsheets", () => {
   it("answers 400 for an id that is not a UUID and 404 for one that does not exist", async () => {
     await user.json("GET", "/spreadsheets/not-a-uuid", undefined, 400);
     expect(await user.json("GET", `/spreadsheets/${UNKNOWN_ID}`, undefined, 404)).toEqual({
-      error: { code: "not_found", message: "Spreadsheet not found" },
+      error: { code: "not_found", message: "Document not found" },
     });
     await user.json("PATCH", `/pages/${UNKNOWN_ID}`, { name: "x" }, 404);
     await user.json("DELETE", `/tables/${UNKNOWN_ID}`, undefined, 404);
@@ -263,7 +263,7 @@ describe("pages", () => {
   it("refuses to delete the last page", async () => {
     const snapshot = await createSpreadsheet(user);
     expect(await user.json("DELETE", `/pages/${first(snapshot).page.id}`, undefined, 409)).toEqual({
-      error: { code: "conflict", message: "A spreadsheet needs at least one page" },
+      error: { code: "conflict", message: "A document needs at least one page" },
     });
   });
 });

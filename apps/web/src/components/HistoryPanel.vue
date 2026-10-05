@@ -38,7 +38,7 @@ const refresh = (): Promise<void> =>
   });
 
 function restore(version: VersionListItem): Promise<void> {
-  const asked = `Put the spreadsheet back as it was on ${when(version)}? What it holds now is kept as a version, so this can be undone.`;
+  const asked = `Put the document back as it was on ${when(version)}? What it holds now is kept as a version, so this can be undone.`;
   if (!window.confirm(asked)) return Promise.resolve();
   return run(version.id, async () => {
     await store.restoreVersion(props.spreadsheetId, version.id);
@@ -82,7 +82,7 @@ onBeforeUnmount(() => {
       <button type="button" aria-label="Close history" @click="emit('close')">×</button>
     </header>
     <p class="history__about">
-      A version is kept before anything is deleted, and every ten minutes while the spreadsheet is
+      A version is kept before anything is deleted, and every ten minutes while the document is
       being changed.
     </p>
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>

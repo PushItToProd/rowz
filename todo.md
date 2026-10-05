@@ -337,7 +337,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [x] show a button in the editor header whenever the document has errors, like the failing-assertions indicator; open a popup listing all errors with links to their locations
   - [x] show a warning triangle on blocks and pages that contain errors
   - [x] show a warning triangle on documents that contain errors in the document list
-- [ ] (Claude) say "document" instead of "spreadsheet" in the UI and help page, as the README does
+- [x] (Claude) say "document" instead of "spreadsheet" in the UI and help page, as the README does
 - [x] mobile friendly UI (layout, touch targets, tap twice to edit)
 - [ ] **P10** revamp the phone-width UI so it is less cramped. The editor header is the tightest part: it holds the back arrow, the spreadsheet's name, the saving indicator, Share, History, Export, and Help on one line.
 - [ ] allow checkboxes, inputs, and other controls to target a named range; require the target to contain exactly one cell
