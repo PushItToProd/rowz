@@ -164,20 +164,12 @@
             {
               "name": "RSVP",
               "type": "choice",
-              "choices": [
-                "Yes",
-                "No",
-                "Pending"
-              ]
+              "choices": ["Yes", "No", "Pending"]
             },
             {
               "name": "Meal",
               "type": "choice",
-              "choices": [
-                "Chicken",
-                "Vegetarian",
-                "Kids meal"
-              ]
+              "choices": ["Chicken", "Vegetarian", "Kids meal"]
             },
             {
               "name": "TableName",
@@ -1027,11 +1019,7 @@
             {
               "name": "Status",
               "type": "choice",
-              "choices": [
-                "Open",
-                "In progress",
-                "Done"
-              ]
+              "choices": ["Open", "In progress", "Done"]
             }
           ],
           "cells": [

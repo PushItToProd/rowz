@@ -309,11 +309,7 @@
             {
               "name": "Kind",
               "type": "choice",
-              "choices": [
-                "Receipt",
-                "Usage",
-                "Adjustment"
-              ]
+              "choices": ["Receipt", "Usage", "Adjustment"]
             },
             {
               "name": "Quantity",
@@ -691,11 +687,7 @@
             {
               "name": "Status",
               "type": "choice",
-              "choices": [
-                "Open",
-                "Fulfilled",
-                "Cancelled"
-              ]
+              "choices": ["Open", "Fulfilled", "Cancelled"]
             },
             {
               "name": "NeedBy",

@@ -3,11 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import {
-  createSecureContext,
-  getCACertificates,
-  setDefaultCACertificates,
-} from "node:tls";
+import { createSecureContext, getCACertificates, setDefaultCACertificates } from "node:tls";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -188,7 +184,9 @@ export async function main(args = process.argv.slice(2)) {
     const account = await credentials(values.credentials);
     if (account.insecureTls) {
       process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-      console.warn("Warning: TLS certificate validation is disabled for requests from this process.");
+      console.warn(
+        "Warning: TLS certificate validation is disabled for requests from this process.",
+      );
     } else if (account.tlsCa) {
       try {
         createSecureContext({ ca: account.tlsCa.certificate });
