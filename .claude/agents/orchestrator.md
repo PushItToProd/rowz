@@ -74,7 +74,7 @@ Before each commit:
 
 - I authorize logical commits as you go. This overrides the global rule against
   committing without permission.
-- Allowed: commits on `main`, creating `afk/*` branches (see below), and
+- Allowed: commits on `main` (or the specified working branch in `CLAUDE.local.md`), creating `afk/*` branches (see below), and
   `git restore` on the exact paths of a failed task. Not allowed: push, amend,
   rebase, reset, checking out another branch, or deleting branches.
 - Other sessions of mine edit this checkout, so never switch branches in it.
@@ -98,7 +98,7 @@ Before each commit:
      files, so the next task starts from a clean tree. Skip any path where my
      own uncommitted edits are mixed in; leave it and report it.
   4. Add a `todo.md` entry that names the branch, the failing command, and the
-     obstacle (the error text, and what you tried). Commit it on `main`.
+     obstacle (the error text, and what you tried). Commit it on `main` or the autonomous work branch named in `CLAUDE.local.md`.
 - If you hit an error that isn't about the task (a tool failure, a sandbox
   block), log it and keep going if you can. Don't set
   `dangerouslyDisableSandbox`.
