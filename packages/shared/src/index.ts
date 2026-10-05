@@ -663,6 +663,8 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
 }
 
 export const spreadsheetParam = z.object({ spreadsheetId: z.uuid() });
+export const folderParam = z.object({ folderId: z.uuid() });
+export const moveSpreadsheetFolderBody = z.object({ folderId: z.uuid().nullable() });
 /** Opening the stream of a spreadsheet's changes. `client` is the name the session makes its own changes under. */
 export const eventsQuery = z.object({ client: z.string().min(1).max(100).optional() });
 /** Sharing a spreadsheet with the account that has this email address. */

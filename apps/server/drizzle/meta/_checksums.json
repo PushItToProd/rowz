@@ -56,6 +56,10 @@
     {
       "tag": "0013_conscious_violations",
       "sha256": "2ab58144a183eb14a416025c3b6cda7f02537bf8bbd39f10542b523a77c12b5b"
+    },
+    {
+      "tag": "0014_curious_psylocke",
+      "sha256": "45386611d936234df4c3cb12e3ba0e27d87a0bc10e7567a45e04aeb2c2172acf"
     }
   ]
 }

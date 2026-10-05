@@ -33,11 +33,15 @@ afterAll(() => server.close());
 
 type Route = [method: string, path: string, body?: unknown];
 
-/** Every route that is not about one spreadsheet. Each needs a session and nothing more. */
+/** Account-scoped routes; moving a document also checks that the caller can read it. */
 const accountRoutes: Route[] = [
   ["GET", "/spreadsheets"],
   ["POST", "/spreadsheets", { name: "x" }],
   ["POST", "/spreadsheets/import", {}],
+  ["POST", "/folders", { name: "x" }],
+  ["PATCH", `/folders/${UNKNOWN_ID}`, { name: "Renamed" }],
+  ["DELETE", `/folders/${UNKNOWN_ID}`],
+  ["PUT", `/spreadsheets/${UNKNOWN_ID}/folder`, { folderId: null }],
 ];
 
 /** Every route that reads the spreadsheet. */
@@ -53,15 +57,19 @@ function readRoutes(): Route[] {
 }
 
 /**
- * The routes other than a GET that change no spreadsheet the caller was given.
- * Each makes a new spreadsheet that belongs to the caller, and the last reads
- * an existing one to do it. Every other such route must be in `writeRoutes`.
+ * The routes other than a GET that change no spreadsheet's contents. These
+ * manage the caller's account or private document list. Every other such
+ * route must be in `writeRoutes`.
  */
 const CHANGES_NO_SPREADSHEET = [
   "POST /spreadsheets",
   "POST /spreadsheets/import",
   "POST /spreadsheets/:spreadsheetId/copy",
   "POST /spreadsheets/:spreadsheetId/versions/:versionId/copy",
+  "POST /folders",
+  "PATCH /folders/:folderId",
+  "DELETE /folders/:folderId",
+  "PUT /spreadsheets/:spreadsheetId/folder",
 ];
 
 /** Every route that changes the spreadsheet, least destructive first so each still has a target. */
@@ -212,8 +220,8 @@ describe("a user outside the workspace", () => {
   it("does not see the spreadsheet in their list", async () => {
     const stranger = await server.signUp("Stranger");
     await createSpreadsheet(stranger, "Mine");
-    const listed = await stranger.json<SpreadsheetSummary[]>("GET", "/spreadsheets");
-    expect(listed.map((item) => item.name)).toEqual(["Mine"]);
+    const listed = await stranger.json<{ documents: SpreadsheetSummary[] }>("GET", "/spreadsheets");
+    expect(listed.documents.map((item) => item.name)).toEqual(["Mine"]);
   });
 });
 
@@ -226,8 +234,8 @@ describe("a viewer", () => {
       ...snapshot,
       role: "viewer",
     });
-    const listed = await viewer.json<SpreadsheetSummary[]>("GET", "/spreadsheets");
-    expect(listed.map((item) => item.id)).toEqual([snapshot.id]);
+    const listed = await viewer.json<{ documents: SpreadsheetSummary[] }>("GET", "/spreadsheets");
+    expect(listed.documents.map((item) => item.id)).toEqual([snapshot.id]);
 
     const routes = writeRoutes();
     expect(await statuses(viewer, routes)).toEqual(routes.map(() => 403));

@@ -24,7 +24,7 @@ describe("authentication", () => {
 
   it("accepts API requests after sign-up", async () => {
     const user = await server.signUp();
-    expect(await user.json("GET", "/spreadsheets")).toEqual([]);
+    expect(await user.json("GET", "/spreadsheets")).toEqual({ folders: [], documents: [] });
   });
 });
 

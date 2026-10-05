@@ -69,7 +69,9 @@ describe("spreadsheets", () => {
     const older = await createSpreadsheet(lister, "Older");
     const newer = await createSpreadsheet(lister, "Newer");
     const names = async (): Promise<string[]> =>
-      (await lister.json<SpreadsheetSummary[]>("GET", "/spreadsheets")).map((item) => item.name);
+      (
+        await lister.json<{ documents: SpreadsheetSummary[] }>("GET", "/spreadsheets")
+      ).documents.map((item) => item.name);
 
     expect(await names()).toEqual(["Newer", "Older"]);
     await lister.json("PUT", `/tables/${first(older).table.id}/cells`, cellsBody({ A1: "1" }), 200);
@@ -82,9 +84,12 @@ describe("spreadsheets", () => {
     const snapshot = await createSpreadsheet(caller, "Diagnostics");
     const { table, page } = first(snapshot);
     const listed = async () =>
-      (await caller.json<{ id: string; hasErrors: boolean }[]>("GET", "/spreadsheets")).find(
-        (item) => item.id === snapshot.id,
-      );
+      (
+        await caller.json<{ documents: { id: string; hasErrors: boolean }[] }>(
+          "GET",
+          "/spreadsheets",
+        )
+      ).documents.find((item) => item.id === snapshot.id);
     expect(await listed()).toMatchObject({ hasErrors: false });
     await caller.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "=1/0" }));
     expect(await listed()).toMatchObject({ hasErrors: true });
@@ -101,7 +106,7 @@ describe("spreadsheets", () => {
     const snapshot = await createSpreadsheet(caller, "Cached diagnostics");
     const { table } = first(snapshot);
     const read = vi.spyOn(SpreadsheetRepository.prototype, "read");
-    const list = () => caller.json<{ hasErrors: boolean }[]>("GET", "/spreadsheets");
+    const list = () => caller.json<{ documents: { hasErrors: boolean }[] }>("GET", "/spreadsheets");
     try {
       await list();
       expect(read).toHaveBeenCalledTimes(1);
@@ -109,13 +114,13 @@ describe("spreadsheets", () => {
       expect(read).toHaveBeenCalledTimes(1);
       await caller.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "=1/0" }));
       read.mockClear();
-      expect(await list()).toEqual([expect.objectContaining({ hasErrors: true })]);
+      expect((await list()).documents).toEqual([expect.objectContaining({ hasErrors: true })]);
       expect(read).toHaveBeenCalledTimes(1);
       await list();
       expect(read).toHaveBeenCalledTimes(1);
       await caller.json("PUT", `/tables/${table.id}/cells`, cellsBody({ A1: "=NOW()" }));
       read.mockClear();
-      expect(await list()).toEqual([expect.objectContaining({ hasErrors: false })]);
+      expect((await list()).documents).toEqual([expect.objectContaining({ hasErrors: false })]);
       await list();
       expect(read).toHaveBeenCalledTimes(2);
     } finally {

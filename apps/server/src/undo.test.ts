@@ -651,6 +651,10 @@ const NOT_JOURNALED = [
   "POST /spreadsheets/:spreadsheetId/versions/:versionId/copy",
   "POST /spreadsheets/:spreadsheetId/undo",
   "POST /spreadsheets/:spreadsheetId/redo",
+  "POST /folders",
+  "PATCH /folders/:folderId",
+  "DELETE /folders/:folderId",
+  "PUT /spreadsheets/:spreadsheetId/folder",
 ];
 
 describe("undo round trips", () => {

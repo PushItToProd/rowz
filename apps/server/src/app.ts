@@ -10,6 +10,7 @@ import {
   type Env,
 } from "./http";
 import { pageRoutes } from "./routes/pages";
+import { folderRoutes } from "./routes/folders";
 import { spreadsheetRoutes } from "./routes/spreadsheets";
 import { tableRoutes } from "./routes/tables";
 import { viewRoutes } from "./routes/views";
@@ -19,6 +20,8 @@ export type {
   Change,
   ChangedContent,
   Created,
+  DocumentList,
+  FolderRecord,
   ListedSpreadsheet,
   MemberRecord,
   PageRecord,
@@ -50,6 +53,7 @@ export function createApp(dependencies: AppDependencies) {
     .use(requireTrustedOrigin(dependencies))
     .use(requireSession(dependencies))
     .use(announceChanges(changes))
+    .route("/folders", folderRoutes())
     .route("/spreadsheets", spreadsheetRoutes(changes, dependencies.shutdown))
     .route("/pages", pageRoutes())
     .route("/tables", tableRoutes(dependencies))

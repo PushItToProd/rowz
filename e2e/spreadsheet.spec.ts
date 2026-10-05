@@ -14,14 +14,14 @@ async function signUp(page: Page, email = uniqueEmail()): Promise<string> {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign up" }).click();
-  await expect(page.getByRole("heading", { name: "Spreadsheets" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible();
   return email;
 }
 
 /** Signs up and opens a new spreadsheet in the editor. */
 async function newSpreadsheet(page: Page): Promise<void> {
   await signUp(page);
-  await page.getByRole("button", { name: "New spreadsheet" }).click();
+  await page.getByRole("button", { name: "New document" }).click();
   await expect(cell(page, "A1")).toBeVisible();
 }
 
@@ -665,28 +665,28 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   const fileDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const file = await fileDownload;
-  expect(file.suggestedFilename()).toBe("Untitled spreadsheet.json");
+  expect(file.suggestedFilename()).toBe("Untitled document.json");
   const filePath = testInfo.outputPath(file.suggestedFilename());
   await file.saveAs(filePath);
 
-  await page.getByRole("link", { name: "← Spreadsheets" }).click();
+  await page.getByRole("link", { name: "← Documents" }).click();
   await page.getByLabel("Import").setInputFiles(filePath);
   await expect(cell(page, "B2")).toHaveText("6");
   await expect(page.locator('[data-view="Chart 1"] .chart__bar')).toHaveCount(2);
   await enter(page, "B1", "5");
   await expect(cell(page, "B2")).toHaveText("10");
-  await page.getByRole("link", { name: "← Spreadsheets" }).click();
-  await expect(page.getByRole("link", { name: "Untitled spreadsheet" })).toHaveCount(2);
+  await page.getByRole("link", { name: "← Documents" }).click();
+  await expect(page.getByRole("link", { name: "Untitled document" })).toHaveCount(2);
 
   // A CSV file goes into a table from its first cell, and the table grows to fit.
-  await page.getByRole("button", { name: "New spreadsheet" }).click();
+  await page.getByRole("button", { name: "New document" }).click();
   await expect(cell(page, "A1")).toBeVisible();
   await page.getByLabel("Import CSV").setInputFiles(csvPath);
   await expect(cell(page, "A2")).toHaveText("pears, ripe");
   await expect(cell(page, "B2")).toHaveText("6");
 
   // A file that is not a spreadsheet is refused with a message.
-  await page.getByRole("link", { name: "← Spreadsheets" }).click();
+  await page.getByRole("link", { name: "← Documents" }).click();
   await page.getByLabel("Import").setInputFiles(csvPath);
   await expect(page.getByRole("alert")).toContainText("not a spreadsheet exported from this app");
 });
@@ -944,7 +944,7 @@ test("the Gran Turismo sample imports its comparison and checkbox, and preserves
   const file = await download;
   const filePath = testInfo.outputPath(file.suggestedFilename());
   await file.saveAs(filePath);
-  await page.getByRole("link", { name: "← Spreadsheets" }).click();
+  await page.getByRole("link", { name: "← Documents" }).click();
   await page.getByLabel("Import").setInputFiles(filePath);
   await expectSampleSettings();
 
@@ -1105,7 +1105,7 @@ test("Save a copy opens an independent document with working formulas", async ({
   await enter(page, "B1", "=A1*2");
   await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
   await page.getByRole("button", { name: "Save a copy", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Untitled spreadsheet (copy)");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Untitled document (copy)");
   expect(page.url()).not.toBe(original);
   await expect(cell(page, "B1")).toHaveText("42");
   await enter(page, "A1", "5");
@@ -1171,7 +1171,7 @@ test("a deleted row is brought back from the history, and a version opens as a c
 
   await history.getByRole("listitem").first().getByRole("button", { name: "Open a copy" }).click();
   await expect(history).toHaveCount(0);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Untitled spreadsheet (copy)");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Untitled document (copy)");
   await expect(cell(page, "A1")).toHaveText("and me");
 });
 
@@ -1223,17 +1223,17 @@ test("spreadsheets are private to the account that made them", async ({ page }) 
   await expect(page).toHaveURL(/\/login/);
 
   const email = await signUp(page);
-  await page.getByRole("button", { name: "New spreadsheet" }).click();
+  await page.getByRole("button", { name: "New document" }).click();
   await expect(cell(page, "A1")).toBeVisible();
   const privateUrl = page.url();
 
-  await page.getByRole("link", { name: "← Spreadsheets" }).click();
-  await expect(page.getByRole("link", { name: "Untitled spreadsheet" })).toBeVisible();
+  await page.getByRole("link", { name: "← Documents" }).click();
+  await expect(page.getByRole("link", { name: "Untitled document" })).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
 
   await signUp(page);
-  await expect(page.getByText("No spreadsheets yet")).toBeVisible();
+  await expect(page.getByText("No documents yet")).toBeVisible();
   await page.goto(privateUrl);
   await expect(page.getByRole("alert")).toHaveText("Spreadsheet not found");
 
@@ -1242,7 +1242,35 @@ test("spreadsheets are private to the account that made them", async ({ page }) 
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("link", { name: "Untitled spreadsheet" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Untitled document" })).toBeVisible();
+});
+
+test("folders organize documents in the list, and deleting one returns them to Unfiled", async ({
+  page,
+}) => {
+  await signUp(page);
+  await page.getByRole("button", { name: "New document" }).click();
+  await expect(cell(page, "A1")).toBeVisible();
+  await page.getByRole("link", { name: "← Documents" }).click();
+
+  await page.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("New folder name").fill("Planning");
+  await page.getByRole("button", { name: "Create folder" }).click();
+  const planning = page
+    .locator(".list__group")
+    .filter({ has: page.getByRole("button", { name: /^Planning/ }) });
+  await expect(planning).toBeVisible();
+
+  await page.getByRole("button", { name: "Move Untitled document to a folder" }).click();
+  await page.getByRole("menuitem", { name: "Move to Planning" }).click();
+  await expect(planning.getByRole("link", { name: "Untitled document" })).toBeVisible();
+
+  await planning.getByRole("button", { name: "Delete folder Planning" }).click();
+  await expect(page.getByRole("button", { name: /^Planning/ })).toHaveCount(0);
+  const unfiled = page
+    .locator(".list__group")
+    .filter({ has: page.getByRole("button", { name: /^Unfiled/ }) });
+  await expect(unfiled.getByRole("link", { name: "Untitled document" })).toBeVisible();
 });
 
 test("a spreadsheet is shared with another account, which can edit it until the share ends", async ({
@@ -1269,7 +1297,7 @@ test("a spreadsheet is shared with another account, which can edit it until the 
   // The guest sees it in their list, opens it, and edits it.
   await guest.reload();
   await expect(guest.getByText("Shared with you · can edit")).toBeVisible();
-  await guest.getByRole("link", { name: "Untitled spreadsheet" }).click();
+  await guest.getByRole("link", { name: "Untitled document" }).click();
   await expect(cell(guest, "A1")).toHaveText("from the owner");
   await enter(guest, "B1", "from the guest");
   await expect(guest.getByRole("button", { name: "Delete table" })).toBeVisible();
@@ -1328,13 +1356,13 @@ test("the browser tab names what is open, then the app", async ({ page }) => {
   await expect(page).toHaveTitle(`Help | ${APP_NAME}`);
 
   await signUp(page);
-  await expect(page).toHaveTitle(`Spreadsheets | ${APP_NAME}`);
+  await expect(page).toHaveTitle(`Documents | ${APP_NAME}`);
   await expect(page.getByText(APP_NAME, { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "New spreadsheet" }).click();
-  await expect(page).toHaveTitle(`Untitled spreadsheet | ${APP_NAME}`);
+  await page.getByRole("button", { name: "New document" }).click();
+  await expect(page).toHaveTitle(`Untitled document | ${APP_NAME}`);
 
-  await page.getByRole("heading", { level: 1 }).getByText("Untitled spreadsheet").dblclick();
+  await page.getByRole("heading", { level: 1 }).getByText("Untitled document").dblclick();
   await page.getByLabel("Spreadsheet name").fill("My budget");
   await page.getByLabel("Spreadsheet name").press("Enter");
   await expect(page).toHaveTitle(`My budget | ${APP_NAME}`);
@@ -1350,7 +1378,7 @@ test.describe("on a phone", () => {
 
     await signUp(page);
     expect(await fitsScreen()).toBe(true);
-    await page.getByRole("button", { name: "New spreadsheet" }).tap();
+    await page.getByRole("button", { name: "New document" }).tap();
     await expect(cell(page, "A1")).toBeVisible();
     expect(await fitsScreen()).toBe(true);
 
@@ -1614,11 +1642,9 @@ test("errors stay visible across pages and in the document list", async ({ page 
   await expect(cell(page, "A1")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
   await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
-  await page.getByRole("link", { name: "← Spreadsheets" }).click();
-  await expect(
-    page.getByRole("img", { name: "Untitled spreadsheet contains errors" }),
-  ).toBeVisible();
-  const link = page.getByRole("link", { name: /Untitled spreadsheet/ });
+  await page.getByRole("link", { name: "← Documents" }).click();
+  await expect(page.getByRole("img", { name: "Untitled document contains errors" })).toBeVisible();
+  const link = page.getByRole("link", { name: /Untitled document/ });
   const href = await link.getAttribute("href");
   const spreadsheetId = href?.split("/")[2];
   if (!spreadsheetId) throw new Error("The document link has no document ID");
@@ -1647,10 +1673,8 @@ test("errors stay visible across pages and in the document list", async ({ page 
     0,
   );
   await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
-  await page.getByRole("link", { name: "← Spreadsheets" }).click();
-  await expect(page.getByRole("img", { name: "Untitled spreadsheet contains errors" })).toHaveCount(
-    0,
-  );
+  await page.getByRole("link", { name: "← Documents" }).click();
+  await expect(page.getByRole("img", { name: "Untitled document contains errors" })).toHaveCount(0);
 });
 
 test("invalid button plans appear in document errors before clicking the button", async ({

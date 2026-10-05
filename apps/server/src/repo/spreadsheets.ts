@@ -92,7 +92,9 @@ import {
 import {
   actionRuns,
   cells,
+  documentFolders,
   deletedRows,
+  folders,
   journal,
   pages,
   spreadsheetMembers,
@@ -145,6 +147,17 @@ export interface SpreadsheetSummary {
 export interface ListedSpreadsheet extends SpreadsheetSummary {
   role: Role;
   hasErrors: boolean;
+  folderId: string | null;
+}
+
+export interface FolderRecord {
+  id: string;
+  name: string;
+}
+
+export interface DocumentList {
+  folders: FolderRecord[];
+  documents: ListedSpreadsheet[];
 }
 
 export interface PageRecord {
@@ -650,28 +663,43 @@ export class SpreadsheetRepository {
     );
   }
 
-  async listSpreadsheets(): Promise<ListedSpreadsheet[]> {
-    const listed = await this.db
-      .select({
-        id: spreadsheets.id,
-        name: spreadsheets.name,
-        revision: spreadsheets.revision,
-        updatedAt: spreadsheets.updatedAt,
-        role: this.access.role,
-      })
-      .from(spreadsheets)
-      .innerJoin(this.access, this.granted())
-      .orderBy(desc(spreadsheets.updatedAt));
+  async listSpreadsheets(): Promise<DocumentList> {
+    const [listed, listedFolders] = await Promise.all([
+      this.db
+        .select({
+          id: spreadsheets.id,
+          name: spreadsheets.name,
+          revision: spreadsheets.revision,
+          updatedAt: spreadsheets.updatedAt,
+          role: this.access.role,
+          folderId: documentFolders.folderId,
+        })
+        .from(spreadsheets)
+        .innerJoin(this.access, this.granted())
+        .leftJoin(
+          documentFolders,
+          and(
+            eq(documentFolders.spreadsheetId, spreadsheets.id),
+            eq(documentFolders.userId, this.userId),
+          ),
+        )
+        .orderBy(desc(spreadsheets.updatedAt)),
+      this.db
+        .select({ id: folders.id, name: folders.name })
+        .from(folders)
+        .where(eq(folders.userId, this.userId))
+        .orderBy(sql`lower(${folders.name})`, asc(folders.name)),
+    ]);
     let cache = diagnosticCaches.get(this.db);
     if (!cache) {
       cache = new Map();
       diagnosticCaches.set(this.db, cache);
     }
-    const result: ListedSpreadsheet[] = [];
+    const documents: ListedSpreadsheet[] = [];
     for (const { revision, ...item } of listed) {
       const cached = cache.get(item.id);
       if (cached?.revision === revision) {
-        result.push({ ...item, hasErrors: cached.hasErrors });
+        documents.push({ ...item, hasErrors: cached.hasErrors });
         continue;
       }
       const { data, snapshot } = await this.read(item.id);
@@ -686,9 +714,76 @@ export class SpreadsheetRepository {
         }
         cache.set(item.id, { revision: snapshot.revision, hasErrors });
       }
-      result.push({ ...item, hasErrors });
+      documents.push({ ...item, hasErrors });
     }
-    return result;
+    return { folders: listedFolders, documents };
+  }
+
+  async createFolder(name: string): Promise<FolderRecord> {
+    try {
+      const [folder] = await this.db
+        .insert(folders)
+        .values({ userId: this.userId, name })
+        .returning({ id: folders.id, name: folders.name });
+      if (!folder) throw new Error("Insert returned no folder");
+      return folder;
+    } catch (cause) {
+      if (isUniqueViolation(cause)) throw conflict(`A folder named ${name} already exists`);
+      throw cause;
+    }
+  }
+
+  async renameFolder(folderId: string, name: string): Promise<FolderRecord> {
+    try {
+      const [folder] = await this.db
+        .update(folders)
+        .set({ name })
+        .where(and(eq(folders.id, folderId), eq(folders.userId, this.userId)))
+        .returning({ id: folders.id, name: folders.name });
+      if (!folder) throw notFound("Folder");
+      return folder;
+    } catch (cause) {
+      if (isUniqueViolation(cause)) throw conflict(`A folder named ${name} already exists`);
+      throw cause;
+    }
+  }
+
+  async deleteFolder(folderId: string): Promise<void> {
+    const deleted = await this.db
+      .delete(folders)
+      .where(and(eq(folders.id, folderId), eq(folders.userId, this.userId)))
+      .returning({ id: folders.id });
+    if (deleted.length === 0) throw notFound("Folder");
+  }
+
+  /** Moves a document in this user's list; a missing folder puts it at the root. */
+  async moveDocument(spreadsheetId: string, folderId: string | null): Promise<void> {
+    await this.findSpreadsheet(spreadsheetId, "read");
+    if (folderId === null) {
+      await this.db
+        .delete(documentFolders)
+        .where(
+          and(
+            eq(documentFolders.userId, this.userId),
+            eq(documentFolders.spreadsheetId, spreadsheetId),
+          ),
+        );
+      return;
+    }
+
+    const [folder] = await this.db
+      .select({ id: folders.id })
+      .from(folders)
+      .where(and(eq(folders.id, folderId), eq(folders.userId, this.userId)));
+    if (!folder) throw notFound("Folder");
+
+    await this.db
+      .insert(documentFolders)
+      .values({ userId: this.userId, spreadsheetId, folderId })
+      .onConflictDoUpdate({
+        target: [documentFolders.userId, documentFolders.spreadsheetId],
+        set: { folderId },
+      });
   }
 
   /** Everyone who can open a spreadsheet: the members of its workspace, then the people it is shared with. */

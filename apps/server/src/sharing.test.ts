@@ -46,9 +46,9 @@ describe("sharing a spreadsheet", () => {
       id: snapshot.id,
       role: "editor",
     });
-    expect(await guest.json<ListedSpreadsheet[]>("GET", "/spreadsheets")).toMatchObject([
-      { id: snapshot.id, name: "Plan", role: "editor" },
-    ]);
+    expect(
+      (await guest.json<{ documents: ListedSpreadsheet[] }>("GET", "/spreadsheets")).documents,
+    ).toMatchObject([{ id: snapshot.id, name: "Plan", role: "editor" }]);
   });
 
   it("lets an editor change the contents and run buttons, and not share or delete", async () => {
@@ -97,8 +97,8 @@ describe("sharing a spreadsheet", () => {
     await share(guest.email, "editor");
     const mine = await createSpreadsheet(guest, "Guest's own");
     await owner.json("GET", `/spreadsheets/${mine.id}`, undefined, 404);
-    const listed = await owner.json<ListedSpreadsheet[]>("GET", "/spreadsheets");
-    expect(listed.map((item) => item.name)).toEqual(["Plan"]);
+    const listed = await owner.json<{ documents: ListedSpreadsheet[] }>("GET", "/spreadsheets");
+    expect(listed.documents.map((item) => item.name)).toEqual(["Plan"]);
   });
 
   it.each<[string, (fixture: Awaited<ReturnType<typeof start>>) => Promise<unknown>, object]>([
@@ -134,7 +134,7 @@ describe("ending a share", () => {
     await share(guest.email, "editor");
     await owner.json("DELETE", `${base}/members/${guest.userId}`, undefined, 204);
     await guest.json("GET", base, undefined, 404);
-    expect(await guest.json("GET", "/spreadsheets")).toEqual([]);
+    expect(await guest.json("GET", "/spreadsheets")).toEqual({ folders: [], documents: [] });
     expect(await owner.json<MemberRecord[]>("GET", `${base}/members`)).toHaveLength(1);
   });
 
@@ -162,6 +162,6 @@ describe("ending a share", () => {
     const { owner, guest, base, share } = await start();
     await share(guest.email, "editor");
     await owner.json("DELETE", base, undefined, 204);
-    expect(await guest.json("GET", "/spreadsheets")).toEqual([]);
+    expect(await guest.json("GET", "/spreadsheets")).toEqual({ folders: [], documents: [] });
   });
 });

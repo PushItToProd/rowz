@@ -63,6 +63,8 @@ pnpm dev
 
 Open http://localhost:5173 and create an account. Development needs no database server: data is stored by PGlite, an in-process Postgres, under `apps/server/.data/`.
 
+The Documents page lists documents you own and documents shared with you. Create flat folders to group the documents in your own list. Folders are private to your account, so moving a shared document changes only how it appears in your list. Deleting a folder returns its documents to the unfiled list without deleting them.
+
 ### Developing from another machine
 
 To open the dev server from a second machine, put the URL that machine will use in `.env.local` at the repository root:

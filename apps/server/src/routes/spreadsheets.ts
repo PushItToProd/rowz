@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import {
   eventsQuery,
   memberParam,
+  moveSpreadsheetFolderBody,
   nameBody,
   optionalNameBody,
   reorderPagesBody,
@@ -22,6 +23,16 @@ export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
   return (
     new Hono<Env>()
       .get("/", async (c) => c.json(await c.var.repository.listSpreadsheets()))
+      .put(
+        "/:spreadsheetId/folder",
+        zValidator("param", spreadsheetParam, onInvalid),
+        zValidator("json", moveSpreadsheetFolderBody, onInvalid),
+        async (c) => {
+          const { spreadsheetId } = c.req.valid("param");
+          await c.var.repository.moveDocument(spreadsheetId, c.req.valid("json").folderId);
+          return c.body(null, 204);
+        },
+      )
       .post("/", zValidator("json", nameBody, onInvalid), async (c) => {
         const { name } = c.req.valid("json");
         return c.json(await c.var.repository.createSpreadsheet(name), 201);

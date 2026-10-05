@@ -1311,6 +1311,75 @@ select.cell-control--dropdown {
   gap: 8px;
 }
 
+.list__folder-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.list__folder-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.list__groups {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.list__group {
+  overflow: hidden;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.list__group-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+}
+
+.list__group-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+}
+
+.list__group-toggle:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--accent);
+}
+
+.list__group-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.list__group .list__items {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.list__group-empty {
+  color: var(--muted);
+}
+
 .table-card__actions {
   flex-wrap: wrap;
   justify-content: flex-end;

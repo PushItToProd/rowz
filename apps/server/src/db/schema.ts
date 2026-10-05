@@ -371,3 +371,42 @@ export const actionRuns = pgTable(
   },
   (table) => [index("action_runs_user_time").on(table.userId, table.createdAt)],
 );
+
+/** A user's private groups for the documents in their list. */
+export const folders = pgTable(
+  "folders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdAt,
+  },
+  (table) => [
+    uniqueIndex("folders_name").on(table.userId, sql`lower(${table.name})`),
+    uniqueIndex("folders_user_id").on(table.userId, table.id),
+  ],
+);
+
+/** A document's folder in one user's list; absence means it is in the root. */
+export const documentFolders = pgTable(
+  "document_folders",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    spreadsheetId: uuid("spreadsheet_id")
+      .notNull()
+      .references(() => spreadsheets.id, { onDelete: "cascade" }),
+    folderId: uuid("folder_id").notNull(),
+  },
+  (table) => [
+    uniqueIndex("document_folders_user_spreadsheet").on(table.userId, table.spreadsheetId),
+    foreignKey({
+      name: "document_folders_folder_owner",
+      columns: [table.userId, table.folderId],
+      foreignColumns: [folders.userId, folders.id],
+    }).onDelete("cascade"),
+  ],
+);

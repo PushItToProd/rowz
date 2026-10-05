@@ -238,8 +238,8 @@ describe("importing a spreadsheet file", () => {
     const other = await server.signUp();
     await other.json("POST", "/spreadsheets/import", file({ name: "Twice" }), 201);
     await other.json("POST", "/spreadsheets/import", file({ name: "Twice" }), 201);
-    const listed = await other.json<SpreadsheetSummary[]>("GET", "/spreadsheets");
-    expect(listed.map((item) => item.name)).toEqual(["Twice", "Twice"]);
+    const listed = await other.json<{ documents: SpreadsheetSummary[] }>("GET", "/spreadsheets");
+    expect(listed.documents.map((item) => item.name)).toEqual(["Twice", "Twice"]);
   });
 
   it("stores more cells than one statement can insert", async () => {
@@ -299,7 +299,7 @@ describe("importing a spreadsheet file", () => {
     expect(await other.json("POST", "/spreadsheets/import", contents, 422)).toEqual({
       error: { code: "invalid_file", message },
     });
-    expect(await other.json("GET", "/spreadsheets")).toEqual([]);
+    expect(await other.json("GET", "/spreadsheets")).toEqual({ folders: [], documents: [] });
   });
 
   it("refuses a file with more cells than the limit across its tables", async () => {

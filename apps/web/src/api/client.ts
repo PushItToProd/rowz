@@ -1,6 +1,8 @@
 import type {
   AppType,
   ClickResult,
+  DocumentList,
+  FolderRecord,
   ListedSpreadsheet,
   MemberRecord,
   PageRecord,
@@ -36,6 +38,7 @@ import { hc } from "hono/client";
 
 export type {
   ClickResult,
+  FolderRecord,
   MemberRecord,
   PageRecord,
   Change,
@@ -62,7 +65,10 @@ export type VersionListItem = Omit<VersionRecord, "createdAt"> & { createdAt: st
 export type SpreadsheetListItem = Omit<SpreadsheetSummary, "updatedAt"> & { updatedAt: string };
 /** A spreadsheet in the list, with the viewer's role on it. */
 export type ListedSpreadsheetItem = SpreadsheetListItem &
-  Pick<ListedSpreadsheet, "role" | "hasErrors">;
+  Pick<ListedSpreadsheet, "role" | "hasErrors" | "folderId">;
+export type DocumentListItem = Omit<DocumentList, "documents"> & {
+  documents: ListedSpreadsheetItem[];
+};
 
 /** A response with an error status. `message` is written for the person using the app. */
 export class ApiRequestError extends Error {
@@ -129,7 +135,20 @@ function clock(): { headers: Record<string, string> } {
  * throws `ApiRequestError`.
  */
 export const api = {
-  listSpreadsheets: (): Promise<ListedSpreadsheetItem[]> => body(routes.spreadsheets.$get()),
+  listSpreadsheets: (): Promise<DocumentListItem> => body(routes.spreadsheets.$get()),
+  createFolder: (name: string): Promise<FolderRecord> =>
+    body(routes.folders.$post({ json: { name } })),
+  renameFolder: (folderId: string, name: string): Promise<FolderRecord> =>
+    body(routes.folders[":folderId"].$patch({ param: { folderId }, json: { name } })),
+  deleteFolder: (folderId: string): Promise<void> =>
+    done(routes.folders[":folderId"].$delete({ param: { folderId } })),
+  moveDocument: (spreadsheetId: string, folderId: string | null): Promise<void> =>
+    done(
+      routes.spreadsheets[":spreadsheetId"].folder.$put({
+        param: { spreadsheetId },
+        json: { folderId },
+      }),
+    ),
 
   /** Everyone who can open a spreadsheet. */
   listMembers: (spreadsheetId: string): Promise<MemberRecord[]> =>

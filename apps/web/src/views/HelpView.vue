@@ -269,7 +269,7 @@ const OPERATORS = [
 <template>
   <div class="help">
     <header class="help__header">
-      <RouterLink :to="{ name: 'spreadsheets' }">← Spreadsheets</RouterLink>
+      <RouterLink :to="{ name: 'spreadsheets' }">← Documents</RouterLink>
       <h1>Help</h1>
     </header>
 
