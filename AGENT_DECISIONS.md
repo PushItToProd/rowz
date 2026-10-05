@@ -733,3 +733,13 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 **Choice.** Pointer previews make changes outside history and retain the exact pre-drag editor state. Release restores that state and commits one isolated history event; cancellation restores it without a text change in history. The grid intercepts pointer events before controls, resizing, fill, and selection. It suppresses the gesture’s final click even when Chromium sends that click to the table’s common ancestor.
 
 **Choice.** The formula bar provides the pick control for cell editors, preserving space for text inside narrow grid cells. Other formula editors provide their own control. The existing toolbar Undo and Redo buttons use the connected editor’s local history while a draft is active; workbook history resumes when editing ends. Help documents these controls and the author-confirmed reference rules already recorded in `DECISIONS.md`.
+
+## Document folders
+
+**Choice.** Folders are flat and per user: a private arrangement of one user's document list, not a property of the document. A user can file documents shared with them, and one user's folders never affect another's list. Deleting a folder returns its documents to the root. Folder changes are not document content, so they skip `change`, undo journaling, and version history.
+
+**Cost.** Nesting and shared folders would need a different model; neither was requested.
+
+## Regex engine
+
+**Choice.** `REGEXMATCH`, `REGEXEXTRACT`, and `REGEXREPLACE` run on an in-engine Thompson NFA simulation with step, pattern-length, and output limits instead of JavaScript `RegExp`, which would backtrack catastrophically and the engine takes no dependencies. Backreferences and lookaround are unsupported.
