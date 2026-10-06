@@ -2718,7 +2718,7 @@ describe("conditional formats", () => {
 
 it("updates document errors and page/block warnings when cells are corrected", async () => {
   const store = await open({ A1: "=1/0", B1: "=Missing" });
-  expect(store.errors.map((failure) => failure.label)).toEqual(["Table 1!A1", "Table 1!B1"]);
+  expect(store.errors.map((failure) => failure.label)).toEqual(["'Table 1'!A1", "'Table 1'!B1"]);
   expect(store.errorPages.has("p1")).toBe(true);
   expect(store.errorBlocks.has("t1")).toBe(true);
   await store.setCell(at("A1"), "1");

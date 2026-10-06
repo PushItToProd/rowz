@@ -1,4 +1,5 @@
 import { formatAddress, type CellId } from "./address";
+import { quoteName } from "./ast";
 import { parseFormula } from "./parser";
 import { FormulaSyntaxError } from "./tokenizer";
 import { parseScript } from "./script";
@@ -45,7 +46,7 @@ export function documentErrors(
       message: failure.message,
       label:
         failure.kind === "cell"
-          ? `${block.name}!${formatAddress(failure.cell)}`
+          ? `${quoteName(block.name)}!${formatAddress(failure.cell)}`
           : failure.kind === "name"
             ? `${block.name}!${failure.name}`
             : `${block.name} line ${String(failure.line)}`,

@@ -19,7 +19,7 @@ test("errors stay visible across pages and in the document list", async ({ page 
   await page.getByRole("button", { name: "1 error", exact: true }).click();
   const errors = page.getByRole("dialog", { name: "Document errors" });
   await expect(errors).toContainText("Page 1");
-  await errors.getByRole("button", { name: /Table 1!A1/ }).click();
+  await errors.getByRole("button", { name: /'Table 1'!A1/ }).click();
   await expect(errors).toBeVisible();
   await expect(cell(page, "A1")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
@@ -68,8 +68,10 @@ test("invalid button plans appear in document errors before clicking the button"
   await page.getByRole("button", { name: "1 error", exact: true }).click();
   const errors = page.getByRole("dialog", { name: "Document errors" });
   await expect(errors).toContainText('"bad" is not an email address');
-  await errors.getByRole("button", { name: /Table 1!A1/ }).click();
+  await errors.getByRole("button", { name: /'Table 1'!A1/ }).click();
   await expect(errors).toBeVisible();
+  await expect(cell(page, "A1")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
   await enter(page, "A1", '=BUTTON("Send", SEND_EMAIL("valid@example.com", "subject", "body"))');
   await expect(errors).not.toContainText("not an email address");
   await expect(page.getByRole("button", { name: "1 error", exact: true })).toHaveCount(0);

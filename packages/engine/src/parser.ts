@@ -86,10 +86,65 @@ class Parser {
   ) {}
 
   parse(): Node {
-    const node = this.expression(0);
-    const token = this.peek();
-    if (token.type !== "end") throw this.unexpected(token);
-    return node;
+    try {
+      const node = this.expression(0);
+      const token = this.peek();
+      if (token.type !== "end") throw this.unexpected(token);
+      return node;
+    } catch (cause) {
+      if (!(cause instanceof FormulaSyntaxError)) throw cause;
+      const hint = this.unquotedNameAt(cause.position);
+      if (hint === undefined) throw cause;
+      throw new FormulaSyntaxError(
+        `${cause.message} — If ${hint.name} is a table or page name, put it in single quotes: ${hint.example}`,
+        cause.position,
+        cause.code,
+      );
+    }
+  }
+
+  /** Only suggest quotes for a run of words at the failure that ends in a reference qualifier. */
+  private unquotedNameAt(position: number): { name: string; example: string } | undefined {
+    const isWord = (token: Token): boolean =>
+      token.type === "identifier" || token.type === "number";
+    let start = 0;
+    for (const [index, token] of this.tokens.entries()) {
+      if (isWord(token)) continue;
+      const words = this.tokens.slice(start, index);
+      const first = words[0];
+      const last = words.at(-1);
+      const before = this.tokens[start - 1];
+      if (
+        words.length > 1 &&
+        first?.type === "identifier" &&
+        last &&
+        (before === undefined ||
+          before.type === "operator" ||
+          (before.type === "punctuation" && (before.value === "(" || before.value === ","))) &&
+        position >= first.position &&
+        position <= token.position &&
+        token.position === last.end &&
+        (token.type === "column" || (token.type === "punctuation" && token.value === "!")) &&
+        /\s/.test(this.text.slice(first.position, last.end)) &&
+        words.slice(1).every((word, offset) => {
+          const previous = words[offset];
+          return (
+            previous !== undefined &&
+            (/^\s+$/.test(this.text.slice(previous.end, word.position)) ||
+              (previous.type === "number" &&
+                word.type === "identifier" &&
+                previous.end === word.position))
+          );
+        })
+      ) {
+        const name = this.text.slice(first.position, last.end);
+        const end =
+          token.type === "column" ? token.end : (this.tokens[index + 1]?.end ?? token.end);
+        return { name, example: `'${name}'${this.text.slice(token.position, end)}` };
+      }
+      start = index + 1;
+    }
+    return undefined;
   }
 
   private peek(offset = 0): Token {

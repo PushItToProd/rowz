@@ -208,6 +208,52 @@ describe("calls", () => {
 
 describe("syntax errors", () => {
   it.each([
+    ["SUM(Table 1[Qty])", "Expected )", "Table 1", "'Table 1'[Qty]", 10],
+    ["Table 1!B2", "Unexpected 1", "Table 1", "'Table 1'!B2", 6],
+    ["Page One!Sales!B2", "Unexpected One", "Page One", "'Page One'!Sales", 5],
+    [
+      "SUM(Annual Sales 2026[Qty])",
+      "Expected )",
+      "Annual Sales 2026",
+      "'Annual Sales 2026'[Qty]",
+      11,
+    ],
+    ["LET(x Sales[Qty],1,x)", "Expected )", "x Sales", "'x Sales'[Qty]", 6],
+    ["Table 1st!B2", "Unexpected 1", "Table 1st", "'Table 1st'!B2", 6],
+    ["Table 2026Q1[Qty]", "Unexpected 2026", "Table 2026Q1", "'Table 2026Q1'[Qty]", 6],
+  ])(
+    "conditionally suggests quoting a spaced qualifier in %j",
+    (text, message, name, example, position) => {
+      try {
+        parseFormula(text);
+        expect.fail("Expected a syntax error");
+      } catch (cause) {
+        expect(cause).toBeInstanceOf(FormulaSyntaxError);
+        expect(cause).toMatchObject({
+          message: `${message} — If ${name} is a table or page name, put it in single quotes: ${example}`,
+          position,
+        });
+      }
+    },
+  );
+
+  it.each([
+    "SUM(Table 1)",
+    "Table 1",
+    "SUM(1 2)",
+    "SUM(1 Sales[Qty])",
+    "SUM(1,2 Sales[Qty])",
+    "Page!Table 1[Qty]",
+    "Table 1 + Sales[Qty]",
+    "Table 1 [Qty]",
+    "'Table 1' 2!A1",
+    '"Table 1!A1" 2',
+  ])("does not suggest quotes for unrelated errors in %j", (text) => {
+    expect(() => parseFormula(text)).toThrow(FormulaSyntaxError);
+    expect(() => parseFormula(text)).not.toThrow("put it in single quotes");
+  });
+
+  it.each([
     ["", "Unexpected end of formula"],
     ["1+", "Unexpected end of formula"],
     ["1 2", "Unexpected 2"],
