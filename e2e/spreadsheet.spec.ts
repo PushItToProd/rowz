@@ -918,6 +918,10 @@ test("a data table is sorted and filtered in place, and edits and fills act on t
 
   await page.getByRole("button", { name: "Clear filter" }).click();
   await expect(page.getByText("row hidden")).toHaveCount(0);
+  const filter = page.getByLabel("Table filter");
+  await filter.click();
+  for (let tab = 0; tab < 10; tab += 1) await page.keyboard.press("Tab");
+  await expect(filter).not.toBeFocused();
   await reload(page);
   await expect(page.getByLabel("Sort column 1")).toBeVisible();
 });
@@ -1276,6 +1280,26 @@ test("editing shows errors, the formula bar, and keyboard navigation", async ({ 
   await cell(page, "B2").click();
   await page.keyboard.press("Delete");
   await expect(cell(page, "B2")).toHaveText("");
+});
+
+test("keeps characters typed immediately after Enter or Tab", async ({ page }) => {
+  await newSpreadsheet(page);
+
+  await cell(page, "A1").click();
+  await page.keyboard.type("cc", { delay: 0 });
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("dd", { delay: 0 });
+  await page.keyboard.press("Enter");
+  await expect(cell(page, "A1")).toHaveText("cc");
+  await expect(cell(page, "B1")).toHaveText("dd");
+
+  await cell(page, "C1").click();
+  await page.keyboard.type("previous", { delay: 0 });
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("TRUE", { delay: 0 });
+  await page.keyboard.press("Enter");
+  await expect(cell(page, "C1")).toHaveText("previous");
+  await expect(cell(page, "C2")).toHaveText("TRUE");
 });
 
 test("spreadsheets are private to the account that made them", async ({ page }) => {

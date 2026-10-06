@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useWorkbookStore } from "../stores/workbook";
 import { namingContext } from "../formula/context";
+import { cellEditingRequest } from "../formula/cells";
 import {
   sameEditingTarget,
   useFormulaSessionStore,
@@ -30,6 +31,14 @@ const root = ref<HTMLElement>();
 const input = ref<HTMLInputElement>();
 const editor = ref<{ focus(): void }>();
 let mounted = true;
+let opening = false;
+let commitPending = false;
+let discardDeferredKeys = false;
+interface DeferredKey {
+  key: string;
+  backwards: boolean;
+}
+const deferredKeys: DeferredKey[] = [];
 const token = Symbol();
 const session = computed(() =>
   sessions.active && sameEditingTarget(sessions.active.target, props.target)
@@ -67,31 +76,39 @@ watch(
 
 async function begin(): Promise<void> {
   if (props.readonly) return;
-  if (session.value) {
-    sessions.activateField(token);
-    await nextTick();
-    editor.value?.focus();
-    return;
-  }
-  if (
-    await sessions.start(
-      {
-        target: props.target,
-        context: props.context,
-        text: props.value,
-        mode: props.mode ?? "formula",
-        label: props.targetLabel ?? props.label,
-        maxLength: props.maxLength,
-      },
-      store.submitFormulaDraft,
-    )
-  ) {
-    sessions.activateField(token);
-    await nextTick();
-    editor.value?.focus();
-  } else {
-    await nextTick();
-    sessions.focus();
+  opening = true;
+  let opened = false;
+  try {
+    if (session.value) {
+      sessions.activateField(token);
+      await nextTick();
+      editor.value?.focus();
+      opened = true;
+    } else if (
+      await sessions.start(
+        {
+          target: props.target,
+          context: props.context,
+          text: props.value,
+          mode: props.mode ?? "formula",
+          label: props.targetLabel ?? props.label,
+          maxLength: props.maxLength,
+        },
+        store.submitFormulaDraft,
+      )
+    ) {
+      sessions.activateField(token);
+      await nextTick();
+      editor.value?.focus();
+      opened = true;
+    } else {
+      await nextTick();
+      sessions.focus();
+    }
+  } finally {
+    opening = false;
+    if (opened) replayOpeningKeys();
+    else deferredKeys.length = 0;
   }
 }
 
@@ -113,34 +130,152 @@ async function commit(key: "Enter" | "Tab", backwards: boolean): Promise<void> {
   const indexBefore = controlsBefore.indexOf(document.activeElement as HTMLElement);
   const target = sessions.active?.target;
   const move = props.cellNavigation ? store.prepareCellMove(key, backwards) : undefined;
-  if (!(await submit())) return;
-  if (move) {
-    if (target?.kind === "append") {
-      const table = store.tables.find((table) => table.id === target.tableId);
-      const row = table?.rows.findIndex((row) => row.id === target.rowId) ?? -1;
-      const col = table?.colIds.indexOf(target.colId) ?? -1;
-      if (table && row >= 0 && col >= 0) store.selection = { tableId: table.id, row, col };
-      store.prepareCellMove(key, backwards)();
-    } else move();
-    store.focusGrid();
+  commitPending = true;
+  discardDeferredKeys = false;
+  try {
+    if (!(await submit())) {
+      const buffered = deferredKeys.splice(0);
+      for (const queued of buffered) {
+        if (isCharacter(queued.key)) sessions.typeCharacter(queued.key);
+      }
+      return;
+    }
+    const buffered = deferredKeys.splice(0);
+    if (move) {
+      if (target?.kind === "append") {
+        const table = store.tables.find((table) => table.id === target.tableId);
+        const row = table?.rows.findIndex((row) => row.id === target.rowId) ?? -1;
+        const col = table?.colIds.indexOf(target.colId) ?? -1;
+        if (table && row >= 0 && col >= 0) store.selection = { tableId: table.id, row, col };
+        store.prepareCellMove(key, backwards)();
+      } else move();
+      store.focusGrid();
+      await replayCellKeys(buffered);
+      return;
+    }
+    await nextTick();
+    if (key === "Tab") {
+      const controls = [
+        ...document.querySelectorAll<HTMLElement>(
+          'input:not(:disabled), select:not(:disabled), button:not(:disabled):not(.formula-editor__pick), a[href], [tabindex="0"]',
+        ),
+      ];
+      const index = input.value ? controls.indexOf(input.value) : -1;
+      if (index >= 0) controls[index + (backwards ? -1 : 1)]?.focus();
+      else {
+        const following = backwards
+          ? controlsBefore.slice(0, indexBefore).reverse()
+          : controlsBefore.slice(indexBefore + 1);
+        following.find((control) => control.isConnected && !control.matches(":disabled"))?.focus();
+      }
+    }
+    for (const queued of buffered) {
+      if (queued.key === "Tab") focusNextControl(queued.backwards);
+      else if (isCharacter(queued.key)) typeIntoFocusedControl(queued.key);
+    }
+  } finally {
+    commitPending = false;
+    discardDeferredKeys = false;
+  }
+}
+
+function isCharacter(key: string): boolean {
+  return key.length === 1;
+}
+
+function isNavigationKey(key: string): key is "Enter" | "Tab" {
+  return key === "Enter" || key === "Tab";
+}
+
+function queueKey(key: string, backwards = false): void {
+  if (!discardDeferredKeys && (isCharacter(key) || isNavigationKey(key)))
+    deferredKeys.push({ key, backwards });
+}
+
+function capturePendingKey(event: KeyboardEvent): void {
+  const saving = commitPending && session.value?.saving;
+  if ((!opening && !saving) || event.isComposing) return;
+  if (saving && event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    deferredKeys.length = 0;
+    discardDeferredKeys = true;
     return;
   }
-  await nextTick();
-  if (key === "Tab") {
-    const controls = [
-      ...document.querySelectorAll<HTMLElement>(
-        'input:not(:disabled), select:not(:disabled), button:not(:disabled):not(.formula-editor__pick), a[href], [tabindex="0"]',
-      ),
-    ];
-    const index = input.value ? controls.indexOf(input.value) : -1;
-    if (index >= 0) controls[index + (backwards ? -1 : 1)]?.focus();
-    else {
-      const following = backwards
-        ? controlsBefore.slice(0, indexBefore).reverse()
-        : controlsBefore.slice(indexBefore + 1);
-      following.find((control) => control.isConnected && !control.matches(":disabled"))?.focus();
-    }
+  const character = isCharacter(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey;
+  const navigation =
+    isNavigationKey(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey;
+  if (!character && !navigation) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (character && session.value && !session.value.saving) sessions.typeCharacter(event.key);
+  else if (!discardDeferredKeys) queueKey(event.key, event.shiftKey);
+}
+
+function replayOpeningKeys(): void {
+  const buffered = deferredKeys.splice(0);
+  const navigation = buffered.find(({ key }) => isNavigationKey(key));
+  const navigationIndex = navigation ? buffered.indexOf(navigation) : -1;
+  const beforeNavigation = navigationIndex < 0 ? buffered : buffered.slice(0, navigationIndex);
+  for (const queued of beforeNavigation) {
+    if (isCharacter(queued.key)) sessions.typeCharacter(queued.key);
   }
+  if (navigation) {
+    deferredKeys.push(...buffered.slice(navigationIndex + 1));
+    void commit(navigation.key as "Enter" | "Tab", navigation.backwards);
+  }
+}
+
+async function replayCellKeys(keys: DeferredKey[]): Promise<void> {
+  for (const queued of keys) {
+    if (isCharacter(queued.key)) {
+      if (sessions.active) sessions.typeCharacter(queued.key);
+      else if (store.selection) {
+        const request = cellEditingRequest(store.selection, queued.key);
+        if (request) void sessions.start(request, store.submitFormulaDraft);
+      }
+      continue;
+    }
+    if (!isNavigationKey(queued.key)) continue;
+    const move = store.prepareCellMove(queued.key, queued.backwards);
+    if (sessions.active && !(await sessions.submit(store.submitFormulaDraft))) {
+      sessions.focus();
+      return;
+    }
+    move();
+    store.focusGrid();
+  }
+}
+
+function focusNextControl(backwards: boolean): void {
+  const controls = [
+    ...document.querySelectorAll<HTMLElement>(
+      'input:not(:disabled), select:not(:disabled), button:not(:disabled):not(.formula-editor__pick), a[href], [tabindex="0"]',
+    ),
+  ];
+  const index = controls.indexOf(document.activeElement as HTMLElement);
+  controls[index + (backwards ? -1 : 1)]?.focus();
+}
+
+function typeIntoFocusedControl(character: string): void {
+  const target = document.activeElement;
+  if (
+    !(target instanceof HTMLInputElement) ||
+    target.disabled ||
+    target.readOnly ||
+    !["email", "password", "search", "tel", "text", "url"].includes(target.type)
+  )
+    return;
+  const start = target.selectionStart ?? target.value.length;
+  const end = target.selectionEnd ?? start;
+  target.setRangeText(character, start, end, "end");
+  target.dispatchEvent(
+    new InputEvent("input", { bubbles: true, inputType: "insertText", data: character }),
+  );
+}
+
+function deferKey(key: string, backwards = false): void {
+  queueKey(key, backwards);
 }
 
 function cancel(): void {
@@ -166,11 +301,21 @@ function blur(): void {
 onBeforeUnmount(() => {
   mounted = false;
 });
-defineExpose({ submit, begin });
+defineExpose({
+  submit,
+  begin,
+  commitKey: (key: "Enter" | "Tab", backwards: boolean) => commit(key, backwards),
+  deferKey,
+});
 </script>
 
 <template>
-  <div ref="root" class="session-formula-field" data-formula-field>
+  <div
+    ref="root"
+    class="session-formula-field"
+    data-formula-field
+    @keydown.capture="capturePendingKey"
+  >
     <strong v-if="showLabel" class="formula-column-label">{{ targetLabel }}</strong>
     <FormulaEditor
       v-if="ownsEditor && session"

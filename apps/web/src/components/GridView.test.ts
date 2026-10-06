@@ -87,6 +87,20 @@ function dispatchPointer(
 function editorView(): EditorView {
   return EditorView.findFromDOM(wrapper.get(".grid__editor .cm-content").element as HTMLElement)!;
 }
+function dispatchKey(
+  target: EventTarget,
+  key: string,
+  modifiers: { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean } = {},
+): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", {
+    key,
+    ...modifiers,
+    bubbles: true,
+    cancelable: true,
+  });
+  target.dispatchEvent(event);
+  return event;
+}
 async function setEditorText(text: string): Promise<void> {
   const view = editorView();
   view.dispatch({
@@ -483,6 +497,140 @@ describe("selection", () => {
 });
 
 describe("editing", () => {
+  const modifiedNavigationKeys = [
+    ["Ctrl+Enter", "Enter", { ctrlKey: true }],
+    ["Ctrl+Tab", "Tab", { ctrlKey: true }],
+    ["Alt+Enter", "Enter", { altKey: true }],
+    ["Alt+Tab", "Tab", { altKey: true }],
+    ["Meta+Enter", "Enter", { metaKey: true }],
+    ["Meta+Tab", "Tab", { metaKey: true }],
+  ] as const;
+
+  it("keeps a fast burst of characters while the grid opens the editor", async () => {
+    await mountGrid({ A1: "old" });
+    await select("A1");
+
+    const grid = wrapper.get(".grid").element;
+    for (const character of "TRUE") dispatchKey(grid, character);
+    await flushPromises();
+
+    expect(editorView().state.doc.toString()).toBe("TRUE");
+  });
+
+  it.each(modifiedNavigationKeys)(
+    "does not queue %s while the grid is opening the editor",
+    async (_label, key, modifiers) => {
+      await mountGrid();
+      await select("A1");
+
+      const grid = wrapper.get(".grid").element;
+      dispatchKey(grid, "x");
+      const event = dispatchKey(grid, key, modifiers);
+      expect(event.defaultPrevented).toBe(false);
+
+      await flushPromises();
+      expect(selectedAddress()).toBe("A1");
+      expect(editorView().state.doc.toString()).toBe("x");
+    },
+  );
+
+  it("keeps Shift+Tab navigation while the grid is opening the editor", async () => {
+    await mountGrid();
+    await select("B1");
+
+    const grid = wrapper.get(".grid").element;
+    dispatchKey(grid, "x");
+    dispatchKey(grid, "Tab", { shiftKey: true });
+    await flushPromises();
+
+    expect(cellAt("B1").text()).toBe("x");
+    expect(selectedAddress()).toBe("A1");
+    expect(wrapper.find(".grid__editor").exists()).toBe(false);
+  });
+
+  it("keeps a failed save's restored draft focused and drops queued navigation", async () => {
+    await mountGrid({ A1: "old" });
+    await select("A1");
+    await press("Enter");
+    await setEditorText("cc");
+    server.setCells.mockRejectedValueOnce(new Error("Offline"));
+
+    const content = editorView().contentDOM;
+    dispatchKey(content, "Tab");
+    dispatchKey(content, "d");
+    dispatchKey(content, "d");
+    dispatchKey(content, "Enter");
+    await flushPromises();
+
+    const editor = editorView();
+    expect(editor.state.doc.toString()).toBe("ccdd");
+    expect(document.activeElement).toBe(editor.contentDOM);
+    expect(selectedAddress()).toBe("A1");
+    expect(cellAt("A1").text()).toBe("ccdd");
+  });
+
+  it("discards queued typing when Escape is pressed during a save", async () => {
+    await mountGrid({ A1: "old" });
+    await select("A1");
+    await press("Enter");
+    await setEditorText("cc");
+
+    const content = editorView().contentDOM;
+    dispatchKey(content, "Tab");
+    dispatchKey(content, "d");
+    dispatchKey(content, "d");
+    dispatchKey(content, "Enter");
+    const field = wrapper.get(".session-formula-field").element;
+    dispatchKey(field, "Escape");
+    await flushPromises();
+
+    expect(cellAt("A1").text()).toBe("cc");
+    expect(cellAt("B1").text()).toBe("");
+    expect(selectedAddress()).toBe("B1");
+    expect(wrapper.find(".grid__editor").exists()).toBe(false);
+  });
+
+  it.each(modifiedNavigationKeys)(
+    "does not replay %s received while a cell save is pending",
+    async (_label, key, modifiers) => {
+      await mountGrid();
+      await select("A1");
+      await press("Enter");
+      await setEditorText("cc");
+
+      dispatchKey(editorView().contentDOM, "Tab");
+      const field = wrapper.get(".session-formula-field").element;
+      const event = dispatchKey(field, key, modifiers);
+      expect(event.defaultPrevented).toBe(false);
+
+      await flushPromises();
+      expect(selectedAddress()).toBe("B1");
+      expect(wrapper.find(".grid__editor").exists()).toBe(false);
+    },
+  );
+
+  it.each([
+    ["Enter", "A2"],
+    ["Tab", "B1"],
+  ] as const)(
+    "keeps keys typed immediately after %s while the save is pending",
+    async (key, next) => {
+      await mountGrid({ A1: "old" });
+      await select("A1");
+      await press("Enter");
+      await setEditorText("cc");
+
+      const content = editorView().contentDOM;
+      dispatchKey(content, key);
+      for (const character of "dd") dispatchKey(content, character);
+      await flushPromises();
+
+      expect(editorView().state.doc.toString()).toBe("dd");
+      await press("Enter");
+      expect(cellAt(next).text()).toBe("dd");
+    },
+  );
+
   it("starts with the typed character, replacing the content, and saves on Enter", async () => {
     await mountGrid({ A1: "old" });
     await select("A1");

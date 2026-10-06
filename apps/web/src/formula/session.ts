@@ -1,5 +1,5 @@
 import type { EditingMode } from "@spreadsheet-app/engine";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Transaction } from "@codemirror/state";
 import { defineStore } from "pinia";
 import { shallowRef } from "vue";
 
@@ -123,6 +123,9 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
   function focus(): void {
     fields.value.find((field) => field.token === owner.value)?.focus();
   }
+  function currentSession(): FormulaSession | undefined {
+    return active.value;
+  }
   let pending: Promise<boolean> | undefined;
 
   function updateState(state: EditorState): void {
@@ -133,6 +136,22 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
         state,
         error: state.doc.eq(session.state.doc) ? session.error : undefined,
       };
+  }
+
+  /** Applies a character received before the active CodeMirror editor has focus. */
+  function typeCharacter(character: string): boolean {
+    const session = active.value;
+    if (!session || session.saving || character.length !== 1) return false;
+    const { from, to } = session.state.selection.main;
+    if (session.state.doc.length - (to - from) + character.length > (session.maxLength ?? Infinity))
+      return false;
+    const transaction = session.state.update({
+      changes: { from, to, insert: character },
+      selection: { anchor: from + character.length },
+      annotations: Transaction.userEvent.of("input.type"),
+    });
+    updateState(transaction.state);
+    return true;
   }
 
   /** Deduplicates Enter/Apply followed by blur. The caller runs its transition only on success. */
@@ -171,12 +190,7 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
     return pending;
   }
 
-  /** Transfers to the same target do not save, reset context, or replace editor state. */
-  async function start(request: StartEditing, save: SaveDraft): Promise<boolean> {
-    if (active.value && sameEditingTarget(active.value.target, request.target)) return true;
-    if (!(await submit(save))) return false;
-    // Another request may have opened a target while this one was waiting for the save.
-    if (active.value) return sameEditingTarget(active.value.target, request.target);
+  function createSession(request: StartEditing): void {
     active.value = {
       id: crypto.randomUUID(),
       target:
@@ -194,6 +208,22 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
     owner.value = fields.value.find((field) =>
       sameEditingTarget(field.target, request.target),
     )?.token;
+  }
+
+  /** Transfers to the same target do not save, reset context, or replace editor state. */
+  async function start(request: StartEditing, save: SaveDraft): Promise<boolean> {
+    if (active.value && sameEditingTarget(active.value.target, request.target)) return true;
+    // Open immediately when there is no draft to save. The grid can then
+    // retain characters that arrive before Vue mounts and focuses the editor.
+    if (!active.value) {
+      createSession(request);
+      return true;
+    }
+    if (!(await submit(save))) return false;
+    // Another request may have opened a target while this one was waiting for the save.
+    const current = currentSession();
+    if (current) return sameEditingTarget(current.target, request.target);
+    createSession(request);
     return true;
   }
 
@@ -212,6 +242,7 @@ export const useFormulaSessionStore = defineStore("formulaEditing", () => {
     columnPopover,
     activateField,
     updateState,
+    typeCharacter,
     submit,
     start,
     cancel,

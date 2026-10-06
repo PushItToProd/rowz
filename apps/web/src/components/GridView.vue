@@ -64,6 +64,7 @@ const draft = computed(() =>
   editingPosition.value ? (active.value?.state.doc.toString() ?? null) : null,
 );
 const cellField = ref<InstanceType<typeof SessionFormulaField> | null>();
+const pendingOpeningNavigation: { key: "Enter" | "Tab"; backwards: boolean }[] = [];
 function captureField(field: Element | ComponentPublicInstance | null): void {
   cellField.value = field as InstanceType<typeof SessionFormulaField> | null;
 }
@@ -610,6 +611,15 @@ async function edit(initial?: string): Promise<void> {
   }
   await nextTick();
   await cellField.value?.begin();
+  while (pendingOpeningNavigation.length) {
+    const queued = pendingOpeningNavigation.shift();
+    if (!queued) break;
+    if (sessions.active) await cellField.value?.commitKey(queued.key, queued.backwards);
+    else {
+      store.prepareCellMove(queued.key, queued.backwards)();
+      focusGrid();
+    }
+  }
 }
 watch(
   () => props.table.rowCount,
@@ -704,7 +714,29 @@ function onGridKeydown(event: KeyboardEvent): void {
   // also keeps its own keys, such as the arrows that change a choice.
   const inControl =
     event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement;
-  if (draft.value !== null || !selected.value || inControl) return;
+  if (draft.value !== null) {
+    if (document.activeElement !== grid.value || inControl) return;
+    const { key } = event;
+    const unmodified = !event.ctrlKey && !event.altKey && !event.metaKey;
+    const character = key.length === 1 && unmodified;
+    const navigation = unmodified && (key === "Enter" || key === "Tab");
+    if (sessions.active?.saving) {
+      if (character || navigation) {
+        event.preventDefault();
+        cellField.value?.deferKey(key, event.shiftKey);
+      }
+      return;
+    }
+    if (character) {
+      if (sessions.typeCharacter(key)) event.preventDefault();
+    } else if (navigation) {
+      event.preventDefault();
+      if (cellField.value) void cellField.value.commitKey(key, event.shiftKey);
+      else pendingOpeningNavigation.push({ key, backwards: event.shiftKey });
+    }
+    return;
+  }
+  if (!selected.value || inControl) return;
   const { key } = event;
   const step = MOVES[key];
   const command = event.ctrlKey || event.metaKey;
