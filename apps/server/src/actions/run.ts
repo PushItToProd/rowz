@@ -16,7 +16,7 @@ import {
 import type { IdentifiedCell, ViewInputBody } from "@spreadsheet-app/shared";
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { actionRuns, type RunStatus } from "../db/schema";
+import { actionRuns, type ActionRunKind, type RunStatus } from "../db/schema";
 import { ApiFailure, conflict, unprocessable } from "../errors";
 import type { Mailer } from "../mail/mailer";
 import { SpreadsheetRepository, type Change, type RepositoryOptions } from "../repo/spreadsheets";
@@ -100,7 +100,7 @@ export function runButton(
   cell: IdentifiedCell,
   now: () => number,
 ): Promise<ClickResult> {
-  return runCell(dependencies, userId, cell, now, (workbook, value) => {
+  return runCell(dependencies, userId, cell, now, "cell_button", (workbook, value) => {
     if (!isButton(value)) {
       throw unprocessable("not_a_button", "The selected cell does not hold a button");
     }
@@ -121,33 +121,14 @@ export function runViewButton(
   now: () => number,
 ): Promise<ClickResult> {
   return runAction(dependencies, userId, now, async (repository) => {
-    let view = await repository.findViewForClick(viewId);
-    if (view.kind !== "text") throw conflict("This text view no longer exists");
-    try {
-      await repository.lockSpreadsheet(view.spreadsheetId);
-    } catch (cause) {
-      if (cause instanceof ApiFailure && cause.status === 404) {
-        // Distinguish a deleted target from access that was removed while waiting.
-        await repository.findViewForClick(viewId);
-      }
-      throw cause;
-    }
-
-    // A view can be deleted or its source changed while this request waits.
-    view = await repository.findViewForClick(viewId);
-    if (view.kind !== "text") throw conflict("This text view no longer exists");
-
-    const contents = await repository.read(view.spreadsheetId);
-    const workbook = createWorkbook(contents.data, { now });
-    const rendered = renderTemplate(view.source, (expression, names) =>
-      workbook.evaluateOnPage(view.pageId, expression, names),
-    );
+    const { view, workbook, rendered } = await renderTextView(repository, viewId, now);
     const button = buttonAt(rendered, buttonIndex);
     if (!button) throw conflict("This button no longer exists");
 
     return {
       spreadsheetId: view.spreadsheetId,
       target: { viewId, buttonIndex },
+      kind: "view_button",
       plan: workbook.planAction(button.action),
     };
   });
@@ -167,25 +148,7 @@ export function runViewInput(
   now: () => number,
 ): Promise<ClickResult> {
   return runAction(dependencies, userId, now, async (repository) => {
-    let view = await repository.findViewForClick(viewId);
-    if (view.kind !== "text") throw conflict("This text view no longer exists");
-    try {
-      await repository.lockSpreadsheet(view.spreadsheetId);
-    } catch (cause) {
-      if (cause instanceof ApiFailure && cause.status === 404) {
-        await repository.findViewForClick(viewId);
-      }
-      throw cause;
-    }
-
-    view = await repository.findViewForClick(viewId);
-    if (view.kind !== "text") throw conflict("This text view no longer exists");
-
-    const contents = await repository.read(view.spreadsheetId);
-    const workbook = createWorkbook(contents.data, { now });
-    const rendered = renderTemplate(view.source, (expression, names) =>
-      workbook.evaluateOnPage(view.pageId, expression, names),
-    );
+    const { view, contents, workbook, rendered } = await renderTextView(repository, viewId, now);
     const input = inputAt(rendered, inputIndex);
     if (!input) throw conflict("This input no longer exists");
 
@@ -208,9 +171,40 @@ export function runViewInput(
     return {
       spreadsheetId: view.spreadsheetId,
       target: { viewId, buttonIndex: inputIndex },
+      kind: "view_input",
       plan: workbook.planInput(input.control, body.value),
     };
   });
+}
+
+/** Finds, locks, re-reads, and renders the current text view for either kind of occurrence. */
+async function renderTextView(
+  repository: SpreadsheetRepository,
+  viewId: string,
+  now: () => number,
+) {
+  let view = await repository.findViewForClick(viewId);
+  if (view.kind !== "text") throw conflict("This text view no longer exists");
+  try {
+    await repository.lockSpreadsheet(view.spreadsheetId);
+  } catch (cause) {
+    if (cause instanceof ApiFailure && cause.status === 404) {
+      // Distinguish a deleted target from access that was removed while waiting.
+      await repository.findViewForClick(viewId);
+    }
+    throw cause;
+  }
+
+  // A view can be deleted or its source changed while this request waits.
+  view = await repository.findViewForClick(viewId);
+  if (view.kind !== "text") throw conflict("This text view no longer exists");
+
+  const contents = await repository.read(view.spreadsheetId);
+  const workbook = createWorkbook(contents.data, { now });
+  const rendered = renderTemplate(view.source, (expression, names) =>
+    workbook.evaluateOnPage(view.pageId, expression, names),
+  );
+  return { view, contents, workbook, rendered };
 }
 
 function sameCell(left: IdentifiedCell, right: IdentifiedCell): boolean {
@@ -229,7 +223,7 @@ export function runControl(
   input: Scalar,
   now: () => number,
 ): Promise<ClickResult> {
-  return runCell(dependencies, userId, cell, now, (workbook, value) => {
+  return runCell(dependencies, userId, cell, now, "cell_input", (workbook, value) => {
     if (!isControl(value)) {
       throw unprocessable("not_a_control", "The selected cell does not hold an input control");
     }
@@ -247,6 +241,7 @@ async function runCell(
   userId: string,
   cell: IdentifiedCell,
   now: () => number,
+  kind: ActionRunKind,
   decide: Decide,
 ): Promise<ClickResult> {
   return runAction(dependencies, userId, now, async (repository) => {
@@ -258,7 +253,7 @@ async function runCell(
     const resolved = contents.position(cell);
     const workbook = createWorkbook(contents.data, { now });
     const plan = decide(workbook, workbook.getValue(resolved));
-    return { spreadsheetId, target: resolved, plan };
+    return { spreadsheetId, target: resolved, kind, plan };
   });
 }
 
@@ -269,6 +264,7 @@ type RunTarget =
 interface LocatedPlan {
   spreadsheetId: string;
   target: RunTarget;
+  kind: ActionRunKind;
   plan: ActionPlan;
 }
 
@@ -312,7 +308,7 @@ async function runAction(
 ): Promise<ClickResult> {
   const planned = await db.transaction(async (tx): Promise<Planned> => {
     const repository = new SpreadsheetRepository(tx, userId, repositoryOptions);
-    const { spreadsheetId, target, plan } = await locate(repository);
+    const { spreadsheetId, target, kind, plan } = await locate(repository);
 
     const record = async (
       effects: Effect[],
@@ -326,6 +322,7 @@ async function runAction(
         .values({
           spreadsheetId,
           ...target,
+          kind,
           userId,
           effects,
           // A refused run sends nothing, so it uses none of the user's limit.

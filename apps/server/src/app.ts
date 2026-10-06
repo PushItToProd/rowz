@@ -19,6 +19,7 @@ export type { ClickResult } from "./actions/run";
 export type {
   Change,
   ChangedContent,
+  ActionRunRecord,
   Created,
   DocumentList,
   FolderRecord,

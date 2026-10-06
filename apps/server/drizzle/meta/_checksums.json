@@ -64,6 +64,10 @@
     {
       "tag": "0015_outgoing_psynapse",
       "sha256": "202fd7132d5ca4ba8612521dab71d3dd52c806c7e53adcbe7d351d3841d6e290"
+    },
+    {
+      "tag": "0016_square_warhawk",
+      "sha256": "090932a5c5be7e9a133f7d23f3c92a3555ab7110968c5d54d7eda5198c152ba9"
     }
   ]
 }

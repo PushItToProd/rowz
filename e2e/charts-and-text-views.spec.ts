@@ -134,6 +134,21 @@ test("a text view button runs the selected stored action", async ({ page }) => {
   await expect(text.getByRole("button", { name: "Increment" })).toBeVisible();
 });
 
+test("the Runs panel shows who ran a cell button and what it did", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "B1", '=BUTTON("Add one", EXECUTE(A1+1, A1))');
+  await cell(page, "B1").getByRole("button", { name: "Add one" }).click();
+  await expect(cell(page, "A1")).toHaveText("1");
+
+  await page.getByRole("button", { name: "Runs", exact: true }).click();
+  const runs = page.getByRole("dialog", { name: "Runs" });
+  await expect(runs).toContainText("Ada");
+  await expect(runs).toContainText("Cell button");
+  await expect(runs).toContainText("Table 1!B1");
+  await expect(runs).toContainText("1 cell write");
+  await expect(runs).toContainText("Succeeded");
+});
+
 test("text-view input controls commit to their bound cells", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "initial name");

@@ -2,7 +2,7 @@ import { LIMITS } from "@spreadsheet-app/shared";
 import { desc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { CellInput } from "@spreadsheet-app/shared";
-import type { ClickResult, PageRecord, TableRecord } from "./app";
+import type { ActionRunRecord, ClickResult, PageRecord, TableRecord } from "./app";
 import { actionRuns } from "./db/schema";
 import {
   cellsBody,
@@ -79,6 +79,29 @@ async function runsFor(sheet: Sheet): Promise<(typeof actionRuns.$inferSelect)[]
 }
 
 describe("clicking an EXECUTE button", () => {
+  it("lists older runs with an unknown kind", async () => {
+    const sheet = await sheetWith({});
+    const [legacy] = await server.db
+      .insert(actionRuns)
+      .values({
+        spreadsheetId: sheet.spreadsheetId,
+        tableId: sheet.tableId,
+        row: 0,
+        col: 0,
+        kind: "unknown",
+        userId: user.userId,
+        effects: [],
+        emails: 0,
+        status: "succeeded",
+        error: null,
+      })
+      .returning({ id: actionRuns.id });
+
+    expect(
+      await user.json<ActionRunRecord[]>("GET", `/spreadsheets/${sheet.spreadsheetId}/runs`),
+    ).toMatchObject([{ id: legacy!.id, kind: "unknown" }]);
+  });
+
   it("re-derives local bindings from the stored formula at click time", async () => {
     const sheet = await sheetWith({ A1: "4", B1: '=LET(x, A1, BUTTON("go", EXECUTE(x+1, A2)))' });
     await user.json("PUT", `/tables/${sheet.tableId}/cells`, cellsBody({ A1: "8" }), 200);
@@ -111,6 +134,7 @@ describe("clicking an EXECUTE button", () => {
     expect(await runsFor(sheet)).toMatchObject([
       {
         id: result.runId,
+        kind: "cell_button",
         tableId: sheet.tableId,
         row: 3,
         col: 0,
@@ -118,6 +142,35 @@ describe("clicking an EXECUTE button", () => {
         status: "succeeded",
         error: null,
         effects: [{ type: "setCell", tableId: sheet.tableId, row: 2, col: 0, input: "3" }],
+      },
+    ]);
+    expect(
+      await user.json<
+        {
+          kind: string;
+          user: { name: string; email: string } | null;
+          target: { type: string; pageName: string | null; name: string | null; cell?: string };
+          cellsWritten: number;
+          emails: number;
+          status: string;
+          error: string | null;
+        }[]
+      >("GET", `/spreadsheets/${sheet.spreadsheetId}/runs`),
+    ).toMatchObject([
+      {
+        id: result.runId,
+        kind: "cell_button",
+        user: { name: "Ada", email: user.email },
+        target: {
+          type: "cell",
+          pageName: "Page 1",
+          name: "Table 1",
+          cell: "A4",
+        },
+        cellsWritten: 1,
+        emails: 0,
+        status: "succeeded",
+        error: null,
       },
     ]);
   });
@@ -248,7 +301,25 @@ describe("clicking a SEND_EMAIL button", () => {
       },
     ]);
     expect(await runsFor(sheet)).toMatchObject([
-      { status: "succeeded", error: null, effects: [{ type: "sendEmail", subject: "Hello" }] },
+      {
+        kind: "cell_button",
+        status: "succeeded",
+        error: null,
+        emails: 2,
+        effects: [{ type: "sendEmail", subject: "Hello" }],
+      },
+    ]);
+    const runLog = await sender.json<
+      {
+        kind: string;
+        emails: number;
+        cellsWritten: number;
+        status: string;
+        error: string | null;
+      }[]
+    >("GET", `/spreadsheets/${sheet.spreadsheetId}/runs`);
+    expect(runLog).toMatchObject([
+      { kind: "cell_button", emails: 2, cellsWritten: 0, status: "succeeded", error: null },
     ]);
   });
 
@@ -274,8 +345,14 @@ describe("clicking a SEND_EMAIL button", () => {
       emailsSent: 0,
     });
     expect(await runsFor(sheet)).toMatchObject([
-      { status: "failed", error: "The email could not be sent" },
+      { kind: "cell_button", status: "failed", error: "The email could not be sent", emails: 0 },
     ]);
+    expect(
+      await sender.json<{ emails: number; status: string; error: string | null }[]>(
+        "GET",
+        `/spreadsheets/${sheet.spreadsheetId}/runs`,
+      ),
+    ).toMatchObject([{ emails: 0, status: "failed", error: "The email could not be sent" }]);
   });
 
   it("stops a user at the hourly limit without affecting other users or other actions", async () => {
@@ -434,9 +511,46 @@ describe("clicking a text view button", () => {
     expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
       "0:0": "9",
     });
+    expect(
+      await user.json<
+        {
+          kind: string;
+          user: { name: string; email: string } | null;
+          target: {
+            type: string;
+            id: string;
+            pageName: string | null;
+            name: string | null;
+            occurrence?: number;
+          };
+          cellsWritten: number;
+          emails: number;
+          status: string;
+          error: string | null;
+        }[]
+      >("GET", `/spreadsheets/${sheet.spreadsheetId}/runs`),
+    ).toMatchObject([
+      {
+        id: result.runId,
+        kind: "view_button",
+        user: { name: "Ada", email: user.email },
+        target: {
+          type: "view",
+          id: view.id,
+          pageName: "Page 1",
+          name: "Text 1",
+          occurrence: 1,
+        },
+        cellsWritten: 1,
+        emails: 0,
+        status: "succeeded",
+        error: null,
+      },
+    ]);
     expect(await runsFor(sheet)).toMatchObject([
       {
         id: result.runId,
+        kind: "view_button",
         tableId: null,
         row: null,
         col: null,
@@ -558,9 +672,24 @@ describe("changing an input in a text view", () => {
     expect(runs).toHaveLength(3);
     expect(runs).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ viewId: view.id, buttonIndex: 1, status: "failed" }),
-        expect.objectContaining({ viewId: view.id, buttonIndex: 1, status: "succeeded" }),
-        expect.objectContaining({ viewId: view.id, buttonIndex: 0, status: "succeeded" }),
+        expect.objectContaining({
+          viewId: view.id,
+          buttonIndex: 1,
+          kind: "view_input",
+          status: "failed",
+        }),
+        expect.objectContaining({
+          viewId: view.id,
+          buttonIndex: 1,
+          kind: "view_input",
+          status: "succeeded",
+        }),
+        expect.objectContaining({
+          viewId: view.id,
+          buttonIndex: 0,
+          kind: "view_input",
+          status: "succeeded",
+        }),
       ]),
     );
   });
@@ -759,7 +888,7 @@ describe("changing a control", () => {
     expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
       "0:0": "FALSE",
     });
-    expect(await runsFor(sheet)).toHaveLength(2);
+    expect(await runsFor(sheet)).toMatchObject([{ kind: "cell_input" }, { kind: "cell_input" }]);
   });
 
   it("writes text as text and requires numbers for NUMBERBOX", async () => {

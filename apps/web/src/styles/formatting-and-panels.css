@@ -156,6 +156,57 @@
   gap: 6px;
 }
 
+.runs__header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.runs__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.runs__item {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.runs__details {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 6px 8px;
+  margin: 0;
+}
+
+.runs__details dt {
+  color: var(--muted);
+}
+
+.runs__details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.runs__email,
+.runs__error {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.runs__outcome--succeeded {
+  color: var(--accent);
+}
+
+.runs__outcome--failed {
+  color: var(--danger);
+}
+
 /* Share */
 
 .share__form {

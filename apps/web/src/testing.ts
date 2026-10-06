@@ -271,6 +271,7 @@ export function mockApi(): MockedApi {
     share: vi.fn(),
     unshare: vi.fn().mockResolvedValue(undefined),
     listVersions: vi.fn().mockResolvedValue([]),
+    listRuns: vi.fn().mockResolvedValue([]),
     restoreVersion: vi
       .fn()
       .mockImplementation(() => Promise.resolve({ revision: ++nextRevision, changed: null })),

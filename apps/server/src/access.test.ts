@@ -42,6 +42,7 @@ beforeAll(async () => {
     },
     200,
   );
+  await owner.json("POST", `/tables/${created.tables[0]!.id}/cells/0/0/click`);
   snapshot = await owner.json<Snapshot>("GET", `/spreadsheets/${created.id}`);
 });
 afterAll(() => server.close());
@@ -63,6 +64,7 @@ const accountRoutes: Route[] = [
 function readRoutes(): Route[] {
   return [
     ["GET", `/spreadsheets/${snapshot.id}`],
+    ["GET", `/spreadsheets/${snapshot.id}/runs`],
     ["GET", `/spreadsheets/${snapshot.id}/events`],
     ["GET", `/spreadsheets/${snapshot.id}/versions`],
     ["GET", `/spreadsheets/${snapshot.id}/members`],
@@ -267,6 +269,12 @@ describe("a viewer", () => {
       ...snapshot,
       role: "viewer",
     });
+    expect(
+      await viewer.json<{ kind: string; user: { name: string; email: string } }[]>(
+        "GET",
+        `/spreadsheets/${snapshot.id}/runs`,
+      ),
+    ).toMatchObject([{ kind: "cell_button", user: { name: "Owner", email: owner.email } }]);
     const listed = await viewer.json<{ documents: SpreadsheetSummary[] }>("GET", "/spreadsheets");
     expect(listed.documents.map((item) => item.id)).toEqual([snapshot.id]);
 

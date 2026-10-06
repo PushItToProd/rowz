@@ -386,9 +386,9 @@ The next items came from a QA pass through the running app in a browser on 2026-
     - (Claude) needs the outbox under Before sharing with others, and a rule for which addresses a server may call, so a formula cannot reach the server's own network
 - [ ] **P10** (Claude) scheduled actions: Rows' `SCHEDULE`, `REPEAT`, `REFRESH`. Needs a server scheduler and a rule for whose permissions a scheduled run uses #small-apps
 - [x] **P3** run a `BUTTON` in a text view through a view click endpoint
-- [ ] **P3** (Claude) show the runs of a document's buttons to the people who can open it: who clicked, when, what it wrote and sent, and how it ended. `action_runs` records all of this and nothing shows it #small-apps
-  - (Claude) first make a run say what kind it was. `runViewInput` in [run.ts](apps/server/src/actions/run.ts) stores a text-view input's occurrence in the `buttonIndex` of its run, so a text-view input commit and a text-view button click look the same. A checkbox or dropdown change in a cell is likewise recorded like a cell button click
-  - (Claude) `runViewButton` and `runViewInput` repeat the same find, lock, find again, and render steps. Share them when this area is next changed
+- [x] **P3** (Claude) show the runs of a document's buttons to the people who can open it: who clicked, when, what it wrote and sent, and how it ended. `action_runs` records all of this and nothing shows it #small-apps
+  - [x] (Claude) first make a run say what kind it was. `runViewInput` in [run.ts](apps/server/src/actions/run.ts) stores a text-view input's occurrence in the `buttonIndex` of its run, so a text-view input commit and a text-view button click look the same. A checkbox or dropdown change in a cell is likewise recorded like a cell button click
+  - [x] (Claude) `runViewButton` and `runViewInput` repeat the same find, lock, find again, and render steps. Share them when this area is next changed
 - [ ] **P3** (Claude) a button can ask for confirmation before it runs, for an action that clears cells or sends email #small-apps
 
 ## Controls, mobile use, and templates
@@ -533,6 +533,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 
 These items harden rowz for several users, hostile input, or a deployed server. They are parked while one person uses rowz on their own machine. Review findings of that kind go here.
 
+- [ ] **P10** The Runs panel lists runs by people whose share has ended, with their name and email, because `action_runs.user_id` outlives a share (`apps/server/src/repo/spreadsheets/runs.ts`). Show a former member as such, without the email #small-apps
 - [ ] **P10** A text-view input commit can overwrite a newer value written from another tab, because its fingerprint names the target but not the value it was rendered with; include the rendered value and answer 409 on mismatch #sharing
 - [ ] **P10** A text-view `BUTTON` click sends only its occurrence index, so a stale view whose conditional content shifted can run a different button; send a render token or the button's label/action fingerprint and answer 409 on mismatch #sharing
 - [ ] **P10** `ContextMenu.vue` moves focus to the menu only on mount. If the focused item becomes disabled while the menu stays open (for example another tab uses the last row capacity), focus can leave the menu and Escape stops working. Keep focus on the menu when its focused item is disabled, and test it. #sharing

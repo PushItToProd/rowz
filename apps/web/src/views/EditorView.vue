@@ -18,6 +18,7 @@ import ErrorWarning from "../components/ErrorWarning.vue";
 import { formatAddress, type DocumentError } from "@spreadsheet-app/engine";
 import AssertionsPanel from "../components/AssertionsPanel.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
+import RunsPanel from "../components/RunsPanel.vue";
 import SharePanel from "../components/SharePanel.vue";
 import { useSessionStore } from "../stores/session";
 import { watchSpreadsheet } from "../api/live";
@@ -127,6 +128,7 @@ function exportFile(): void {
 }
 
 const historyOpen = ref(false);
+const runsOpen = ref(false);
 const shareOpen = ref(false);
 const assertionsOpen = ref(false);
 const errorsOpen = ref(false);
@@ -366,6 +368,7 @@ watch(
           Share
         </button>
         <button v-if="loaded" type="button" @click="historyOpen = true">History</button>
+        <button v-if="loaded" type="button" @click="runsOpen = true">Runs</button>
         <button v-if="loaded" type="button" @click="exportFile">Export</button>
         <button v-if="loaded" type="button" :disabled="copying || store.saving" @click="saveCopy">
           Save a copy
@@ -462,6 +465,11 @@ watch(
       @close="historyOpen = false"
       @restored="reload"
       @copied="openCopy"
+    />
+    <RunsPanel
+      v-if="runsOpen && loaded"
+      :spreadsheet-id="spreadsheetId"
+      @close="runsOpen = false"
     />
 
     <div

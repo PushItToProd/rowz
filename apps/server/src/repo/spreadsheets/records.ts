@@ -13,7 +13,7 @@ import {
   type StoredCell,
 } from "@spreadsheet-app/shared";
 import { type Change } from "../journal";
-import { type Role, type ViewKind } from "../../db/schema";
+import { type Role, type RunKind, type RunStatus, type ViewKind } from "../../db/schema";
 
 /** What a caller means to do: read, change the contents, or do what only the owner may. */
 export type Access = "read" | "write" | "own";
@@ -104,6 +104,35 @@ export interface VersionRecord {
   reason: string | null;
   /** The name of whoever made the change that kept it. */
   createdBy: string | null;
+}
+
+/** A recent action run, with only the effect counts needed by the Runs panel. */
+export interface ActionRunRecord {
+  id: string;
+  createdAt: Date;
+  kind: RunKind;
+  user: { name: string; email: string } | null;
+  target:
+    | {
+        type: "cell";
+        id: string;
+        pageName: string | null;
+        name: string | null;
+        cell: string;
+      }
+    | {
+        type: "view";
+        id: string;
+        pageName: string | null;
+        name: string | null;
+        occurrence: number;
+      };
+  cellsWritten: number;
+  tablesExpanded: number;
+  rowsDeleted: number;
+  emails: number;
+  status: RunStatus;
+  error: string | null;
 }
 
 /** A whole spreadsheet: everything the editor and the formula engine need. */

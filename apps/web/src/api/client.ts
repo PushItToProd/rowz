@@ -1,5 +1,6 @@
 import type {
   AppType,
+  ActionRunRecord,
   ClickResult,
   DocumentList,
   FolderRecord,
@@ -63,6 +64,7 @@ export type ControlInput = string | number | boolean | null;
 
 /** `updatedAt` arrives as an ISO string: JSON has no date type. */
 export type VersionListItem = Omit<VersionRecord, "createdAt"> & { createdAt: string };
+export type RunListItem = Omit<ActionRunRecord, "createdAt"> & { createdAt: string };
 export type SpreadsheetListItem = Omit<SpreadsheetSummary, "updatedAt"> & { updatedAt: string };
 /** A spreadsheet in the list, with the viewer's role on it. */
 export type ListedSpreadsheetItem = SpreadsheetListItem &
@@ -197,6 +199,10 @@ export const api = {
   /** The kept versions of a spreadsheet, newest first. */
   listVersions: (spreadsheetId: string): Promise<VersionListItem[]> =>
     body(routes.spreadsheets[":spreadsheetId"].versions.$get({ param: { spreadsheetId } })),
+
+  /** The latest 100 button and control runs, newest first. */
+  listRuns: (spreadsheetId: string): Promise<RunListItem[]> =>
+    body(routes.spreadsheets[":spreadsheetId"].runs.$get({ param: { spreadsheetId } })),
 
   /** Puts a spreadsheet back as a kept version has it. */
   restoreVersion: (spreadsheetId: string, versionId: string): Promise<Change> =>

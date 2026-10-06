@@ -47,6 +47,10 @@ export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
         const undoState = await c.var.repository.undoState(spreadsheetId);
         return c.json({ ...snapshot, ...undoState });
       })
+      // The latest 100 button and control runs, newest first.
+      .get("/:spreadsheetId/runs", zValidator("param", spreadsheetParam, onInvalid), async (c) =>
+        c.json(await c.var.repository.listRuns(c.req.valid("param").spreadsheetId)),
+      )
       .post("/:spreadsheetId/copy", zValidator("param", spreadsheetParam, onInvalid), async (c) =>
         c.json(await c.var.repository.copySpreadsheet(c.req.valid("param").spreadsheetId), 201),
       )

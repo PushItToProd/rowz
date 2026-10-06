@@ -30,6 +30,7 @@ import {
   type ViewRecord,
   type Found,
   type VersionRecord,
+  type ActionRunRecord,
   type Snapshot,
   type UndoResult,
   type RepositoryOptions,
@@ -47,6 +48,7 @@ export type {
   TableRecord,
   ViewRecord,
   VersionRecord,
+  ActionRunRecord,
   Snapshot,
   SnapshotWithHistory,
   UndoResult,
@@ -135,6 +137,11 @@ export class SpreadsheetRepository {
   /** The kept versions of a spreadsheet, newest first. */
   async listVersions(spreadsheetId: string): Promise<VersionRecord[]> {
     return this.context.listVersions(spreadsheetId);
+  }
+
+  /** The latest action runs of a spreadsheet, newest first. */
+  async listRuns(spreadsheetId: string): Promise<ActionRunRecord[]> {
+    return this.context.listRuns(spreadsheetId);
   }
 
   /**
