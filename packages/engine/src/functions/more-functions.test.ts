@@ -509,6 +509,29 @@ describe("more text", () => {
   });
 });
 
+describe("grapheme-aware text positions", () => {
+  it.each<[string, CellValue]>([
+    ['=LEN("😀")', 1],
+    ['=LEN("é")', 1],
+    ['=LEFT("😀a", 1)', "😀"],
+    ['=RIGHT("a🇺🇸", 1)', "🇺🇸"],
+    ['=MID("x👨‍👩‍👧‍👦y", 2, 1)', "👨‍👩‍👧‍👦"],
+    ['=SLICE("aéb", 1, 2)', "é"],
+    ['=FIND("b", "😀ab")', 3],
+    ['=FIND("a", "😀a", 2)', 2],
+    ['=SEARCH("B", "🇺🇸b")', 2],
+    ['=SEARCH("i", "İ")', 1],
+    ['=LEN("hello")', 5],
+    ['=LEFT("hello", 2)', "he"],
+    ['=MID("hello", 2, 2)', "el"],
+    ['=SLICE("hello", 1, 3)', "el"],
+    ['=FIND("l", "hello")', 3],
+    ['=SEARCH("L", "hello")', 3],
+  ])("%s is %j", (formula, expected) => {
+    expect(evaluateFormula(formula)).toBe(expected);
+  });
+});
+
 describe("more lookups and information", () => {
   const cells = {
     A1: "id",

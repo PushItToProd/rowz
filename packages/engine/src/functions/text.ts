@@ -14,6 +14,14 @@ import {
   scalar,
   text,
 } from "./arguments";
+import {
+  graphemeLength,
+  graphemes,
+  isAscii,
+  offsetAtGrapheme,
+  positionAtGrapheme,
+  sliceGraphemes,
+} from "./graphemes";
 import type { FunctionDefinition } from "./registry";
 
 function textFunction(compute: (value: string) => Scalar): FunctionDefinition {
@@ -32,8 +40,45 @@ function count(value: Parameters<typeof integer>[0], what: string): number {
 /** Finds `needle` in `haystack` from a 1-based position, and gives a 1-based position. */
 function find(needle: string, haystack: string, from: number): number {
   if (from < 1) fail("#VALUE!", "The start position must be 1 or more");
-  const index = haystack.indexOf(needle, from - 1);
-  return index === -1 ? fail("#VALUE!", `"${needle}" was not found`) : index + 1;
+  if (isAscii(haystack)) {
+    const index = haystack.indexOf(needle, from - 1);
+    return index === -1 ? fail("#VALUE!", `"${needle}" was not found`) : index + 1;
+  }
+  const index = haystack.indexOf(needle, offsetAtGrapheme(haystack, from - 1));
+  return index === -1
+    ? fail("#VALUE!", `"${needle}" was not found`)
+    : positionAtGrapheme(haystack, index);
+}
+
+/** Finds text without case sensitivity while returning a position in the original text. */
+function search(needle: string, haystack: string, from: number): number {
+  if (from < 1) fail("#VALUE!", "The start position must be 1 or more");
+  const folded = haystack.toLowerCase();
+  const foldedNeedle = needle.toLowerCase();
+  if (isAscii(haystack) && isAscii(needle)) {
+    const index = folded.indexOf(foldedNeedle, from - 1);
+    return index === -1 ? fail("#VALUE!", `"${needle}" was not found`) : index + 1;
+  }
+  const starts: number[] = [];
+  let foldedOffset = 0;
+  for (const character of graphemes(haystack)) {
+    starts.push(foldedOffset);
+    foldedOffset += character.toLowerCase().length;
+  }
+  const start = starts[from - 1] ?? folded.length;
+  const index = folded.indexOf(foldedNeedle, start);
+  if (index === -1) return fail("#VALUE!", `"${needle}" was not found`);
+  if (index === folded.length) return starts.length + 1;
+
+  // Find the grapheme whose lowercased text contains this match offset.
+  let low = 0;
+  let high = starts.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((starts[middle] ?? Infinity) <= index) low = middle + 1;
+    else high = middle;
+  }
+  return low;
 }
 
 const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -195,7 +240,7 @@ export const textFunctions: Record<string, FunctionDefinition> = {
   SLICE: eager(2, 3, (value, start, ...endValues) => {
     const source = text(value);
     const end = endValues.at(0);
-    return source.slice(integer(start), end === undefined ? undefined : integer(end));
+    return sliceGraphemes(source, integer(start), end === undefined ? undefined : integer(end));
   }),
   /** Writes a number as text with a fixed number of decimals, grouping thousands unless told not to. */
   FIXED: eager(1, 3, (value, decimals = 2, plain = false) => {
@@ -211,20 +256,22 @@ export const textFunctions: Record<string, FunctionDefinition> = {
       .filter((part) => !skip || part !== "")
       .join(text(delimiter));
   }),
-  LEN: textFunction((value) => value.length),
+  LEN: textFunction(graphemeLength),
   UPPER: textFunction((value) => value.toUpperCase()),
   LOWER: textFunction((value) => value.toLowerCase()),
   /** Removes leading and trailing spaces and collapses runs of spaces between words. */
   TRIM: textFunction((value) => value.trim().replace(/ {2,}/g, " ")),
-  LEFT: eager(1, 2, (value, length = 1) => text(value).slice(0, count(length, "The length"))),
+  LEFT: eager(1, 2, (value, length = 1) =>
+    sliceGraphemes(text(value), 0, count(length, "The length")),
+  ),
   RIGHT: eager(1, 2, (value, length = 1) => {
     const taken = count(length, "The length");
-    return taken === 0 ? "" : text(value).slice(-taken);
+    return taken === 0 ? "" : sliceGraphemes(text(value), -taken);
   }),
   MID: eager(3, 3, (value, start, length) => {
     const from = integer(start);
     if (from < 1) fail("#VALUE!", "The start position must be 1 or more");
-    return text(value).slice(from - 1, from - 1 + count(length, "The length"));
+    return sliceGraphemes(text(value), from - 1, from - 1 + count(length, "The length"));
   }),
   /** The position of one text inside another, matching letter case. */
   FIND: eager(2, 3, (needle, haystack, start = 1) =>
@@ -232,7 +279,7 @@ export const textFunctions: Record<string, FunctionDefinition> = {
   ),
   /** The position of one text inside another, ignoring letter case. */
   SEARCH: eager(2, 3, (needle, haystack, start = 1) =>
-    find(text(needle).toLowerCase(), text(haystack).toLowerCase(), integer(start)),
+    search(text(needle), text(haystack), integer(start)),
   ),
   SUBSTITUTE: eager(3, 3, (value, old, replacement) => {
     const target = text(old);

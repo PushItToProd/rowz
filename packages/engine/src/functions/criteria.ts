@@ -1,6 +1,7 @@
 import { parseDate } from "../dates";
 import { fail } from "../errors";
 import { compare, isScalar, kindOf, parseNumber, type CellValue, type Scalar } from "../values";
+import { graphemes } from "./graphemes";
 
 type Comparison = "=" | "<>" | "<" | ">" | "<=" | ">=";
 
@@ -36,9 +37,9 @@ function operand(text: string): Operand {
   return { value: parseDate(text) ?? text, quotedText: false };
 }
 
-/** The characters of text without their letter case, so that `?` stands for one whole character. */
+/** The grapheme clusters of text without their letter case, so `?` stands for one character. */
 function folded(text: string): string[] {
-  return Array.from(text, (character) => character.toLowerCase());
+  return graphemes(text).map((character) => character.toLowerCase());
 }
 
 /**

@@ -26,13 +26,29 @@ describe("regular expression functions", () => {
     ['=REGEXMATCH("cat", "[^a-z]+")', false],
     ['=REGEXMATCH("A", "[A-Z]")', true],
     ['=REGEXMATCH("B", "[\\dA-Z]")', true],
+    ['=REGEXMATCH("🚀", "[😀-😁]")', false],
+    ['=REGEXMATCH("😁", "[😀-😂]")', true],
     ['=REGEXMATCH("aaa", "a{2,3}")', true],
   ] as [string, boolean][])("%s is %j", (formula, expected) => {
     expect(evaluateFormula(formula)).toBe(expected);
   });
 
+  it("treats a grapheme cluster as one regular expression character", () => {
+    expect(evaluateFormula('=REGEXMATCH("👨‍👩‍👧‍👦", "^.$")')).toBe(true);
+    expect(evaluateFormula('=REGEXMATCH("😀", "^😀$")')).toBe(true);
+    expect(evaluateFormula('=REGEXMATCH("😀", "^\\uD83D\\uDE00$")')).toBe(true);
+    expect(evaluateFormula('=REGEXMATCH("😀", "^[\\uD83D\\uDE00]$")')).toBe(true);
+    expect(evaluateFormula('=REGEXMATCH("é", "^e\\u0301$")')).toBe(true);
+    expect(evaluateFormula('=REGEXMATCH("é", "\\w")')).toBe(true);
+    expect(evaluateFormula('=REGEXEXTRACT("🇺🇸", ".")')).toBe("🇺🇸");
+    expect(evaluateFormula('=REGEXREPLACE("é", "", "-")')).toBe("-é-");
+    expect(evaluateFormula('=REGEXREPLACE("👨‍👩‍👧‍👦", ".", "x")')).toBe("x");
+    expect(evaluateFormula('=REGEXREPLACE("abc", "", "-")')).toBe("-a-b-c-");
+  });
+
   it("does not let dot match a line break", () => {
     expect(evaluateFormula('=REGEXMATCH(A1, "a.b")', { A1: "a\nb" })).toBe(false);
+    expect(evaluateFormula('=REGEXMATCH(CONCATENATE(CHAR(13), CHAR(10)), "^.$")')).toBe(false);
   });
 
   it.each([
@@ -112,4 +128,12 @@ describe("regular expression functions", () => {
     expect(evaluateFormula('=REGEXMATCH(A1, "(a+)+$")', { A1: source })).toBe(false);
     expect(performance.now() - started).toBeLessThan(2000);
   });
+
+  it("replaces every grapheme in a large input without rescanning the prefix", () => {
+    const started = performance.now();
+    expect(evaluateFormula('=REGEXREPLACE(REPT("😀", 100000), ".", "x")')).toBe(
+      "x".repeat(100_000),
+    );
+    expect(performance.now() - started).toBeLessThan(5000);
+  }, 10_000);
 });

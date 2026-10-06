@@ -1,3 +1,5 @@
+import { graphemes, isAscii } from "./functions/graphemes";
+
 /** A syntax, size, or execution limit error in the regular expression engine. */
 export class RegexError extends Error {
   constructor(message: string) {
@@ -36,12 +38,56 @@ type Node =
       greedy: boolean;
     };
 
+function mergeLiteralNodes(nodes: Node[]): Node[] {
+  const merged: Node[] = [];
+  let literal = "";
+  const flush = () => {
+    for (const value of graphemes(literal)) {
+      merged.push({ kind: "character", test: { kind: "literal", value } });
+    }
+    literal = "";
+  };
+
+  for (const node of nodes) {
+    if (node.kind === "character" && node.test.kind === "literal") {
+      literal += node.test.value;
+    } else {
+      flush();
+      merged.push(node);
+    }
+  }
+  flush();
+  return merged;
+}
+
+function mergeLiteralTests(terms: CharacterTest[]): CharacterTest[] {
+  const merged: CharacterTest[] = [];
+  let literal = "";
+  const flush = () => {
+    for (const value of graphemes(literal)) merged.push({ kind: "literal", value });
+    literal = "";
+  };
+
+  for (const term of terms) {
+    if (term.kind === "literal") {
+      literal += term.value;
+    } else {
+      flush();
+      merged.push(term);
+    }
+  }
+  flush();
+  return merged;
+}
+
 class Parser {
   private position = 0;
   captureCount = 0;
+  private readonly characters: string[];
 
-  constructor(private readonly pattern: string) {
-    if (pattern.length > MAX_PATTERN_LENGTH) {
+  constructor(pattern: string) {
+    this.characters = graphemes(pattern);
+    if (this.characters.length > MAX_PATTERN_LENGTH) {
       throw new RegexError(
         "The regular expression cannot exceed " + String(MAX_PATTERN_LENGTH) + " characters",
       );
@@ -50,8 +96,8 @@ class Parser {
 
   parse(): Node {
     const result = this.parseChoice();
-    if (this.position !== this.pattern.length) {
-      const character = this.pattern[this.position];
+    if (this.position !== this.characters.length) {
+      const character = this.current();
       if (character === ")") throw new RegexError("The regular expression has an unmatched )");
       throw new RegexError(`Unexpected ${JSON.stringify(character)} in the regular expression`);
     }
@@ -59,7 +105,7 @@ class Parser {
   }
 
   private current(): string | undefined {
-    return this.pattern[this.position];
+    return this.characters[this.position];
   }
 
   private parseChoice(): Node {
@@ -76,16 +122,17 @@ class Parser {
   private parseSequence(): Node {
     const children: Node[] = [];
     while (
-      this.position < this.pattern.length &&
+      this.position < this.characters.length &&
       this.current() !== ")" &&
       this.current() !== "|"
     ) {
       children.push(this.parseQuantified());
     }
     if (children.length === 0) return { kind: "empty" };
-    return children.length === 1
-      ? (children[0] ?? { kind: "empty" })
-      : { kind: "sequence", children };
+    const merged = mergeLiteralNodes(children);
+    return merged.length === 1
+      ? (merged[0] ?? { kind: "empty" })
+      : { kind: "sequence", children: merged };
   }
 
   private parseQuantified(): Node {
@@ -152,7 +199,7 @@ class Parser {
     const start = this.position;
     while (isDigit(this.current())) this.position += 1;
     if (this.position === start) return undefined;
-    const value = Number(this.pattern.slice(start, this.position));
+    const value = Number(this.characters.slice(start, this.position).join(""));
     if (!Number.isSafeInteger(value)) throw new RegexError("A repeat count is too large");
     return value;
   }
@@ -208,15 +255,15 @@ class Parser {
     const negated = this.current() === "^";
     if (negated) this.position += 1;
     const terms: CharacterTest[] = [];
-    while (this.position < this.pattern.length && this.current() !== "]") {
+    while (this.position < this.characters.length && this.current() !== "]") {
       const first = this.parseClassAtom();
-      if (this.current() === "-" && this.pattern[this.position + 1] !== "]") {
+      if (this.current() === "-" && this.characters[this.position + 1] !== "]") {
         this.position += 1;
         const last = this.parseClassAtom();
         if (first.kind !== "literal" || last.kind !== "literal") {
           throw new RegexError("Character class ranges need literal endpoints");
         }
-        if (first.value.charCodeAt(0) > last.value.charCodeAt(0)) {
+        if ((first.value.codePointAt(0) ?? 0) > (last.value.codePointAt(0) ?? 0)) {
           throw new RegexError("A character class range is in descending order");
         }
         terms.push({ kind: "range", first: first.value, last: last.value });
@@ -227,7 +274,7 @@ class Parser {
     if (this.current() !== "]") throw new RegexError("The regular expression has an unclosed [");
     this.position += 1;
     if (terms.length === 0) throw new RegexError("An empty character class is not supported");
-    return { kind: "class", terms, negated };
+    return { kind: "class", terms: mergeLiteralTests(terms), negated };
   }
 
   private parseClassAtom(): CharacterTest {
@@ -279,7 +326,7 @@ class Parser {
   }
 
   private readHexEscape(length: number): string {
-    const digits = this.pattern.slice(this.position, this.position + length);
+    const digits = this.characters.slice(this.position, this.position + length).join("");
     let valid = digits.length === length;
     for (const digit of digits) {
       if (!isHexDigit(digit)) valid = false;
@@ -492,33 +539,72 @@ export function compileRegex(pattern: string): RegexProgram {
 /** Searches using a prioritized Thompson NFA, with one shared step budget per formula call. */
 export class RegexRunner {
   private readonly budget = new StepBudget();
+  private indexedText: string | undefined;
+  private indexedCharacters: string[] | undefined;
+  private indexedOffsets: number[] | undefined;
 
   constructor(private readonly program: RegexProgram) {}
 
   find(text: string, from = 0): RegexMatch | undefined {
+    if (this.indexedText !== text) {
+      this.indexedText = text;
+      this.indexedCharacters = isAscii(text) ? undefined : graphemes(text);
+      this.indexedOffsets = this.indexedCharacters
+        ? this.indexedCharacters.reduce<number[]>(
+            (positions, character) => {
+              positions.push((positions.at(-1) ?? 0) + character.length);
+              return positions;
+            },
+            [0],
+          )
+        : undefined;
+    }
     let seeds: Thread[] = [];
     let fallback: Candidate | undefined;
     const firstPosition = Math.max(0, Math.min(text.length, from));
+    const characters = this.indexedCharacters;
+    const offsets = this.indexedOffsets;
+    let characterIndex = 0;
+    let position = firstPosition;
+    if (offsets) {
+      let low = 0;
+      let high = offsets.length;
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if ((offsets[middle] ?? Infinity) < firstPosition) low = middle + 1;
+        else high = middle;
+      }
+      characterIndex = Math.min(low, characters?.length ?? 0);
+      position = offsets[characterIndex] ?? text.length;
+    }
 
-    for (let position = firstPosition; position <= text.length; position += 1) {
+    while (position <= text.length) {
       const roots = seeds.slice();
       if (!fallback) roots.push({ pc: this.program.start, start: position, captures: null });
-      const closure = this.expand(roots, text, position);
+      const before = characters ? characters[characterIndex - 1] : text[position - 1];
+      const current = characters ? characters[characterIndex] : text[position];
+      const closure = this.expand(roots, text, position, before, current);
       if (closure.match) fallback = { thread: closure.match, end: position };
       if (fallback && closure.threads.length === 0) return this.result(fallback, text);
       if (position === text.length) return fallback ? this.result(fallback, text) : undefined;
 
       const next: Thread[] = [];
-      const character = text.charAt(position);
+      const character = characters ? characters[characterIndex] : text.charAt(position);
       for (const thread of closure.threads) {
         this.budget.step();
         const instruction = this.instruction(thread.pc);
-        if (instruction.op === "character" && matches(instruction.test, character)) {
+        if (instruction.op === "character" && character && matches(instruction.test, character)) {
           next.push({ ...thread, pc: this.target(instruction.out) });
         }
       }
       if (fallback && next.length === 0) return this.result(fallback, text);
       seeds = next;
+      if (offsets) {
+        characterIndex += 1;
+        position = offsets[characterIndex] ?? text.length;
+      } else {
+        position += 1;
+      }
     }
     return undefined;
   }
@@ -527,6 +613,8 @@ export class RegexRunner {
     roots: Thread[],
     text: string,
     position: number,
+    before: string | undefined,
+    current: string | undefined,
   ): { threads: Thread[]; match: Thread | undefined } {
     const stack = roots.reverse();
     const visited = new Set<number>();
@@ -557,7 +645,7 @@ export class RegexRunner {
           });
           break;
         case "assert":
-          if (asserts(instruction.assertion, text, position)) {
+          if (asserts(instruction.assertion, text, position, before, current)) {
             stack.push({ ...thread, pc: this.target(instruction.out) });
           }
           break;
@@ -609,12 +697,15 @@ function matches(test: CharacterTest, character: string): boolean {
     case "literal":
       return character === test.value;
     case "range": {
-      const code = character.charCodeAt(0);
-      return code >= test.first.charCodeAt(0) && code <= test.last.charCodeAt(0);
+      const code = character.codePointAt(0) ?? 0;
+      return code >= (test.first.codePointAt(0) ?? 0) && code <= (test.last.codePointAt(0) ?? 0);
     }
     case "any":
       return (
-        character !== "\n" && character !== "\r" && character !== "\u2028" && character !== "\u2029"
+        !character.includes("\n") &&
+        !character.includes("\r") &&
+        !character.includes("\u2028") &&
+        !character.includes("\u2029")
       );
     case "builtin": {
       const result = builtin(test.name, character);
@@ -628,29 +719,36 @@ function matches(test: CharacterTest, character: string): boolean {
 }
 
 function builtin(name: BuiltinClass, character: string): boolean {
+  const first = character.charAt(0);
   switch (name) {
     case "digit":
-      return character >= "0" && character <= "9";
+      return first >= "0" && first <= "9";
     case "word":
       return (
-        (character >= "A" && character <= "Z") ||
-        (character >= "a" && character <= "z") ||
-        (character >= "0" && character <= "9") ||
-        character === "_"
+        (first >= "A" && first <= "Z") ||
+        (first >= "a" && first <= "z") ||
+        (first >= "0" && first <= "9") ||
+        first === "_"
       );
     case "space":
-      return character.trim() === "";
+      return first.trim() === "";
   }
 }
 
-function asserts(assertion: Assertion, text: string, position: number): boolean {
+function asserts(
+  assertion: Assertion,
+  text: string,
+  position: number,
+  before: string | undefined,
+  current: string | undefined,
+): boolean {
   switch (assertion) {
     case "start":
       return position === 0;
     case "end":
       return position === text.length;
     case "word-boundary":
-      return isWordCharacter(text[position - 1]) !== isWordCharacter(text[position]);
+      return isWordCharacter(before) !== isWordCharacter(current);
   }
 }
 

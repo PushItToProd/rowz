@@ -29,8 +29,13 @@ describe("wildcards in a criterion", () => {
     ["a.c", "a.c", true],
     ["(a|b)+", "(a|b)+", true],
     ["a*c", "a\nc", true],
-    // `?` is one character, however many code units hold it.
+    // `?` is one grapheme cluster, regardless of its number of code units or code points.
     ["?", "😀", true],
+    ["?", "🇺🇸", true],
+    ["?", "👨‍👩‍👧‍👦", true],
+    ["?", "é", true],
+    ["??", "éa", true],
+    ["?", "ab", false],
     ["?", "İ", true],
     ["i", "İ", false],
   ])("%j against %j is %j", (pattern, text, matches) => {
