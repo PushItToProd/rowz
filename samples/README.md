@@ -1,6 +1,6 @@
 # Sample rowz documents
 
-Import a JSON file from the **Import** button on the spreadsheets list. The records are fictional examples; replace them with your own data after importing.
+Import a JSON file from the **Import** button on the Documents page. The records are fictional examples; replace them with your own data after importing.
 
 - [Payday cash planner](payday-cash-planner.json) compares baseline and lean cash forecasts against an editable reserve target, with paychecks, bills, scenarios, a chart, and a low-balance summary.
 - [Home maintenance and service history](home-maintenance-history.json) calculates next due dates from service records and includes a form that appends a completion to the log.

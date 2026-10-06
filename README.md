@@ -46,7 +46,7 @@ The aim is to do what a traditional spreadsheet does, and do it better. I build 
 rowz has not fixed these.
 
 - **Data and business logic are intermingled.** A table holds typed values and formulas side by side, and nothing marks which cells are which. Formula columns and text views move some formulas out of the cells.
-- **Formulas cannot be tested.** There is no way to state what a formula should return and have that checked. History keeps versions of a document but does not show what changed between two of them.
+- **Formulas can be tested only against the document's own data.** `ASSERT(condition, [message])` states what a formula should return, and the editor header counts the assertions that fail. There is no way to run a formula against sample inputs kept apart from the data. History keeps versions of a document but does not show what changed between two of them.
 - **Numbers are binary floating point.** `=0.1+0.2=0.3` is `FALSE`. There is no decimal type for money.
 - **Typed text is converted by guesswork.** A cell typed as `2026-09-30` becomes a date. Outside a typed column, nothing says what a cell should hold.
 - **A reference names a position.** `B2:B9` says nothing about what it reads. Named columns fix this only for tables that have them.

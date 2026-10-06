@@ -4,22 +4,22 @@ This guide maps the parts of rowz that developers most often need to change. For
 
 ## Mental model
 
-A spreadsheet holds pages. Each page holds blocks: tables, charts, and text views. Tables store cell inputs; charts and text views compute their content from formulas. The formula engine runs in the browser for immediate recalculation and on the server when an action runs. The server stores inputs, not computed values.
+A spreadsheet holds pages. Each page holds blocks: tables, charts, text views, and scripts. Tables store cell inputs; charts and text views compute their content from formulas; a script defines names, functions, and `ASSERT` checks. The formula engine runs in the browser for immediate recalculation and on the server when an action runs. The server stores inputs, not computed values.
 
-The engine is pure and has no I/O. An action formula evaluates to a description of an action. When a user clicks its button, the server reads the stored formula, plans its effects, and applies them. The browser sends the cell address, not an effect to execute.
+The engine is pure and has no I/O. An action formula evaluates to a description of an action. When a user clicks its button, the server reads the stored formula, plans its effects, and applies them. The browser sends the cell's row and column IDs, or a view ID and the button's occurrence in it, not an effect to execute.
 
 ## Main components
 
-| Area                | Start here                                                                                                                                                  | Common changes                                                                                |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Formula engine      | [`packages/engine/src/workbook.ts`](../packages/engine/src/workbook.ts)                                                                                     | Evaluation, dependency tracking, array spills, typed and formula columns, action planning     |
-| Formula language    | [`tokenizer.ts`](../packages/engine/src/tokenizer.ts), [`parser.ts`](../packages/engine/src/parser.ts), [`evaluate.ts`](../packages/engine/src/evaluate.ts) | Syntax, references, and evaluation behavior                                                   |
-| Functions and help  | [`packages/engine/src/functions/index.ts`](../packages/engine/src/functions/index.ts), [`docs.ts`](../packages/engine/src/docs.ts)                          | Built-in functions and the entries shown on `/help`                                           |
-| Shared contracts    | [`packages/shared/src/index.ts`](../packages/shared/src/index.ts)                                                                                           | API request schemas, limits, and spreadsheet import/export format                             |
-| Web app             | [`EditorView.vue`](../apps/web/src/views/EditorView.vue), [`workbook.ts`](../apps/web/src/stores/workbook.ts)                                               | Editor composition, spreadsheet state, local recalculation, saving, selection, undo, and redo |
-| Grid and formula UI | [`apps/web/src/components/`](../apps/web/src/components/)                                                                                                   | Table interaction, cell rendering, formula bar and completion, charts, text views, and menus  |
-| API and persistence | [`app.ts`](../apps/server/src/app.ts), [`spreadsheets.ts`](../apps/server/src/repo/spreadsheets.ts)                                                         | HTTP routes, authorization, database changes, history, and formula rewrites                   |
-| Actions and effects | [`run.ts`](../apps/server/src/actions/run.ts), [`effects.ts`](../packages/engine/src/effects.ts)                                                            | Effects such as cell writes, table growth, and email                                          |
+| Area                | Start here                                                                                                                                                  | Common changes                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Formula engine      | [`packages/engine/src/workbook.ts`](../packages/engine/src/workbook.ts)                                                                                     | Evaluation, dependency tracking, array spills, typed and formula columns, action planning        |
+| Formula language    | [`tokenizer.ts`](../packages/engine/src/tokenizer.ts), [`parser.ts`](../packages/engine/src/parser.ts), [`evaluate.ts`](../packages/engine/src/evaluate.ts) | Syntax, references, and evaluation behavior                                                      |
+| Functions and help  | [`packages/engine/src/functions/index.ts`](../packages/engine/src/functions/index.ts), [`docs.ts`](../packages/engine/src/docs.ts)                          | Built-in functions and the entries shown on `/help`                                              |
+| Shared contracts    | [`packages/shared/src/index.ts`](../packages/shared/src/index.ts)                                                                                           | API request schemas, limits, and spreadsheet import/export format                                |
+| Web app             | [`EditorView.vue`](../apps/web/src/views/EditorView.vue), [`workbook.ts`](../apps/web/src/stores/workbook.ts)                                               | Editor composition, spreadsheet state, local recalculation, saving, selection, undo, and redo    |
+| Grid and formula UI | [`apps/web/src/components/`](../apps/web/src/components/)                                                                                                   | Table interaction, cell rendering, formula editing and completion, charts, text views, and menus |
+| API and persistence | [`app.ts`](../apps/server/src/app.ts), [`spreadsheets.ts`](../apps/server/src/repo/spreadsheets.ts)                                                         | HTTP routes, authorization, database changes, history, and formula rewrites                      |
+| Actions and effects | [`run.ts`](../apps/server/src/actions/run.ts), [`effects.ts`](../packages/engine/src/effects.ts)                                                            | Effects such as cell writes, table growth, and email                                             |
 
 Useful supporting modules include [`graph.ts`](../packages/engine/src/graph.ts) for formula dependencies, [`template.ts`](../packages/engine/src/template.ts) for text-view templates, [`views.ts`](../packages/engine/src/views.ts) and [`columns.ts`](../packages/engine/src/columns.ts) for formula rewrites, and [`api/client.ts`](../apps/web/src/api/client.ts) for typed web-to-server calls.
 
@@ -37,7 +37,7 @@ Add an `Effect` variant in [`effects.ts`](../packages/engine/src/effects.ts), ma
 
 ### Change names, rows, columns, or page placement
 
-Formulas can be stored in cell inputs, chart and text view sources, and formula-column definitions. A rename, row or column edit, or move that changes formula references must rewrite each applicable location in the same transaction. The server returns rewritten cells, views, and tables for the client to apply. See [`rewrite.ts`](../packages/engine/src/rewrite.ts), [`views.ts`](../packages/engine/src/views.ts), [`columns.ts`](../packages/engine/src/columns.ts), and the rewrite paths in [`SpreadsheetRepository`](../apps/server/src/repo/spreadsheets.ts).
+Formulas can be stored in cell inputs, the sources of charts, text views, and scripts, formula-column definitions, a data table's filter, and a table's named formulas. A rename, row or column edit, or move that changes formula references must rewrite each applicable location in the same transaction. The server returns rewritten cells, views, and tables for the client to apply. See [`rewrite.ts`](../packages/engine/src/rewrite.ts) for cell inputs, [`views.ts`](../packages/engine/src/views.ts) for charts, text views, and scripts, [`columns.ts`](../packages/engine/src/columns.ts) for formula columns, filters, and named formulas, and `rewriteFormulas` and `rewriteForMove` in [`SpreadsheetRepository`](../apps/server/src/repo/spreadsheets.ts).
 
 ### Add an API or persisted data change
 
@@ -49,7 +49,9 @@ For a database schema change, edit [`db/schema.ts`](../apps/server/src/db/schema
 
 ### Change editor behavior
 
-The Pinia store in [`stores/workbook.ts`](../apps/web/src/stores/workbook.ts) owns most spreadsheet state and mutation flows. [`GridView.vue`](../apps/web/src/components/GridView.vue) handles grid interaction; [`CellView.vue`](../apps/web/src/components/CellView.vue) renders cells; [`FormulaBar.vue`](../apps/web/src/components/FormulaBar.vue) and [`FormulaAssist.vue`](../apps/web/src/components/FormulaAssist.vue) handle formula editing and completion. `EditorView.vue` assembles the page from table, chart, and text-view components.
+The Pinia store in [`stores/workbook.ts`](../apps/web/src/stores/workbook.ts) owns most spreadsheet state and mutation flows. [`GridView.vue`](../apps/web/src/components/GridView.vue) handles grid interaction and [`CellView.vue`](../apps/web/src/components/CellView.vue) renders cells. `EditorView.vue` assembles the page from table, chart, text-view, and script components.
+
+Every place a formula is typed uses the CodeMirror editor in [`FormulaEditor.vue`](../apps/web/src/components/FormulaEditor.vue): cells, the formula bar, formula columns, names, filters, chart sources, scripts, and Markdown templates. A draft is a session in [`formula/session.ts`](../apps/web/src/formula/session.ts), which names its target by ID and keeps its text and undo history while the field that started it is unmounted. [`SessionFormulaField.vue`](../apps/web/src/components/SessionFormulaField.vue) binds a field to a session, and [`FormulaSessionHost.vue`](../apps/web/src/components/FormulaSessionHost.vue) shows a draft whose field is not on screen. Completion is in [`formula/assist.ts`](../apps/web/src/formula/assist.ts) and reference picking in [`formula/picking.ts`](../apps/web/src/formula/picking.ts).
 
 The typed API client in [`api/client.ts`](../apps/web/src/api/client.ts) derives route types from the Hono app. When adding a route, update its request schema, server handler, client call, store flow, and UI as needed.
 
@@ -67,4 +69,4 @@ pnpm exec vitest run --project web
 pnpm e2e
 ```
 
-The project requires Node 24 and pnpm. Packages export TypeScript source, so there is no build step between packages. In this environment, `pnpm e2e` must run outside the sandbox because Chromium does not start inside it.
+The project requires Node 24 and pnpm. Packages export TypeScript source, so there is no build step between packages. Chromium does not start inside the Claude Code or Codex sandbox, so an agent runs `pnpm e2e:remote`, which keeps the browser in the `playwright` container of `compose.yaml`.
