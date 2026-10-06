@@ -49,6 +49,16 @@ function inlineErrors(source: string) {
 }
 
 describe("output", () => {
+  it("captures each loop occurrence before later let bindings change its scope", () => {
+    const buttons = inlineParts(
+      '{% let suffix = "!" %}{% for name in Table1!A1:A2 %}{{ BUTTON(name, DO(EXECUTE(name & suffix, Table1!C1))) }}{% let name = "changed" %}{% end %}{% let suffix = "changed" %}',
+    ).filter((part) => part.type === "button");
+    expect(buttons.map((button) => workbook.planAction(button.action))).toEqual([
+      { ok: true, effects: [{ type: "setCell", tableId: "t1", row: 0, col: 2, input: "pear!" }] },
+      { ok: true, effects: [{ type: "setCell", tableId: "t1", row: 0, col: 2, input: "apple!" }] },
+    ]);
+  });
+
   it("puts the value of a formula into the text", () => {
     expect(markdown("Total sold: {{ SUM(Table1!B1:B3) }} items.")).toBe("Total sold: 25 items.");
     expect(markdown("{{Table1!A1}} and {{ UPPER(Table1!A2) }}")).toBe("pear and APPLE");

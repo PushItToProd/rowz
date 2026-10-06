@@ -157,6 +157,21 @@ describe("TextCard", () => {
     expect(useWorkbookStore().notice).toEqual({ kind: "success", text: "Done" });
   });
 
+  it("sends the selected loop button occurrence without serializing its bindings", async () => {
+    await render(
+      "{% for name in 'Table 1'!A1:A2 %}{{ BUTTON(name, EXECUTE(name, 'Table 1'!B1)) }}{% end %}",
+    );
+    expect(
+      shown()
+        .findAll(".text-view__button")
+        .map((item) => item.text()),
+    ).toEqual(["apples", "pears"]);
+    server.clickViewButton.mockResolvedValue(clickResult());
+    await button("pears").trigger("click");
+    await flushPromises();
+    expect(server.clickViewButton).toHaveBeenCalledExactlyOnceWith("v1", 1);
+  });
+
   it("shows busy and error feedback while a text-view action runs", async () => {
     await render(`{{ BUTTON("Run", EXECUTE(1, 'Table 1'!A1)) }}`);
     let finish!: (result: ReturnType<typeof clickResult>) => void;

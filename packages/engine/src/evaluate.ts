@@ -334,6 +334,7 @@ function call(name: string, args: readonly Node[], context: EvaluationContext): 
         name,
         args: [...args],
         origin: context.origin,
+        ...(context.names === undefined ? {} : { names: new Map(context.names) }),
         ...(context.pageId === undefined ? {} : { pageId: context.pageId }),
       };
     case "special":

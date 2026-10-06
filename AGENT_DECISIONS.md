@@ -743,3 +743,7 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 ## Regex engine
 
 **Choice.** `REGEXMATCH`, `REGEXEXTRACT`, and `REGEXREPLACE` run on an in-engine Thompson NFA simulation with step, pattern-length, and output limits instead of JavaScript `RegExp`, which would backtrack catastrophically and the engine takes no dependencies. Backreferences and lookaround are unsupported.
+
+## Work order of the autonomous run
+
+**Choice.** After the grapheme item, the run takes `_scratch/AFK_TODOS.md` in priority order from P0, because the author said so, which overrides the agent instructions to take the highest numbers first.

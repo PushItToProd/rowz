@@ -26,6 +26,8 @@ export interface ActionValue {
   origin: CellId;
   /** The page used to resolve references when a text view template contains the action. */
   pageId?: string;
+  /** Local values captured when the action was made, independent of later scope changes. */
+  names?: ReadonlyMap<string, Evaluated>;
 }
 
 export interface ButtonValue {

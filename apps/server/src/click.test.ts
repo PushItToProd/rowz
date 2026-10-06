@@ -79,6 +79,15 @@ async function runsFor(sheet: Sheet): Promise<(typeof actionRuns.$inferSelect)[]
 }
 
 describe("clicking an EXECUTE button", () => {
+  it("re-derives local bindings from the stored formula at click time", async () => {
+    const sheet = await sheetWith({ A1: "4", B1: '=LET(x, A1, BUTTON("go", EXECUTE(x+1, A2)))' });
+    await user.json("PUT", `/tables/${sheet.tableId}/cells`, cellsBody({ A1: "8" }), 200);
+    expect((await click(sheet, 0, 1)).status).toBe("succeeded");
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "1:0": "9",
+    });
+  });
+
   it("writes the value, reports the changed cell, and records the run", async () => {
     const sheet = await sheetWith({
       A1: "1",
@@ -387,6 +396,28 @@ describe("clicking a SEND_EMAIL button", () => {
 });
 
 describe("clicking a text view button", () => {
+  it("plans the selected loop occurrence with its captured local bindings", async () => {
+    const sheet = await sheetWith({ A1: "pear", A2: "apple" });
+    const view = await addView(user, sheet.pageId);
+    await user.json("PATCH", `/views/${view.id}`, {
+      source:
+        '{% let suffix = "!" %}{% for name in \'Table 1\'!A1:A2 %}{{ BUTTON(name, DO(EXECUTE(name & suffix, \'Table 1\'!B1))) }}{% let name = "changed" %}{% end %}{% let suffix = "changed" %}',
+    });
+    for (const [occurrence, input] of [
+      [1, "apple!"],
+      [0, "pear!"],
+    ] as const) {
+      const result = await user.json<ClickResult>(
+        "POST",
+        `/views/${view.id}/buttons/${String(occurrence)}/click`,
+      );
+      expect(result.status).toBe("succeeded");
+      expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+        "0:1": input,
+      });
+    }
+  });
+
   it("selects the rendered occurrence and derives its action from the stored view", async () => {
     const sheet = await sheetWith({ A1: "2" });
     const view = await addView(user, sheet.pageId);

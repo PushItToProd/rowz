@@ -61,6 +61,49 @@ describe("BUTTON", () => {
 });
 
 describe("action values", () => {
+  it.each([
+    '=LET(x, A1, BUTTON("go", EXECUTE(x+1, A2)))',
+    '=LAMBDA(x, BUTTON("go", EXECUTE(x+1, A2)))(A1)',
+    '=LET(x, A1, BUTTON("go", DO(EXECUTE(x+1, A2))))',
+    '=LET(x, A1, f, LAMBDA(y, x+y), BUTTON("go", EXECUTE(f(1), A2)))',
+    '=LET(x, 99, BUTTON("go", LET(x, A1, EXECUTE(x+1, A2))))',
+  ])("plans with local bindings in %s", (formula) => {
+    const workbook = workbookWith({ t1: { A1: "4", B1: formula } });
+    expect(isButton(workbook.getValue(at("B1")))).toBe(true);
+    expect(workbook.getValue(at("A2"))).toBe(null);
+    workbook.setCell(at("A1"), "8");
+    expect(click(workbook, "B1")).toEqual([{ type: "setCell", ...at("A2"), input: "9" }]);
+  });
+
+  it("captures script function parameters", () => {
+    const workbook = workbookWith({ t1: { B1: "=MakeButton(4)" } });
+    workbook.setStructure({
+      ...STRUCTURE,
+      scripts: [
+        {
+          id: "s1",
+          pageId: "p1",
+          name: "Actions",
+          source: 'MakeButton(x) = BUTTON("go", EXECUTE(x+1, Table1!A2))',
+        },
+      ],
+    });
+    expect(click(workbook, "B1")).toEqual([{ type: "setCell", ...at("A2"), input: "5" }]);
+  });
+
+  it("keeps captured values while deferred cell references read current values", () => {
+    const workbook = workbookWith({
+      t1: { A1: "4", B1: '=LET(x, A1, BUTTON("go", EXECUTE(x+A1, A2)))' },
+    });
+    const button = workbook.getValue(at("B1"));
+    if (!isButton(button)) throw new Error("Expected a button");
+    workbook.setCell(at("A1"), "8");
+    expect(workbook.planAction(button.action)).toEqual({
+      ok: true,
+      effects: [{ type: "setCell", ...at("A2"), input: "12" }],
+    });
+  });
+
   it("a bare action formula evaluates to an action", () => {
     const value = workbookWith({ t1: { A1: "=EXECUTE(1, B1)" } }).getValue(at("A1"));
     expect(isAction(value)).toBe(true);

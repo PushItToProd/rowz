@@ -697,8 +697,12 @@ export class Workbook {
   private effectsOf(action: ActionValue): Effect[] {
     const definition = this.functions.get(action.name);
     if (definition?.kind !== "action") fail("#NAME?", `Unknown action ${action.name}`);
-    const context =
-      action.pageId === undefined ? this.context(action.origin) : this.pageContext(action.pageId);
+    const context = {
+      ...(action.pageId === undefined
+        ? this.context(action.origin)
+        : this.pageContext(action.pageId)),
+      ...(action.names === undefined ? {} : { names: action.names }),
+    };
     const effects = definition.plan(action.args, {
       origin: action.origin,
       evaluate: (node) => evaluate(node, context),
