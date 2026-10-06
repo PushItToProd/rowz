@@ -143,4 +143,16 @@
     width: 12px;
     height: 12px;
   }
+
+  .cell-control--column,
+  .cell-control--checkbox {
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .cell-control__checkbox-target {
+    flex-basis: 32px;
+    width: 32px;
+    height: 32px;
+  }
 }
