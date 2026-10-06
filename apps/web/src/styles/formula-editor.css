@@ -1,0 +1,56 @@
+/* Suggestions and the function hint under a formula being typed. */
+.formula-assist {
+  position: fixed;
+  z-index: 10;
+  min-width: 260px;
+  max-width: 460px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
+  font-size: 0.92rem;
+}
+
+.formula-assist ul {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.formula-assist li {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.formula-assist__item--active,
+.formula-assist li:hover {
+  background: var(--accent-soft);
+}
+
+.formula-assist__label {
+  font-weight: 500;
+}
+
+.formula-assist__detail {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.formula-assist__signature {
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--muted);
+}
+
+.formula-assist__signature code {
+  display: block;
+  color: var(--ink);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}

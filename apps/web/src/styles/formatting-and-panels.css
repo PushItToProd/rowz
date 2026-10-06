@@ -1,0 +1,400 @@
+/* Format bar */
+
+.format-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.format-bar select {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font: inherit;
+}
+
+.format-bar__toggle {
+  min-width: 30px;
+}
+
+.format-bar__toggle[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.format-bar__bold {
+  font-weight: 700;
+}
+
+.format-bar__italic {
+  font-style: italic;
+}
+
+@media (max-width: 640px) {
+  .format-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 6px 12px;
+  }
+
+  .format-bar > * {
+    flex-shrink: 0;
+  }
+}
+
+/* A table, chart, or text view on a page, with the buttons that move it beside it. */
+
+.editor__block {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.editor__block > :first-child {
+  min-width: 0;
+}
+
+.editor__move {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor__move button {
+  padding: 2px 8px;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .editor__block {
+    flex-direction: column-reverse;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .editor__move {
+    flex-direction: row;
+    align-self: flex-end;
+  }
+}
+
+/* A panel that slides over the right of the editor: History and Share */
+
+.side-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(380px, 100vw);
+  padding: 16px;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: -8px 0 24px rgb(0 0 0 / 10%);
+}
+
+.side-panel:focus {
+  outline: none;
+}
+
+.side-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.side-panel__header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.history__about,
+.history__who {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.history__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history__list li {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.history__list li > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.history__list time {
+  font-weight: 600;
+}
+
+.history__actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Share */
+
+.share__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.share__form input {
+  flex: 1;
+  min-width: 12em;
+}
+
+.share__form select,
+.share__list select {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font: inherit;
+}
+
+.share__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share__list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.share__who {
+  display: grid;
+  flex: 1;
+  min-width: 10em;
+}
+
+.share__email,
+.share__role {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.share__email {
+  overflow-wrap: anywhere;
+}
+
+.script {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.92rem;
+}
+
+.script th,
+.script td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.script__name {
+  width: 40%;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.script__error {
+  color: var(--danger);
+}
+
+.script__reason {
+  display: block;
+  font-family: system-ui, sans-serif;
+  font-size: 0.85rem;
+}
+
+/* Centered between the name on the left and the buttons on the right. */
+.editor__assertions {
+  margin: 0 auto;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.assertions__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assertions__list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.assertions__list span {
+  display: block;
+}
+
+.names-panel {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.names-panel table {
+  border-collapse: collapse;
+}
+
+.names-panel th,
+.names-panel td {
+  padding: 2px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.names-panel__formula {
+  width: 16rem;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.names-panel__add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.names-panel__empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.error-warning {
+  display: inline-block;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+  vertical-align: -0.15em;
+  color: #b42318;
+}
+
+.editor__errors {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #b42318;
+  background: #fef3f2;
+  border: 1px solid #fda29b;
+  font-weight: 700;
+}
+
+.errors__code {
+  color: #b42318;
+  font-family: monospace;
+}
+
+.cell-error-popover {
+  position: fixed;
+  z-index: 100;
+  width: min(320px, calc(100vw - 16px));
+  max-height: min(50vh, 300px);
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid #fda29b;
+  border-radius: 0.4rem;
+  color: #b42318;
+  background: #fff;
+  box-shadow: 0 4px 16px #0002;
+  overflow-wrap: anywhere;
+}
+
+.cell-error-popover p {
+  margin: 0.35rem 0 0;
+}
+
+.cell-error-popover__action {
+  margin-top: 0.65rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #fda29b;
+  border-radius: 0.3rem;
+  color: #b42318;
+  background: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cell-error-popover__action:focus-visible {
+  outline: 2px solid #b42318;
+  outline-offset: 2px;
+}
+
+.cell-error-popover__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.875em;
+}
+
+.errors .assertions__list li + li {
+  margin-top: 0.5rem;
+}
+
+.names-panel__formula input,
+.table-display__filter input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+
+.formula-bar__input input,
+.grid__editor input {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  box-sizing: border-box;
+  font: inherit;
+}
+.formula-column-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.grid__editor:has(.formula-column-label) {
+  inset: auto 0 0;
+  width: max(100%, 24rem);
+  height: auto;
+  z-index: 2;
+  padding: 4px 6px;
+  box-shadow: 0 0 0 1px var(--accent);
+}

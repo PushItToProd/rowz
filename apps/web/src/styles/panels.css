@@ -1,0 +1,153 @@
+/* Actions on the selected cell's row and column. */
+.table-card__lines {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 20px;
+  min-height: 26px;
+  margin-bottom: 10px;
+  font-size: 0.92rem;
+}
+
+.table-card__lines [role="group"] {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.table-card__line {
+  min-width: 5.5em;
+  color: var(--muted);
+}
+
+.table-card__lines button {
+  padding: 2px 8px;
+}
+
+/* The conditional formats of a table. */
+.conditional-panel {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.conditional-panel__rules {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.conditional-panel__rules li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.conditional-panel__area {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.conditional-panel__empty {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+
+.conditional-panel__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.conditional-panel__add p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.conditional-panel__add fieldset {
+  display: flex;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* The choices of a dropdown column. */
+.choices-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.choices-panel fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choices-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 24rem;
+}
+
+.choices-panel__source,
+.choices-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.cell-control--outside {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* The sort and filter of a data table. */
+.table-display {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 20px;
+  margin-bottom: 10px;
+  font-size: 0.92rem;
+}
+
+.table-display__group,
+.table-display__key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-display__filter {
+  width: 16rem;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.table-display__label,
+.table-display__none,
+.table-display__hidden {
+  color: var(--muted);
+}
+
+.table-display__error {
+  color: var(--danger);
+}
+
+.table-display button,
+.table-display select {
+  padding: 2px 8px;
+}

@@ -1,0 +1,148 @@
+/* Help */
+
+.help {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  line-height: 1.55;
+}
+
+.help__header {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+}
+
+.help__header a {
+  text-decoration: none;
+}
+
+/* The contents stay in view while the page scrolls: one line across the top that scrolls sideways. */
+.help__contents {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 6px 18px;
+  margin: 16px 0 8px;
+  padding: 10px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.help__contents a {
+  text-decoration: none;
+}
+
+.help__contents [aria-current="true"] {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.help section {
+  /* Space above a section reached by a contents link, clear of the contents. */
+  scroll-margin-top: 60px;
+}
+
+/* A window with room beside the text has the contents there, as a list down the left. */
+@media (min-width: 1000px) {
+  .help {
+    max-width: 1156px;
+    padding-left: 256px;
+  }
+
+  /* Floated into the padding, so the sections take the full width of the text column. */
+  .help__contents {
+    top: 16px;
+    float: left;
+    flex-direction: column;
+    width: 224px;
+    max-height: calc(100vh - 32px);
+    margin: 8px 0 0 -240px;
+    overflow: hidden auto;
+    white-space: normal;
+  }
+
+  .help section {
+    scroll-margin-top: 12px;
+  }
+}
+
+.help h2 {
+  margin: 32px 0 8px;
+  font-size: 1.2rem;
+}
+
+.help h3 {
+  margin: 20px 0 6px;
+  font-size: 1rem;
+}
+
+.help table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+}
+
+.help th,
+.help td {
+  /* Long formulas wrap inside their cell on a narrow screen. */
+  overflow-wrap: anywhere;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.help thead th {
+  background: var(--canvas);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.help tbody th {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.help code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.help pre {
+  margin: 12px 0;
+  padding: 10px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+/* Fixed widths, so the columns line up from one category's table to the next. */
+.help__functions {
+  table-layout: fixed;
+}
+
+.help__functions th:nth-child(1),
+.help__functions th:nth-child(3) {
+  width: 30%;
+}
+
+.help__jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.help__result {
+  display: block;
+  color: var(--muted);
+}
+
+.help li + li {
+  margin-top: 4px;
+}

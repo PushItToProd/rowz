@@ -1,0 +1,38 @@
+/* Data tables: named columns */
+
+.grid .grid__column--named {
+  padding: 2px 6px;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.grid__column-letter,
+.grid__column-type {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.grid__column-letter {
+  margin-right: 4px;
+}
+
+.grid__column-type {
+  margin-left: 4px;
+}
+
+.grid__column--named .editable-name--editing {
+  width: 8em;
+  padding: 1px 4px;
+}
+
+/* A formula column's cells are computed, not typed. */
+.grid .grid__cell--computed {
+  background: color-mix(in srgb, var(--canvas) 60%, var(--surface));
+}
+
+.cell-control--column {
+  justify-content: center;
+}
