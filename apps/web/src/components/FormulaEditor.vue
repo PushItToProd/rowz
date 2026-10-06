@@ -6,6 +6,7 @@ import {
   defaultKeymap,
   history,
   historyKeymap,
+  isolateHistory,
   insertNewlineAndIndent,
 } from "@codemirror/commands";
 import {
@@ -131,6 +132,18 @@ function extensions() {
       return text.length <= props.maxLength && (multiline.value || !/[\r\n]/.test(text))
         ? transaction
         : [];
+    }),
+    EditorState.transactionExtender.of((transaction) => {
+      // Literal/formula transitions change page-navigation behavior. Keep them
+      // separate from adjacent typing regardless of timing or editor transfers.
+      if (
+        props.mode === "cell" &&
+        transaction.docChanged &&
+        transaction.startState.doc.toString().startsWith("=") !==
+          transaction.newDoc.toString().startsWith("=")
+      )
+        return { annotations: isolateHistory.of("full") };
+      return null;
     }),
     autocompletion({
       defaultKeymap: false,

@@ -1,9 +1,9 @@
 import { markRaw } from "vue";
 import { createPinia } from "pinia";
 import { mount, type VueWrapper } from "@vue/test-utils";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { undo } from "@codemirror/commands";
+import { redo, undo } from "@codemirror/commands";
 import { startCompletion, completionStatus } from "@codemirror/autocomplete";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import FormulaEditor from "./FormulaEditor.vue";
@@ -84,6 +84,57 @@ describe("shared formula editor", () => {
     expect(second.view.state.doc.toString()).toBe("=B2");
     await second.wrapper.vm.$nextTick();
     expect(second.wrapper.emitted("update:state")).toBeDefined();
+  });
+
+  it.each([0, 1000])(
+    "isolates literal/formula transitions across transfers with %i ms between edits",
+    (delay) => {
+      const first = render("1");
+      first.view.dispatch({
+        changes: { from: 0, to: 1, insert: "=" },
+        selection: { anchor: 1 },
+        userEvent: "input.type",
+        annotations: Transaction.time.of(1000),
+      });
+      const transferred = first.view.state;
+      first.wrapper.unmount();
+      mounted.splice(mounted.indexOf(first.wrapper), 1);
+      const second = render("ignored", { state: transferred });
+      second.view.dispatch({
+        changes: { from: 0, to: 1, insert: "=B2" },
+        selection: { anchor: 3 },
+        userEvent: "input.type",
+        annotations: Transaction.time.of(1000 + delay),
+      });
+      expect(undo(second.view)).toBe(true);
+      expect(second.view.state.doc.toString()).toBe("=");
+      expect(undo(second.view)).toBe(true);
+      expect(second.view.state.doc.toString()).toBe("1");
+      expect(redo(second.view)).toBe(true);
+      expect(second.view.state.doc.toString()).toBe("=");
+      expect(redo(second.view)).toBe(true);
+      expect(second.view.state.doc.toString()).toBe("=B2");
+    },
+  );
+
+  it("groups rapid formula typing and isolates switching back to literal input", () => {
+    const { view } = render("=");
+    for (const [index, character] of ["B", "2"].entries()) {
+      view.dispatch({
+        changes: { from: view.state.doc.length, insert: character },
+        userEvent: "input.type",
+        annotations: Transaction.time.of(1000 + index),
+      });
+    }
+    view.dispatch({
+      changes: { from: 0, to: 3, insert: "1" },
+      userEvent: "input.type",
+      annotations: Transaction.time.of(1002),
+    });
+    expect(undo(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("=B2");
+    expect(undo(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("=");
   });
 
   it("keeps arrows in the editor after an unfinished operand and isolates keyboard events from the grid", async () => {

@@ -2,6 +2,12 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-05: Cell literal/formula transitions have separate undo steps
+
+**Choice.** Annotate a cell edit that changes whether its text begins with `=` with CodeMirror's `isolateHistory("full")`. Undo can restore that transition independently of adjacent typing, including after transfers to the draft dock. Ordinary typing retains CodeMirror's default grouping.
+
+**Why.** The current draft determines whether page navigation saves it or retains it. Default 500 ms history grouping could merge `1` → `=` → `=B2`, making undo restore literal input and changing navigation behavior according to typing speed.
+
 ## 2026-10-04: Shared formula editor state and initial implementation
 
 **Decision.** Keep a CodeMirror `EditorState` in a dedicated Pinia store. The shared editor receives that state and emits updated states; transferring or unmounting an editor retains the document, selection, and local history. The store identifies editing targets separately from their original formula-resolution context. Submission takes a save callback, awaits its result, and retains the session on an error or a deleted-target result. The component emits commit, cancel, and blur events so each input can apply its specified submission rules.
