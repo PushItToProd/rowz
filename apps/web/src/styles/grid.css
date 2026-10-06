@@ -1,8 +1,16 @@
 /* Grid */
 
 .grid {
+  position: relative;
   max-width: 100%;
   overflow: auto;
+}
+
+.grid .grid__spacer {
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  pointer-events: none;
 }
 
 .grid .grid__header--selected {
@@ -131,6 +139,12 @@
   white-space: nowrap;
 }
 
+/* Table-cell height is a minimum. Bound content so Markdown line breaks do
+   not enlarge a row or change its height when a column is windowed out. */
+.grid td > .cell-value {
+  max-height: calc(var(--row-height, 30px) - 1px);
+}
+
 .cell-value--number,
 .cell-value--date {
   text-align: right;
@@ -192,7 +206,8 @@ select.cell-control--dropdown {
 .cell-button {
   display: block;
   width: calc(100% - 8px);
-  margin: 3px 4px;
+  /* The button plus margins must fit inside a 30px row's borders. */
+  margin: 2px 4px;
   padding: 2px 6px;
   overflow: hidden;
   line-height: 18px;

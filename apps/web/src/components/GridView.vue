@@ -199,6 +199,126 @@ const tableWidth = computed(
   () => 52 + props.table.colIds.reduce((sum, _, col) => sum + lineSize("col", col), 0),
 );
 
+// Coordinates remain display places; only the DOM is windowed.
+const virtual = computed(() => displayedRows.value > 200 || props.table.colCount > 30);
+const viewport = ref({ top: 0, bottom: 800, left: 0, right: 1200 });
+const focused = ref<Partial<CellAddress> | null>(null);
+const printing = ref(false);
+const rowOffsets = computed(() => offsets(displayedRows.value, "row"));
+const colOffsets = computed(() => offsets(props.table.colCount, "col"));
+function offsets(count: number, axis: Axis): number[] {
+  const result = [0];
+  for (let index = 0; index < count; index++)
+    result.push((result[index] ?? 0) + lineSize(axis, index));
+  return result;
+}
+function updateViewport(): void {
+  if (!grid.value) return;
+  const box = grid.value.getBoundingClientRect();
+  const next = {
+    top: -box.top - 31,
+    bottom: window.innerHeight - box.top - 31,
+    left: grid.value.scrollLeft - 52,
+    right: grid.value.scrollLeft + (grid.value.clientWidth || window.innerWidth) - 52,
+  };
+  const previous = viewport.value;
+  if (
+    next.top !== previous.top ||
+    next.bottom !== previous.bottom ||
+    next.left !== previous.left ||
+    next.right !== previous.right
+  )
+    viewport.value = next;
+}
+function visibleLines(axis: Axis): number[] {
+  const positions = axis === "row" ? rowOffsets.value : colOffsets.value;
+  const count = positions.length - 1;
+  if (!virtual.value || printing.value) return Array.from({ length: count }, (_, i) => i + 1);
+  const { top, bottom, left, right } = viewport.value;
+  const start = axis === "row" ? top : left;
+  const end = axis === "row" ? bottom : right;
+  const margin = axis === "row" ? 180 : 300;
+  const result = new Set<number>();
+  // A table outside the page viewport needs no cells.
+  if (bottom >= -margin && top <= (rowOffsets.value[displayedRows.value] ?? 0) + margin) {
+    for (let i = 0; i < count; i++)
+      if ((positions[i + 1] ?? 0) >= start - margin && (positions[i] ?? 0) <= end + margin)
+        result.add(i + 1);
+  }
+  const editing = editingPosition.value;
+  if (editing) result.add((axis === "row" ? placeOf(editing.row) : editing.col) + 1);
+  const focusedIndex = focused.value?.[axis];
+  if (focusedIndex !== undefined) result.add(focusedIndex + 1);
+  if (resizeDrag.value?.axis === axis) {
+    for (let i = 0; i < count; i++) if (lineId(axis, i) === resizeDrag.value.id) result.add(i + 1);
+  }
+  return [...result].filter((i) => i > 0 && i <= count).sort((a, b) => a - b);
+}
+const renderedRows = computed(() => visibleLines("row"));
+const renderedCols = computed(() => visibleLines("col"));
+function gap(lines: number[], index: number, positions: number[]): number {
+  return (
+    (positions[(lines[index] ?? 1) - 1] ?? 0) -
+    (positions[index ? (lines[index - 1] ?? 0) : 0] ?? 0)
+  );
+}
+function trackFocus(event: FocusEvent): void {
+  const element = (event.target as HTMLElement).closest<HTMLElement>("[data-pick-kind]");
+  const kind = element?.dataset.pickKind;
+  if (kind === "cells")
+    focused.value = {
+      row: Number(element?.dataset.pickRow),
+      col: Number(element?.dataset.pickCol),
+    };
+  else if (kind === "col") focused.value = { col: Number(element?.dataset.pickIndex) };
+  else if (kind === "row") focused.value = { row: Number(element?.dataset.pickIndex) };
+  else focused.value = null;
+}
+function beforePrint(): void {
+  printing.value = true;
+}
+function afterPrint(): void {
+  printing.value = false;
+}
+let viewportObserver: ResizeObserver | undefined;
+let layoutObserver: MutationObserver | undefined;
+onMounted(() => {
+  updateViewport();
+  window.addEventListener("scroll", updateViewport, { passive: true, capture: true });
+  window.addEventListener("resize", updateViewport);
+  window.addEventListener("beforeprint", beforePrint);
+  window.addEventListener("afterprint", afterPrint);
+  // Grid size alone does not report position changes from moving blocks or
+  // changing content above this table. Watch the containing editor as well.
+  const layoutRoot = grid.value?.closest(".editor") ?? grid.value?.parentElement;
+  if (typeof ResizeObserver !== "undefined") {
+    viewportObserver = new ResizeObserver(updateViewport);
+    if (grid.value) viewportObserver.observe(grid.value);
+    if (layoutRoot) viewportObserver.observe(layoutRoot);
+  }
+  if (layoutRoot) {
+    layoutObserver = new MutationObserver((records) => {
+      // Ignore our window's DOM updates; other blocks may change our position.
+      if (records.some((record) => !grid.value?.contains(record.target))) updateViewport();
+    });
+    layoutObserver.observe(layoutRoot, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["class", "style", "hidden"],
+    });
+  }
+});
+onBeforeUnmount(() => {
+  viewportObserver?.disconnect();
+  layoutObserver?.disconnect();
+  window.removeEventListener("scroll", updateViewport, true);
+  window.removeEventListener("resize", updateViewport);
+  window.removeEventListener("beforeprint", beforePrint);
+  window.removeEventListener("afterprint", afterPrint);
+});
+
 function startResize(event: PointerEvent, axis: Axis, index: number): void {
   if (!store.canEdit || !event.isPrimary || event.button !== 0 || resizeDrag.value) return;
   const id = lineId(axis, index);
@@ -448,6 +568,11 @@ function extend(rows: number, cols: number): void {
   const corner = end ? { row: placeOf(end.row), col: end.col } : selectedPlace.value;
   if (corner) {
     store.extendSelection(stored(clamp({ row: corner.row + rows, col: corner.col + cols })));
+    const target = store.selectionEnd;
+    if (virtual.value && target)
+      void nextTick(() => {
+        scrollSelection(target);
+      });
   }
 }
 
@@ -686,10 +811,29 @@ watch(selected, async (current, previous) => {
   scrollSelection();
 });
 
-function scrollSelection(): void {
-  if (!selected.value) return;
+function scrollSelection(target: CellAddress | null = selected.value): void {
+  if (!target) return;
+  if (virtual.value && grid.value) {
+    const row = placeOf(target.row);
+    const col = target.col;
+    const marker = document.createElement("div");
+    Object.assign(marker.style, {
+      position: "absolute",
+      pointerEvents: "none",
+      scrollMarginTop: "195px",
+      top: `${String(31 + (rowOffsets.value[row] ?? 0))}px`,
+      left: `${String(52 + (colOffsets.value[col] ?? 0))}px`,
+      width: `${String(lineSize("col", col))}px`,
+      height: `${String(lineSize("row", row))}px`,
+    });
+    grid.value.append(marker);
+    marker.scrollIntoView({ block: "nearest", inline: "nearest" });
+    marker.remove();
+    updateViewport();
+    return;
+  }
   grid.value
-    ?.querySelector(`[data-cell="${formatAddress(selected.value)}"]`)
+    ?.querySelector(`[data-cell="${formatAddress(target)}"]`)
     ?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
@@ -774,6 +918,8 @@ function onGridKeydown(event: KeyboardEvent): void {
     @click.capture="picking.click"
     @dblclick.capture="picking.click"
     @keydown="onGridKeydown"
+    @focusin="trackFocus"
+    @focusout="focused = null"
   >
     <table :style="{ width: `${tableWidth}px` }">
       <colgroup>
@@ -787,137 +933,173 @@ function onGridKeydown(event: KeyboardEvent): void {
       <thead>
         <tr>
           <th class="grid__corner"></th>
+          <template v-for="(col, index) in renderedCols" :key="table.colIds[col - 1]">
+            <th
+              v-if="col > (index ? renderedCols[index - 1]! : 0) + 1"
+              class="grid__spacer"
+              :colspan="col - (index ? renderedCols[index - 1]! : 0) - 1"
+            ></th>
+            <th
+              scope="col"
+              :class="{
+                'grid__column--named': columnAt(col - 1),
+                'grid__header--selected': isLineSelected('col', col - 1),
+              }"
+              :data-column="columnAt(col - 1)?.name"
+              data-pick-kind="col"
+              :data-pick-index="col - 1"
+              @mousedown.left="onColumnMousedown($event, col - 1)"
+              @mouseenter="onHeaderMouseenter('col', col - 1)"
+              @contextmenu="onHeaderContextMenu($event, 'col', col - 1)"
+            >
+              <template v-if="columnAt(col - 1)">
+                <span class="grid__column-letter">{{ columnLabel(col - 1) }}</span>
+                <EditableName
+                  :value="columnAt(col - 1)?.name ?? ''"
+                  label="Column name"
+                  :disabled="!store.canEdit"
+                  @rename="store.updateColumn(table.id, col - 1, { name: $event })"
+                />
+                <span v-if="columnAt(col - 1)?.type !== 'any'" class="grid__column-type">
+                  {{ columnAt(col - 1)?.type }}
+                </span>
+              </template>
+              <template v-else>{{ columnLabel(col - 1) }}</template>
+              <span
+                v-if="store.canEdit"
+                class="grid__resize grid__resize--col"
+                :aria-label="`Resize column ${columnLabel(col - 1)}`"
+                @pointerdown.stop.prevent="startResize($event, 'col', col - 1)"
+                @dblclick.stop.prevent="resetSize('col', col - 1)"
+              ></span>
+            </th>
+          </template>
           <th
-            v-for="col in table.colCount"
-            :key="table.colIds[col - 1]"
-            scope="col"
-            :class="{
-              'grid__column--named': columnAt(col - 1),
-              'grid__header--selected': isLineSelected('col', col - 1),
-            }"
-            :data-column="columnAt(col - 1)?.name"
-            data-pick-kind="col"
-            :data-pick-index="col - 1"
-            @mousedown.left="onColumnMousedown($event, col - 1)"
-            @mouseenter="onHeaderMouseenter('col', col - 1)"
-            @contextmenu="onHeaderContextMenu($event, 'col', col - 1)"
-          >
-            <template v-if="columnAt(col - 1)">
-              <span class="grid__column-letter">{{ columnLabel(col - 1) }}</span>
-              <EditableName
-                :value="columnAt(col - 1)?.name ?? ''"
-                label="Column name"
-                :disabled="!store.canEdit"
-                @rename="store.updateColumn(table.id, col - 1, { name: $event })"
-              />
-              <span v-if="columnAt(col - 1)?.type !== 'any'" class="grid__column-type">
-                {{ columnAt(col - 1)?.type }}
-              </span>
-            </template>
-            <template v-else>{{ columnLabel(col - 1) }}</template>
-            <span
-              v-if="store.canEdit"
-              class="grid__resize grid__resize--col"
-              :aria-label="`Resize column ${columnLabel(col - 1)}`"
-              @pointerdown.stop.prevent="startResize($event, 'col', col - 1)"
-              @dblclick.stop.prevent="resetSize('col', col - 1)"
-            ></span>
-          </th>
+            v-if="(renderedCols.at(-1) ?? 0) < table.colCount"
+            class="grid__spacer"
+            :colspan="table.colCount - (renderedCols.at(-1) ?? 0)"
+          ></th>
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-for="row in displayedRows"
+        <template
+          v-for="(row, index) in renderedRows"
           :key="table.rows[storedRow(row - 1)]?.id ?? 'new'"
-          role="row"
-          :style="{ '--row-height': `${lineSize('row', row - 1)}px` }"
         >
-          <th
-            scope="row"
-            data-pick-kind="row"
-            :data-pick-index="row - 1"
-            :class="{ 'grid__header--selected': isLineSelected('row', row - 1) }"
-            @mousedown.left.prevent="onHeaderMousedown($event, 'row', row - 1)"
-            @mouseenter="onHeaderMouseenter('row', row - 1)"
-            @contextmenu="onHeaderContextMenu($event, 'row', row - 1)"
-          >
-            {{ row > shownRows ? "+" : storedRow(row - 1) + 1 }}
-            <span
-              v-if="store.canEdit && row <= shownRows"
-              class="grid__resize grid__resize--row"
-              :aria-label="`Resize row ${storedRow(row - 1) + 1}`"
-              @pointerdown.stop.prevent="startResize($event, 'row', row - 1)"
-              @dblclick.stop.prevent="resetSize('row', row - 1)"
-            ></span>
-          </th>
+          <tr v-if="gap(renderedRows, index, rowOffsets) > 0" aria-hidden="true">
+            <td
+              class="grid__spacer"
+              :colspan="table.colCount + 1"
+              :style="{ height: `${gap(renderedRows, index, rowOffsets)}px` }"
+            ></td>
+          </tr>
+          <tr role="row" :style="{ '--row-height': `${lineSize('row', row - 1)}px` }">
+            <th
+              scope="row"
+              data-pick-kind="row"
+              :data-pick-index="row - 1"
+              :class="{ 'grid__header--selected': isLineSelected('row', row - 1) }"
+              @mousedown.left.prevent="onHeaderMousedown($event, 'row', row - 1)"
+              @mouseenter="onHeaderMouseenter('row', row - 1)"
+              @contextmenu="onHeaderContextMenu($event, 'row', row - 1)"
+            >
+              {{ row > shownRows ? "+" : storedRow(row - 1) + 1 }}
+              <span
+                v-if="store.canEdit && row <= shownRows"
+                class="grid__resize grid__resize--row"
+                :aria-label="`Resize row ${storedRow(row - 1) + 1}`"
+                @pointerdown.stop.prevent="startResize($event, 'row', row - 1)"
+                @dblclick.stop.prevent="resetSize('row', row - 1)"
+              ></span>
+            </th>
+            <template v-for="(col, colIndex) in renderedCols" :key="table.colIds[col - 1]">
+              <td
+                v-if="col > (colIndex ? renderedCols[colIndex - 1]! : 0) + 1"
+                class="grid__spacer"
+                :colspan="col - (colIndex ? renderedCols[colIndex - 1]! : 0) - 1"
+              ></td>
+              <td
+                role="gridcell"
+                data-pick-kind="cells"
+                :data-pick-row="row - 1"
+                :data-pick-col="col - 1"
+                :data-cell="formatAddress({ row: storedRow(row - 1), col: col - 1 })"
+                :aria-selected="isSelected(row - 1, col - 1)"
+                :class="{
+                  'grid__cell--selected': isSelected(row - 1, col - 1),
+                  'grid__cell--in-range': inRange(row - 1, col - 1),
+                  'grid__cell--fill-preview': inFillPreview(row - 1, col - 1),
+                  'grid__cell--filled': store.filledBy(cellAt(row - 1, col - 1)) !== undefined,
+                  'grid__cell--computed': columnAt(col - 1)?.type === 'formula',
+                }"
+                :style="[
+                  cellStyle(store.formatOf(cellAt(row - 1, col - 1))),
+                  { boxShadow: outlines.get(`${row - 1}:${col - 1}`)?.boxShadow },
+                ]"
+                :data-reference-color="outlines.get(`${row - 1}:${col - 1}`)?.color"
+                @pointerdown="onCellPointerdown($event, row - 1, col - 1)"
+                @mousedown="onCellMousedown($event, row - 1, col - 1)"
+                @click="onCellClick"
+                @mouseenter="onCellMouseenter(row - 1, col - 1)"
+                @contextmenu="onCellContextMenu($event, row - 1, col - 1)"
+                @dblclick="edit()"
+              >
+                <SessionFormulaField
+                  v-if="active && isEditing(row - 1, col - 1)"
+                  :ref="captureField"
+                  class="grid__editor"
+                  :target="active.target"
+                  :context="active.context"
+                  :mode="active.mode"
+                  :value="active.state.doc.toString()"
+                  label="Cell content"
+                  :target-label="editingLabel(active.target) ?? active.label"
+                  :show-label="active.target.kind === 'column'"
+                  :readonly="!store.canEdit"
+                  :max-length="LIMITS.inputLength"
+                  cell-navigation
+                  @mousedown.stop
+                  @click.stop
+                />
+                <CellView
+                  v-else
+                  :value="store.valueOf(cellAt(row - 1, col - 1))"
+                  :spill-resize-to="spillResizeTo(cellAt(row - 1, col - 1))"
+                  :running="store.isRunning(cellAt(row - 1, col - 1))"
+                  :can-run="store.canEdit"
+                  :checkbox="columnAt(col - 1)?.type === 'checkbox'"
+                  :choices="store.choicesOf(props.table.id, col - 1)"
+                  :format="store.formatOf(cellAt(row - 1, col - 1))"
+                  @toggle="store.setCell(cellAt(row - 1, col - 1), $event ? 'TRUE' : 'FALSE')"
+                  @pick="store.setCell(cellAt(row - 1, col - 1), literalInput($event))"
+                  @run="run(row - 1, col - 1)"
+                  @choose="store.input(cellAt(row - 1, col - 1), $event)"
+                  @edit="store.input(cellAt(row - 1, col - 1), $event)"
+                  @resize-table="resizeForSpill"
+                />
+                <span
+                  v-if="store.canEdit && draft === null && isHandleCell(row - 1, col - 1)"
+                  class="grid__fill-handle"
+                  title="Drag to fill"
+                  @mousedown.stop.prevent="startFill"
+                ></span>
+              </td>
+            </template>
+            <td
+              v-if="(renderedCols.at(-1) ?? 0) < table.colCount"
+              class="grid__spacer"
+              :colspan="table.colCount - (renderedCols.at(-1) ?? 0)"
+            ></td>
+          </tr>
+        </template>
+        <tr v-if="(renderedRows.at(-1) ?? 0) < displayedRows" aria-hidden="true">
           <td
-            v-for="col in table.colCount"
-            :key="table.colIds[col - 1]"
-            role="gridcell"
-            data-pick-kind="cells"
-            :data-pick-row="row - 1"
-            :data-pick-col="col - 1"
-            :data-cell="formatAddress({ row: storedRow(row - 1), col: col - 1 })"
-            :aria-selected="isSelected(row - 1, col - 1)"
-            :class="{
-              'grid__cell--selected': isSelected(row - 1, col - 1),
-              'grid__cell--in-range': inRange(row - 1, col - 1),
-              'grid__cell--fill-preview': inFillPreview(row - 1, col - 1),
-              'grid__cell--filled': store.filledBy(cellAt(row - 1, col - 1)) !== undefined,
-              'grid__cell--computed': columnAt(col - 1)?.type === 'formula',
+            class="grid__spacer"
+            :colspan="table.colCount + 1"
+            :style="{
+              height: `${rowOffsets[displayedRows]! - rowOffsets[renderedRows.at(-1) ?? 0]!}px`,
             }"
-            :style="[
-              cellStyle(store.formatOf(cellAt(row - 1, col - 1))),
-              { boxShadow: outlines.get(`${row - 1}:${col - 1}`)?.boxShadow },
-            ]"
-            :data-reference-color="outlines.get(`${row - 1}:${col - 1}`)?.color"
-            @pointerdown="onCellPointerdown($event, row - 1, col - 1)"
-            @mousedown="onCellMousedown($event, row - 1, col - 1)"
-            @click="onCellClick"
-            @mouseenter="onCellMouseenter(row - 1, col - 1)"
-            @contextmenu="onCellContextMenu($event, row - 1, col - 1)"
-            @dblclick="edit()"
-          >
-            <SessionFormulaField
-              v-if="active && isEditing(row - 1, col - 1)"
-              :ref="captureField"
-              class="grid__editor"
-              :target="active.target"
-              :context="active.context"
-              :mode="active.mode"
-              :value="active.state.doc.toString()"
-              label="Cell content"
-              :target-label="editingLabel(active.target) ?? active.label"
-              :show-label="active.target.kind === 'column'"
-              :readonly="!store.canEdit"
-              :max-length="LIMITS.inputLength"
-              cell-navigation
-              @mousedown.stop
-              @click.stop
-            />
-            <CellView
-              v-else
-              :value="store.valueOf(cellAt(row - 1, col - 1))"
-              :spill-resize-to="spillResizeTo(cellAt(row - 1, col - 1))"
-              :running="store.isRunning(cellAt(row - 1, col - 1))"
-              :can-run="store.canEdit"
-              :checkbox="columnAt(col - 1)?.type === 'checkbox'"
-              :choices="store.choicesOf(props.table.id, col - 1)"
-              :format="store.formatOf(cellAt(row - 1, col - 1))"
-              @toggle="store.setCell(cellAt(row - 1, col - 1), $event ? 'TRUE' : 'FALSE')"
-              @pick="store.setCell(cellAt(row - 1, col - 1), literalInput($event))"
-              @run="run(row - 1, col - 1)"
-              @choose="store.input(cellAt(row - 1, col - 1), $event)"
-              @edit="store.input(cellAt(row - 1, col - 1), $event)"
-              @resize-table="resizeForSpill"
-            />
-            <span
-              v-if="store.canEdit && draft === null && isHandleCell(row - 1, col - 1)"
-              class="grid__fill-handle"
-              title="Drag to fill"
-              @mousedown.stop.prevent="startFill"
-            ></span>
-          </td>
+          ></td>
         </tr>
       </tbody>
     </table>

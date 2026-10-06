@@ -1,7 +1,7 @@
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../api/client";
+import { api, type TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import {
   at,
@@ -27,6 +27,178 @@ vi.mock("../api/client", async () => {
 const server = api as unknown as MockedApi;
 
 let wrapper: VueWrapper;
+
+describe("windowed grids", () => {
+  async function largeGrid(
+    colCount = 100,
+    rowCount = 1000,
+    changes: Partial<TableRecord> = {},
+    attachTo: HTMLElement = document.body,
+  ): Promise<void> {
+    const table = sizedTable({ rowCount, colCount, ...changes });
+    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith({}), tables: [table] }));
+    await useWorkbookStore().load("s1");
+    wrapper = mount(GridView, { props: { table }, attachTo });
+  }
+
+  it("mounts a window and updates both axes on scroll", async () => {
+    await largeGrid();
+    expect(wrapper.findAll('[role="gridcell"]').length).toBeLessThan(1000);
+    expect(wrapper.find('[data-cell="CV1000"]').exists()).toBe(false);
+    const grid = wrapper.element as HTMLElement;
+    vi.spyOn(grid, "getBoundingClientRect").mockReturnValue({ top: -15000 } as DOMRect);
+    grid.scrollLeft = 6000;
+    window.dispatchEvent(new Event("scroll"));
+    await flushPromises();
+    expect(wrapper.find('[data-cell="A1"]').exists()).toBe(false);
+    expect(wrapper.findAll('[role="gridcell"]').length).toBeLessThan(1000);
+    expect(wrapper.find('[data-pick-row="500"]').exists()).toBe(true);
+  });
+
+  it("scrolls to an unmounted selection during keyboard navigation", async () => {
+    await largeGrid();
+    const grid = wrapper.element as HTMLElement;
+    let top = 0;
+    vi.spyOn(grid, "getBoundingClientRect").mockImplementation(() => ({ top }) as DOMRect);
+    vi.mocked(Element.prototype.scrollIntoView).mockImplementation(function (this: Element) {
+      if (this instanceof HTMLElement && this.style.position === "absolute") {
+        top = -Number.parseFloat(this.style.top);
+        grid.scrollLeft = Number.parseFloat(this.style.left);
+      }
+    });
+    const store = useWorkbookStore();
+    store.selection = { tableId: TABLE.id, row: 998, col: 99 };
+    (wrapper.element as HTMLElement).focus();
+    await wrapper.trigger("keydown", { key: "ArrowDown" });
+    await flushPromises();
+    expect(store.selection.row).toBe(999);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(wrapper.find('[data-cell="CV1000"]').exists()).toBe(true);
+  });
+
+  it.each([8, 100])("measures the windowed DOM for 1000 x %i", async (colCount) => {
+    await largeGrid(colCount);
+    await flushPromises();
+    const grid = wrapper.element as HTMLElement;
+    const mounted = grid.querySelectorAll('[role="gridcell"]').length;
+    const nodes = grid.querySelectorAll("*").length;
+    console.info(
+      `Grid DOM (1000 x ${String(colCount)}): ${String(nodes)} descendant elements, ${String(mounted)} mounted cells; ${String(1000 * colCount)} unwindowed cells (calculated)`,
+    );
+    expect(mounted).toBeGreaterThan(0);
+    expect(mounted).toBeLessThan(500);
+    expect(nodes).toBeLessThan(1500);
+    expect(mounted).toBeLessThan((1000 * colCount) / 10);
+  });
+
+  it("renders every cell for printing and restores the window afterward", async () => {
+    // Exceed the row threshold with only one column: print behavior needs no huge baseline.
+    await largeGrid(1, 201);
+    await flushPromises();
+    const grid = wrapper.element as HTMLElement;
+    const mounted = grid.querySelectorAll('[role="gridcell"]').length;
+    expect(mounted).toBeLessThan(50);
+    window.dispatchEvent(new Event("beforeprint"));
+    await flushPromises();
+    expect(grid.querySelectorAll('[role="gridcell"]')).toHaveLength(201);
+    window.dispatchEvent(new Event("afterprint"));
+    await flushPromises();
+    expect(grid.querySelectorAll('[role="gridcell"]')).toHaveLength(mounted);
+  });
+
+  it("retains a focused column-name draft outside the horizontal window", async () => {
+    await largeGrid(40, 201, {
+      columns: Array.from({ length: 40 }, (_, col) => ({
+        name: `Column ${String(col)}`,
+        type: "any",
+      })),
+    });
+    await wrapper
+      .get('[data-pick-kind="col"][data-pick-index="0"] .editable-name')
+      .trigger("dblclick");
+    await flushPromises();
+    const input = wrapper.get<HTMLInputElement>('input[aria-label="Column name"]');
+    await input.setValue("Uncommitted name");
+    const grid = wrapper.element as HTMLElement;
+    grid.scrollLeft = 4000;
+    window.dispatchEvent(new Event("scroll"));
+    await flushPromises();
+    expect(wrapper.find('[data-pick-kind="col"][data-pick-index="1"]').exists()).toBe(false);
+    expect(wrapper.get('input[aria-label="Column name"]').element).toBe(input.element);
+    expect(input.element.value).toBe("Uncommitted name");
+    expect(document.activeElement).toBe(input.element);
+    expect(server.updateColumn).not.toHaveBeenCalled();
+    grid.scrollLeft = 0;
+    window.dispatchEvent(new Event("scroll"));
+    await flushPromises();
+    await input.trigger("keydown", { key: "Escape" });
+    await flushPromises();
+    expect(wrapper.get('[data-pick-kind="col"][data-pick-index="0"] .editable-name').text()).toBe(
+      "Column 0",
+    );
+  });
+
+  it.each(["reorder", "content"])(
+    "refreshes a culled table after a page %s change",
+    async (change) => {
+      let notify: ((records: MutationRecord[]) => void) | undefined;
+      const observe = vi.fn();
+      class MutationObserverStub implements MutationObserver {
+        constructor(callback: MutationCallback) {
+          notify = (records) => {
+            callback(records, this);
+          };
+        }
+        observe = observe;
+        disconnect = vi.fn();
+        takeRecords(): MutationRecord[] {
+          return [];
+        }
+      }
+      vi.stubGlobal("MutationObserver", MutationObserverStub);
+      // This fixture belongs to the test, outside Vue's mount container.
+      const host = document.createElement("section");
+      host.className = "editor";
+      const block = document.createElement("div");
+      const text = document.createTextNode("Block above the table");
+      block.append(text);
+      host.append(block);
+      document.body.append(host);
+      try {
+        await largeGrid(100, 1000, {}, host);
+        const grid = wrapper.element as HTMLElement;
+        let top = 2000;
+        vi.spyOn(grid, "getBoundingClientRect").mockImplementation(() => ({ top }) as DOMRect);
+        expect(observe).toHaveBeenCalledWith(host, expect.objectContaining({ subtree: true }));
+        if (!notify) throw new Error("Layout observer was not created");
+        const emptyNodes = document.createDocumentFragment().childNodes;
+        const record: MutationRecord = {
+          type: change === "reorder" ? "childList" : "characterData",
+          target: change === "reorder" ? host : text,
+          addedNodes: emptyNodes,
+          removedNodes: emptyNodes,
+          previousSibling: null,
+          nextSibling: null,
+          attributeName: null,
+          attributeNamespace: null,
+          oldValue: null,
+        };
+        notify([record]);
+        await flushPromises();
+        expect(grid.querySelectorAll('[role="gridcell"]')).toHaveLength(0);
+        top = 0;
+        notify([record]);
+        await flushPromises();
+        expect(grid.querySelectorAll('[role="gridcell"]').length).toBeGreaterThan(0);
+        expect(grid.querySelectorAll('[role="gridcell"]').length).toBeLessThan(500);
+      } finally {
+        // Detach only the fixture; Vue's mount container and children stay intact.
+        host.remove();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+});
 
 async function mountGrid(inputs: Record<string, string> = {}, role = "owner"): Promise<void> {
   server.getSnapshot.mockResolvedValue(wireSnapshot(snapshotWith(inputs, role)));

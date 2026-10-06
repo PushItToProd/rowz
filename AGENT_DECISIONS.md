@@ -758,6 +758,12 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 
 **Choice.** `REGEXMATCH`, `REGEXEXTRACT`, and `REGEXREPLACE` run on an in-engine Thompson NFA simulation with step, pattern-length, and output limits instead of JavaScript `RegExp`, which would backtrack catastrophically and the engine takes no dependencies. Backreferences and lookaround are unsupported.
 
+## Windowed grid row heights
+
+**Choice.** Clip cell values to the configured row height, including Markdown with hard line breaks. The grid already clips overflow and presents cell values as single lines. Fixed row geometry keeps spacer heights and keyboard scrolling independent of which columns are mounted. Users can resize a row to reveal more content.
+
+**Cost.** Content no longer expands a row automatically. A future text-wrapping feature must define row geometry for columns outside the rendered window.
+
 ## Work order of the autonomous run
 
 **Choice.** After the grapheme item, the run takes `_scratch/AFK_TODOS.md` in priority order from P0, because the author said so, which overrides the agent instructions to take the highest numbers first.
