@@ -307,6 +307,10 @@ async function commitTextInput(event: Event): Promise<void> {
   }
   const input = inputFrom(event);
   if (!input || !props.view.id) return;
+  if (input.type === "number" && input.validity.badInput) {
+    if (event.type === "keydown") input.reportValidity();
+    return;
+  }
   const occurrence = Number(input.dataset.viewInput);
   const key = input.dataset.draftKey;
   if (!Number.isInteger(occurrence) || !key || committingInputs.has(key)) return;

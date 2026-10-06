@@ -132,7 +132,12 @@ function onChoice(event: Event): void {
   emit("choose", control.value?.options[index] ?? null);
 }
 
-function commitInput(): void {
+function commitInput(event: Event, reportNativeValidity = false): void {
+  const input = event.target as HTMLInputElement;
+  if (inputControl.value?.control === "numberbox" && input.validity.badInput) {
+    if (reportNativeValidity) input.reportValidity();
+    return;
+  }
   if (
     !inputControl.value ||
     String(inputDraft.value) === inputText.value ||
@@ -146,7 +151,7 @@ function commitInput(): void {
 function commitInputOnEnter(event: KeyboardEvent): void {
   event.preventDefault();
   event.stopPropagation();
-  commitInput();
+  commitInput(event, true);
 }
 </script>
 

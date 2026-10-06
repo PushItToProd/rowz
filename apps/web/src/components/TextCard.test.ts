@@ -232,6 +232,61 @@ describe("TextCard", () => {
     });
   });
 
+  it("does not commit an incomplete number input", async () => {
+    await render(`Count: {{ NUMBERBOX('Table 1'!B1) }}`);
+    const input = shown().get<HTMLInputElement>(".text-view__input--numberbox");
+    const reportValidity = vi.spyOn(input.element, "reportValidity").mockReturnValue(false);
+    Object.defineProperty(input.element, "validity", {
+      configurable: true,
+      value: { badInput: true },
+    });
+    Object.defineProperty(input.element, "value", {
+      configurable: true,
+      get: () => "",
+    });
+
+    await input.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+
+    expect(server.inputViewControl).not.toHaveBeenCalled();
+    expect(input.element.value).toBe("");
+    expect(reportValidity).toHaveBeenCalledOnce();
+  });
+
+  it("does not report validity when an incomplete number input loses focus", async () => {
+    await render(`Count: {{ NUMBERBOX('Table 1'!B1) }}`);
+    const input = shown().get<HTMLInputElement>(".text-view__input--numberbox");
+    const reportValidity = vi.spyOn(input.element, "reportValidity").mockReturnValue(false);
+    Object.defineProperty(input.element, "validity", {
+      configurable: true,
+      value: { badInput: true },
+    });
+    Object.defineProperty(input.element, "value", {
+      configurable: true,
+      get: () => "",
+    });
+
+    await input.trigger("focusout");
+    await flushPromises();
+
+    expect(server.inputViewControl).not.toHaveBeenCalled();
+    expect(reportValidity).not.toHaveBeenCalled();
+  });
+
+  it("still commits an empty number input", async () => {
+    await render(`Count: {{ NUMBERBOX('Table 1'!B1) }}`);
+    const input = shown().get<HTMLInputElement>(".text-view__input--numberbox");
+
+    await input.setValue("");
+    await input.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+
+    expect(server.inputViewControl).toHaveBeenCalledExactlyOnceWith("v1", 0, {
+      fingerprint: { control: "numberbox", target: identifiedAt("B1") },
+      value: "",
+    });
+  });
+
   it("shows an error beside a text-view input when its commit is refused", async () => {
     await render("{{ TEXTBOX('Table 1'!A1) }}");
     server.inputViewControl.mockResolvedValue(

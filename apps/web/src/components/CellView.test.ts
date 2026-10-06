@@ -6,7 +6,7 @@ import {
 } from "@spreadsheet-app/engine";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { nextTick } from "vue";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import CellView from "./CellView.vue";
 
 const action: ActionValue = {
@@ -150,6 +150,76 @@ describe("CellView", () => {
     expect(wrapper.emitted("edit")).toEqual([[control === "numberbox" ? 3.25 : "edited text"]]);
     await input.trigger("blur");
     expect(wrapper.emitted("edit")).toHaveLength(1);
+  });
+
+  it("does not commit an incomplete number input", async () => {
+    const wrapper = render({
+      kind: "control",
+      control: "numberbox",
+      target: { tableId: "t1", row: 0, col: 0 },
+      value: 12.5,
+      options: [],
+      label: "Count",
+    });
+    const input = wrapper.get<HTMLInputElement>("input");
+    const reportValidity = vi.spyOn(input.element, "reportValidity").mockReturnValue(false);
+    Object.defineProperty(input.element, "validity", {
+      configurable: true,
+      value: { badInput: true },
+    });
+    Object.defineProperty(input.element, "value", {
+      configurable: true,
+      get: () => "",
+    });
+
+    await input.trigger("keydown", { key: "Enter" });
+
+    expect(wrapper.emitted("edit")).toBeUndefined();
+    expect(input.element.value).toBe("");
+    expect(reportValidity).toHaveBeenCalledOnce();
+  });
+
+  it("does not report validity when an incomplete number input loses focus", async () => {
+    const wrapper = render({
+      kind: "control",
+      control: "numberbox",
+      target: { tableId: "t1", row: 0, col: 0 },
+      value: 12.5,
+      options: [],
+      label: "Count",
+    });
+    const input = wrapper.get<HTMLInputElement>("input");
+    const reportValidity = vi.spyOn(input.element, "reportValidity").mockReturnValue(false);
+    Object.defineProperty(input.element, "validity", {
+      configurable: true,
+      value: { badInput: true },
+    });
+    Object.defineProperty(input.element, "value", {
+      configurable: true,
+      get: () => "",
+    });
+
+    await input.trigger("blur");
+
+    expect(wrapper.emitted("edit")).toBeUndefined();
+    expect(reportValidity).not.toHaveBeenCalled();
+  });
+
+  it("still commits an empty number input", async () => {
+    const wrapper = render({
+      kind: "control",
+      control: "numberbox",
+      target: { tableId: "t1", row: 0, col: 0 },
+      value: 12.5,
+      options: [],
+      label: "Count",
+    });
+    const input = wrapper.get<HTMLInputElement>("input");
+
+    await input.setValue("");
+    await input.trigger("keydown", { key: "Enter" });
+
+    expect(wrapper.emitted("edit")).toEqual([[""]]);
   });
 
   it("shows Markdown with its formatting, on one line", () => {
