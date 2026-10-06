@@ -3,6 +3,7 @@ import {
   columnLabel,
   literalInput,
   formatAddress,
+  isControl,
   isError,
   type CellAddress,
   type CellId,
@@ -608,9 +609,25 @@ function onCellPointerdown(event: PointerEvent, place: number, col: number): voi
     event.pointerType === "touch" && isSelected(place, col) && store.selectionEnd === null;
 }
 
-function onCellClick(): void {
-  if (tapOnSelected && draft.value === null) void edit();
+function isCheckboxTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    target.closest(
+      ".cell-control--checkbox, .cell-control__checkbox-target, .cell-control__checkbox",
+    ) !== null
+  );
+}
+
+function onCellClick(event: MouseEvent): void {
+  const checkboxClick = isCheckboxTarget(event.target);
+  if (checkboxClick && (event.shiftKey || event.ctrlKey || event.metaKey)) event.preventDefault();
+  if (tapOnSelected && draft.value === null && !checkboxClick) void edit();
   tapOnSelected = false;
+}
+
+function onCellDoubleClick(event: MouseEvent): void {
+  if (isCheckboxTarget(event.target)) return;
+  void edit();
 }
 
 async function onCellMousedown(event: MouseEvent, place: number, col: number): Promise<void> {
@@ -882,6 +899,32 @@ function onGridKeydown(event: KeyboardEvent): void {
   }
   if (!selected.value || inControl) return;
   const { key } = event;
+  if (key === " ") {
+    const id = selected.value;
+    const value = store.valueOf(id);
+    const checkboxColumn = columnAt(id.col)?.type === "checkbox";
+    const checkboxControl = isControl(value) && value.control === "checkbox";
+    if (checkboxColumn || checkboxControl) {
+      event.preventDefault();
+      if (
+        event.repeat ||
+        event.shiftKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.metaKey ||
+        store.selectionEnd !== null ||
+        !store.canEdit
+      )
+        return;
+      if (checkboxColumn) {
+        if (value === null || typeof value === "boolean")
+          void store.setCell(id, value === true ? "FALSE" : "TRUE");
+        return;
+      }
+      if (checkboxControl) void store.input(id, value.value !== true);
+      return;
+    }
+  }
   const step = MOVES[key];
   const command = event.ctrlKey || event.metaKey;
   if (key === "Enter" && event.altKey && !command && focusSpillResizeAction())
@@ -1042,7 +1085,7 @@ function onGridKeydown(event: KeyboardEvent): void {
                 @click="onCellClick"
                 @mouseenter="onCellMouseenter(row - 1, col - 1)"
                 @contextmenu="onCellContextMenu($event, row - 1, col - 1)"
-                @dblclick="edit()"
+                @dblclick="onCellDoubleClick"
               >
                 <SessionFormulaField
                   v-if="active && isEditing(row - 1, col - 1)"

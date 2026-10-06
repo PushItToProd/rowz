@@ -97,8 +97,54 @@ describe("CellView", () => {
     const box = wrapper.get<HTMLInputElement>("input");
     expect(wrapper.text()).toBe("Done");
     expect(box.element.checked).toBe(true);
+    expect(wrapper.get(".cell-control__checkbox-visual").classes()).toContain(
+      "cell-control__checkbox-visual--checked",
+    );
     await box.setValue(false);
     expect(wrapper.emitted("choose")).toEqual([[false]]);
+  });
+
+  it("gives an unlabeled checkbox an accessible name", () => {
+    const wrapper = render({
+      kind: "control",
+      control: "checkbox",
+      target: { tableId: "t1", row: 0, col: 0 },
+      value: false,
+      options: [],
+      label: "",
+    });
+
+    expect(wrapper.get('input[type="checkbox"]').attributes("aria-label")).toBe("Checkbox");
+  });
+
+  it("puts the native checkbox inside the expanded hit area", () => {
+    const wrapper = render({
+      kind: "control",
+      control: "checkbox",
+      target: { tableId: "t1", row: 0, col: 0 },
+      value: false,
+      options: [],
+      label: "Done",
+    });
+    const hitArea = wrapper.get(".cell-control__checkbox-target");
+    const checkbox = wrapper.get<HTMLInputElement>('input[type="checkbox"]');
+
+    expect(hitArea.element.firstElementChild).toBe(checkbox.element);
+  });
+
+  it("associates the visible CHECKBOX label with its input", () => {
+    const wrapper = render({
+      kind: "control",
+      control: "checkbox",
+      target: { tableId: "t1", row: 0, col: 0 },
+      value: false,
+      options: [],
+      label: "Done",
+    });
+    const box = wrapper.get<HTMLInputElement>('input[type="checkbox"]');
+
+    expect(wrapper.get(".cell-control__checkbox-label").text()).toBe("Done");
+    expect(box.element.closest("label")).toBe(wrapper.get(".cell-control--checkbox").element);
   });
 
   it("shows a dropdown with no choice selected when the cell holds none of the choices", () => {

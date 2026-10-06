@@ -262,7 +262,13 @@ function editorView(): EditorView {
 function dispatchKey(
   target: EventTarget,
   key: string,
-  modifiers: { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean } = {},
+  modifiers: {
+    shiftKey?: boolean;
+    ctrlKey?: boolean;
+    altKey?: boolean;
+    metaKey?: boolean;
+    repeat?: boolean;
+  } = {},
 ): KeyboardEvent {
   const event = new KeyboardEvent("keydown", {
     key,
@@ -1443,6 +1449,86 @@ describe("controls", () => {
     expect(useWorkbookStore().notice).toBeNull();
   });
 
+  it("selects a CHECKBOX cell without toggling, and toggles it with Space", async () => {
+    await mountGrid({ A1: "FALSE", B1: '=CHECKBOX(A1, "Done")' });
+    server.input.mockResolvedValue(clickResult({ cells: [{ ...at("A1"), input: "TRUE" }] }));
+
+    await cellAt("B1").trigger("mousedown");
+    await cellAt("B1").trigger("click");
+    expect(selectedAddress()).toBe("B1");
+    expect(server.input).not.toHaveBeenCalled();
+    expect(cellAt("B1").get<HTMLInputElement>("input").element.checked).toBe(false);
+
+    const repeated = dispatchKey(wrapper.get(".grid").element, " ", { repeat: true });
+    expect(repeated.defaultPrevented).toBe(true);
+    expect(server.input).not.toHaveBeenCalled();
+
+    await press(" ");
+    await vi.waitFor(() => {
+      expect(server.input).toHaveBeenCalledExactlyOnceWith(identifiedAt("B1"), true);
+    });
+    expect(cellAt("B1").get<HTMLInputElement>("input").element.checked).toBe(true);
+  });
+
+  it("does not toggle or edit a CHECKBOX cell when Space is pressed on a range", async () => {
+    await mountGrid({ A1: "FALSE", B1: "=CHECKBOX(A1)" });
+    await select("B1");
+    await press("ArrowDown", { shiftKey: true });
+    expect(useWorkbookStore().selectionEnd).not.toBeNull();
+
+    await press(" ");
+
+    expect(wrapper.find(".grid__editor").exists()).toBe(false);
+    expect(server.input).not.toHaveBeenCalled();
+  });
+
+  it("does not toggle a CHECKBOX control on a modifier-click", async () => {
+    await mountGrid({ A1: "FALSE", B1: "=CHECKBOX(A1)" });
+    await select("A1");
+    const box = cellAt("B1").get<HTMLInputElement>("input");
+    await box.trigger("mousedown", { ctrlKey: true });
+
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true });
+    box.element.dispatchEvent(click);
+
+    expect(selectedAddress()).toBe("B1");
+    expect(click.defaultPrevented).toBe(true);
+    expect(box.element.checked).toBe(false);
+    expect(server.input).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Shift", { shiftKey: true }],
+    ["Ctrl", { ctrlKey: true }],
+    ["Meta", { metaKey: true }],
+  ] as const)(
+    "does not toggle a CHECKBOX control on a %s-click in its hit area",
+    async (_key, modifiers) => {
+      await mountGrid({ A1: "FALSE", B1: "=CHECKBOX(A1)" });
+      await select("A1");
+      const target = cellAt("B1").get(".cell-control__checkbox-target");
+      await target.trigger("mousedown", modifiers);
+
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true, ...modifiers });
+      target.element.dispatchEvent(click);
+
+      if ("shiftKey" in modifiers) expect(useWorkbookStore().selectionEnd).not.toBeNull();
+      else expect(selectedAddress()).toBe("B1");
+      expect(click.defaultPrevented).toBe(true);
+      expect(cellAt("B1").get<HTMLInputElement>("input").element.checked).toBe(false);
+      expect(server.input).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not start editing when a checkbox is double-clicked", async () => {
+    await mountGrid({ A1: "FALSE", B1: "=CHECKBOX(A1)" });
+    const box = cellAt("B1").get<HTMLInputElement>("input");
+
+    await box.trigger("dblclick");
+
+    expect(wrapper.find(".grid__editor").exists()).toBe(false);
+  });
+
   it("shows a dropdown of the choices, with the bound cell's value chosen", async () => {
     await mountGrid({ A1: "low", A2: "high", B1: "high", C1: "=DROPDOWN(A1:A2, B1)" });
     server.input.mockResolvedValue(clickResult({ cells: [{ ...at("B1"), input: "low" }] }));
@@ -1829,6 +1915,68 @@ describe("a data table", () => {
       expect.any(Number),
       expect.any(Array),
     );
+  });
+
+  it("selects checkbox-column cells outside the box and toggles a selected cell with Space", async () => {
+    await mountData({ B1: "FALSE" });
+
+    await cellAt("B1").trigger("mousedown");
+    await cellAt("B1").trigger("click");
+    expect(selectedAddress()).toBe("B1");
+    expect(server.setCells).not.toHaveBeenCalled();
+    expect(cellAt("B1").get<HTMLInputElement>("input").element.checked).toBe(false);
+
+    await press(" ");
+    await vi.waitFor(() => {
+      expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+        "t1",
+        [{ rowId: "r0", colId: "c2", input: "TRUE" }],
+        expect.any(String),
+        expect.any(Number),
+        expect.any(Array),
+      );
+    });
+    expect(cellAt("B1").get<HTMLInputElement>("input").element.checked).toBe(true);
+
+    const nextBox = cellAt("B2").get<HTMLInputElement>("input");
+    await nextBox.trigger("mousedown");
+    await nextBox.setValue(true);
+    await vi.waitFor(() => {
+      expect(server.setCells).toHaveBeenCalledTimes(2);
+    });
+    expect(selectedAddress()).toBe("B2");
+  });
+
+  it.each([
+    ["Shift", { shiftKey: true }],
+    ["Ctrl", { ctrlKey: true }],
+    ["Meta", { metaKey: true }],
+  ] as const)("does not toggle a checkbox on a %s-click", async (_modifier, modifiers) => {
+    await mountData({ B1: "FALSE" });
+    await select("A1");
+    const box = cellAt("B1").get<HTMLInputElement>("input");
+    await box.trigger("mousedown", modifiers);
+
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, ...modifiers });
+    box.element.dispatchEvent(click);
+
+    expect(click.defaultPrevented).toBe(true);
+    expect(box.element.checked).toBe(false);
+    expect(server.setCells).not.toHaveBeenCalled();
+    if ("shiftKey" in modifiers) expect(useWorkbookStore().selectionEnd).not.toBeNull();
+    else expect(selectedAddress()).toBe("B1");
+  });
+
+  it("does not open an editor for Space on a checkbox-column range", async () => {
+    await mountData({ B1: "FALSE" });
+    await select("B1");
+    await press("ArrowDown", { shiftKey: true });
+    expect(useWorkbookStore().selectionEnd).not.toBeNull();
+
+    await press(" ");
+
+    expect(wrapper.find(".grid__editor").exists()).toBe(false);
+    expect(server.setCells).not.toHaveBeenCalled();
   });
 
   it("shows the error for something in a checkbox column that is not TRUE or FALSE", async () => {

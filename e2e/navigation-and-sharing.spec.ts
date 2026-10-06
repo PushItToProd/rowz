@@ -247,4 +247,45 @@ test.describe("on a phone", () => {
     await expect(page.getByRole("heading", { name: "Help" })).toBeVisible();
     expect(await fitsScreen()).toBe(true);
   });
+
+  test("a checkbox control toggles when tapped without making its whole cell a hit target", async ({
+    page,
+  }) => {
+    await newSpreadsheet(page);
+    await enter(page, "A1", "FALSE");
+    await enter(page, "B1", '=CHECKBOX(A1, "Done")');
+
+    const controlCell = cell(page, "B1");
+    const controlSize = await controlCell.boundingBox();
+    if (!controlSize) throw new Error("The checkbox control cell is not visible");
+    const checkbox = controlCell.getByRole("checkbox");
+    const checkboxSize = await checkbox.boundingBox();
+    if (!checkboxSize) throw new Error("The checkbox is not visible");
+    expect(checkboxSize.width).toBeGreaterThanOrEqual(32);
+    expect(checkboxSize.height).toBeGreaterThanOrEqual(32);
+    const checkboxTarget = controlCell.locator(".cell-control__checkbox-target");
+    const targetSize = await checkboxTarget.boundingBox();
+    if (!targetSize) throw new Error("The checkbox hit area is not visible");
+    expect(targetSize.width).toBeGreaterThanOrEqual(32);
+    expect(targetSize.height).toBeGreaterThanOrEqual(32);
+
+    await controlCell.tap({
+      position: { x: controlSize.width - 5, y: controlSize.height / 2 },
+    });
+    await expect(controlCell).toHaveAttribute("aria-selected", "true");
+    await expect(checkbox).not.toBeChecked();
+    await expect(page.getByLabel("Cell content")).toHaveCount(0);
+
+    await checkboxTarget.tap({ position: { x: 2, y: 2 } });
+    await expect(checkbox).toBeChecked();
+    await expect(cell(page, "A1")).toHaveText("TRUE");
+
+    await checkbox.tap();
+    await expect(checkbox).not.toBeChecked();
+    await expect(cell(page, "A1")).toHaveText("FALSE");
+
+    await controlCell.locator(".cell-control__checkbox-label").tap();
+    await expect(checkbox).toBeChecked();
+    await expect(cell(page, "A1")).toHaveText("TRUE");
+  });
 });

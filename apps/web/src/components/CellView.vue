@@ -195,26 +195,51 @@ function commitInputOnEnter(event: KeyboardEvent): void {
       @blur="commitInput"
     />
   </label>
-  <label
+  <div
     v-else-if="checkbox && (value === null || typeof value === 'boolean')"
     class="cell-control cell-control--column"
   >
-    <input
-      type="checkbox"
-      aria-label="Checked"
-      :checked="value === true"
-      :disabled="!canRun"
-      @change="emit('toggle', ($event.target as HTMLInputElement).checked)"
-    />
-  </label>
-  <label v-else-if="control && kind === 'checkbox'" class="cell-control">
-    <input
-      type="checkbox"
-      :checked="control.value === true"
-      :disabled="running || !canRun"
-      @change="emit('choose', ($event.target as HTMLInputElement).checked)"
-    />
-    {{ control.label }}
+    <span class="cell-control__checkbox-target">
+      <input
+        type="checkbox"
+        class="cell-control__checkbox"
+        aria-label="Checked"
+        :checked="value === true"
+        :disabled="!canRun"
+        @change="emit('toggle', ($event.target as HTMLInputElement).checked)"
+      />
+      <span
+        class="cell-control__checkbox-visual"
+        :class="{
+          'cell-control__checkbox-visual--checked': value === true,
+          'cell-control__checkbox-visual--disabled': !canRun,
+        }"
+        aria-hidden="true"
+      ></span>
+    </span>
+  </div>
+  <label v-else-if="control && kind === 'checkbox'" class="cell-control cell-control--checkbox">
+    <span class="cell-control__checkbox-target">
+      <input
+        type="checkbox"
+        class="cell-control__checkbox"
+        :aria-label="control.label || 'Checkbox'"
+        :checked="control.value === true"
+        :disabled="running || !canRun"
+        @change="emit('choose', ($event.target as HTMLInputElement).checked)"
+      />
+      <span
+        class="cell-control__checkbox-visual"
+        :class="{
+          'cell-control__checkbox-visual--checked': control.value === true,
+          'cell-control__checkbox-visual--disabled': running || !canRun,
+        }"
+        aria-hidden="true"
+      ></span>
+    </span>
+    <span v-if="control.label" class="cell-control__checkbox-label">
+      {{ control.label }}
+    </span>
   </label>
   <select
     v-else-if="control && kind === 'dropdown'"

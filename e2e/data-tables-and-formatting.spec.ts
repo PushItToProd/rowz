@@ -87,7 +87,20 @@ test("a table with named columns has typed columns, a formula column, and column
   // A checkbox column shows checkboxes, and ticking one stores it.
   await choose("Paid", "Column holds: Checkbox");
   await expect(cell(page, "D1").getByRole("checkbox")).toBeChecked();
-  await cell(page, "D2").getByRole("checkbox").check();
+  const unpaid = cell(page, "D2");
+  const unpaidSize = await unpaid.boundingBox();
+  if (!unpaidSize) throw new Error("The unpaid cell is not visible");
+  await unpaid.click({ position: { x: 4, y: unpaidSize.height / 2 } });
+  await expect(unpaid).toHaveAttribute("aria-selected", "true");
+  await expect(unpaid.getByRole("checkbox")).not.toBeChecked();
+  const unpaidBox = unpaid.getByRole("checkbox");
+  const boxSize = await unpaidBox.boundingBox();
+  if (!boxSize) throw new Error("The checkbox is not visible");
+  expect(boxSize.width).toBeGreaterThanOrEqual(16);
+  expect(boxSize.height).toBeGreaterThanOrEqual(16);
+  await unpaidBox.check();
+  await expect(unpaid).toHaveAttribute("aria-selected", "true");
+  await expect(unpaidBox).toBeChecked();
 
   // A formula column computes every row from the columns it names.
   await choose("Column 1", "Column holds: A formula…");
