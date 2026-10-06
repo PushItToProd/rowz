@@ -236,6 +236,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     get syncStructure() {
       return syncStructure;
     },
+    get syncCells() {
+      return syncCells;
+    },
     get extendSelection() {
       return extendSelection;
     },
@@ -288,6 +291,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     positionOf,
     withStableSelection,
     syncStructure,
+    syncCells,
     receiveChange,
     load,
     refresh,

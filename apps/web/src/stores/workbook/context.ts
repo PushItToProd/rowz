@@ -90,6 +90,7 @@ export interface WorkbookContext {
   rejectedDraft: Ref<{ id: IdentifiedCell; input: string; revision: number } | null>;
   withStableSelection: (change: () => void) => void;
   syncStructure: () => void;
+  syncCells: (cells: readonly IdentifiedCell[]) => void;
   extendSelection: (address: CellAddress) => void;
   hasTable: (tableId: string) => boolean;
   unansweredCount: Ref<number, number>;

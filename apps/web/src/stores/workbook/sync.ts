@@ -1,5 +1,6 @@
 import { createWorkbook, type CellId } from "@spreadsheet-app/engine";
 import { keyBetween, type IdentifiedCell } from "@spreadsheet-app/shared";
+import { triggerRef } from "vue";
 import {
   api,
   type Change,
@@ -99,6 +100,34 @@ export function createSync(context: WorkbookContext) {
       ),
       cells,
     });
+  }
+
+  /** Reconcile only these identities, keeping the latest pending input visible. */
+  function syncCells(cells: readonly IdentifiedCell[]): void {
+    const visible = new Map(
+      cells.map((cell) => [
+        context.cellIdentityKey(cell),
+        context.inputs.get(context.cellIdentityKey(cell))?.input ?? "",
+      ]),
+    );
+    for (const { tableId, changes } of context.unsavedChanges) {
+      for (const change of changes) {
+        const key = context.cellIdentityKey({ tableId, ...change });
+        if (visible.has(key)) visible.set(key, change.input);
+      }
+    }
+    let edited = false;
+    for (const cell of cells) {
+      const position = positionOf(cell);
+      const input = visible.get(context.cellIdentityKey(cell)) ?? "";
+      if (!position || context.engine.value.getInput(position) === input) continue;
+      context.engine.value.setCell(position, input);
+      edited = true;
+    }
+    if (edited) {
+      context.engine.value.recalculateVolatile();
+      triggerRef(context.engine);
+    }
   }
 
   function installSnapshot(snapshot: Snapshot): void {
@@ -209,6 +238,11 @@ export function createSync(context: WorkbookContext) {
 
   /** Applies the content the server restored, then keeps or moves the selection. */
   function applyChanged(changed: ChangedContent): void {
+    const scriptsChanged = changed.views.some(
+      ({ id, view }) =>
+        view?.kind === "script" ||
+        context.views.value.some((current) => current.id === id && current.kind === "script"),
+    );
     // Start from confirmed positions before merging an earlier reorder response.
     if (context.optimisticPageOrder && context.acceptedPageOrder)
       context.showPageOrder(context.acceptedPageOrder);
@@ -246,12 +280,28 @@ export function createSync(context: WorkbookContext) {
       if (cell.input === "") context.inputs.delete(context.cellIdentityKey(cell));
       else context.inputs.set(context.cellIdentityKey(cell), cell);
     }
-    for (const [key, cell] of context.inputs) {
-      const table = context.tables.value.find((table) => table.id === cell.tableId);
-      if (!context.rows.has(`${cell.tableId}:${cell.rowId}`) || !table?.colIds.includes(cell.colId))
-        context.inputs.delete(key);
+    const touched = new Set([
+      ...changed.tables.map(({ id }) => id),
+      ...changed.rows.map(({ tableId }) => tableId),
+    ]);
+    if (touched.size) {
+      const columns = new Map(
+        context.tables.value
+          .filter((table) => touched.has(table.id))
+          .map((table) => [table.id, new Set(table.colIds)]),
+      );
+      for (const [key, cell] of context.inputs) {
+        if (!touched.has(cell.tableId)) continue;
+        if (
+          !context.rows.has(`${cell.tableId}:${cell.rowId}`) ||
+          !columns.get(cell.tableId)?.has(cell.colId)
+        )
+          context.inputs.delete(key);
+      }
     }
-    syncStructure();
+    if (changed.pages.length || changed.tables.length || changed.rows.length || scriptsChanged)
+      syncStructure();
+    else syncCells(changed.cells);
 
     context.rememberOrders();
     context.showPendingOrders();
@@ -262,6 +312,7 @@ export function createSync(context: WorkbookContext) {
     positionOf,
     withStableSelection,
     syncStructure,
+    syncCells,
     receiveChange,
     load,
     refresh,

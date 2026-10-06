@@ -160,6 +160,7 @@ export function createWrites(context: WorkbookContext) {
     writtenAt: number,
     appendRows: string[],
   ): Promise<void> {
+    const written = pending.changes.map((cell) => ({ tableId: pending.tableId, ...cell }));
     try {
       do {
         const batch = pending.changes.slice(0, LIMITS.cellsPerRequest);
@@ -174,7 +175,10 @@ export function createWrites(context: WorkbookContext) {
     } finally {
       context.unsavedChanges.delete(pending);
       context.pendingRows.delete(stepId);
-      context.withStableSelection(context.syncStructure);
+      context.withStableSelection(() => {
+        if (appendRows.length) context.syncStructure();
+        else context.syncCells(written);
+      });
     }
   }
 
@@ -204,7 +208,7 @@ export function createWrites(context: WorkbookContext) {
       crypto.randomUUID(),
     );
     context.pendingRows.set(stepId, { tableId: table.id, ids: appendRows });
-    context.syncStructure();
+    if (appendRows.length) context.syncStructure();
     // Capture every existing row before a queued structural edit can move it.
     const rowIds = [...table.rows.map((row) => row.id), ...appendRows];
     const pending = {
@@ -219,7 +223,7 @@ export function createWrites(context: WorkbookContext) {
       return;
     }
     context.unsavedChanges.add(pending);
-    context.syncStructure();
+    context.syncCells(pending.changes.map((cell) => ({ tableId: table.id, ...cell })));
     const selectEnd = selectTo ?? { row: rowCount - 1, col: colCount - 1 };
     if (selectWritten) context.extendSelection(selectEnd);
     context.saves = context.enqueueWrite(async () => {
@@ -263,7 +267,8 @@ export function createWrites(context: WorkbookContext) {
       } catch (cause) {
         context.unsavedChanges.delete(pending);
         context.pendingRows.delete(stepId);
-        context.syncStructure();
+        if (appendRows.length) context.syncStructure();
+        else context.syncCells(pending.changes.map((cell) => ({ tableId: table.id, ...cell })));
         context.failedSaves += 1;
         context.fail(cause, "The change could not be saved");
       }

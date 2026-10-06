@@ -5,6 +5,7 @@ import { identifiedAt } from "../testing";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ColumnDefinition, ConditionalRule, FormatRule } from "@spreadsheet-app/engine";
+import * as engine from "@spreadsheet-app/engine";
 import { keysAfter, LIMITS } from "@spreadsheet-app/shared";
 import { computed } from "vue";
 import { api, type Snapshot, type ViewRecord } from "../api/client";
@@ -53,6 +54,135 @@ beforeEach(() => {
     Promise.resolve(changeWith({ pages: [{ id, page: { id, name, position: 0 } }] })),
   );
   server.click.mockResolvedValue(clickResult());
+});
+
+describe("in-place cell edits", () => {
+  it("refreshes clock formulas and their dependents after edits, undo, and redo", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date(2026, 9, 6, 12));
+      const store = await open({ A1: "=NOW()", B1: "=A1", A2: "=TODAY()", B2: "=A2", C1: "0" });
+      const build = vi.spyOn(engine, "createWorkbook");
+      const current = computed(() => store.valueOf(at("A1")));
+      const dependent = computed(() => store.valueOf(at("B1")));
+      const today = computed(() => store.valueOf(at("B2")));
+      const expectTime = (day: number) => {
+        const time = { kind: "date", ms: Date.UTC(2026, 9, day, 12) };
+        expect(current.value).toEqual(time);
+        expect(dependent.value).toEqual(time);
+        expect(today.value).toEqual({ kind: "date", ms: Date.UTC(2026, 9, day) });
+      };
+      expectTime(6);
+      vi.setSystemTime(new Date(2026, 9, 7, 12));
+      const saved = store.setCell(at("C1"), "1");
+      expectTime(7);
+      await saved;
+      notifyJournaled();
+      server.undo.mockResolvedValueOnce({
+        outcome: "done",
+        label: null,
+        error: null,
+        undoable: false,
+        redoable: true,
+        change: changeWith({ cells: [{ ...identifiedAt("C1"), input: "0" }] }, 2),
+      });
+      vi.setSystemTime(new Date(2026, 9, 8, 12));
+      await store.undo();
+      expectTime(8);
+      server.redo.mockResolvedValueOnce({
+        outcome: "done",
+        label: null,
+        error: null,
+        undoable: true,
+        redoable: false,
+        change: changeWith({ cells: [{ ...identifiedAt("C1"), input: "1" }] }, 3),
+      });
+      vi.setSystemTime(new Date(2026, 9, 9, 12));
+      await store.redo();
+      expectTime(9);
+      expect(build).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("applies confirmed cell changes while preserving later optimistic edits", async () => {
+    const store = await open({ A1: "1", B1: "=A1*3" });
+    const build = vi.spyOn(engine, "createWorkbook");
+    const dependent = computed(() => store.valueOf(at("B1")));
+    expect(dependent.value).toBe(3);
+    await store.receiveChange(changeWith({ cells: [{ ...identifiedAt("A1"), input: "2" }] }, 1));
+    expect(dependent.value).toBe(6);
+    const saving = deferred();
+    server.setCells
+      .mockImplementationOnce(() =>
+        saving.promise.then(() =>
+          changeWith({ cells: [{ ...identifiedAt("A1"), input: "3" }] }, 2),
+        ),
+      )
+      .mockResolvedValueOnce(changeWith({ cells: [{ ...identifiedAt("A1"), input: "4" }] }, 3));
+    const first = store.setCell(at("A1"), "3");
+    const second = store.setCell(at("A1"), "4");
+    expect(dependent.value).toBe(12);
+    await store.receiveChange(changeWith({ cells: [{ ...identifiedAt("A1"), input: "3" }] }, 2));
+    expect(dependent.value).toBe(12);
+    saving.resolve();
+    await Promise.all([first, second]);
+    expect(dependent.value).toBe(12);
+    expect(build).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("updates reactive dependents, spills, page formulas, and inputs without constructing an engine", async () => {
+    const store = await open({ A1: "2", B1: "=A1*3", C1: "=SEQUENCE(A1)" });
+    const build = vi.spyOn(engine, "createWorkbook");
+    const set = vi.spyOn(engine.Workbook.prototype, "setCell");
+    const dependent = computed(() => store.valueOf(at("B1")));
+    const page = computed(() => store.evaluateOnPage("p1", "=SUM('Table 1'!B1)"));
+    const spill = computed(() => store.filledBy(at("C2")));
+    const input = computed(() => store.inputOf(at("A1")));
+    expect(dependent.value).toBe(6);
+    expect(page.value).toBe(6);
+    expect(spill.value).toEqual(at("C1"));
+    expect(input.value).toBe("2");
+    const saving = deferred();
+    server.setCells.mockImplementationOnce((...args) =>
+      saving.promise.then(() => savedCells(...args)),
+    );
+    const saved = store.setCell(at("A1"), "1");
+    expect(dependent.value).toBe(3);
+    expect(page.value).toBe(3);
+    expect(spill.value).toBeUndefined();
+    expect(input.value).toBe("1");
+    saving.resolve();
+    await saved;
+    expect(dependent.value).toBe(3);
+    expect(set).toHaveBeenCalledWith(at("A1"), "1");
+    expect(build).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("restores reactive values and diagnostics after a failed save without constructing an engine", async () => {
+    const store = await open({ A1: "2", B1: "=1/A1" });
+    const build = vi.spyOn(engine, "createWorkbook");
+    const dependent = computed(() => store.valueOf(at("B1")));
+    expect(dependent.value).toBe(0.5);
+    expect(store.errors).toEqual([]);
+    const saving = deferred();
+    server.setCells.mockReturnValueOnce(saving.promise as never);
+    const saved = store.setCell(at("A1"), "0");
+    expect(store.errors).toHaveLength(1);
+    expect(dependent.value).toMatchObject({ kind: "error" });
+    await idle();
+    saving.reject(new Error("offline"));
+    await saved;
+    expect(store.inputOf(at("A1"))).toBe("2");
+    expect(dependent.value).toBe(0.5);
+    expect(store.errors).toEqual([]);
+    expect(build).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
 });
 
 describe("loading", () => {

@@ -9,6 +9,78 @@ function expectError(value: CellValue, code: string): void {
   expect(value).toMatchObject({ kind: "error", code });
 }
 
+describe("volatile recalculation", () => {
+  it("refreshes clock formulas and dependents while retaining unrelated cached values", () => {
+    let now = Date.UTC(2026, 9, 6, 12);
+    let calls = 0;
+    const functions = new Map(defaultFunctions);
+    functions.set("COUNT_CALLS", {
+      kind: "pure",
+      minArgs: 0,
+      maxArgs: 0,
+      callableAsValue: true,
+      call: () => ++calls,
+    });
+    const workbook = new Workbook({ now: () => now, functions });
+    workbook.setStructure(STRUCTURE);
+    workbook.setCell(at("A1"), "=NOW()");
+    workbook.setCell(at("B1"), "=A1");
+    workbook.setCell(at("A2"), "=TODAY()");
+    workbook.setCell(at("B2"), "=A2");
+    workbook.setCell(at("C1"), "=COUNT_CALLS()");
+    expect(workbook.getValue(at("B1"))).toEqual({ kind: "date", ms: now });
+    expect(workbook.getValue(at("C1"))).toBe(1);
+    now += 86_400_000;
+    workbook.recalculateVolatile();
+    expect(workbook.getValue(at("A1"))).toEqual({ kind: "date", ms: now });
+    expect(workbook.getValue(at("B1"))).toEqual({ kind: "date", ms: now });
+    expect(workbook.getValue(at("B2"))).toEqual({ kind: "date", ms: Date.UTC(2026, 9, 7) });
+    expect(workbook.getValue(at("C1"))).toBe(1);
+  });
+
+  it("tracks cached names, named functions, formula columns, and relative-date spills", () => {
+    let now = Date.UTC(2026, 9, 6, 12);
+    const workbook = new Workbook({ now: () => now });
+    workbook.setStructure({
+      ...STRUCTURE,
+      names: [
+        { holderId: "t1", name: "Stamp", formula: "=NOW()" },
+        { holderId: "t1", name: "Clock", formula: "=LAMBDA(NOW())" },
+      ],
+      tables: [
+        ...STRUCTURE.tables,
+        {
+          id: "computed",
+          pageId: "p1",
+          name: "Computed",
+          rowCount: 1,
+          columns: [{ name: "Time", type: "formula", formula: "=NOW()" }],
+        },
+      ],
+    });
+    expect(workbook.getName("t1", "Stamp")).toEqual({ kind: "date", ms: now });
+    workbook.setCell(at("A1"), "=Stamp");
+    workbook.setCell(at("A2"), "=Stamp");
+    workbook.setCell(at("B1"), "=Clock()");
+    workbook.setCell(at("C3"), "=LASTXDAYS(2)");
+    workbook.setCell(at("E3"), "=D3");
+    expect(workbook.getValue(at("A2"))).toEqual({ kind: "date", ms: now });
+    now += 86_400_000;
+    workbook.recalculateVolatile();
+    for (const address of ["A1", "A2", "B1"]) {
+      expect(workbook.getValue(at(address))).toEqual({ kind: "date", ms: now });
+    }
+    expect(workbook.getValue(at("A1", "computed"))).toEqual({ kind: "date", ms: now });
+    expect(workbook.getValue(at("E3"))).toEqual({ kind: "date", ms: Date.UTC(2026, 9, 7) });
+    workbook.setCell(at("A1"), "42");
+    workbook.setCell(at("A2"), "");
+    workbook.setStructure(STRUCTURE);
+    workbook.recalculateVolatile();
+    expect(workbook.getValue(at("A1"))).toBe(42);
+    expect(workbook.getValue(at("A2"))).toBeNull();
+  });
+});
+
 describe("cell contents", () => {
   it("returns null and an empty input for a cell never set", () => {
     const workbook = workbookWith({});

@@ -77,6 +77,8 @@ interface NameRecord {
   /** The value computed for it, and the state of the cells it was computed from. */
   kept?: { epoch: number; value: Evaluated };
   evaluating: boolean;
+  /** Whether evaluating this name has read the workbook clock. */
+  volatile?: boolean;
   /** Set for a bare formula of a script, which has no name: the line it is written on. */
   line?: number;
 }
@@ -196,6 +198,9 @@ export class Workbook {
   private readonly cache = new Map<string, CellValue>();
   /** Formula cells whose value is not computed. */
   private readonly pending = new Set<CellRecord>();
+  private readonly volatileCells = new Set<CellRecord>();
+  private evaluatingCell: CellRecord | undefined;
+  private readonly evaluatingNames = new Set<NameRecord>();
   private readonly dependencies = new DependencyIndex();
 
   /** The values an array formula placed in other cells, keyed by the cell each landed in. */
@@ -258,6 +263,7 @@ export class Workbook {
 
     this.cache.clear();
     this.pending.clear();
+    this.volatileCells.clear();
     this.dependencies.clear();
     this.spilled.clear();
     this.spillAreas.clear();
@@ -436,7 +442,10 @@ export class Workbook {
 
     const key = cellKey(id);
     const replaced = records.get(key);
-    if (replaced) this.pending.delete(replaced);
+    if (replaced) {
+      this.pending.delete(replaced);
+      this.volatileCells.delete(replaced);
+    }
     if (input === "") {
       records.delete(key);
       this.dependencies.remove(id);
@@ -460,6 +469,23 @@ export class Workbook {
   getInput(id: CellId): string {
     return this.record(id)?.input ?? "";
   }
+
+  /** Refresh clock readers and their dependents after a write or a clock tick. */
+  recalculateVolatile(): void {
+    // Names and script statements can read the clock without any cell reading them.
+    this.epoch += 1;
+    for (const record of this.volatileCells) this.invalidate(record.id);
+  }
+
+  private markClockReaders(): void {
+    if (this.evaluatingCell) this.volatileCells.add(this.evaluatingCell);
+    for (const record of this.evaluatingNames) record.volatile = true;
+  }
+
+  private readClock = (): number => {
+    this.markClockReaders();
+    return this.now();
+  };
 
   getValue(id: CellId): CellValue {
     this.settle();
@@ -961,9 +987,11 @@ export class Workbook {
    */
   private nameValue(record: NameRecord): Evaluated {
     if ("error" in record.content) return record.content.error;
+    if (record.volatile) this.markClockReaders();
     if (record.kept?.epoch === this.epoch) return record.kept.value;
     if (record.evaluating) fail("#CYCLE!", `${record.name} depends on itself`);
     record.evaluating = true;
+    this.evaluatingNames.add(record);
     try {
       const { holder } = record;
       const value = evaluate(
@@ -976,6 +1004,7 @@ export class Workbook {
       return value;
     } finally {
       record.evaluating = false;
+      this.evaluatingNames.delete(record);
     }
   }
 
@@ -1122,7 +1151,7 @@ export class Workbook {
       controlTargetError: (cell) => this.controlTargetError(cell),
       extent: (tableId) => this.extent(tableId),
       columnNames: (tableId) => this.tables.table(tableId)?.columns?.map((column) => column.name),
-      now: this.now,
+      now: this.readClock,
       document: this.scope(this.tables.table(origin.tableId)?.pageId),
     };
   }
@@ -1139,7 +1168,7 @@ export class Workbook {
       controlTargetError: (cell) => this.controlTargetError(cell),
       extent: (tableId) => this.extent(tableId),
       columnNames: (tableId) => this.tables.table(tableId)?.columns?.map((column) => column.name),
-      now: this.now,
+      now: this.readClock,
       document: this.scope(pageId),
     };
   }
@@ -1238,8 +1267,14 @@ export class Workbook {
 
   private evaluateRecord(record: CellRecord): CellValue {
     if (record.content.type !== "formula") return this.current(record.id);
-    const value = evaluate(record.content.ast, this.context(record.id));
-    return isRange(value) ? this.place(record.id, value.rows) : value;
+    const previous = this.evaluatingCell;
+    this.evaluatingCell = record;
+    try {
+      const value = evaluate(record.content.ast, this.context(record.id));
+      return isRange(value) ? this.place(record.id, value.rows) : value;
+    } finally {
+      this.evaluatingCell = previous;
+    }
   }
 
   /**
