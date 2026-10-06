@@ -670,24 +670,26 @@ export class Workbook {
     });
     const targetError = this.controlTargetError(control.target);
     if (targetError) return refuse(targetError);
+    const write = (input: string): ActionPlan => {
+      const column = this.columnOf(control.target);
+      if (input !== "" && column) {
+        const content = parseTyped(input, column.type);
+        if (content.type === "invalid") {
+          return refuse(`${column.name}: ${content.error.message ?? content.error.code}`);
+        }
+      }
+      return { ok: true, effects: [{ type: "setCell", ...control.target, input }] };
+    };
     if (control.control === "checkbox" && typeof value !== "boolean") {
       return refuse("A checkbox takes TRUE or FALSE");
     }
     if (control.control === "textbox") {
       if (typeof value !== "string") return refuse("A text box takes text");
-      return {
-        ok: true,
-        effects: [
-          { type: "setCell", ...control.target, input: value === "" ? "" : literalInput(value) },
-        ],
-      };
+      return write(value === "" ? "" : literalInput(value));
     }
     if (control.control === "numberbox") {
       if (value === null || value === "") {
-        return {
-          ok: true,
-          effects: [{ type: "setCell", ...control.target, input: "" }],
-        };
+        return write("");
       }
       const parsed =
         typeof value === "number"
@@ -698,10 +700,7 @@ export class Workbook {
       if (parsed === undefined || !Number.isFinite(parsed)) {
         return refuse("A number box takes a number");
       }
-      return {
-        ok: true,
-        effects: [{ type: "setCell", ...control.target, input: literalInput(parsed) }],
-      };
+      return write(literalInput(parsed));
     }
     // A date choice arrives as text, because the request that carries it has no date type.
     const given = typeof value === "string" ? value.trim() : value;

@@ -2,6 +2,14 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-06: Text and number controls in typed columns
+
+**Choice.** TEXTBOX preserves text in untyped and text columns. Other typed columns parse its text and refuse invalid commits. NUMBERBOX normalizes numeric input before writing, so `007` becomes number `7` in a number or untyped column and text `"7"` in a text column. Empty commits clear either target.
+
+**Why.** Column types determine stored literals' evaluated types. NUMBERBOX already normalizes numeric input; preserving its original spelling only for text targets would make its behavior depend on the target type.
+
+**To change.** Update `Workbook.planInput` and the TEXTBOX/NUMBERBOX documentation and tests.
+
 ## 2026-10-05: QUERY quotes
 
 **Decision.** Single quotes delimit identifiers in QUERY, matching formula references. Double quotes delimit string literals, including date and LABEL text. Existing queries may break; no compatibility shim is needed.

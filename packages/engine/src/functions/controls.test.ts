@@ -181,6 +181,56 @@ describe("DROPDOWN", () => {
   });
 });
 
+describe("text and number controls in typed columns", () => {
+  it.each(["TEXTBOX", "NUMBERBOX"])("validates %s against the target column", (name) => {
+    const workbook = new Workbook();
+    workbook.setStructure({
+      ...STRUCTURE,
+      tables: STRUCTURE.tables.map((table) =>
+        table.id === "t1"
+          ? {
+              ...table,
+              rowCount: 1,
+              colCount: 5,
+              columns: [
+                { name: "Text", type: "text" },
+                { name: "Number", type: "number" },
+                { name: "Date", type: "date" },
+                { name: "Control", type: "any" },
+                { name: "Other control", type: "any" },
+              ] as const,
+            }
+          : table,
+      ),
+    });
+    workbook.setCell(at("A1"), "original");
+    workbook.setCell(at("B1"), "12");
+    workbook.setCell(at("D1"), `=${name}(A1)`);
+    workbook.setCell(at("E1"), `=${name}(B1)`);
+    const textPlan = workbook.planInput(control(workbook, "D1"), "007");
+    expect(textPlan).toMatchObject({ ok: true });
+    if (!textPlan.ok) throw new Error("Expected a write");
+    for (const effect of textPlan.effects) {
+      if (effect.type === "setCell") workbook.setCell(effect, effect.input);
+    }
+    expect(workbook.getValue(at("A1"))).toBe(name === "TEXTBOX" ? "007" : "7");
+    expect(choose(workbook, "E1", "007")).toMatchObject([
+      { input: name === "TEXTBOX" ? "'007" : "7" },
+    ]);
+    expect(choose(workbook, "E1", "abc")).toMatchObject({
+      code: "#VALUE!",
+      message: name === "TEXTBOX" ? "Number: abc is not a number" : "A number box takes a number",
+    });
+    expect(workbook.getValue(at("B1"))).toBe(12);
+    expect(choose(workbook, "E1", "")).toMatchObject([{ input: "" }]);
+    workbook.setCell(at("E1"), `=${name}(C1)`);
+    expect(choose(workbook, "E1", "7")).toMatchObject({
+      code: "#VALUE!",
+      message: "Date: " + (name === "TEXTBOX" ? "'7" : "7") + " is not a date",
+    });
+  });
+});
+
 describe("TEXTBOX", () => {
   it("shows the target value and label, and writes committed text as text", () => {
     const workbook = workbookWith({ t1: { A1: "'123", B1: '=TEXTBOX(A1, "Name")' } });

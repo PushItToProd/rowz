@@ -470,6 +470,38 @@ describe("clicking a text view button", () => {
 });
 
 describe("changing an input in a text view", () => {
+  it("refuses text that is invalid for the target's number column", async () => {
+    const sheet = await sheetWith({ A1: "12" });
+    await user.json("POST", `/tables/${sheet.tableId}/columns`, { headerRow: false });
+    await user.json("PATCH", `/tables/${sheet.tableId}/columns/0`, {
+      type: "number",
+      name: "Number",
+    });
+    const view = await addView(user, sheet.pageId);
+    await user.json("PATCH", `/views/${view.id}`, { source: "{{ TEXTBOX('Table 1'!A1) }}" });
+    const snapshot = await readSnapshot(user, sheet.spreadsheetId);
+    const table = snapshot.tables.find(({ id }) => id === sheet.tableId)!;
+    const result = await user.json<ClickResult>("POST", `/views/${view.id}/inputs/0`, {
+      fingerprint: {
+        control: "textbox",
+        target: {
+          tableId: table.id,
+          rowId: rowIds(snapshot, table.id)[0]!,
+          colId: table.colIds[0]!,
+        },
+      },
+      value: "abc",
+    });
+    expect(result).toMatchObject({
+      status: "failed",
+      error: "#VALUE! Number: abc is not a number",
+      change: null,
+    });
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "0:0": "12",
+    });
+  });
+
   it("re-evaluates the occurrence, checks its identity, and writes through the journal", async () => {
     const sheet = await sheetWith({ A1: "'123", A2: "1.5" });
     const view = await addView(user, sheet.pageId);
@@ -750,6 +782,40 @@ describe("changing a control", () => {
       status: "succeeded",
       cells: [{ row: 0, col: 2, input: "2.75" }],
     });
+  });
+
+  it.each(["TEXTBOX", "NUMBERBOX"])("checks typed targets for %s commits", async (name) => {
+    const sheet = await sheetWith({
+      A1: "original",
+      B1: "12",
+      C1: `=${name}(A1)`,
+      D1: `=${name}(B1)`,
+    });
+    await user.json("POST", `/tables/${sheet.tableId}/columns`, { headerRow: false });
+    await user.json("PATCH", `/tables/${sheet.tableId}/columns/0`, { type: "text" });
+    await user.json("PATCH", `/tables/${sheet.tableId}/columns/1`, {
+      type: "number",
+      name: "Number",
+    });
+    const before = await readSnapshot(user, sheet.spreadsheetId);
+    expect(await choose(sheet, 0, 3, "abc")).toMatchObject({
+      status: "failed",
+      error:
+        name === "TEXTBOX"
+          ? "#VALUE! Number: abc is not a number"
+          : "#VALUE! A number box takes a number",
+      change: null,
+    });
+    expect((await readSnapshot(user, sheet.spreadsheetId)).revision).toBe(before.revision);
+    expect(await storedInputs(user, sheet.spreadsheetId, sheet.tableId)).toMatchObject({
+      "0:1": "12",
+    });
+    expect(await choose(sheet, 0, 2, "007")).toMatchObject({
+      status: "succeeded",
+      cells: [{ input: name === "TEXTBOX" ? "'007" : "7" }],
+    });
+    expect(await choose(sheet, 0, 3, "007")).toMatchObject({ status: "succeeded" });
+    expect(await choose(sheet, 0, 3, "")).toMatchObject({ cells: [{ input: "" }] });
   });
 
   it("does not offer an input bound to a formula cell", async () => {

@@ -877,7 +877,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Controls",
     syntax: "TEXTBOX(cell, [label])",
     summary:
-      "Shows the cell's value in a text input. Committing text writes it as text to the cell.",
+      "Shows the cell's value in a text input. Commits preserve any text, including leading zeros, in untyped, text, and choice columns without enforcing choices. Number, date, and checkbox columns refuse text that does not parse as their type. An empty input clears the cell.",
     example: 'TEXTBOX(B1, "Fruit")',
   },
   {
@@ -885,7 +885,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Controls",
     syntax: "NUMBERBOX(cell, [label])",
     summary:
-      "Shows the cell's value in a number input. Committing a number writes it to the cell; an empty input clears it.",
+      "Shows the cell's value in a number input. Commits normalize a finite number (007 becomes 7); text columns store its normalized text. Untyped, text, and choice columns accept any finite number without enforcing choices. Number, date, and checkbox columns refuse values that do not parse as their type. An empty input clears the cell.",
     example: 'NUMBERBOX(A1, "Count")',
   },
   {

@@ -87,7 +87,7 @@ export const controlFunctions: Record<string, FunctionDefinition> = {
 
   /**
    * `TEXTBOX(cell, [label])` shows the cell's value in a text input. Committing
-   * text writes it as text to the cell.
+   * text preserves it in untyped and text columns; other column types parse it.
    */
   TEXTBOX: {
     kind: "special",
@@ -102,7 +102,7 @@ export const controlFunctions: Record<string, FunctionDefinition> = {
 
   /**
    * `NUMBERBOX(cell, [label])` shows the cell's value in a number input.
-   * Committing a number writes it to the cell.
+   * Committing a number writes its normalized literal, subject to the column type.
    */
   NUMBERBOX: {
     kind: "special",
