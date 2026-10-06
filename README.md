@@ -277,6 +277,8 @@ Every change to what a document holds runs in a transaction that first locks the
 
 Every document belongs to a workspace, and users reach documents through workspace membership with a role of owner, editor, or viewer. All data access goes through `SpreadsheetRepository`, which checks membership in each query. A document outside the user's workspaces is reported as not found.
 
+`apps/server/src/repo/spreadsheets.ts` keeps the public repository API. Its implementation modules are in `apps/server/src/repo/spreadsheets/`: document reads, folders, sharing, file import/copy, versions, undo/redo, pages, tables, columns, formats, views, cell writes, structural edits, and formula rewrites. `context.ts` owns the single access subquery, authorized lookups, and the shared `locked`, `change`, and `touch` methods. Calls between public methods use `context.repository`, preserving repository overrides and spies; transaction contexts belong to new repository instances. Content writes still go through `ContentWriter` in `repo/journal.ts`.
+
 ## Configuration
 
 The server reads environment variables, and the web app's build reads `APP_NAME`. Development needs none. `pnpm dev` also reads them from `.env.local` at the repository root, which Git ignores.
