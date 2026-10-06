@@ -25,6 +25,25 @@ test("a button writes the sum of two cells into a third, and the result persists
   await expect(page.getByRole("button", { name: "Sum range" })).toBeVisible();
 });
 
+test("a cell button asks before clearing cells", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "keep this");
+  await enter(page, "B1", '=BUTTON("Clear", CLEAR(A1), "Clear A1?")');
+
+  const clear = cell(page, "B1").getByRole("button", { name: "Clear", exact: true });
+  await clear.click();
+  const dialog = page.getByRole("dialog", { name: "Confirm action" });
+  await expect(dialog).toContainText("Clear A1?");
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(cell(page, "A1")).toHaveText("keep this");
+
+  await clear.click();
+  await dialog.getByRole("button", { name: "Run button" }).click();
+  await expect(cell(page, "A1")).toHaveText("");
+});
+
 test("formulas read other tables and other pages, and follow their changes", async ({ page }) => {
   await newSpreadsheet(page);
 

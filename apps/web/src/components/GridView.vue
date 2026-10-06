@@ -121,6 +121,16 @@ function cell(row: number, col: number): CellId {
   return { tableId: props.table.id, row, col };
 }
 
+function setPendingConfirmation(id: CellId, open: boolean): void {
+  if (open) {
+    pendingConfirmation.value = id;
+    return;
+  }
+  const pending = pendingConfirmation.value;
+  if (pending?.tableId === id.tableId && pending.row === id.row && pending.col === id.col)
+    pendingConfirmation.value = null;
+}
+
 /** The smallest permitted table size that includes this error's array result. */
 function spillResizeTo(id: CellId): { rowCount: number; colCount: number } | undefined {
   const value = store.valueOf(id);
@@ -204,6 +214,7 @@ const tableWidth = computed(
 const virtual = computed(() => displayedRows.value > 200 || props.table.colCount > 30);
 const viewport = ref({ top: 0, bottom: 800, left: 0, right: 1200 });
 const focused = ref<Partial<CellAddress> | null>(null);
+const pendingConfirmation = ref<CellId | null>(null);
 const printing = ref(false);
 const rowOffsets = computed(() => offsets(displayedRows.value, "row"));
 const colOffsets = computed(() => offsets(props.table.colCount, "col"));
@@ -248,6 +259,9 @@ function visibleLines(axis: Axis): number[] {
   }
   const editing = editingPosition.value;
   if (editing) result.add((axis === "row" ? placeOf(editing.row) : editing.col) + 1);
+  const confirming = pendingConfirmation.value;
+  if (confirming?.tableId === props.table.id)
+    result.add((axis === "row" ? placeOf(confirming.row) : confirming.col) + 1);
   const focusedIndex = focused.value?.[axis];
   if (focusedIndex !== undefined) result.add(focusedIndex + 1);
   if (resizeDrag.value?.axis === axis) {
@@ -1119,6 +1133,7 @@ function onGridKeydown(event: KeyboardEvent): void {
                   @choose="store.input(cellAt(row - 1, col - 1), $event)"
                   @edit="store.input(cellAt(row - 1, col - 1), $event)"
                   @resize-table="resizeForSpill"
+                  @confirmation="setPendingConfirmation(cellAt(row - 1, col - 1), $event)"
                 />
                 <span
                   v-if="store.canEdit && draft === null && isHandleCell(row - 1, col - 1)"

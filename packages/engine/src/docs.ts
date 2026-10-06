@@ -891,9 +891,10 @@ const ENTRIES: readonly FunctionDoc[] = [
   {
     name: "BUTTON",
     category: "Actions",
-    syntax: "BUTTON(label, action)",
-    summary: "Shows a button in the cell. Clicking it runs the action.",
-    example: 'BUTTON("Add one", EXECUTE(A1 + 1, A1))',
+    syntax: "BUTTON(label, action, [confirm])",
+    summary:
+      "Shows a button. An optional confirmation message, or TRUE for a default prompt, asks before running. It guards against accidental clicks; the server still derives the action from stored inputs.",
+    example: 'BUTTON("Reset", CLEAR(A1:A3), "Clear these cells?")',
   },
   {
     name: "EXECUTE",

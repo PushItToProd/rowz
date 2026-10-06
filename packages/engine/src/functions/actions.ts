@@ -127,12 +127,21 @@ function sameKey(a: CellValue, b: CellValue): boolean {
 }
 
 export const actionFunctions: Record<string, FunctionDefinition> = {
-  /** `BUTTON(label, action)` shows a button that runs the action when clicked. */
-  BUTTON: lazy(2, 2, ([label, action]): Evaluated => {
+  /** `BUTTON(label, action, [confirm])` optionally asks before running the action. */
+  BUTTON: lazy(2, 3, ([label, action, confirmation]): Evaluated => {
     const shown = text(label?.() ?? null);
     const run = action?.() ?? null;
     if (isError(run)) return run;
     if (!isAction(run)) fail("#VALUE!", "BUTTON needs an action such as EXECUTE or SEND_EMAIL");
+    if (confirmation !== undefined) {
+      const value = confirmation();
+      if (isError(value) || value === true) run.confirm = "Run this button?";
+      else {
+        const message = scalar(value);
+        if (typeof message !== "string") fail("#VALUE!", "BUTTON confirmation needs text or TRUE");
+        run.confirm = message;
+      }
+    }
     return { kind: "button", label: shown, action: run };
   }),
 

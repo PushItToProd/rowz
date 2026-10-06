@@ -28,6 +28,8 @@ export interface ActionValue {
   pageId?: string;
   /** Local values captured when the action was made, independent of later scope changes. */
   names?: ReadonlyMap<string, Evaluated>;
+  /** A client-side confirmation prompt. The server still derives the action from stored inputs. */
+  confirm?: string;
 }
 
 export interface ButtonValue {

@@ -45,7 +45,7 @@ describe("HelpView", () => {
     expect(wrapper.get('[data-function="SUM"]').text()).toContain("=SUM(A1:A3, 10)gives 16");
     expect(wrapper.get('[data-function="IFERROR"]').text()).toContain("gives no result");
     expect(wrapper.get('[data-function="BUTTON"]').text()).toContain(
-      "gives a button labeled “Add one”",
+      "gives a button labeled “Reset”",
     );
     expect(wrapper.text()).toContain("A1 holds 1, A2 holds 2, A3 holds 3");
     expect(wrapper.get('[data-function="CHECKBOX"]').text()).toContain(

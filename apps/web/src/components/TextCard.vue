@@ -7,7 +7,7 @@ import {
   type TemplateInline,
 } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import type { ViewRecord } from "../api/client";
 import { markdown } from "../markdown";
 import { useWorkbookStore } from "../stores/workbook";
@@ -16,6 +16,7 @@ import ViewSourceEditor from "./ViewSourceEditor.vue";
 import { sameEditingTarget, useFormulaSessionStore } from "../formula/session";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
+import ConfirmDialog from "./ConfirmDialog.vue";
 
 const props = defineProps<{ view: ViewRecord }>();
 const store = useWorkbookStore();
@@ -35,6 +36,10 @@ const inputDrafts = new Map<string, string>();
 const inputErrors = reactive(new Map<string, string>());
 const committingInputs = new Set<string>();
 const inputRenderVersion = ref(0);
+const confirmation = ref<string | null>(null);
+const pendingButton = ref<number | null>(null);
+const returnFocus = ref<HTMLElement>();
+const textView = ref<HTMLElement>();
 watch([() => props.view.id, () => props.view.source], () => {
   inputDrafts.clear();
   inputErrors.clear();
@@ -98,6 +103,10 @@ function inlineElement(part: InlineReplacement, viewId: string, isEditing: boole
     button.type = "button";
     button.className = "text-view__button";
     button.dataset.viewButton = String(part.occurrence);
+    if (part.action.confirm !== undefined) {
+      button.dataset.confirmMessage = part.action.confirm;
+      button.setAttribute("aria-haspopup", "dialog");
+    }
     button.disabled = isEditing || !store.canEdit || running;
     if (running) button.setAttribute("aria-busy", "true");
     button.textContent = running ? "Running…" : part.label;
@@ -282,7 +291,38 @@ function runTextButton(event: MouseEvent): void {
   if (!button || !props.view.id) return;
   event.preventDefault();
   event.stopPropagation();
-  void store.clickViewButton(props.view.id, Number(button.dataset.viewButton));
+  const occurrence = Number(button.dataset.viewButton);
+  const message = button.dataset.confirmMessage;
+  if (message !== undefined) {
+    pendingButton.value = occurrence;
+    returnFocus.value = button;
+    confirmation.value = message;
+  } else {
+    void store.clickViewButton(props.view.id, occurrence);
+  }
+}
+
+async function confirmTextButton(): Promise<void> {
+  const occurrence = pendingButton.value;
+  const viewId = props.view.id;
+  confirmation.value = null;
+  pendingButton.value = null;
+  await nextTick();
+  returnFocus.value = undefined;
+  if (occurrence !== null && viewId && store.canEdit) {
+    await store.clickViewButton(viewId, occurrence);
+    await nextTick();
+    textView.value
+      ?.querySelector<HTMLButtonElement>(`button[data-view-button="${String(occurrence)}"]`)
+      ?.focus({ preventScroll: true });
+  }
+}
+
+async function cancelConfirmation(): Promise<void> {
+  confirmation.value = null;
+  pendingButton.value = null;
+  await nextTick();
+  returnFocus.value = undefined;
 }
 
 function inputFrom(event: Event): HTMLInputElement | undefined {
@@ -388,7 +428,16 @@ function editFromText(event: MouseEvent): void {
 
     <ViewSourceEditor v-if="editing" :view="view" mode="markdown" label="Text view source" />
 
+    <ConfirmDialog
+      v-if="confirmation !== null"
+      :message="confirmation"
+      :return-focus="returnFocus"
+      @confirm="confirmTextButton"
+      @cancel="cancelConfirmation"
+    />
+
     <div
+      ref="textView"
       class="text-view"
       :title="store.canEdit && !editing ? 'Double-click to edit' : undefined"
       @input="rememberTextInput"

@@ -55,6 +55,35 @@ describe("windowed grids", () => {
     expect(wrapper.find('[data-pick-row="500"]').exists()).toBe(true);
   });
 
+  it("keeps a pending confirmation mounted when its row leaves the window", async () => {
+    const table = sizedTable({ rowCount: 1000, colCount: 1 });
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith({ A1: '=BUTTON("Clear", CLEAR(A2), 1/0)', A2: "keep" }),
+        tables: [table],
+      }),
+    );
+    await useWorkbookStore().load("s1");
+    wrapper = mount(GridView, { props: { table }, attachTo: document.body });
+
+    await wrapper.get('[data-cell="A1"] button').trigger("click");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Run this button?");
+
+    const grid = wrapper.element as HTMLElement;
+    vi.spyOn(grid, "getBoundingClientRect").mockReturnValue({ top: -15000 } as DOMRect);
+    window.dispatchEvent(new Event("scroll"));
+    await flushPromises();
+
+    expect(wrapper.find('[data-cell="A1"]').exists()).toBe(true);
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(server.click).not.toHaveBeenCalled();
+    document
+      .querySelector<HTMLButtonElement>(".confirm-dialog__actions button:last-child")
+      ?.click();
+    await flushPromises();
+    expect(server.click).toHaveBeenCalledExactlyOnceWith(identifiedAt("A1"));
+  });
+
   it("scrolls to an unmounted selection during keyboard navigation", async () => {
     await largeGrid();
     const grid = wrapper.element as HTMLElement;
@@ -1385,6 +1414,46 @@ describe("buttons", () => {
     await vi.waitFor(() => {
       expect(cellAt("A1").text()).toBe("2");
     });
+    expect(server.click).toHaveBeenCalledExactlyOnceWith(identifiedAt("B1"));
+  });
+
+  it("waits for confirmation before sending a cell button click", async () => {
+    await mountGrid({ A1: "keep", B1: '=BUTTON("Clear", CLEAR(A1), "Clear A1?")' });
+    server.click.mockResolvedValue(clickResult({ cells: [{ ...at("A1"), input: "" }] }));
+
+    const trigger = cellAt("B1").get<HTMLButtonElement>("button");
+    trigger.element.focus();
+    await trigger.trigger("click");
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog?.getAttribute("aria-modal")).toBe("true");
+    expect(dialog?.textContent).toContain("Clear A1?");
+    expect(document.activeElement?.textContent).toBe("Cancel");
+    expect(server.click).not.toHaveBeenCalled();
+
+    const cancel = document.querySelector<HTMLButtonElement>(
+      ".confirm-dialog__actions button:first-child",
+    );
+    const enter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    cancel?.dispatchEvent(enter);
+    await flushPromises();
+    expect(enter.defaultPrevented).toBe(false);
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(server.click).not.toHaveBeenCalled();
+    cancel?.click();
+
+    await flushPromises();
+    expect(server.click).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(trigger.element);
+
+    await trigger.trigger("click");
+    document
+      .querySelector<HTMLButtonElement>(".confirm-dialog__actions button:last-child")
+      ?.click();
+    await flushPromises();
     expect(server.click).toHaveBeenCalledExactlyOnceWith(identifiedAt("B1"));
   });
 

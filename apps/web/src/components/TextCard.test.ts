@@ -157,6 +157,60 @@ describe("TextCard", () => {
     expect(useWorkbookStore().notice).toEqual({ kind: "success", text: "Done" });
   });
 
+  it("waits for confirmation before sending a text-view button click", async () => {
+    await render(`{{ BUTTON("Clear", CLEAR('Table 1'!A1), "Clear this value?") }}`);
+    server.clickViewButton.mockResolvedValue(clickResult());
+
+    await button("Clear").trigger("click");
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog?.textContent).toContain("Clear this value?");
+    expect(server.clickViewButton).not.toHaveBeenCalled();
+
+    const cancel = document.querySelector<HTMLButtonElement>(
+      ".confirm-dialog__actions button:first-child",
+    );
+    cancel?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+    await flushPromises();
+    expect(server.clickViewButton).not.toHaveBeenCalled();
+    cancel?.click();
+
+    await button("Clear").trigger("click");
+    document
+      .querySelector<HTMLButtonElement>(".confirm-dialog__actions button:last-child")
+      ?.click();
+    await flushPromises();
+    expect(server.clickViewButton).toHaveBeenCalledExactlyOnceWith("v1", 0);
+  });
+
+  it("restores focus to the same text-view button after a confirmed click finishes", async () => {
+    await render(
+      `{{ BUTTON("Keep", EXECUTE(1, 'Table 1'!A1)) }} {{ BUTTON("Clear", CLEAR('Table 1'!A1), "Clear this value?") }}`,
+    );
+    let finish!: (result: ReturnType<typeof clickResult>) => void;
+    server.clickViewButton.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+
+    const trigger = button("Clear").element as HTMLButtonElement;
+    trigger.focus();
+    await button("Clear").trigger("click");
+    document
+      .querySelector<HTMLButtonElement>(".confirm-dialog__actions button:last-child")
+      ?.click();
+    await flushPromises();
+    expect(server.clickViewButton).toHaveBeenCalledExactlyOnceWith("v1", 1);
+    expect(button("Running…").attributes("disabled")).toBeDefined();
+
+    finish(clickResult());
+    await flushPromises();
+    expect(button("Clear").element).not.toBe(trigger);
+    expect(document.activeElement).toBe(button("Clear").element);
+  });
+
   it("sends the selected loop button occurrence without serializing its bindings", async () => {
     await render(
       "{% for name in 'Table 1'!A1:A2 %}{{ BUTTON(name, EXECUTE(name, 'Table 1'!B1)) }}{% end %}",

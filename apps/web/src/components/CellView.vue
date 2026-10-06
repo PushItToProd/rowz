@@ -14,10 +14,11 @@ import {
   type Scalar,
 } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { formattedText, textStyle } from "../formatStyle";
 import { markdown } from "../markdown";
 import CellError from "./CellError.vue";
+import ConfirmDialog from "./ConfirmDialog.vue";
 
 const props = defineProps<{
   value: CellValue;
@@ -41,7 +42,11 @@ const emit = defineEmits<{
   toggle: [checked: boolean];
   pick: [text: string];
   resizeTable: [size: { rowCount: number; colCount: number }];
+  confirmation: [open: boolean];
 }>();
+
+const confirmation = ref<string | null>(null);
+const returnFocus = ref<HTMLElement>();
 
 /** Whether the cell shows a dropdown column's choices: it holds a plain value, not an error or a control. */
 const picking = computed(
@@ -57,6 +62,9 @@ const outside = computed(() => held.value !== "" && !props.choices?.includes(hel
 
 const text = computed(
   () => formattedText(props.value, props.format ?? {}) ?? formatValue(props.value),
+);
+const buttonConfirmation = computed(() =>
+  isButton(props.value) ? props.value.action.confirm : undefined,
 );
 const style = computed(() => {
   if (!props.format) return undefined;
@@ -127,6 +135,33 @@ function resizeTable(): void {
   if (props.spillResizeTo) emit("resizeTable", props.spillResizeTo);
 }
 
+function runButton(event: MouseEvent): void {
+  if (!isButton(props.value)) return;
+  if (props.value.action.confirm === undefined) {
+    emit("run");
+    return;
+  }
+  returnFocus.value = event.currentTarget as HTMLElement;
+  confirmation.value = props.value.action.confirm;
+  emit("confirmation", true);
+}
+
+async function confirmButton(): Promise<void> {
+  const shouldRun = confirmation.value !== null && props.canRun;
+  confirmation.value = null;
+  await nextTick();
+  returnFocus.value = undefined;
+  emit("confirmation", false);
+  if (shouldRun) emit("run");
+}
+
+async function cancelConfirmation(): Promise<void> {
+  confirmation.value = null;
+  await nextTick();
+  returnFocus.value = undefined;
+  emit("confirmation", false);
+}
+
 function onChoice(event: Event): void {
   const index = Number((event.target as HTMLSelectElement).value);
   emit("choose", control.value?.options[index] ?? null);
@@ -161,7 +196,8 @@ function commitInputOnEnter(event: KeyboardEvent): void {
     type="button"
     class="cell-button"
     :disabled="running || !canRun"
-    @click="$emit('run')"
+    :aria-haspopup="buttonConfirmation !== undefined ? 'dialog' : undefined"
+    @click="runButton"
   >
     {{ running ? "Running…" : text }}
   </button>
@@ -291,4 +327,11 @@ function commitInputOnEnter(event: KeyboardEvent): void {
     @resize="resizeTable"
   />
   <span v-else class="cell-value" :class="`cell-value--${kind}`" :style="style">{{ text }}</span>
+  <ConfirmDialog
+    v-if="confirmation !== null"
+    :message="confirmation"
+    :return-focus="returnFocus"
+    @confirm="confirmButton"
+    @cancel="cancelConfirmation"
+  />
 </template>

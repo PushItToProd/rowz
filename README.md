@@ -197,25 +197,28 @@ An action is a function that describes a side effect. It does nothing until a bu
 ```
 =BUTTON("Sum range", EXECUTE(SUM(A1,A2),A3))
 =BUTTON("Click me!", SEND_EMAIL(A1,A2,A3))
+=BUTTON("Reset", CLEAR(A1:A3), "Clear these cells?")
 ```
 
 The first formula shows a button that writes the sum of A1 and A2 into A3. The second shows a button that sends an email built from three cells.
 
-| Function                            | Effect                                                                                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `BUTTON(label, action)`             | Shows a button. Clicking it runs the action.                                                                                         |
-| `EXECUTE(expression, target)`       | Writes the value of `expression` into the cell `target`.                                                                             |
-| `SEND_EMAIL(to, subject, body, cc)` | Sends an email. `cc` is optional. `to` and `cc` take addresses separated by commas or semicolons                                     |
-| `APPEND_ROW(range, value, ...)`     | Appends after the last stored row of a data table for an open-ended range; otherwise writes below the range's content                |
-| `INSERT(data, range)`               | Appends each data row after the last stored row of a data table for an open-ended range; otherwise adds below the range's content    |
-| `UPDATE(data, key_columns, range)`  | Writes each row of the data over the row of the range with the same key, and adds the rows with new keys                             |
-| `OVERWRITE(data, range)`            | Empties the range and writes the data from its first row; deletes surplus data-table rows when the range covers all writable columns |
-| `CLEAR(range)`                      | Empties the cells of the range.                                                                                                      |
-| `DO(action, ...)`                   | Runs several actions from one click.                                                                                                 |
+| Function                            | Effect                                                                                                                                                                                  |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BUTTON(label, action, [confirm])`  | Shows a button. Clicking it runs the action. Optional `confirm` text asks first; `TRUE` uses "Run this button?". This guards against accidental clicks, and is not a security boundary. |
+| `EXECUTE(expression, target)`       | Writes the value of `expression` into the cell `target`.                                                                                                                                |
+| `SEND_EMAIL(to, subject, body, cc)` | Sends an email. `cc` is optional. `to` and `cc` take addresses separated by commas or semicolons                                                                                        |
+| `APPEND_ROW(range, value, ...)`     | Appends after the last stored row of a data table for an open-ended range; otherwise writes below the range's content                                                                   |
+| `INSERT(data, range)`               | Appends each data row after the last stored row of a data table for an open-ended range; otherwise adds below the range's content                                                       |
+| `UPDATE(data, key_columns, range)`  | Writes each row of the data over the row of the range with the same key, and adds the rows with new keys                                                                                |
+| `OVERWRITE(data, range)`            | Empties the range and writes the data from its first row; deletes surplus data-table rows when the range covers all writable columns                                                    |
+| `CLEAR(range)`                      | Empties the cells of the range.                                                                                                                                                         |
+| `DO(action, ...)`                   | Runs several actions from one click.                                                                                                                                                    |
 
 `SEND_EMAIL` delivers through a mail server when `SMTP_URL` is set. Without one it writes the message to the server log and delivers nothing.
 
 An action's arguments are evaluated when the button is clicked, not when formulas recalculate. `=BUTTON("Add one", EXECUTE(A1+1, A1))` is a counter, not a circular reference.
+
+The optional third `BUTTON` argument can be a message, as in `=BUTTON("Reset", CLEAR(A1:A3), "Clear these cells?")`, or `TRUE` for the default message. The browser asks before sending the click. The server still derives the effect from the stored formula, so confirmation only guards against accidental clicks.
 
 ### Controls
 

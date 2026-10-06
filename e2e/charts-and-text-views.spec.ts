@@ -119,12 +119,20 @@ test("a text view button runs the selected stored action", async ({ page }) => {
     .fill(
       [
         `{{ BUTTON("Increment", EXECUTE('Table 1'!A1 + 1, 'Table 1'!A1)) }}`,
-        `{{ BUTTON("Set nine", EXECUTE(9, 'Table 1'!A1)) }}`,
+        `{{ BUTTON("Set nine", EXECUTE(9, 'Table 1'!A1), "Set A1 to nine?") }}`,
       ].join("\n\n"),
     );
   await text.getByRole("button", { name: "Done" }).click();
 
-  await text.getByRole("button", { name: "Set nine" }).click();
+  const setNine = text.getByRole("button", { name: "Set nine", exact: true });
+  await setNine.click();
+  const confirm = page.getByRole("dialog", { name: "Confirm action" });
+  await expect(confirm).toContainText("Set A1 to nine?");
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(cell(page, "A1")).toHaveText("1");
+
+  await setNine.click();
+  await confirm.getByRole("button", { name: "Run button" }).click();
   await expect(cell(page, "A1")).toHaveText("9");
   await expect(page.getByRole("status")).toHaveText(/Updated Table 1!A1/);
 

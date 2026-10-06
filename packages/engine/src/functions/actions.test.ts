@@ -36,6 +36,41 @@ describe("BUTTON", () => {
     ).toMatchObject({ label: "42" });
   });
 
+  it("puts a custom or default confirmation on the action value", () => {
+    expect(
+      workbookWith({ t1: { A1: '=BUTTON("Reset", CLEAR(B1), "Clear the form?")' } }).getValue(
+        at("A1"),
+      ),
+    ).toMatchObject({
+      kind: "button",
+      action: { confirm: "Clear the form?" },
+    });
+    expect(
+      workbookWith({
+        t1: { A1: '=BUTTON("Send", SEND_EMAIL("a@b.co", "s", "b"), TRUE)' },
+      }).getValue(at("A1")),
+    ).toMatchObject({
+      kind: "button",
+      action: { confirm: "Run this button?" },
+    });
+  });
+
+  it("uses the default confirmation when the prompt formula evaluates to an error", () => {
+    const workbook = workbookWith({
+      t1: { A1: "keep", B1: '=BUTTON("Clear", CLEAR(A1), 1/0)' },
+    });
+    const value = workbook.getValue(at("B1"));
+    if (!isButton(value)) throw new Error("Expected a button");
+
+    expect(value.action.confirm).toBe("Run this button?");
+    expect(workbook.getValue(at("A1"))).toBe("keep");
+    expect(workbook.planAction(value.action)).toEqual({
+      ok: true,
+      effects: [{ type: "setCell", tableId: "t1", row: 0, col: 0, input: "" }],
+    });
+    expect(workbook.getValue(at("A1"))).toBe("keep");
+  });
+
   it("updates its label when the label's cell changes", () => {
     const workbook = workbookWith({ t1: { A1: "Before", B1: "=BUTTON(A1, EXECUTE(1, C1))" } });
     expect(workbook.getValue(at("B1"))).toMatchObject({ label: "Before" });
@@ -52,6 +87,8 @@ describe("BUTTON", () => {
     ['=BUTTON("x")', "#ERROR!"],
     ['=BUTTON("x", EXECUTE(1))', "#ERROR!"],
     ['=BUTTON("x", NOPE(1))', "#NAME?"],
+    ['=BUTTON("x", EXECUTE(1, C1), FALSE)', "#VALUE!"],
+    ['=BUTTON("x", EXECUTE(1, C1), 5)', "#VALUE!"],
   ])("%s is %s", (formula, code) => {
     expect(workbookWith({ t1: { Z99: formula } }).getValue(at("Z99"))).toMatchObject({
       kind: "error",
@@ -102,6 +139,22 @@ describe("action values", () => {
       ok: true,
       effects: [{ type: "setCell", ...at("A2"), input: "12" }],
     });
+  });
+
+  it("leaves action planning unchanged and does not apply effects during recalculation", () => {
+    const workbook = workbookWith({
+      t1: { A1: "keep until clicked", B1: '=BUTTON("Reset", CLEAR(A1), "Clear A1?")' },
+    });
+    const value = workbook.getValue(at("B1"));
+    if (!isButton(value)) throw new Error("Expected a button");
+
+    expect(value.action.confirm).toBe("Clear A1?");
+    expect(workbook.getValue(at("A1"))).toBe("keep until clicked");
+    expect(workbook.planAction(value.action)).toEqual({
+      ok: true,
+      effects: [{ type: "setCell", tableId: "t1", row: 0, col: 0, input: "" }],
+    });
+    expect(workbook.getValue(at("A1"))).toBe("keep until clicked");
   });
 
   it("a bare action formula evaluates to an action", () => {

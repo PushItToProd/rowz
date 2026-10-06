@@ -65,6 +65,8 @@ A reference document is the acceptance test of a theme: the theme is done when i
 
 ## Bugs
 
+- [ ] **P6** A button cannot be pressed from the keyboard: in the grid, Enter on a selected cell starts editing and Space starts a space-prefixed edit, so the handler cancels the browser's activation of a focused `<button>`; in a text view, the delegated key handler prevents Enter for every descendant including buttons (`apps/web/src/components/GridView.vue`, `TextCard.vue`) #everyday
+- [ ] **P7** A confirmation prompt names the button as it was when the dialog opened, but confirming sends the same cell identity or loop occurrence; if the formula or the rendered loop changes while the dialog is open, a different action can run under the old prompt (`apps/web/src/components/TextCard.vue`, `apps/server/src/actions/run.ts`) #small-apps
 - [ ] **P5** `CHECKBOX` and `DROPDOWN` writes skip the target column's type check that `TEXTBOX` and `NUMBERBOX` now have: `CHECKBOX(A1)` aimed at a number column stores `TRUE`, and `DROPDOWN("abc", A1)` stores `abc`, both leaving a `#VALUE!` cell (`packages/engine/src/workbook.ts`, the final return of the input planner) #small-apps
 - [ ] **P7** A windowed table leaves rows and columns out of the DOM, so a screen reader sees a partial grid with no `aria-rowindex`, `aria-colindex`, or total counts (`apps/web/src/components/GridView.vue`) #everyday
 - [ ] **P6** Browser Find (Ctrl+F) cannot find a value in a row or column of a large table that is not drawn; the document search items under Everyday would cover this #everyday
@@ -389,7 +391,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [x] **P3** (Claude) show the runs of a document's buttons to the people who can open it: who clicked, when, what it wrote and sent, and how it ended. `action_runs` records all of this and nothing shows it #small-apps
   - [x] (Claude) first make a run say what kind it was. `runViewInput` in [run.ts](apps/server/src/actions/run.ts) stores a text-view input's occurrence in the `buttonIndex` of its run, so a text-view input commit and a text-view button click look the same. A checkbox or dropdown change in a cell is likewise recorded like a cell button click
   - [x] (Claude) `runViewButton` and `runViewInput` repeat the same find, lock, find again, and render steps. Share them when this area is next changed
-- [ ] **P3** (Claude) a button can ask for confirmation before it runs, for an action that clears cells or sends email #small-apps
+- [x] **P3** (Claude) a button can ask for confirmation before it runs, for an action that clears cells or sends email #small-apps
 
 ## Controls, mobile use, and templates
 

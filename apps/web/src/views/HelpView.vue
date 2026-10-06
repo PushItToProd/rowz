@@ -845,7 +845,8 @@ const OPERATORS = [
         or text view.
       </p>
       <pre><code>=BUTTON("Sum range", EXECUTE(SUM(A1,A2),A3))
-=BUTTON("Click me!", SEND_EMAIL(A1,A2,A3))</code></pre>
+=BUTTON("Click me!", SEND_EMAIL(A1,A2,A3))
+=BUTTON("Reset", CLEAR(A1:A3), "Clear these cells?")</code></pre>
       <p>
         The first shows a button that writes the sum of A1 and A2 into A3. The second shows a button
         that sends an email to the address in A1, with the subject in A2 and the body in A3.
@@ -855,6 +856,11 @@ const OPERATORS = [
           An action reads its cells at the moment of the click, not when the sheet recalculates. A
           button can therefore read and write the same cell:
           <code>=BUTTON("Add one", EXECUTE(A1 + 1, A1))</code> is a counter.
+        </li>
+        <li>
+          The optional third argument to <code>BUTTON</code> asks for confirmation before the click
+          is sent. Give it a message, or use <code>TRUE</code> for “Run this button?”. This guards
+          against accidental clicks; the server still derives the action from the stored formula.
         </li>
         <li>
           <code>EXECUTE</code> writes to one cell. The target can be in another table or on another
