@@ -17,7 +17,7 @@ ledger).
 ### Work source and stopping
 
 - Work through the unchecked items in `_scratch/AFK_TODOS.md`. Take items with
-  higher priority numbers first (P6, P5, ...), and take unmarked items last.
+  lower priority numbers first (P0, P1, ...), and take unmarked items last.
   Defer items that need a large design decision (the row block, saved
   sort/filter presets) until the others are done.
 - `_scratch/AFK_TODOS.md` is a gitignored file to capture the author's specified
