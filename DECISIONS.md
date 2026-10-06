@@ -2,6 +2,56 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-05: An action that undo reverses asks for no confirmation
+
+**Decision.** Deleting a row, a column, or a page does not ask for confirmation, because undo restores each of them with its formulas and formats. A confirmation is kept for what undo cannot reverse.
+
+**Why.** A confirmation that guards a reversible action interrupts every use of it to prevent a mistake the app can already put right.
+
+**What would reopen it.** An action whose undo proves unreliable or is refused often enough that people lose work.
+
+## 2026-10-05: A cell reference in a text view carries its number format
+
+**Decision.** A bare cell reference in a template, such as `{{Sales!D1}}`, shows the value with the cell's number format. A computed value has no cell to take a format from and is formatted with `TEXT`.
+
+**Why.** A report that shows `7.5` beside a cell showing `$7.50` reads as a bug.
+
+**What would reopen it.** A need to show a cell's raw value in a text view without wrapping it in a formula.
+
+## 2026-10-05: Committing a formula closes its open parentheses
+
+**Decision.** A formula committed with parentheses left open at its end is saved with them closed: `=SUM(D2:D4` becomes `=SUM(D2:D4)`.
+
+**Why.** Excel and Sheets do this, and at the end of a formula the fix is unambiguous.
+
+**What would reopen it.** A case where the added parenthesis hides a mistake the error would have shown.
+
+## 2026-10-05: A row or column added from inside a range joins it
+
+**Decision.** A range grows when a row or column is added from a row or column inside it, and stays as it is when one is added from outside. With the range `A2:A8`, right-clicking row 8 and choosing **Add 1 row below** makes it `A2:A9`. Right-clicking row 9 and choosing **Add 1 row above** puts the new row in the same place and leaves the range as `A2:A8`. Likewise, adding a row above from row 8 grows the range, and adding a row below from row 9 does not. Columns follow the same rule.
+
+**Why.** Each command then does one thing wherever it is used: what the person selected says whether they are working inside the range. A total under a list grows with the list when a row is added from the list's last row, and a range that ends where it does on purpose is left alone by an edit made beside it.
+
+**Not decided.** Rows that an action adds, such as `APPEND_ROW` and `INSERT`, keep their current behavior until this is considered separately.
+
+**What would reopen it.** Experience with ranges that grow when that was not wanted, or a decision about rows added by actions.
+
+## 2026-10-05: Text functions never split a character
+
+**Decision.** `LEN`, `LEFT`, `RIGHT`, `MID`, `SLICE`, and any other function that counts or cuts text work in grapheme clusters, which are what a reader sees as one character. `LEN("😀")` is 1, `LEFT("😀a", 1)` is the emoji, and a flag or a family emoji, which is several code points, also counts as one.
+
+**Why.** Returning part of a character is wrong output, whatever other spreadsheets do. Counting code points would fix a single emoji and still split the ones built from several.
+
+**What would reopen it.** A cost in speed on long text that the app cannot accept.
+
+## 2026-10-05: Charts are drawn with Apache ECharts
+
+**Decision.** rowz draws its charts with Apache ECharts in place of its own SVG drawing code.
+
+**Why.** A charting library takes over the details that are otherwise each a task here: axis titles, stacked bars, colors, a date axis, labels on hover, and sizing.
+
+**What would reopen it.** A bundle size or a rendering limit that the app cannot accept.
+
 ## 2026-10-04: Formula-column editing uses a visibly labeled column session
 
 **Decision.** Formula-column edits target the table ID and column ID and share one session across the inline editor, formula bar, and column popover. Every editor visibly identifies the whole-column effect before submission, with a label such as **Editing formula for every row in Sales[Amount]**. Deleting the originating row leaves the column session intact; deleting the column uses the agreed submit-time error dialog.

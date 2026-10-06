@@ -13,7 +13,7 @@ A prefix such as `**P3**` is the author's priority for an item. When instructed 
 | P10       | Parked. Mostly the hardening under [Before sharing with others](#before-sharing-with-others). Not picked up unless the author says so |
 | P99       | Not planned. Kept so the idea and the reason are not lost                                                                  |
 | Hold      | Waits for a decision by the author. Not picked up                                                                          |
-| Author    | A task for the author. Not picked up                                                                                       |
+| Author | Needs the author first: a decision, a design, or something only the author can supply or run. Not picked up. A priority after it applies once the author has acted |
 
 A sub-item without a prefix takes its parent's. An item that only groups sub-items, such as "more actions", has no prefix. An item with no prefix and no prefixed parent has not been triaged: do not pick it up, and point it out to the author.
 
@@ -46,10 +46,9 @@ A reference document is the acceptance test of a theme: the theme is done when i
 ## Inbox - to be categorized
 
 - [ ] **P10** explore Yjs + Hocuspocus for sync #sharing
-- [ ] **P2** entering a value like `$10,000` (verbatim) into a numeric data table column produces a `#VALUE!` error (`$10,000 is not a number`) #everyday
+- [ ] **Author** **P2** entering a value like `$10,000` (verbatim) into a numeric data table column produces a `#VALUE!` error (`$10,000 is not a number`) #everyday
   - (Claude) the cause is `parseNumber` in [values.ts](packages/engine/src/values.ts), which every typed cell and every conversion of text to a number uses. It also refuses `10%`, `1,234`, and `VALUE("$1,234.50")`, in plain tables as well as typed columns, so those entries become text. `=5%` is a syntax error because the formula language has no percent operator. Decide which of these to accept in one change
-- [ ] **P4** Claude took my `CLAMP` example literally in a way I didn't expect. undo its change to make `CLAMP` lazy #formula-language
-  - its prompt for luna: "The author's spec for CLAMP is that it is exactly equivalent to `IFS(val < min, min, val > max, max, 1=1, val)`. Review findings to fix: (1) CLAMP is registered `eager` and evaluates all arguments, so `=CLAMP(-1, 0, 1/0)` returns #DIV/0! while the IFS form returns 0 (the first condition succeeds without evaluating max). Make CLAMP lazy like IFS (see how IFS/IF are registered with `lazy()`) so that an unused min/max argument that errors is not evaluated, including in the array/elementwise case if it applies. "
+- [ ] **P4** make `CLAMP` eager again: it evaluates all three arguments, so `=CLAMP(-1, 0, 1/0)` is `#DIV/0!`. An agent made it lazy, like `IFS`, by reading the author's `IFS` equivalent literally. The equivalence describes the result for arguments that have values and nothing more. Update the help entry and the README sentence about `CLAMP` to match #formula-language
 - [ ] **P6** in data tables, conditional formatting should be a column property #formatting
   - okay, I guess when I create rules covering a whole column of a data table it does intelligently set it to e.g. `F1:F` so it covers the whole thing, but that behavior doesn't feel obvious from the way it's presented
 - [ ] **P6** create context menu item to add conditional formatting to the selected cell or range #formatting
@@ -74,8 +73,8 @@ A reference document is the acceptance test of a theme: the theme is done when i
 - [ ] **P0** (Claude) A `BUTTON` loses every local name when it is clicked. `=LET(x, A1, BUTTON("go", EXECUTE(x+1, A2)))` shows a button, and clicking it fails with `#NAME? Unknown name 'x'`. `call` in [evaluate.ts](packages/engine/src/evaluate.ts) builds the `ActionValue` with the action's arguments, origin, and page, and leaves out `context.names`. `LET` is the case that was run; a `LAMBDA` parameter, a script function's parameter, and a template `let` or loop variable are bound the same way. Keep the bindings in the `ActionValue`, as a `LAMBDA` value keeps its context, and plan the action with them #small-apps
   - A text-view `BUTTON` inside a template loop is one case: an action body that uses the loop variable fails with `#NAME?`, so a button on each row of a loop cannot act on its row. Preserve the bindings for the selected occurrence
 - [ ] **P6** (Claude) `ROUND(1.005, 2)` is 1, and Excel and Sheets give 1.01. 1.005 is stored as a binary fraction slightly below 1.005, and `ROUND` rounds that. Amounts of money land on such halves often. Round the shortest decimal form of the number instead #formula-language
-- [ ] **P9** (Claude) `LEFT("😀a", 1)` returns half of the emoji, and `LEN("😀")` is 2. `LEFT`, `RIGHT`, `MID`, `LEN`, and `SLICE` count UTF-16 code units. Decide whether they count code points, as the wildcard matcher in `criteria.ts` does #formula-language
-- [ ] **P5** `FILTER_COLUMNS` and `FILTER` skip the error check on later conditions for a column that an earlier condition already rejected (`keep[col] &&= boolean(flag)` short-circuits), so a later `#DIV/0!` is hidden by an earlier `FALSE`. `AND` propagates it. Decide whether to check every condition cell, and test it. #formula-language
+- [ ] **P9** (Claude) `LEFT("😀a", 1)` returns half of the emoji, and `LEN("😀")` is 2. `LEFT`, `RIGHT`, `MID`, `LEN`, and `SLICE` count UTF-16 code units. Make every text function that counts or cuts characters work in grapheme clusters, using `Intl.Segmenter`, so that a flag or a family emoji is one character too. See [DECISIONS.md](DECISIONS.md), "Text functions never split a character" #formula-language
+- [ ] **Author** **P5** `FILTER_COLUMNS` and `FILTER` skip the error check on later conditions for a column that an earlier condition already rejected (`keep[col] &&= boolean(flag)` short-circuits), so a later `#DIV/0!` is hidden by an earlier `FALSE`. `AND` propagates it. Decide whether to check every condition cell, and test it. #formula-language
 - [x] **P2** conditional formatting criteria doesn't handle strings -- I made a conditional format with a condition like `="foobar"` but it didn't apply (maybe b/c it was a data table column with formula values)
 
 - [ ] **P2** `QUERY` treats single quotes as delimiting string literals which contradicts the outer formula languge syntax. this isn't exactly a bug but I consider it a severe enough misfeature I'm classing it as one - we should probably have single quotes delimit identifiers in `QUERY` syntax instead so you can write queries like `=QUERY(People, "select 'Favorite food', count(*) group by 'Favorite food'")`. (as this is a pre-production app I don't care if this breaks anything) #formula-language
@@ -102,6 +101,23 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] (Claude) Reproduce, then fix: a response that arrives after the editor has opened another document is applied to that document. `addPage` in the [workbook store](apps/web/src/stores/workbook.ts) appends the page and table the server made for document A to the lists of document B, and `renameSpreadsheet` puts back A's record. Other store functions that write after an `await` may do the same and need the same check. `runHistory` already compares the open document's id before applying its answer.
 
 - [x] when editing a script and unfocusing it, if a table cell is already selected that's above or below the fold, the UI will scroll the whole page up/down to show that cell, which is really annoying
+
+The next items came from a QA pass through the running app in a browser on 2026-10-05 (running commit b236b7f730cea29cd32823ea0c85a5e3357fdcbd). Each was seen in headless Chromium at 1440×900 against the Vite dev build, and none has a failing test yet. They are listed with the ones a single user is most likely to hit first. Screenshots are in `_scratch/qa/`.
+
+- [ ] **P4** (Claude) A chart draws at 300 by 150 pixels whatever its data, and its axis labels are about 6 pixels tall. That is the size a browser gives an SVG with no width or height, so the chart's SVG probably has a `viewBox` and no size. Fix it as part of the move to Apache ECharts, which sizes a chart to its block. Resizing a block is a separate item under Tables, pages, charts, and text views #charts
+- [ ] **P2** (Claude) A cell shows the binary rounding error of its number. `=SUM(C2:C1000)` over 999 amounts with two decimals shows `51487.4899999999`. Excel and Sheets show 15 significant digits, which hides it. Round a number to 15 significant digits for display when the cell has no number format. The `ROUND` item above is about the value a function returns and does not cover this #everyday
+- [ ] **P1** (Claude) Keys typed straight after Enter or Tab are lost. Typing a value, Enter, and the next value with no pause stored `RUE` for `TRUE` and `1/0` for `=1/0`. Typing `cc`, Tab, `dd` with 20 ms between keys stored `c` and `d`. Nothing was lost with 30 ms or more between keys, so a person hits this only in a fast burst, and pasted keystrokes from another tool hit it every time. The cell editor is probably mounted after the first key arrives, so the keys that follow have nowhere to go until it has focus. The table filter field behaves the same way: ten Tab presses with no pause all stayed in it, and with 120 ms between them the first one left it #formula-editing
+- [ ] **P3** (Claude) A table or page name with a space, written without quotes, gives an error that does not mention quotes. `=SUM(Table 1[Qty])` shows `Expected )` and `=Table 1!B2` shows `Unexpected 1`. Every new table is named `Table 1`, `Table 2`, and so on, so a formula typed by hand meets this first. The document errors panel prints the unquoted form `Table 1!D5` as a cell's address. Clicking a cell to insert its reference writes the quotes. Say in the error that the name needs single quotes when the words before `!` or `[` are a table or page name, or name new tables without a space #formula-language
+- [ ] **P5** (Claude) A name defined twice in one script is not marked in the script, and a formula that uses it is told to do something it cannot. With `QtyTotal = SUM(Sales[Qty])` and `QtyTotal = 5` in one script, the script card shows 227 beside both lines. `=QtyTotal` in a cell shows "QtyTotal has more than one meaning: 'Page 1'!'Script 1'!QtyTotal, 'Page 1'!'Script 1'!QtyTotal. Write the one meant", and the two qualified names are the same. Mark the second definition in the script as an error. The wording item under Controls, mobile use, and templates changes this message's last sentence #formula-language
+- [ ] **P5** (Claude) With a sort on a data table, a selection of a whole column is described by the stored rows at its two ends. Clicking the header of column B while sorted by `Qty` descending made the conditional format panel say "Applies to B4:B20", and the rule it added covers `B1:B`. After the sort was removed, the same selection covered only rows 4 to 20. Keep a whole-column selection as a whole column #data-tables
+- [ ] **P4** (Claude) An error message at the bottom right stays until its × is clicked, and Escape does not close it. "A column named qty already exists" stayed through several minutes of other work. The banner for a duplicate folder name on the document list stays too, and it moves the list down. Close a message after a few seconds or when the next action succeeds #everyday
+- [ ] **P6** (Claude) The address of a document that does not exist, and an address the app has no route for, both open the document list with no message. Say that the document was not found #everyday
+- [ ] **P8** (Claude) The sign-in form and the share panel keep the server's last error after a later attempt that the browser's own validation stops. Submitting the sign-in form empty after a wrong password leaves "Invalid email or password" in view #everyday
+- [ ] **P5** (Claude) A text view writes a cell's value without the cell's number format. `{{Sales!D1}}` shows `7.5` where the cell shows `$7.50`. The author decided that a bare cell reference in a template carries the cell's number format. A computed value such as `{{Sales!D1 * 2}}` has no cell to take a format from, and `TEXT` formats it #small-apps
+- [ ] **P6** (Claude) Changing a column's type to Checkbox turns each cell that is not true or false into `#VALUE!` without a warning. In the test the document's error count went from 7 to 14. Say how many cells do not fit the new type before changing it #data-tables
+- [ ] **P3** (Claude) A click anywhere in a cell of a checkbox column ticks or clears it, so the mouse cannot select such a cell without changing it. Only the box itself should toggle #data-tables
+- [ ] **P4** (Claude) "Save a copy" opens the copy at once, and the only sign is "(copy)" at the end of the name in the header. A later edit meant for the original goes to the copy. Show a message that the copy is now open, or keep the original open and link to the copy #documents
+- [ ] **Author** **P8** (Claude) After a reload the Undo button is disabled, though the server keeps the journal of changes. Decide whether undo should continue across a reload #everyday
 
 ## Formula language and functions
 
@@ -200,6 +216,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P9** (GPT) Support reference picking by dragging across multiple named-column headers. Deferred from [the shared formula editor](plans/formula-editing.md); choose how a range of named columns is represented before implementing. #formula-editing
 - [ ] **P10** (GPT) Add nested-language editing assistance inside formula strings, such as the query text passed to `QUERY`. Deferred from [the shared formula editor](plans/formula-editing.md). #formula-editing
 - [ ] **P6** (GPT) Add automatic bracket insertion to the shared formula editor. Deferred from [the initial implementation](plans/formula-editing.md). #formula-editing
+  - [ ] **P5** (Claude) close open parentheses when a formula is committed. `=SUM(D2:D4` shows `#ERROR! Expected )` today, and Excel and Sheets add the missing parenthesis. The author decided that a commit closes them. Only parentheses left open at the end of the formula are closed #formula-editing
 - [ ] **P5** (GPT) Add comprehensive inline diagnostics to the shared formula editor. Deferred from [the initial implementation](plans/formula-editing.md). #formula-editing
 - [x] **P7** when a spill error is caused by table dimensions, show a “Resize table to fit” button in its popover
 - [x] **P6** Clearly explain why an array result cannot spill: when the table is too small, say e.g. “The result needs 12 rows and 26 columns, but the table is only 11 rows and 15 columns”; when existing values block it, say e.g. “but one or more cells in A1:P26 already have values.” Do not name a target cell when the table dimensions are the reason it cannot fit.
@@ -219,7 +236,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] when a row/col is inserted into a range used in a formula, the formula's range should be auto-updated to include the range.
   - e.g. if we have A1 = 1, A2 = 2, A3 = 3, A4 = `SUM(A1:A3)` and the user right clicks and inserts a row above or below A2, the range should be updated to `A1:A4`
   - (Claude) this already works. `inputsAfterEdit` in [rewrite.ts](packages/engine/src/rewrite.ts) turns `SUM(A1:A3)` into `SUM(A1:A4)` for a row inserted before row 2 or row 3, and into `SUM(A2:A4)` for one inserted before row 1
-- [ ] **P7** (Claude) decide whether a row inserted directly below a range joins it. With `SUM(A1:A3)` in A4, a row inserted before row 4 leaves the range as `A1:A3`, so a value typed into the new row is not summed. Excel and Sheets do the same. Growing the range is right for a total under a list and wrong for a range that ends where it does on purpose. An auto-growing data table with `SUM(Sales[Amount])` avoids the question #everyday
+- [ ] **P7** a row or column added from inside a range joins it, and one added from outside does not. With `SUM(A2:A8)`, "Add 1 row below" on row 8 makes it `SUM(A2:A9)`, and "Add 1 row above" on row 9 leaves it alone. The two put the new row in the same place, so the request has to say which row or column the person added from, and `inputsAfterEdit` in [rewrite.ts](packages/engine/src/rewrite.ts) has to take it. The same goes for columns and for every other place that holds a formula. Rows that an action adds (`APPEND_ROW`, `INSERT`) are left as they are and need a separate decision. See [DECISIONS.md](DECISIONS.md), "A row or column added from inside a range joins it" #everyday
 - [x] **P4** allow resizing rows heights and column widths
   - [x] by clicking and dragging on the borders of the row/col headers
   - [x] by a "resize [row/column]" ctx menu item shown when right clicking on row/col headers
@@ -228,7 +245,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [x] if I select C:E, give me a "Delete columns C-E" option. likewise for rows.
   - [x] if I select C3:E6 and right click on the selected range, show me both "Delete columns C-E" and "Delete rows 3-6"
 - [ ] **P8** merge cells across selection - support merging multiple cells across one or more rows and one or more columns #everyday
-- [ ] **P5** (Claude) draw only the rows and columns in view. `GridView` makes a cell component for every row and column of a table, 100,000 of them for a table of 1,000 rows and 100 columns, and a page shows every table on it. Each edit also triggers the one ref that holds the engine, so everything that read a value through it is computed again. Do this before raising `tableRows` #everyday
+- [ ] **P2** (Claude) draw only the rows and columns in view. `GridView` makes a cell component for every row and column of a table, 100,000 of them for a table of 1,000 rows and 100 columns, and a page shows every table on it. Each edit also triggers the one ref that holds the engine, so everything that read a value through it is computed again. Do this before raising `tableRows` #everyday
+  - (Claude) measured in headless Chromium against the Vite dev build on 2026-10-05, after importing a CSV of 1,000 rows and 5 columns into a table 8 columns wide (8,000 cells, 19,165 DOM nodes): the first keystroke in a cell took 1.9 s, each later keystroke about 0.6 s, a commit 1.1 s, and an arrow key 0.19 s. In a 20-row table the same steps took 183 ms, 67 ms, 126 ms, and 34 ms. Scrolling stayed at 60 frames a second. The measurements do not separate drawing from the engine rebuild described under Server, performance, and reliability
 - [ ] find and replace within a block, page, or document
   - [ ] **P4** standalone find without replace - search just the current document #everyday
     - [ ] **P4** allow filtering by just the current page or block #everyday
@@ -281,8 +299,9 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] **P8** export variables declared in Markdown templates as named values, like script declarations and named ranges in tables #small-apps
 - [ ] **P3** add a way to save multiple sort and filter view presets for each data table #data-tables
 - [ ] **P6** explore adding a generated, dynamically sized data table block type defined by the output of a formula, so changing the result's row or column count does not require manually managing table dimensions; the implementation approach is open and needs to consider conditional formatting and other proprrties as well (may also be addressed by the proposal to support conditional formatting and sorting when rendering data tables in markdown) #data-tables
-- [ ] **P9** (Claude) consider deleting a data table's row when its last cell is cleared. `plans/persistent-row-identity.md` keeps such a row, so that its id stays valid for a relation that points at it, and deletes empty rows only at the end of a table when its columns are named #data-tables
+- [ ] **Author** **P9** (Claude) consider deleting a data table's row when its last cell is cleared. `plans/persistent-row-identity.md` keeps such a row, so that its id stays valid for a relation that points at it, and deletes empty rows only at the end of a table when its columns are named #data-tables
 - [ ] **P6** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable #charts
+  - (Claude) a block's card is as wide as what it holds, so a chart's card changed from 364 px to 443 px to 521 px as its type went from bar to pie to scatter with an error message
 - [x] **P4** when updating a formula column's formula, use an in-page editor with proper formula support (modal or popover or maybe just hijack the formula bar), not a browser `input` popup
 - [ ] **P9** (Claude) pivot tables as a block or table feature (`QUERY` already has a `pivot` clause) #data-tables
 - [x] move a table, chart, or text view to another page, and reorder pages
@@ -294,7 +313,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [ ] stacked bars
   - [ ] colors
 - [ ] **P6** when a chart has dates on one axis, they should be spaced out like numeric data, not categorical -- right now if I have a plot with `2018-08-22`, `2019-03-04`, `2019-12-03`, `2020-03-01`, `2021-08-25` on the X-axis, those points all appear equally horizontally spaced, but they should have variable width gaps proportional to the number of days between them just like they would if they were ordinary numbers and the X-axis should have dates at regular intervals covering the time period #charts
-- [ ] **P6** adopt a reasonable charting library -- something lightweight that saves us from having to worry about too much minutiae (unvetted possibilities: ECharts, Chart.js) #charts
+- [ ] **P4** draw charts with Apache ECharts, in chart blocks and in text views. Import only the chart kinds and components in use, since the whole library is large. Do this before the other chart items, which it changes. See [DECISIONS.md](DECISIONS.md), "Charts are drawn with Apache ECharts" #charts
 - [ ] **P10** show labels on charts on hover #charts
 - [x] allow editing markdown views by just double clicking on the text (instead of clicking "Edit"). save and exit edit mode when the user unfocuses the input (instead of requiring user to hit "Done") (keep the "Edit" and "Done" buttons for user convenience)
 - [ ] **P7** support conditional formatting and sorting when rendering a data table in Markdown, or allow embedding an existing table/sheet in a Markdown view so its conditional formatting is applied #data-tables
@@ -313,6 +332,11 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
     - block context menu should appear when right clocking on the card around it but not the controls within it. keep a button in the upper right with a vertical ellipsis that I can click to show the same menu as well
 - [ ] **P7** data tables - allow choices to be drawn from a formula's result (when the formula value changes, keep the raw underlying value in the cell but flag it visibly as invalid) #data-tables
 - [ ] **P6** allow creating links to navigate directly to a page, table cell, block, etc. #small-apps
+- [ ] **P7** (Claude) the editor for a formula column's formula looks unfinished beside the other panels: its heading is small, "Pick reference" is smaller than the other buttons, and Apply and Cancel touch. See `_scratch/qa/15-formula-col.png` #formula-editing
+- [ ] **P4** (Claude) a block added below the visible part of the page is not scrolled into view, so nothing seems to happen after "Add chart". Scroll to a new block and put the keyboard focus in it #small-apps
+- [ ] **P7** (Claude) the row of "Add table", "Add chart", "Add text", and "Add script" buttons between every two blocks takes a line of each gap on a page of five blocks. Consider showing the rows between blocks only when the pointer or the focus is in the gap, and keeping the first and last #small-apps
+- [ ] **P5** (Claude) the label of a `TEXTBOX` or `NUMBERBOX` in a cell is cut to one letter at the default column width ("N…" for "Name"), because the input keeps a fixed width. Let the input shrink before the label does #small-apps
+- [ ] **P7** (Claude) a column's name is renamed by double-clicking its text. A double-click elsewhere in the header cell does nothing. Take the double-click anywhere in the header outside the resize handle #data-tables
 
 ## Formatting
 
@@ -328,6 +352,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
     - [ ] **P8** calculate color range values with a formula, e.g. `CLAMP(X(), -5, 5)`, and use those results to choose colors #formatting
     - [ ] **P7** allow HTML color names and hex RGB codes for conditional formatting colors #formatting
       - [ ] **P7** make color dropdowns comboboxes that show current options on click, suggest valid HTML color names while typing, and accept hex codes beginning with `#` #formatting
+        - (Claude) the toolbar's text and fill color dropdowns and the conditional format panel's list color names as words, with no swatch of the color
     - [ ] **P6** allow a formula to return a conditional formatting color, including HTML color names such as `red` or `purple` and numeric values, so a user-defined function can control coloring #formatting
     - [ ] **P8** advanced color range settings: #formatting
       - [ ] choose arbitrary colors for minimum, midpoint, and maximum points
@@ -379,6 +404,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] (Claude) say "document" instead of "spreadsheet" in the UI and help page, as the README does
 - [x] mobile friendly UI (layout, touch targets, tap twice to edit)
 - [ ] **P10** revamp the phone-width UI so it is less cramped. The editor header is the tightest part: it holds the back arrow, the spreadsheet's name, the saving indicator, Share, History, Export, and Help on one line. #everyday
+  - (Claude) at 390 px wide on 2026-10-05, the error count button covers the document's name, "Save a copy" and Help are cut off, the page scrolls sideways (475 px of content), the format toolbar runs off the right edge, and 73 of the editor's 134 controls are smaller than 24 px in one dimension. A table scrolls inside its card as intended. See `_scratch/qa/32-mobile-editor.png`
 - [ ] **P6** allow checkboxes, inputs, and other controls to target a named range; require the target to contain exactly one cell #small-apps
 - [ ] more controls:
   - [x] **P3** a text or number input bound to a cell (esp. useful in Markdown)
@@ -398,18 +424,25 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [x] a comparison of high-payout races in Gran Turismo 7, after https://docs.google.com/spreadsheets/d/1rZxgfay0Gjq7MuSmOkioZC4srW5yerPfiYR0XAXcE3c ([sample](samples/gt7-grind-comparison.json))
     - (Claude) the source sheet could not be read: the Google Drive read was denied and `_scratch/google-sheets-exported-to-xlsx` is absent from this checkout. The races, payouts, and durations are representative, and the columns follow `plans/data-tables.md`. Compare it with the real sheet and replace the data.
     - (Claude) `Runs[Race]` written on another page than the table is `#REF!`, though `QUERY(Runs, ...)` with the bare name works. A column reference needs the page, as in `Data!Runs[Race]`. Decide whether a unique bare table name should work as the table of a column reference too.
+      - [ ] **P6** (Claude) the error for a column reference to a table on another page is "There is no table Sales with a column named Qty", which does not say that a table of that name is on another page. Have the message name the page that holds the table #formula-language
     - [ ] **P7** (Claude) `QUERY ... pivot Duration` writes the pivoted numbers as text headers (`"6"`, not `6`), so a header cannot be compared as a number. #formula-language
     - (Claude) each run is entered by hand with a race picked from the dropdown, so one race at one duration appears once. A way to build the grid of every race at every duration from `Races` would remove the hand-entered rows.
-  - [ ] **P3** a video game quest tracker, after https://docs.google.com/spreadsheets/d/1cwsRONdpXMJAvjpamauZ391NrTXX1gEdeTrx1Rf324o #small-apps
+  - [ ] **Author** **P3** a video game quest tracker, after https://docs.google.com/spreadsheets/d/1cwsRONdpXMJAvjpamauZ391NrTXX1gEdeTrx1Rf324o #small-apps
   - [ ] **P4** a few standard templates in the style of Sheets and Excel (invoice, contacts list, to-do list), and one or two in the style of Access and FileMaker #documents
   - [ ] **P10** revise/augment the samples after we've added formatting, conditional formatting, etc. #documents
 - [x] add screenshots to the README
 - [ ] **P8** use icons to make the toolbar denser #everyday
+- [ ] **P7** (Claude) the help page is about 60,000 characters with a list of sections and no search. Add a search field that filters sections and functions #everyday
+- [ ] **P9** (Claude) the grid does not tell a screen reader which cell is selected: it has no `aria-activedescendant`, and a cell has no label naming its address. Every button and input checked has a label #everyday
 - [ ] **P5** plan to add keyboard shortcuts #everyday
+  - (Claude) missing on 2026-10-05: Ctrl+Arrow moves one cell and does not jump to the edge of the data. Home, Ctrl+Home, Ctrl+End, and PageDown do nothing in the grid, and End and PageUp were not tried. Ctrl+B and Ctrl+I do not format the selection
 - [x] identify where we should use in-app modals instead of browser-based `input` and alerts -- we have specific tasks for a couple of these already so this would just cover identifying anything I missed
   - (Claude) [docs/native-browser-ui-audit.md](docs/native-browser-ui-audit.md) lists them with replacement options
 - [ ] **P4** (Claude) replace the native `prompt`, `confirm`, and `alert` calls with in-app dialogs, following the audit. 15 call sites remain: six in `TableCard.vue`, and one each in `router.ts`, `SpreadsheetListView.vue`, `ScriptCard.vue`, `ConditionalFormatsPanel.vue`, `PageTabs.vue`, `HistoryPanel.vue`, `TextCard.vue`, `ChartCard.vue`, and `SharePanel.vue` #everyday
+  - the author decided that an action undo reverses asks for no confirmation. Deleting a row, a column, or a page asks today, and undo restores each of them with its formulas and formats. Remove those confirmations first, which leaves fewer dialogs to replace. See [DECISIONS.md](DECISIONS.md), "An action that undo reverses asks for no confirmation"
+  - (Claude) a native dialog also pauses browser automation, so an end-to-end test of these flows has to answer or replace it
 - [ ] **P5** allow renaming, deleting, and duplicating docs from the docs list view #documents
+  - (Claude) the list also has no search and no choice of sort order, and it allows two documents with one name: importing an exported file makes a second "QA Sales Book"
 
 ## Import and export
 
@@ -426,6 +459,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 
 - [x] undo that survives structural changes (insert or delete a row, rename), and undo of formatting (I'm inclined to tie this into verison history -author)
 - [ ] **P9** named versions #documents
+- [ ] **P8** (Claude) History keeps a version before every delete, including one undone seconds later. About fifteen minutes of editing left at least ten versions, three of them "Before deleting row 4 of Table 1". Consider dropping a version when the delete it preceded is undone, or joining versions made within a short time #documents
 - [x] (Claude) undo and redo (persistent version history): the server keeps versions, and History restores one or opens a copy
 - [x] (Claude) Ctrl+Z and Ctrl+Y for single edits within a session
 - [ ] **P10** (Claude) store versions compressed or as differences if large spreadsheets make them costly #codebase
@@ -434,7 +468,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] **P1** saves, button clicks, and checkbox/dropdown changes name their row and column by persistent IDs, so intervening inserts cannot redirect them
 - [x] **P2** (Claude) send workbook-store mutations, including undo and redo, through one ordered queue. Requests enter it when the person acts; formatting, renames, and deletes wait for earlier saves. Version restoration uses the same queue
 - [x] (Claude) route version restoration through the workbook mutation queue and save indicator
-- [ ] **P7** (Claude) comments on cells, blocks, pages, and whole documents #agents
+- [ ] **Author** **P7** (Claude) comments on cells, blocks, pages, and whole documents #agents
   - (author) comments are also a way to give feedback to an AI agent on a document it created or edited, which makes them useful to one person
 
 ## Accounts and email
@@ -452,15 +486,17 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 
 ## Server, performance, and reliability
 
-- [ ] **P8** investigate whether the previously flaky Postgres test still fails; identify the test and reproduce the failure before deciding on a fix #codebase
+- [ ] **Author** **P8** investigate whether the previously flaky Postgres test still fails; identify the test and reproduce the failure before deciding on a fix #codebase
 - [ ] **P6** replace UUIDs in document URLs with shorter unique IDs, targeting 14 characters from a URL-safe alphabet such as `[A-Za-z0-9._-]` #documents
   - That alphabet has 65 characters, so 14 characters allow about 24 septillion values. Example: `2WRhRE4C3O.EaQ` instead of `277690de-bc98-4310-9a84-ab5f27a02086`.
 
 - [x] (Claude) production build of the web app, served by the server
-- [ ] **P5** (Claude) apply a cell edit to the engine in place. `syncStructure` in the [workbook store](apps/web/src/stores/workbook.ts) builds a new `Workbook` from every cell of the document, and one cell edit calls it four times: twice in `writeCells`, once in `applyChanged` when the server answers, and once when `saveCellChanges` finishes. Each new engine also makes every cell on screen compute its value again. Measured in Node with one formula per cell: a document of 50,000 cells takes 402 ms to build and 194 ms to compute, and the engine's own `setCell` followed by reading every cell takes 19 ms. At 10,000 cells the figures are 130 ms, 44 ms, and 2 ms. It was not measured in a browser. Call `setCell` for cell writes and their rollback, and build a new engine only when rows, columns, tables, names, or scripts change. Drawing only the rows in view, under Grid editing and navigation, does not cover this #codebase
+- [ ] **P2** (Claude) apply a cell edit to the engine in place. `syncStructure` in the [workbook store](apps/web/src/stores/workbook.ts) builds a new `Workbook` from every cell of the document, and one cell edit calls it four times: twice in `writeCells`, once in `applyChanged` when the server answers, and once when `saveCellChanges` finishes. Each new engine also makes every cell on screen compute its value again. Measured in Node with one formula per cell: a document of 50,000 cells takes 402 ms to build and 194 ms to compute, and the engine's own `setCell` followed by reading every cell takes 19 ms. At 10,000 cells the figures are 130 ms, 44 ms, and 2 ms. It was not measured in a browser. Call `setCell` for cell writes and their rollback, and build a new engine only when rows, columns, tables, names, or scripts change. Drawing only the rows in view, under Grid editing and navigation, does not cover this #codebase
+  - (Claude) browser timings for a table of 8,000 cells are under that item. They include both costs
   - `applyChanged` also checks every stored input against its table's rows and columns on each change, with a search of the tables and of the column ids for each input. Do that only for the tables a change touched
 - [ ] **P0** (Claude) the end-to-end test "cell drafts keep history across pages and save literal text before navigation" in [spreadsheet.spec.ts](e2e/spreadsheet.spec.ts) failed once in a full `pnpm e2e:remote` run and passed four of four runs alone. After Ctrl+Z in the draft dock the draft read `1` where the test expects `=`, so the undo went back one step further than expected. The cause is not known. Find out whether the editor's undo history groups the two edits by timing, which a person could hit too, or the test races the draft session #codebase
 - [ ] **P2** (Claude) split the largest files by concern. `repo/spreadsheets.ts` is 3,341 lines and about 110 methods covering folders, sharing, versions, undo, structural edits, and formula rewrites. The workbook store is 2,022 lines, `styles.css` 2,042, and the one end-to-end spec 2,108. Sessions working in the same checkout collide in these files, and each costs an agent much of its context to read. The repository can become several modules that share the one access subquery and `change`, which keeps the rule that authorization lives in one place #codebase
+  - do this before the two other P2 items that change the grid and the workbook store, "draw only the rows and columns in view" and "apply a cell edit to the engine in place". All three change the same files, so sessions doing them at once would collide, and splitting the store first means the other two are written against its new structure
   - (author) many tasks touch these files, and reading them probably raises the tokens each task uses
 - [ ] **P10** (Claude) two checks on every save read more as a document grows. `checkCellCount` counts every cell of the document after each write that is not a clear, and `pruneJournal` reads every journal entry of the document after each journaled change. Keep a count on the spreadsheet row, and prune only when a limit could have been passed. This is small at today's limits #codebase
 - [ ] **P10** (Claude) cache a range's values across the formulas that read the same range. Each formula reads every cell of its range again when it is recalculated, so 50,000 formulas that each read a 1,000-row column take about 10 s after one edit in that column: 50 million cell reads. 1,000 such formulas take about 0.2 s, so this matters only at the extreme. The cache needs invalidation inside the evaluator: a cached range is stale once any cell in it changes, including a cell an array result fills or gives up. #codebase
