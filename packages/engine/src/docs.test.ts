@@ -79,6 +79,7 @@ describe("functionDocs", () => {
 
 describe("array examples", () => {
   it.each([
+    ["QUERY", [["Favorite food"], ["banana"]]],
     ["FILTER", [["banana"], ["cherry"]]],
     ["FILTER_COLUMNS", [["apple"], ["banana"], ["cherry"]]],
     [

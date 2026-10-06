@@ -83,7 +83,7 @@
         {
           "type": "text",
           "name": "Monthly report",
-          "source": "# October 2026\n\nIncome: **${{ Income }}**  \nExpenses: **${{ Expenses }}**  \nNet: **${{ Net }}**\n\n### Expenses by category\n\n{{ QUERY(Transactions, \"select Category, sum(Amount) where Type = 'Expense' and `Date` >= date '2026-10-01' and `Date` <= date '2026-10-31' group by Category order by sum(Amount) desc\") }}\n\n### Amounts by account\n\n{{ QUERY(Transactions, \"select Type, Account, sum(Amount) where `Date` >= date '2026-10-01' and `Date` <= date '2026-10-31' group by Type, Account order by Type, sum(Amount) desc\") }}"
+          "source": "# October 2026\n\nIncome: **${{ Income }}**  \nExpenses: **${{ Expenses }}**  \nNet: **${{ Net }}**\n\n### Expenses by category\n\n{{ QUERY(Transactions, \"select Category, sum(Amount) where Type = \"\"Expense\"\" and 'Date' >= date \"\"2026-10-01\"\" and 'Date' <= date \"\"2026-10-31\"\" group by Category order by sum(Amount) desc\") }}\n\n### Amounts by account\n\n{{ QUERY(Transactions, \"select Type, Account, sum(Amount) where 'Date' >= date \"\"2026-10-01\"\" and 'Date' <= date \"\"2026-10-31\"\" group by Type, Account order by Type, sum(Amount) desc\") }}"
         }
       ]
     }

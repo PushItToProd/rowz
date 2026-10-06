@@ -239,10 +239,14 @@ The **Save order** button above appends the form's cells to the Log table and th
 `QUERY(range, query, [headers])` runs a query written like SQL over a range:
 
 ```
-=QUERY(A1:D99, "select B, sum(C) where D >= date '2026-01-01' group by B order by sum(C) desc limit 5")
+=QUERY(A1:D99, "select B, sum(C) where D >= date ""2026-01-01"" group by B order by sum(C) desc limit 5")
 ```
 
 It supports `select`, `where`, `group by`, `having`, `pivot`, `order by`, `limit`, `offset`, and `label`. Columns are named by letter, counting from the first column of the range, or by header. A query expression can call any formula function.
+
+Single quotes delimit column names and aliases, including names with spaces or reserved words: `=QUERY(People, "select 'Favorite food', count(*) group by 'Favorite food'")`. Double an apostrophe within an identifier: `'Person''s food'`.
+
+String literals, date literals, and `label` text use double quotes only. Inside the formula string, double each query double quote: `=QUERY(People, "select * where 'Favorite food' = ""Pizza""")`. A double quote within a query string is doubled again, so `=QUERY(People, "select * where Note = ""say """"hello""""""")` matches `say "hello"`. Backslashes do not escape quotes.
 
 ## History and files
 

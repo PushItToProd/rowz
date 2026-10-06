@@ -207,7 +207,7 @@ const QUERY_CLAUSES = [
     "Which columns to give, and values computed from them. `select *` gives every column.",
   ],
   ["select A as Name", "Names a result column."],
-  ["where C > 5 and B = 'Fruit'", "Keeps the rows that pass a test."],
+  ['where C > 5 and B = "Fruit"', "Keeps the rows that pass a test."],
   [
     "group by B",
     "Makes one row for each value of B. Other columns must be inside `sum`, `count`, `avg`, `min`, `max`, or `median`.",
@@ -216,20 +216,20 @@ const QUERY_CLAUSES = [
   ["pivot B", "Makes a column for each value of B."],
   ["order by C desc, A", "Sorts the rows. `desc` sorts from the largest."],
   ["limit 10 offset 5", "Gives at most 10 rows, after skipping 5."],
-  ["label C 'Units'", "Names a result column, as `as` does."],
+  ['label C "Units"', "Names a result column, as `as` does."],
 ] as const;
 
 const QUERY_TESTS = [
   ["= != < > <= >=", "Compare. An empty cell passes none of them."],
   ["and, or, not", "Combine tests."],
-  ["A contains 'an'", "Text that holds other text. Also `starts with` and `ends with`."],
+  ['A contains "an"', "Text that holds other text. Also `starts with` and `ends with`."],
   [
-    "A like 'b%'",
+    'A like "b%"',
     "Text that fits a pattern, where `%` is any run of characters and `_` is any one.",
   ],
-  ["A in ('x', 'y')", "One of several values."],
+  ['A in ("x", "y")', "One of several values."],
   ["C is null", "An empty cell. Also `is not null`."],
-  ["D >= date '2026-01-31'", "A date is written with the word `date` before it."],
+  ['D >= date "2026-01-31"', "A date is written with the word `date` before it."],
 ] as const;
 
 const TEMPLATE_TAGS = [
@@ -758,12 +758,18 @@ const OPERATORS = [
         <code>QUERY</code> picks, filters, groups, and sorts the rows of a range with a query
         written like SQL:
       </p>
-      <pre><code>=QUERY(A1:D99, "select B, sum(C) where D >= date '2026-01-01' group by B order by sum(C) desc")</code></pre>
+      <pre><code>=QUERY(A1:D99, "select B, sum(C) where D >= date ""2026-01-01"" group by B order by sum(C) desc")</code></pre>
       <p>
         A column is named by its letter, counting from the first column of the range, so in
         <code>QUERY(C1:E9, …)</code> column C is <code>A</code>. A column with a header can also be
-        named by it: <code>select Amount</code>. A header of several words goes in backticks:
-        <code>select `Sold on`</code>. Text in a query goes in single quotes.
+        named by it: <code>select Amount</code>. Headers with spaces or reserved words and aliases
+        go in single quotes: <code>select 'Sold on'</code>. Double an apostrophe inside an
+        identifier. Strings, date literals, and label text use double quotes only. Double each query
+        double quote inside the formula string:
+        <code>=QUERY(People, "select * where 'Favorite food' = ""Pizza""")</code>. A double quote
+        inside query text is doubled again:
+        <code>=QUERY(People, "select * where Note = ""say """"hello""""""")</code>
+        matches <code>say "hello"</code>. Backslashes do not escape quotes.
       </p>
       <p>
         A data table carries its column names into a query, without a header row in its data. For

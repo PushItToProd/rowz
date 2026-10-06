@@ -2,6 +2,14 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-05: QUERY quotes
+
+**Decision.** Single quotes delimit identifiers in QUERY, matching formula references. Double quotes delimit string literals, including date and LABEL text. Existing queries may break; no compatibility shim is needed.
+
+**Why.** The author requested identifier quoting consistent with the outer formula language. Inside a formula string, each query double quote uses the existing doubled-quote escape.
+
+**To change.** Update the parser in `packages/engine/src/query.ts` and the QUERY documentation and examples.
+
 ## 2026-10-05: Cell literal/formula transitions have separate undo steps
 
 **Choice.** Annotate a cell edit that changes whether its text begins with `=` with CodeMirror's `isolateHistory("full")`. Undo can restore that transition independently of adjacent typing, including after transfers to the draft dock. Ordinary typing retains CodeMirror's default grouping.
@@ -346,7 +354,7 @@ Your todo item gave `'Table 1'[Column Name]`. I added the bare `[Price]` form fo
 **Choices.**
 
 - **Column letters count from the first column of the range.** In `QUERY(C1:E9, ...)`, `A` is column C. Google Sheets uses the sheet's own letters for a range and `Col1` for computed data. `QUERY` receives values and not a reference, so a single rule that also works for `QUERY(FILTER(...), ...)` seemed better than two. `Col1`, `Col2` also work.
-- **Columns can be named by header:** `select Amount`, or `` select `Sold on` `` for a header with spaces. Rows and Sheets do not offer this. A header that is also a column letter (a header `B` on column A) means the header.
+- **Columns can be named by header:** `select Amount`, or `select 'Sold on'` for a header with spaces (updated 2026-10-05 to follow the author’s QUERY quoting decision). Rows and Sheets do not offer this. A header that is also a column letter (a header `B` on column A) means the header.
 - **Header rows are guessed when the third argument is left out:** a first row of text above numbers or dates is a header. Rows documents the default as 0. Guessing matches Sheets, and a header row sorted into the data is the more annoying mistake.
 - **An empty cell passes no comparison,** as in SQL. A formula treats an empty cell as 0, which would make `where C < 5` keep rows with nothing in C.
 - **Text comparison ignores case,** as everywhere else in the app. `group by` also groups `Apple` with `apple`.

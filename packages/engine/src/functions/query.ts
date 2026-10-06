@@ -316,7 +316,7 @@ class Runner {
 
 export const queryFunctions: Record<string, FunctionDefinition> = {
   /**
-   * Runs a query written in a SQL-like language over a range. `headers` is
+   * Runs a query with single-quoted identifiers and double-quoted strings over a range. `headers` is
    * how many rows at the top are headings. When it is left out, a first row
    * of text above other kinds of values is taken to be one.
    */

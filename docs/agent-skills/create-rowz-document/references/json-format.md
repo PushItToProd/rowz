@@ -113,6 +113,8 @@ Outstanding: **{{ TEXT(total, "$#,##0.00") }}**.
 {{ BAR_CHART(HSTACK(Orders[Item], Orders[Total]), "Orders") }}
 ```
 
+QUERY uses single quotes for identifiers (`'Favorite food'`) and double quotes for strings, dates, and LABEL text. Double apostrophes inside identifiers. Double query double quotes inside the formula string: `QUERY(Orders, "select * where Item = ""Pizza""")`. A double quote inside a query string requires four double quotes in the formula; JSON then escapes each double quote with a backslash.
+
 An array expression renders as a table; chart values render as charts. QUERY returns a result header for named data tables, including when its third argument is `0`. That argument controls input header rows. Remove the result header with DROP when a loop should iterate only data rows. Verify the current QUERY semantics in docs.ts when combining it with other arrays. HTML is not a supported text-view layout mechanism.
 
 ## Controls and actions in cell inputs

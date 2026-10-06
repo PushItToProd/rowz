@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Workbook } from "../workbook";
 import { at, workbookWith } from "../testing";
 import { formatValue, type CellValue } from "../values";
 
@@ -75,15 +76,15 @@ describe("selecting columns", () => {
     expect(run("select C, A", "A1:C3")).toEqual(expected);
     expect(run("select Col3, col1", "A1:C3")).toEqual(expected);
     expect(run("select amount, Item", "A1:C3")).toEqual(expected);
-    expect(run("select `Amount`, `item`", "A1:C3")).toEqual(expected);
+    expect(run("select 'Amount', 'item'", "A1:C3")).toEqual(expected);
   });
 
   it("counts column letters from the first column of the range", () => {
     expect(run("select A", "C1:C3")).toEqual([["Amount"], [10], [5]]);
   });
 
-  it("names a header of several words or a reserved word in backticks", () => {
-    expect(run("select `Sold on` where `Sold on` < date '2026-01-10'")).toEqual([
+  it("names a header of several words or a reserved word in single quotes", () => {
+    expect(run("select 'Sold on' where 'Sold on' < date \"2026-01-10\"")).toEqual([
       ["Sold on"],
       ["2026-01-05"],
     ]);
@@ -102,10 +103,80 @@ describe("selecting columns", () => {
       ["Name", "Twice the amount"],
       ["Apple", 20],
     ]);
-    expect(run("select A, C limit 1 label C 'Units', A 'What'")).toEqual([
+    expect(run('select A, C limit 1 label C "Units", A "What"')).toEqual([
       ["What", "Units"],
       ["Apple", 10],
     ]);
+  });
+});
+
+describe("quoted identifiers and strings", () => {
+  it("groups a named data table by a single-quoted header", () => {
+    const workbook = new Workbook();
+    workbook.setStructure({
+      pages: [{ id: "p", name: "Main" }],
+      tables: [
+        {
+          id: "people",
+          pageId: "p",
+          name: "People",
+          rowCount: 3,
+          colCount: 3,
+          columns: [
+            { name: "Favorite food", type: "text" },
+            { name: "Person's food", type: "text" },
+            { name: "select", type: "text" },
+          ],
+        },
+      ],
+    });
+    for (const [row, food] of ["Pizza", "Tacos", "Pizza"].entries()) {
+      for (let col = 0; col < 3; col += 1) {
+        workbook.setCell({ tableId: "people", row, col }, food);
+      }
+    }
+    const report = workbook.evaluateOnPage(
+      "p",
+      `QUERY(People, "select 'Favorite food', count(*) group by 'Favorite food'")`,
+    );
+    expect(report).toMatchObject({
+      rows: [
+        ["Favorite food", "count(*)"],
+        ["Pizza", 2],
+        ["Tacos", 1],
+      ],
+    });
+    const escaped = workbook.evaluateOnPage(
+      "p",
+      `QUERY(People, "select 'Person''s food', 'select' where 'Favorite food' = ""Pizza""")`,
+    );
+    expect(escaped).toMatchObject({
+      rows: [
+        ["Person's food", "select"],
+        ["Pizza", "Pizza"],
+        ["Pizza", "Pizza"],
+      ],
+    });
+  });
+
+  it("resolves a quoted alias in a clause before SELECT", () => {
+    expect(
+      run("order by 'Twice the amount' desc select A, C * 2 as 'Twice the amount' limit 1"),
+    ).toEqual([
+      ["Item", "Twice the amount"],
+      ["Banana", 40],
+    ]);
+  });
+
+  it("preserves literal double quotes after both parsers decode them", () => {
+    const workbook = workbookWith({
+      t1: DATA,
+      t2: {
+        A1: '=QUERY(Table1!A1:D7, "select ""say """"hello"""""" as Note limit 1")',
+      },
+    });
+    expect(workbook.getArray(at("A1", "t2"))).toEqual([["Note"], ['say "hello"']]);
+    expect(run('select "" as Note limit 1')).toEqual([["Note"], [""]]);
   });
 });
 
@@ -139,21 +210,21 @@ describe("header rows", () => {
 describe("filtering", () => {
   it.each<[string, string[]]>([
     ["C > 8", ["Apple", "Banana"]],
-    ["C >= 8 and B = 'Vegetable'", ["Leek"]],
-    ["B = 'fruit' and not C > 8", ["apple"]],
+    ['C >= 8 and B = "Vegetable"', ["Leek"]],
+    ['B = "fruit" and not C > 8', ["apple"]],
     ["C < 6 or C > 15", ["Carrot", "Banana"]],
-    ["B != 'Fruit'", ["Carrot", "Leek", "Milk"]],
-    ["B <> 'Fruit' and C is not null", ["Carrot", "Leek"]],
+    ['B != "Fruit"', ["Carrot", "Leek", "Milk"]],
+    ['B <> "Fruit" and C is not null', ["Carrot", "Leek"]],
     ["C is null", ["Milk"]],
-    ["A in ('Leek', 'Milk', 'Kiwi')", ["Leek", "Milk"]],
-    ["A not in ('Apple', 'Banana', 'Carrot')", ["Leek", "Milk"]],
-    ["A contains 'an'", ["Banana"]],
-    ["A not contains 'a'", ["Leek", "Milk"]],
-    ["A starts with 'ap'", ["Apple", "apple"]],
-    ["A ends with 'k'", ["Leek", "Milk"]],
-    ["A like '%e_k'", ["Leek"]],
-    ["A like 'b%'", ["Banana"]],
-    ["D >= date '2026-03-01'", ["apple", "Milk"]],
+    ['A in ("Leek", "Milk", "Kiwi")', ["Leek", "Milk"]],
+    ['A not in ("Apple", "Banana", "Carrot")', ["Leek", "Milk"]],
+    ['A contains "an"', ["Banana"]],
+    ['A not contains "a"', ["Leek", "Milk"]],
+    ['A starts with "ap"', ["Apple", "apple"]],
+    ['A ends with "k"', ["Leek", "Milk"]],
+    ['A like "%e_k"', ["Leek"]],
+    ['A like "b%"', ["Banana"]],
+    ['D >= date "2026-03-01"', ["apple", "Milk"]],
     ["MONTH(D) = 2", ["Banana", "Leek"]],
     ["(C + 1) * 2 = 12", ["Carrot"]],
     ["C = -5 + 10", ["Carrot"]],
@@ -166,8 +237,9 @@ describe("filtering", () => {
     expect(rows.flat()).toEqual(expected);
   });
 
-  it("keeps a quote written twice inside quoted text", () => {
-    expect(run("select 'it''s' as Note limit 1")).toEqual([["Note"], ["it's"]]);
+  it("doubles query double quotes inside formula strings", () => {
+    expect(run('select "say ""hello""" as Note limit 1')).toEqual([["Note"], ['say "hello"']]);
+    expect(run(`select "it's" as Note limit 1`)).toEqual([["Note"], ["it's"]]);
   });
 });
 
@@ -209,7 +281,7 @@ describe("ordering and paging", () => {
   });
 
   it("accepts the clauses in any order", () => {
-    expect(run("limit 1 order by C desc where B = 'Fruit' select A")).toEqual([
+    expect(run('limit 1 order by C desc where B = "Fruit" select A')).toEqual([
       ["Item"],
       ["Banana"],
     ]);
@@ -228,7 +300,7 @@ describe("ordering and paging", () => {
       ["Fruit", 37],
       ["Vegetable", 13],
     ]);
-    expect(failure("where A = 'x' select A select B").message).toBe("SELECT appears twice");
+    expect(failure('where A = "x" select A select B').message).toBe("SELECT appears twice");
   });
 });
 
@@ -243,7 +315,7 @@ describe("grouping", () => {
   });
 
   it("groups text without regard to letter case", () => {
-    expect(run("select A, sum(C) where B = 'Fruit' group by A")).toEqual([
+    expect(run('select A, sum(C) where B = "Fruit" group by A')).toEqual([
       ["Item", "sum Amount"],
       ["Apple", 17],
       ["Banana", 20],
@@ -268,7 +340,7 @@ describe("grouping", () => {
   });
 
   it("combines every row into one when there is no GROUP BY", () => {
-    expect(run("select sum(C) where B = 'Fruit'")).toEqual([["sum Amount"], [37]]);
+    expect(run('select sum(C) where B = "Fruit"')).toEqual([["sum Amount"], [37]]);
     expect(run("select count(*), sum(C) where C > 100")).toEqual([
       ["count(*)", "sum Amount"],
       [0, null],
@@ -328,7 +400,7 @@ describe("pivoting", () => {
   });
 
   it("names the columns after each combination when there are several", () => {
-    expect(run("select sum(C), count(*) where B <> 'Dairy' pivot B")).toEqual([
+    expect(run('select sum(C), count(*) where B <> "Dairy" pivot B')).toEqual([
       ["Fruit sum Amount", "Fruit count(*)", "Vegetable sum Amount", "Vegetable count(*)"],
       [37, 3, 13, 2],
     ]);
@@ -337,9 +409,15 @@ describe("pivoting", () => {
 
 describe("mistakes", () => {
   it.each<[string, string]>([
+    ["select 'Fruit'", "The data has no column Fruit"],
+    ["select 'x", "' is never closed"],
+    ["select `Amount`", "The query cannot contain `"],
+    ['select A as "Name"', "AS needs a name after it"],
+    ["select A label A 'Units'", "LABEL needs text in double quotes after each column"],
+    ["select A where A like 'a%'", "LIKE needs a pattern in double quotes"],
     ["select Z", "The data has no column Z"],
     ["select Col9", "The data has no column Col9"],
-    ["select `Price`", "The data has no column Price"],
+    ["select 'Price'", "The data has no column Price"],
     ["select A, sum(C)", "A must be in GROUP BY or inside a function such as SUM"],
     ["select A, sum(C) group by B", "A must be in GROUP BY or inside a function such as SUM"],
     ["select * group by B", "Col1 must be in GROUP BY or inside a function such as SUM"],
@@ -349,16 +427,16 @@ describe("mistakes", () => {
     ["select A select B", "SELECT appears twice"],
     ["select A limit x", "LIMIT needs a whole number"],
     ["select A limit 1.5", "LIMIT needs a whole number"],
-    ["select A where B = 'x", "' is never closed"],
+    ['select A where B = "x', '" is never closed'],
     [
-      "select A where B matches 'x'",
+      'select A where B matches "x"',
       "MATCHES is not supported. Use LIKE, CONTAINS, or STARTS WITH",
     ],
-    ["select A where B like C", "LIKE needs a pattern in quotes"],
+    ["select A where B like C", "LIKE needs a pattern in double quotes"],
     ["select A group B", "Expected BY, not B"],
     ["select A where (C > 1", "Expected ), not the end of the query"],
     ["select A ; drop", "The query cannot contain ;"],
-    ["select A label A", "LABEL needs a name in quotes after each column"],
+    ["select A label A", "LABEL needs text in double quotes after each column"],
     ["select A as", "AS needs a name after it"],
     ["select order", "order cannot be used as a value here"],
     ["select A where B not 5", "Expected IN, LIKE, or CONTAINS after NOT"],

@@ -64,7 +64,7 @@ describe("monthly budget reference file", () => {
 
     const report = workbook.evaluateOnPage(
       reportsPageId,
-      "QUERY(Transactions, \"select Category, sum(Amount) where Type = 'Expense' and `Date` >= date '2026-10-01' and `Date` <= date '2026-10-31' group by Category order by sum(Amount) desc\")",
+      'QUERY(Transactions, "select Category, sum(Amount) where Type = ""Expense"" and \'Date\' >= date ""2026-10-01"" and \'Date\' <= date ""2026-10-31"" group by Category order by sum(Amount) desc")',
     );
     if (isError(report)) throw new Error(`${report.code}: ${report.message ?? ""}`);
     expect(report).toMatchObject({

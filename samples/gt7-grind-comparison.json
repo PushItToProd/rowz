@@ -1804,7 +1804,7 @@
         {
           "type": "script",
           "name": "Formulas",
-          "source": "PayoutByDuration(with_spa) = QUERY(Runs, \"select Race, sum(`Payout (40 hrs)`) \" & IF(with_spa, \"\", \"where Race <> 'Spa' \") & \"group by Race pivot Duration\")\nRaceNames = SORT(Races[Race Name])\nPayoutAt(race, minutes) = SUMIFS(Runs[Payout (40 hrs)], Runs[Race], race, Runs[Duration], minutes)\nLongestRunPayingOver(race, payout) = MAXIFS(Runs[Duration], Runs[Race], race, Runs[Payout (40 hrs)], \">\" & payout)\n"
+          "source": "PayoutByDuration(with_spa) = QUERY(Runs, \"select Race, sum('Payout (40 hrs)') \" & IF(with_spa, \"\", \"where Race <> \"\"Spa\"\" \") & \"group by Race pivot Duration\")\nRaceNames = SORT(Races[Race Name])\nPayoutAt(race, minutes) = SUMIFS(Runs[Payout (40 hrs)], Runs[Race], race, Runs[Duration], minutes)\nLongestRunPayingOver(race, payout) = MAXIFS(Runs[Duration], Runs[Race], race, Runs[Payout (40 hrs)], \">\" & payout)\n"
         },
         {
           "type": "table",
@@ -1835,7 +1835,7 @@
             {
               "row": 0,
               "col": 0,
-              "input": "=QUERY(Runs, \"select * order by `Payout (40 hrs)` desc, `Payout per Minute` desc\")"
+              "input": "=QUERY(Runs, \"select * order by 'Payout (40 hrs)' desc, 'Payout per Minute' desc\")"
             }
           ]
         },
@@ -1905,7 +1905,7 @@
             {
               "row": 0,
               "col": 0,
-              "input": "=QUERY(Runs, \"select Duration, sum(`Payout per Minute`) where Duration <= 29 group by Duration pivot Race\")"
+              "input": "=QUERY(Runs, \"select Duration, sum('Payout per Minute') where Duration <= 29 group by Duration pivot Race\")"
             }
           ]
         }

@@ -1358,8 +1358,8 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Arrays",
     syntax: "QUERY(range, query, [headers])",
     summary:
-      "Selects, filters, groups, and sorts the rows of a range with a query written like SQL. Columns are named by letter, counting from the first column of the range, or by their header. `headers` is how many rows at the top are headings.",
-    example: 'QUERY(A1:B3, "select B where A > 1 order by A desc")',
+      'Selects, filters, groups, and sorts the rows of a range with a query written like SQL. Columns are named by letter, counting from the first column of the range, or by their header. Single quotes delimit identifiers (for example, `\'Favorite food\'`); double an apostrophe inside a name. Strings, dates, and LABEL text use double quotes. Double each query double quote inside the formula string: `where B = ""banana""`. A quote inside a query string needs four double quotes in the formula. `headers` is how many rows at the top are headings.',
+    example: 'QUERY(A1:B3, "select B as \'Favorite food\' where B = ""banana""", 0)',
   },
   {
     name: "MARKDOWN",

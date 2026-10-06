@@ -4,7 +4,7 @@ import type { BinaryOperator, Node } from "./ast";
 /**
  * The language of `QUERY`: SQL's `SELECT` over the columns of a range.
  *
- *     SELECT A, SUM(C) WHERE B = 'Fruit' GROUP BY A ORDER BY SUM(C) DESC LIMIT 3
+ *     SELECT A, SUM(C) WHERE B = "Fruit" GROUP BY A ORDER BY SUM(C) DESC LIMIT 3
  *
  * A query is parsed into the formula engine's own expression nodes, so a
  * query expression can call any function a formula can. A column becomes a
@@ -113,7 +113,7 @@ function tokenize(source: string): Token[] {
       continue;
     }
     const from = index;
-    if (char === "'" || char === '"' || char === "`") {
+    if (char === "'" || char === '"') {
       // A doubled quote inside the text stands for one quote.
       let value = "";
       index += 1;
@@ -127,7 +127,7 @@ function tokenize(source: string): Token[] {
         index += 1;
       }
       index += 1;
-      tokens.push({ kind: char === "`" ? "quoted" : "string", value, from, to: index });
+      tokens.push({ kind: char === "'" ? "quoted" : "string", value, from, to: index });
       continue;
     }
     const number = match(NUMBER);
@@ -159,7 +159,7 @@ const CLAUSES = [
   "OFFSET",
   "LABEL",
 ];
-/** Words that are part of the language and cannot name a column without backticks. */
+/** Words that are part of the language and cannot name a column without single quotes. */
 const RESERVED = new Set([
   ...CLAUSES,
   ...["BY", "AND", "OR", "NOT", "AS", "ASC", "DESC", "IN", "IS", "NULL", "CONTAINS", "STARTS"],
@@ -295,7 +295,7 @@ class Parser {
           const expression = this.expression();
           const label = this.next();
           if (label.kind !== "string") {
-            throw new QuerySyntaxError("LABEL needs a name in quotes after each column");
+            throw new QuerySyntaxError("LABEL needs text in double quotes after each column");
           }
           return { expression, label: label.value };
         });
@@ -311,7 +311,7 @@ class Parser {
       const text = this.source.slice(from, this.tokens[this.index - 1]?.to ?? from);
       if (!this.word("AS")) return { expression, text };
       const name = this.next();
-      if (name.kind !== "word" && name.kind !== "string" && name.kind !== "quoted") {
+      if (name.kind !== "word" && name.kind !== "quoted") {
         throw new QuerySyntaxError("AS needs a name after it");
       }
       const alias = name.kind === "word" ? this.source.slice(name.from, name.to) : name.value;
@@ -397,7 +397,8 @@ class Parser {
     }
     if (this.word("LIKE")) {
       const pattern = this.next();
-      if (pattern.kind !== "string") throw new QuerySyntaxError("LIKE needs a pattern in quotes");
+      if (pattern.kind !== "string")
+        throw new QuerySyntaxError("LIKE needs a pattern in double quotes");
       // SQL's `%` and `_` are the `*` and `?` that COUNTIF matches with.
       const wildcard = pattern.value.replaceAll("%", "*").replaceAll("_", "?");
       return binary(">", call("COUNTIF", left, { type: "string", value: wildcard }), {
