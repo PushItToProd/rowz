@@ -77,7 +77,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Math",
     syntax: "CLAMP(value, min, max)",
     summary:
-      "Equivalent to IFS(value < min, min, value > max, max, 1=1, value), using type-aware comparisons and returning the selected input unchanged.",
+      "For scalar arguments, equivalent to IFS(value < min, min, value > max, max, 1=1, value); ranges are clamped cell by cell. It evaluates all three arguments, propagates their errors, compares by type, and returns the selected input unchanged.",
     example: "CLAMP(12, 0, 10)",
   },
   {

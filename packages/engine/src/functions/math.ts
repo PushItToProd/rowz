@@ -1,5 +1,4 @@
 import { dateFromMs, isDate } from "../dates";
-import { Failure } from "../errors";
 import { compare, isRange, type CellValue, type Evaluated } from "../values";
 import {
   array,
@@ -9,13 +8,12 @@ import {
   grid,
   integer,
   items,
-  lazy,
   limitCells,
   number,
   numbers,
   scalar,
 } from "./arguments";
-import type { Argument, FunctionDefinition } from "./registry";
+import type { FunctionDefinition } from "./registry";
 import { compensatedSum } from "./sum";
 
 function aggregate(compute: (values: readonly number[]) => Evaluated): FunctionDefinition {
@@ -84,77 +82,42 @@ function cellAt(rows: readonly CellValue[][], row: number, col: number): CellVal
 }
 
 /** Clamps values with the comparison and cellwise array pairing used by operators. */
-function clampArray(value: Evaluated, minimum: Evaluated, maximumArgument: Argument): Evaluated {
-  const valueGrid = grid(value);
-  const minimumGrid = grid(minimum);
-  const grids = [valueGrid, minimumGrid] as const;
+function clampArray(value: Evaluated, minimum: Evaluated, maximum: Evaluated): Evaluated {
+  const grids = [grid(value), grid(minimum), grid(maximum)] as const;
   if (grids.some((rows) => rows.length === 0)) return array([]);
   const height = Math.max(...grids.map((rows) => rows.length));
   const width = Math.max(...grids.map((rows) => rows[0]?.length ?? 0));
   limitCells(height * width);
 
-  // Test the first condition before asking for max. An argument-level failure
-  // in max becomes an error only in cells that need the second comparison.
-  const belowMinimum = Array.from({ length: height }, (_, row) =>
-    Array.from({ length: width }, (_, col) =>
-      element(
-        () =>
-          compare(scalar(cellAt(valueGrid, row, col)), scalar(cellAt(minimumGrid, row, col))) < 0,
-      ),
-    ),
-  );
-  if (!belowMinimum.some((rows) => rows.some((cell) => cell === false))) {
-    return array(
-      belowMinimum.map((rows, row) =>
-        rows.map((cell, col) => (cell === true ? cellAt(minimumGrid, row, col) : cell)),
-      ),
-    );
-  }
-
-  let maximum: Evaluated;
-  try {
-    maximum = maximumArgument();
-  } catch (cause) {
-    if (!(cause instanceof Failure)) throw cause;
-    maximum = cause.error;
-  }
-  // Keep a scalar error as a cell value here so it affects only cells that
-  // actually compare against max.
-  const maximumGrid = isRange(maximum) ? maximum.rows : [[maximum]];
-  if (maximumGrid.length === 0) return array([]);
-  const resultGrids = [valueGrid, minimumGrid, maximumGrid] as const;
-  const resultHeight = Math.max(...resultGrids.map((rows) => rows.length));
-  const resultWidth = Math.max(...resultGrids.map((rows) => rows[0]?.length ?? 0));
-  limitCells(resultHeight * resultWidth);
-
   return array(
-    Array.from({ length: resultHeight }, (_, row) =>
-      Array.from({ length: resultWidth }, (_, col) =>
+    Array.from({ length: height }, (_, row) =>
+      Array.from({ length: width }, (_, col) =>
         element(() => {
-          const valueCell = cellAt(valueGrid, row, col);
-          const minimumCell = cellAt(minimumGrid, row, col);
-          if (compare(scalar(valueCell), scalar(minimumCell)) < 0) return minimumCell;
-          const maximumCell = cellAt(maximumGrid, row, col);
-          return compare(scalar(valueCell), scalar(maximumCell)) > 0 ? maximumCell : valueCell;
+          const valueCell = cellAt(grids[0], row, col);
+          const minimumCell = cellAt(grids[1], row, col);
+          const maximumCell = cellAt(grids[2], row, col);
+          const valueScalar = scalar(valueCell);
+          const minimumScalar = scalar(minimumCell);
+          const maximumScalar = scalar(maximumCell);
+          if (compare(valueScalar, minimumScalar) < 0) return minimumCell;
+          return compare(valueScalar, maximumScalar) > 0 ? maximumCell : valueCell;
         }),
       ),
     ),
   );
 }
 
-/** Returns the selected input unchanged, evaluating max only when its comparison is needed. */
-function clamp(args: readonly Argument[]): Evaluated {
-  const [valueArgument, minimumArgument, maximumArgument] = args;
-  const value = valueArgument?.() ?? null;
-  const minimum = minimumArgument?.() ?? null;
-  const maximum = (): Evaluated => maximumArgument?.() ?? null;
+/** Returns the selected input unchanged after comparing all three arguments. */
+function clamp(value: Evaluated, minimum: Evaluated, maximum: Evaluated): Evaluated {
+  if (isRange(value) || isRange(minimum) || isRange(maximum)) {
+    return clampArray(value, minimum, maximum);
+  }
 
-  if (isRange(value) || isRange(minimum)) return clampArray(value, minimum, maximum);
-
-  if (compare(scalar(value), scalar(minimum)) < 0) return minimum;
-  const upper = maximum();
-  if (isRange(upper)) return clampArray(value, minimum, () => upper);
-  return compare(scalar(value), scalar(upper)) > 0 ? upper : value;
+  const valueScalar = scalar(value);
+  const minimumScalar = scalar(minimum);
+  const maximumScalar = scalar(maximum);
+  if (compare(valueScalar, minimumScalar) < 0) return minimum;
+  return compare(valueScalar, maximumScalar) > 0 ? maximum : value;
 }
 
 /**
@@ -301,7 +264,7 @@ export const mathFunctions: Record<string, FunctionDefinition> = {
   ),
 
   ROUND: atPlaces(halfAwayFromZero),
-  CLAMP: lazy(3, 3, (args) => clamp(args)),
+  CLAMP: eager(3, 3, clamp),
   ROUNDUP: atPlaces(awayFromZero),
   ROUNDDOWN: atPlaces(Math.trunc),
   FLOOR: toMultiple(Math.floor),

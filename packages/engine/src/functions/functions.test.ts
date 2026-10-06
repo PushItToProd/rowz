@@ -98,6 +98,7 @@ describe("math functions", () => {
     ["=MIN(A1:A2)", "#DIV/0!"],
     ["=ROUND(A2)", "#DIV/0!"],
     ["=ROUND(1, A2)", "#DIV/0!"],
+    ["=CLAMP(-1, 0, 1/0)", "#DIV/0!"],
     ["=CLAMP(A2, 0, 2)", "#DIV/0!"],
     ["=CLAMP(0, A2, 2)", "#DIV/0!"],
     ["=CLAMP(0, -1, A2)", "#DIV/0!"],
@@ -152,20 +153,20 @@ describe("math functions", () => {
     expect(evaluateFormula("=CLAMP(A1, -1, 1)", { A1: "" })).toBe(null);
   });
 
-  it("skips an unused max argument, including for array results", () => {
-    expect(evaluateFormula("=CLAMP(-1, 0, 1/0)")).toBe(0);
+  it("evaluates all arguments before clamping", () => {
+    expectError(evaluateFormula("=CLAMP(-1, 0, 1/0)"), "#DIV/0!");
 
-    const allBelowMinimum = workbookWith({
+    const scalarError = workbookWith({
       t1: { A1: "-1", A2: "-2", Z99: "=CLAMP(A1:A2, 0, 1/0)" },
     });
-    expect(allBelowMinimum.getArray(at("Z99"))).toEqual([[0], [0]]);
+    expectError(scalarError.getValue(at("Z99")), "#DIV/0!");
 
-    const partlyNeedsMaximum = workbookWith({
-      t1: { A1: "-1", A2: "1", Z99: "=CLAMP(A1:A2, 0, 1/0)" },
+    const rangeCellError = workbookWith({
+      t1: { A1: "-1", A2: "1", C1: "=1/0", C2: "2", Z99: "=CLAMP(A1:A2, 0, C1:C2)" },
     });
-    expect(partlyNeedsMaximum.getArray(at("Z99"))).toMatchObject([
-      [0],
+    expect(rangeCellError.getArray(at("Z99"))).toMatchObject([
       [{ kind: "error", code: "#DIV/0!" }],
+      [1],
     ]);
   });
 

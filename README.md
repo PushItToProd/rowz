@@ -176,7 +176,7 @@ Typing a formula offers the functions and names that match, with what each funct
 | Names       | `LET LAMBDA`. A function kept in a cell is called by the cell's address: `=D1(21)`                                                                                                                                                                                                                                                   |
 | Errors      | `#DIV/0! #VALUE! #REF! #NAME? #N/A #SPILL! #CYCLE! #ERROR!`                                                                                                                                                                                                                                                                          |
 
-`CLAMP(value, min, max)` is equivalent to `IFS(value < min, min, value > max, max, 1=1, value)`. It uses the comparison operators' type ordering and returns the selected input unchanged.
+`CLAMP(value, min, max)` is equivalent to `IFS(value < min, min, value > max, max, 1=1, value)` for scalar arguments; ranges are clamped cell by cell. It evaluates all three arguments, propagates their errors, uses the comparison operators' type ordering, and returns the selected input unchanged.
 
 Comparison operators ignore letter case when comparing text. A number and text with the same digits, such as `12` and `"12"`, do not compare equal.
 

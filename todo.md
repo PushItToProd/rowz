@@ -48,7 +48,7 @@ A reference document is the acceptance test of a theme: the theme is done when i
 - [ ] **P10** explore Yjs + Hocuspocus for sync #sharing
 - [ ] **Author** **P2** entering a value like `$10,000` (verbatim) into a numeric data table column produces a `#VALUE!` error (`$10,000 is not a number`) #everyday
   - (Claude) the cause is `parseNumber` in [values.ts](packages/engine/src/values.ts), which every typed cell and every conversion of text to a number uses. It also refuses `10%`, `1,234`, and `VALUE("$1,234.50")`, in plain tables as well as typed columns, so those entries become text. `=5%` is a syntax error because the formula language has no percent operator. Decide which of these to accept in one change
-- [ ] **P4** make `CLAMP` eager again: it evaluates all three arguments, so `=CLAMP(-1, 0, 1/0)` is `#DIV/0!`. An agent made it lazy, like `IFS`, by reading the author's `IFS` equivalent literally. The equivalence describes the result for arguments that have values and nothing more. Update the help entry and the README sentence about `CLAMP` to match #formula-language
+- [x] **P4** make `CLAMP` eager again: it evaluates all three arguments, so `=CLAMP(-1, 0, 1/0)` is `#DIV/0!`. An agent made it lazy, like `IFS`, by reading the author's `IFS` equivalent literally. The equivalence describes the result for arguments that have values and nothing more. Update the help entry and the README sentence about `CLAMP` to match #formula-language
 - [ ] **P6** in data tables, conditional formatting should be a column property #formatting
   - okay, I guess when I create rules covering a whole column of a data table it does intelligently set it to e.g. `F1:F` so it covers the whole thing, but that behavior doesn't feel obvious from the way it's presented
 - [ ] **P6** create context menu item to add conditional formatting to the selected cell or range #formatting
@@ -65,6 +65,7 @@ A reference document is the acceptance test of a theme: the theme is done when i
 
 ## Bugs
 
+- [ ] **P8** `CLAMP(A1:A3, 0, C1:C2)` with `A3` an error returns `#N/A` for the third cell, not the error: the array path fetches the cells of all three arguments before it checks any of them (`packages/engine/src/functions/math.ts`) #formula-language
 - [ ] **P6** A button cannot be pressed from the keyboard: in the grid, Enter on a selected cell starts editing and Space starts a space-prefixed edit, so the handler cancels the browser's activation of a focused `<button>`; in a text view, the delegated key handler prevents Enter for every descendant including buttons (`apps/web/src/components/GridView.vue`, `TextCard.vue`) #everyday
 - [ ] **P7** A confirmation prompt names the button as it was when the dialog opened, but confirming sends the same cell identity or loop occurrence; if the formula or the rendered loop changes while the dialog is open, a different action can run under the old prompt (`apps/web/src/components/TextCard.vue`, `apps/server/src/actions/run.ts`) #small-apps
 - [ ] **P5** `CHECKBOX` and `DROPDOWN` writes skip the target column's type check that `TEXTBOX` and `NUMBERBOX` now have: `CHECKBOX(A1)` aimed at a number column stores `TRUE`, and `DROPDOWN("abc", A1)` stores `abc`, both leaving a `#VALUE!` cell (`packages/engine/src/workbook.ts`, the final return of the input planner) #small-apps
