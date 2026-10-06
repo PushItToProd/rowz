@@ -732,8 +732,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     name: "SEQUENCE",
     category: "Arrays",
     syntax: "SEQUENCE(rows, [columns], [start], [step])",
-    summary:
-      "A grid of numbers filled row by row. It starts at 1 and counts by 1 unless a start or step is given.",
+    summary: "A grid of numbers filled row by row. The start and the step each default to 1.",
     example: "SEQUENCE(2, 3, 10, 0.5)",
   },
   {
