@@ -21,11 +21,9 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 
 ## Inbox - to be categorized
 
-- [x] "Save as"/"Save a copy" for duplicating an existing document
-- [x] when errors appear in a rendered markdown block, show the errors as a chip with the error message. e.g. writing `{{ A+nonexistentvar }}` currently just renders `#NAME?` verbatim, but not even what name is invalid
-
 - [ ] explore Yjs + Hocuspocus for sync
 - [ ] entering a value like `$10,000` (verbatim) into a numeric data table column produces a `#VALUE!` error (`$10,000 is not a number`)
+  - (Claude) the cause is `parseNumber` in [values.ts](packages/engine/src/values.ts), which every typed cell and every conversion of text to a number uses. It also refuses `10%`, `1,234`, and `VALUE("$1,234.50")`, in plain tables as well as typed columns, so those entries become text. `=5%` is a syntax error because the formula language has no percent operator. Decide which of these to accept in one change
 - [ ] Claude took my `CLAMP` example literally in a way I didn't expect. undo its change to make `CLAMP` lazy
   - its prompt for luna: "The author's spec for CLAMP is that it is exactly equivalent to `IFS(val < min, min, val > max, max, 1=1, val)`. Review findings to fix: (1) CLAMP is registered `eager` and evaluates all arguments, so `=CLAMP(-1, 0, 1/0)` returns #DIV/0! while the IFS form returns 0 (the first condition succeeds without evaluating max). Make CLAMP lazy like IFS (see how IFS/IF are registered with `lazy()`) so that an unused min/max argument that errors is not evaluated, including in the array/elementwise case if it applies. "
 - [ ] in data tables, conditional formatting should be a column property
@@ -36,6 +34,12 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 
 - [x] **P1** implement [persistent row identity](plans/persistent-row-identity.md)
 - [x] implement [data tables](plans/data-tables.md): sort and filter, dropdown columns, conditional formats, and the Gran Turismo 7 sample
+- [ ] (Claude) for the author: review three drafts in `plans/` that no item here acts on. None is an approved decision
+  - [formula-language-proposal.md](plans/formula-language-proposal.md): records, lists, and tables as values, one expression language everywhere a formula is written, and libraries
+  - [function-suite-design-review.md](plans/function-suite-design-review.md): where the current functions do not compose predictably, with recommendations, table query pipelines, explicit `@` intersection, and collections kept in one cell
+  - [plain-text-file-format-proposal.md](plans/plain-text-file-format-proposal.md): a document as Markdown-like text that an ordinary editor and version control can work with, edited Obsidian-style, without a rowz server
+- [ ] (Claude) delete [plans/persistent-row-identity-handoff.md](plans/persistent-row-identity-handoff.md). It is a prompt for an agent to finish work that is finished
+- [ ] (Claude) for the author: `AGENT_DECISIONS.md` has 47 entries and nothing marks which the author has reviewed. Its entries are out of date order and four headings have no date. Mark the reviewed ones, or move them to `DECISIONS.md` or delete them as they are reviewed
 
 ## Bugs
 
@@ -46,7 +50,12 @@ The reference documents under [Controls, mobile use, and templates](#controls-mo
 - [ ] A text-view input commit can overwrite a newer value written from another tab, because its fingerprint names the target but not the value it was rendered with; include the rendered value and answer 409 on mismatch
 - [ ] A `TEXTBOX` commit of exactly 8,192 formula-like or numeric-looking characters gains a leading apostrophe and exceeds the stored-cell limit, so the write fails; make the control's limit one less than the cell limit
 - [ ] A text-view `BUTTON` click sends only its occurrence index, so a stale view whose conditional content shifted can run a different button; send a render token or the button's label/action fingerprint and answer 409 on mismatch
-- [ ] A text-view `BUTTON` inside a template loop loses the loop's bound names when the action is planned (`ActionValue` keeps the page but not the template bindings), so an action body that uses a loop variable fails with `#NAME?`; preserve the bindings for the selected occurrence
+- [ ] (Claude) A `BUTTON` loses every local name when it is clicked. `=LET(x, A1, BUTTON("go", EXECUTE(x+1, A2)))` shows a button, and clicking it fails with `#NAME? Unknown name 'x'`. `call` in [evaluate.ts](packages/engine/src/evaluate.ts) builds the `ActionValue` with the action's arguments, origin, and page, and leaves out `context.names`. `LET` is the case that was run; a `LAMBDA` parameter, a script function's parameter, and a template `let` or loop variable are bound the same way. Keep the bindings in the `ActionValue`, as a `LAMBDA` value keeps its context, and plan the action with them
+  - A text-view `BUTTON` inside a template loop is one case: an action body that uses the loop variable fails with `#NAME?`, so a button on each row of a loop cannot act on its row. Preserve the bindings for the selected occurrence
+- [ ] (Claude) `ROUND(1.005, 2)` is 1, and Excel and Sheets give 1.01. 1.005 is stored as a binary fraction slightly below 1.005, and `ROUND` rounds that. Amounts of money land on such halves often. Round the shortest decimal form of the number instead
+- [ ] (Claude) `LEFT("😀a", 1)` returns half of the emoji, and `LEN("😀")` is 2. `LEFT`, `RIGHT`, `MID`, `LEN`, and `SLICE` count UTF-16 code units. Decide whether they count code points, as the wildcard matcher in `criteria.ts` does
+- [ ] `ContextMenu.vue` moves focus to the menu only on mount. If the focused item becomes disabled while the menu stays open (for example another tab uses the last row capacity), focus can leave the menu and Escape stops working. Keep focus on the menu when its focused item is disabled, and test it.
+- [ ] `FILTER_COLUMNS` and `FILTER` skip the error check on later conditions for a column that an earlier condition already rejected (`keep[col] &&= boolean(flag)` short-circuits), so a later `#DIV/0!` is hidden by an earlier `FALSE`. `AND` propagates it. Decide whether to check every condition cell, and test it.
 - [x] **P2** conditional formatting criteria doesn't handle strings -- I made a conditional format with a condition like `="foobar"` but it didn't apply (maybe b/c it was a data table column with formula values)
 
 - [ ] `QUERY` treats single quotes as delimiting string literals which contradicts the outer formula languge syntax. this isn't exactly a bug but I consider it a severe enough misfeature I'm classing it as one - we should probably have single quotes delimit identifiers in `QUERY` syntax instead so you can write queries like `=QUERY(People, "select 'Favorite food', count(*) group by 'Favorite food'")`. (as this is a pre-production app I don't care if this breaks anything)
@@ -116,6 +125,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [x] `!=` in addition to `<>`
 - [x] make the help page's navigation sticky so it stays visible as the user scrolls. update it to reflect the section they're currently looking at, too (e.g. by making the currently visible section bold)
 - [x] **P7** add `start` and `step` args to `SEQUENCE`
+  - [ ] The `SEQUENCE` help summary in `packages/engine/src/docs.ts` reads as if giving either start or step overrides both defaults. Say that start and step each default to 1.
 
 ### Additional formula functions
 
@@ -138,6 +148,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] `SORTBY`
 - [ ] `SCAN` for running totals, balances, and cumulative state
 - [ ] more text processing: "regex matching, extraction, replacement; literal substring predicates; text-before/text-after helpers"
+  - (Claude) the regex functions are done. Substring predicates and text-before and text-after helpers remain
 - [ ] `GROUPBY` -- bad idea: `GROUPBY(Sales, [Category], AVERAGE, [Amount])` for `select 'Category', avg('Amount') as AvgAmount group by 'Category'`
 - [ ] reusable function ergonomics: parameter help for user defined functions and better arg-specific errors
 - [ ] formula-checking: "array-aware assertions and explicit approximate numeric comparison"
@@ -248,6 +259,7 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - [x] `QUERY` shows named columns in its output, including for ranges such as `Sales!A:C`
   - [x] sort and filter a data table in place (`plans/data-tables.md`, stage 1)
   - [x] dropdown columns (`plans/data-tables.md`, stage 2)
+- [x] when errors appear in a rendered markdown block, show the errors as a chip with the error message. e.g. writing `{{ A+nonexistentvar }}` currently just renders `#NAME?` verbatim, but not even what name is invalid
 - [ ] export variables declared in Markdown templates as named values, like script declarations and named ranges in tables
 - [ ] **P3** add a way to save multiple sort and filter view presets for each data table
 - [ ] explore adding a generated, dynamically sized data table block type defined by the output of a formula, so changing the result's row or column count does not require manually managing table dimensions; the implementation approach is open and needs to consider conditional formatting and other proprrties as well (may also be addressed by the proposal to support conditional formatting and sorting when rendering data tables in markdown)
@@ -322,6 +334,8 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [ ] (Claude) scheduled actions: Rows' `SCHEDULE`, `REPEAT`, `REFRESH`. Needs a server scheduler and a rule for whose permissions a scheduled run uses
 - [x] **P3** run a `BUTTON` in a text view through a view click endpoint
 - [ ] **P3** (Claude) show the runs of a document's buttons to the people who can open it: who clicked, when, what it wrote and sent, and how it ended. `action_runs` records all of this and nothing shows it
+  - (Claude) first make a run say what kind it was. `runViewInput` in [run.ts](apps/server/src/actions/run.ts) stores a text-view input's occurrence in the `buttonIndex` of its run, so a text-view input commit and a text-view button click look the same. A checkbox or dropdown change in a cell is likewise recorded like a cell button click
+  - (Claude) `runViewButton` and `runViewInput` repeat the same find, lock, find again, and render steps. Share them when this area is next changed
 - [ ] **P3** (Claude) a button can ask for confirmation before it runs, for an action that clears cells or sends email
 
 ## Controls, mobile use, and templates
@@ -329,10 +343,12 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] rebrand the app as "rowz" instead of "Spreadsheet". don't change package names but just update the UI. make the name configurable via an env var as well so it's easy to update in the future.
 - [x] update the page title to show the name of the spreadsheet being edited or, for the help page, "Help". include the app name `rowz` at the end - e.g. `Help | rowz` or `My budget | rowz`
 - [ ] remove awkward or unnecessary agent-written wording from the UI and help text
-  - [ ] remove "Select a cell to insert or delete its row or column." from the table view - that functionality is obvious
+  - [x] remove "Select a cell to insert or delete its row or column." from the table view - that functionality is obvious
   - [ ] replace Claudeslop phrasing like "what it holds"
+    - (Claude) in user-facing text it remains in `HelpView.vue` (two places), the restore prompt in `HistoryPanel.vue`, and the delete prompt in `TableCard.vue`
   - [ ] revise "row of this column" help text in autocomplete
   - [ ] revise "Write the one meant" in `workbook.ts`
+    - (Claude) it is in the engine's two ambiguous-name messages, in [workbook.ts](packages/engine/src/workbook.ts)
 - [x] make errors highly visible throughout the document
   - [x] show a button in the editor header whenever the document has errors, like the failing-assertions indicator; open a popup listing all errors with links to their locations
   - [x] show a warning triangle on blocks and pages that contain errors
@@ -367,11 +383,14 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
 - [x] add screenshots to the README
 - [ ] use icons to make the toolbar denser
 - [ ] **P5** plan to add keyboard shortcuts
-- [ ] **P4** identify where we should use in-app modals instead of browser-based `input` and alerts -- we have specific tasks for a couple of these already so this would just cover identifying anything I missed
+- [x] identify where we should use in-app modals instead of browser-based `input` and alerts -- we have specific tasks for a couple of these already so this would just cover identifying anything I missed
+  - (Claude) [docs/native-browser-ui-audit.md](docs/native-browser-ui-audit.md) lists them with replacement options
+- [ ] (Claude) replace the native `prompt`, `confirm`, and `alert` calls with in-app dialogs, following the audit. 15 call sites remain: six in `TableCard.vue`, and one each in `router.ts`, `SpreadsheetListView.vue`, `ScriptCard.vue`, `ConditionalFormatsPanel.vue`, `PageTabs.vue`, `HistoryPanel.vue`, `TextCard.vue`, `ChartCard.vue`, and `SharePanel.vue`
 - [ ] allow renaming, deleting, and duplicating docs from the docs list view 
 
 ## Import and export
 
+- [x] "Save as"/"Save a copy" for duplicating an existing document
 - [x] import and export (to files on disk): a JSON file for a whole spreadsheet, and CSV for a table
 - [ ] (Claude) import from .xlsx
 - [ ] CSV export - two modes: rowz-compatible and data export (selected from a dropdown on the "Export CSV" button)
@@ -413,6 +432,12 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - That alphabet has 65 characters, so 14 characters allow about 24 septillion values. Example: `2WRhRE4C3O.EaQ` instead of `277690de-bc98-4310-9a84-ab5f27a02086`.
 
 - [x] (Claude) production build of the web app, served by the server
+- [ ] (Claude) apply a cell edit to the engine in place. `syncStructure` in the [workbook store](apps/web/src/stores/workbook.ts) builds a new `Workbook` from every cell of the document, and one cell edit calls it four times: twice in `writeCells`, once in `applyChanged` when the server answers, and once when `saveCellChanges` finishes. Each new engine also makes every cell on screen compute its value again. Measured in Node with one formula per cell: a document of 50,000 cells takes 402 ms to build and 194 ms to compute, and the engine's own `setCell` followed by reading every cell takes 19 ms. At 10,000 cells the figures are 130 ms, 44 ms, and 2 ms. It was not measured in a browser. Call `setCell` for cell writes and their rollback, and build a new engine only when rows, columns, tables, names, or scripts change. Drawing only the rows in view, under Grid editing and navigation, does not cover this
+  - `applyChanged` also checks every stored input against its table's rows and columns on each change, with a search of the tables and of the column ids for each input. Do that only for the tables a change touched
+- [ ] (Claude) the end-to-end test "cell drafts keep history across pages and save literal text before navigation" in [spreadsheet.spec.ts](e2e/spreadsheet.spec.ts) failed once in a full `pnpm e2e:remote` run and passed four of four runs alone. After Ctrl+Z in the draft dock the draft read `1` where the test expects `=`, so the undo went back one step further than expected. The cause is not known. Find out whether the editor's undo history groups the two edits by timing, which a person could hit too, or the test races the draft session
+- [ ] (Claude) split the largest files by concern. `repo/spreadsheets.ts` is 3,341 lines and about 110 methods covering folders, sharing, versions, undo, structural edits, and formula rewrites. The workbook store is 2,022 lines, `styles.css` 2,042, and the one end-to-end spec 2,108. Sessions working in the same checkout collide in these files, and each costs an agent much of its context to read. The repository can become several modules that share the one access subquery and `change`, which keeps the rule that authorization lives in one place
+- [ ] (Claude) two checks on every save read more as a document grows. `checkCellCount` counts every cell of the document after each write that is not a clear, and `pruneJournal` reads every journal entry of the document after each journaled change. Keep a count on the spreadsheet row, and prune only when a limit could have been passed. This is small at today's limits
+- [ ] (Claude) delete the branches that have nothing `main` lacks: `formula-editing` and `code-review` locally, and `data-tables`, `names-and-scripts`, `persistent-row-identity`, and `structural-undo` on `origin`. The `code-review` worktree goes with its branch
 - [ ] (Claude) cache a range's values across the formulas that read the same range. Each formula reads every cell of its range again when it is recalculated, so 50,000 formulas that each read a 1,000-row column take about 10 s after one edit in that column: 50 million cell reads. 1,000 such formulas take about 0.2 s, so this matters only at the extreme. The cache needs invalidation inside the evaluator: a cached range is stale once any cell in it changes, including a cell an array result fills or gives up.
 - [ ] (Claude) index the ranges of a column by row in the dependency index. `transitiveDependents` in [graph.ts](packages/engine/src/graph.ts) scans every range that crosses a cell's column for each cell it reaches, so one edit costs the number of cells reached times the number of ranges in their columns. Deferred because the size limits keep it small: a table has at most 1,000 rows, so a chain down one column costs about 12 ms, and the worst case that fits in a spreadsheet (1,000 cells reached in a column that 99,000 ranges cross) is estimated at 1 s. Do it before raising `tableRows`: at 20,000 rows one edit measured 4.7 s, and the time grows with the square of the row count
 - [x] (Claude) code review of 2026-10-01 (`_scratch/2026-10-01-codex-review.md`): all 20 findings addressed, see AGENT_DECISIONS.md
@@ -420,6 +445,14 @@ The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eye
   - (author) e2e run and full CI run are passing as of `87b20ea`
 - [x] (Claude) make the tests that guard a design rule find what they guard. `access.test.ts` and `undo.test.ts` ran over lists of routes written by hand, so a new route that nobody added passed both, and the stream at `/spreadsheets/:id/events` was missing from `access.test.ts`. Each now compares what it covers with the routes the app registers and fails for one that is left out
 - [ ] **P5** (Claude) a lint rule that keeps `packages/engine` free of imports from outside it and of Node and browser globals. Its `package.json` has no dependencies, and nothing fails if one is added
+
+## Test gaps
+
+- [ ] Add tests for `BASE64DECODE` with malformed padding or trailing bits made of valid alphabet characters (`"A==="`, `"AA=A"`, `"AB=="`), and for `SLICE("abcdef", -4, -1)` (negative end index).
+- [ ] Add tests for `LOOKUP` and `XYLOOKUP` with empty search ranges, empty or single-row `XYLOOKUP` ranges, and mismatched key types.
+- [ ] Add tests for the date range helpers (`LASTXDAYS`, `LASTXWEEKS`, `LASTXMONTHS`, `DATEINTERVAL`) at the year 0 and 9999 boundaries, with negative and fractional counts, and for `LASTXMONTHS` clamping around February and month ends. Add `TIMEVALUE` with fractional seconds and more `YEARFRAC` day-count edge cases.
+- [ ] The `SUBTOTAL` tests for codes 7/107 and 10/110 use values 1, 2, 3, where `STDEV` and `VAR_S` are both 1, so swapped mappings would pass. Use a fixture such as 1, 2, 4.
+- [ ] The spill-resize keyboard tests (`press()` in `GridView.test.ts`) dispatch keydown straight to `.grid` and select cells with `mousedown`, so they do not check that the grid actually has focus when Alt+Enter is pressed. Add a test with real focus.
 
 ## Before sharing with others
 
@@ -495,18 +528,3 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - (Claude) numbers and dates shown in the reader's locale
 
 - allow table cells to contain structs/arrays/nested tables
-
-- [ ] `ContextMenu.vue` moves focus to the menu only on mount. If the focused item becomes disabled while the menu stays open (for example another tab uses the last row capacity), focus can leave the menu and Escape stops working. Keep focus on the menu when its focused item is disabled, and test it.
-
-- [ ] Add tests for `BASE64DECODE` with malformed padding or trailing bits made of valid alphabet characters (`"A==="`, `"AA=A"`, `"AB=="`), and for `SLICE("abcdef", -4, -1)` (negative end index).
-
-- [ ] The `SEQUENCE` help summary in `packages/engine/src/docs.ts` reads as if giving either start or step overrides both defaults. Say that start and step each default to 1.
-
-- [ ] Add tests for `LOOKUP` and `XYLOOKUP` with empty search ranges, empty or single-row `XYLOOKUP` ranges, and mismatched key types.
-
-- [ ] Add tests for the date range helpers (`LASTXDAYS`, `LASTXWEEKS`, `LASTXMONTHS`, `DATEINTERVAL`) at the year 0 and 9999 boundaries, with negative and fractional counts, and for `LASTXMONTHS` clamping around February and month ends. Add `TIMEVALUE` with fractional seconds and more `YEARFRAC` day-count edge cases.
-
-- [ ] `FILTER_COLUMNS` and `FILTER` skip the error check on later conditions for a column that an earlier condition already rejected (`keep[col] &&= boolean(flag)` short-circuits), so a later `#DIV/0!` is hidden by an earlier `FALSE`. `AND` propagates it. Decide whether to check every condition cell, and test it.
-- [ ] The `SUBTOTAL` tests for codes 7/107 and 10/110 use values 1, 2, 3, where `STDEV` and `VAR_S` are both 1, so swapped mappings would pass. Use a fixture such as 1, 2, 4.
-
-- [ ] The spill-resize keyboard tests (`press()` in `GridView.test.ts`) dispatch keydown straight to `.grid` and select cells with `mousedown`, so they do not check that the grid actually has focus when Alt+Enter is pressed. Add a test with real focus.
