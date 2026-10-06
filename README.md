@@ -279,6 +279,8 @@ Every document belongs to a workspace, and users reach documents through workspa
 
 `apps/server/src/repo/spreadsheets.ts` keeps the public repository API. Its implementation modules are in `apps/server/src/repo/spreadsheets/`: document reads, folders, sharing, file import/copy, versions, undo/redo, pages, tables, columns, formats, views, cell writes, structural edits, and formula rewrites. `context.ts` owns the single access subquery, authorized lookups, and the shared `locked`, `change`, and `touch` methods. Calls between public methods use `context.repository`, preserving repository overrides and spies; transaction contexts belong to new repository instances. Content writes still go through `ContentWriter` in `repo/journal.ts`.
 
+`apps/web/src/stores/workbook.ts` keeps the public `useWorkbookStore` API and shared state. Its implementation modules are in `apps/web/src/stores/workbook/`: selection and ranges, cell writes, structure changes and ordering, snapshot and revision synchronization, undo/redo, formats, action execution, values and file export, and mutation queues. `context.ts` defines their private dependencies. `sync.ts` retains the engine rebuild in `syncStructure`.
+
 ## Configuration
 
 The server reads environment variables, and the web app's build reads `APP_NAME`. Development needs none. `pnpm dev` also reads them from `.env.local` at the repository root, which Git ignores.
