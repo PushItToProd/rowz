@@ -16,6 +16,7 @@ import {
   scalar,
 } from "./arguments";
 import type { Argument, FunctionDefinition } from "./registry";
+import { compensatedSum } from "./sum";
 
 function aggregate(compute: (values: readonly number[]) => Evaluated): FunctionDefinition {
   return eager(1, Infinity, (...values) => compute(numbers(values)));
@@ -37,7 +38,7 @@ function extreme(name: string, pick: (...values: number[]) => number): FunctionD
 }
 
 function sum(values: readonly number[]): number {
-  return values.reduce((total, value) => total + value, 0);
+  return compensatedSum(values);
 }
 
 function median(values: readonly number[]): number {
@@ -207,14 +208,13 @@ export const mathFunctions: Record<string, FunctionDefinition> = {
     if (grids.some((cells) => cells.length !== first.length)) {
       fail("#VALUE!", "The ranges must all be the same size");
     }
-    return first.reduce<number>(
-      (total, _, index) =>
-        total +
+    return compensatedSum(
+      first.map((_, index) =>
         grids.reduce((product, cells) => {
           const cell = cells[index];
           return product * (typeof cell === "number" ? cell : 0);
         }, 1),
-      0,
+      ),
     );
   }),
   TRUNC: atPlaces(Math.trunc),

@@ -6,6 +6,20 @@ import type { CellValue } from "../values";
 const MIXED = { A1: "1", A2: "2.5", A3: "header", A4: "TRUE", A6: "'7" };
 const WITH_ERROR = { A1: "1", A2: "=1/0" };
 
+function moneyFixture(): { amounts: number[]; cells: Record<string, string> } {
+  let state = 91;
+  const cents = Array.from({ length: 998 }, () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return 5000 + (state % 308);
+  });
+  cents.push(5_148_749 - cents.reduce((total, value) => total + value, 0));
+  const amounts = cents.map((value) => value / 100);
+  const cells = Object.fromEntries(
+    amounts.map((amount, index) => [`A${String(index + 1)}`, amount.toFixed(2)]),
+  );
+  return { amounts, cells };
+}
+
 function expectError(value: CellValue, code: string): void {
   expect(value).toMatchObject({ kind: "error", code });
 }
@@ -44,6 +58,37 @@ describe("math functions", () => {
     ["=ABS(4)", 4],
   ])("%s is %j", (formula, expected) => {
     expect(evaluateFormula(formula, MIXED)).toBe(expected);
+  });
+
+  it("compensates decimal amounts across aggregate functions", () => {
+    const { amounts, cells } = moneyFixture();
+    const workbook = workbookWith({
+      t1: {
+        ...cells,
+        B1: "=SUM(A1:A999)",
+        B2: "=AVERAGE(A1:A999)",
+        B3: '=SUMIF(A1:A999, ">0")',
+        B4: '=SUMIFS(A1:A999, A1:A999, ">0")',
+        B5: '=AVERAGEIF(A1:A999, ">0")',
+        B6: "=SUMPRODUCT(A1:A999)",
+        B7: "=SUBTOTAL(9, A1:A999)",
+        B8: "=SUBTOTAL(109, A1:A999)",
+        B9: "=SUBTOTAL(1, A1:A999)",
+      },
+    });
+    const total = 51487.49;
+    const average = total / amounts.length;
+
+    expect(String(amounts.reduce((sum, amount) => sum + amount, 0))).toBe("51487.4899999999");
+    expect(workbook.getValue(at("B1"))).toBe(total);
+    expect(workbook.getValue(at("B2"))).toBe(average);
+    expect(workbook.getValue(at("B3"))).toBe(total);
+    expect(workbook.getValue(at("B4"))).toBe(total);
+    expect(workbook.getValue(at("B5"))).toBe(average);
+    expect(workbook.getValue(at("B6"))).toBe(total);
+    expect(workbook.getValue(at("B7"))).toBe(total);
+    expect(workbook.getValue(at("B8"))).toBe(total);
+    expect(workbook.getValue(at("B9"))).toBe(average);
   });
 
   it.each([

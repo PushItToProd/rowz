@@ -1,4 +1,9 @@
-import { createWorkbook, type ActionValue, type CellValue } from "@spreadsheet-app/engine";
+import {
+  createWorkbook,
+  type ActionValue,
+  type CellFormat,
+  type CellValue,
+} from "@spreadsheet-app/engine";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { describe, expect, it } from "vitest";
@@ -17,6 +22,7 @@ function render(
     running?: boolean;
     canRun?: boolean;
     spillResizeTo?: { rowCount: number; colCount: number };
+    format?: CellFormat;
   } = {},
 ): VueWrapper {
   return mount(CellView, { props: { value, running: false, canRun: true, ...props } });
@@ -49,6 +55,23 @@ describe("CellView", () => {
     const span = render(value).get("span");
     expect(span.text()).toBe(text);
     expect(span.classes()).toContain(className);
+  });
+
+  it("rounds a computed number for default display and keeps a cell number format", () => {
+    const workbook = createWorkbook({
+      pages: [{ id: "p", name: "Page" }],
+      tables: [{ id: "t", pageId: "p", name: "Table" }],
+      cells: [{ tableId: "t", row: 0, col: 0, input: "=0.1+0.2" }],
+    });
+    const value = workbook.getValue({ tableId: "t", row: 0, col: 0 });
+
+    expect(value).toBe(0.30000000000000004);
+    expect(render(value).get("span").text()).toBe("0.3");
+    expect(
+      render(value, { format: { numberFormat: "0.0000" } })
+        .get("span")
+        .text(),
+    ).toBe("0.3000");
   });
 
   it("shows a function by its parameters, with a hint on how to call it", () => {

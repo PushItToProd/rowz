@@ -234,8 +234,14 @@ export function toBoolean(value: Scalar): boolean | ErrorValue {
 // 0.1 + 0.2 = 0.30000000000000004.
 const DISPLAY_PRECISION = 15;
 
-export function formatNumber(value: number): string {
+function formatNumberForDisplay(value: number): string {
+  // Keep both signs of zero as the ordinary displayed zero.
+  if (value === 0) return "0";
   return String(Number(value.toPrecision(DISPLAY_PRECISION)));
+}
+
+export function formatNumber(value: number): string {
+  return formatNumberForDisplay(value);
 }
 
 /**
@@ -260,6 +266,7 @@ export function formatValue(value: CellValue): string {
   if (isControl(value)) return value.control === "checkbox" ? value.label : toText(value.value);
   if (isChart(value)) return value.title === "" ? `${value.chart} chart` : value.title;
   if (isMarkdown(value)) return value.text;
+  if (typeof value === "number") return formatNumberForDisplay(value);
   return toText(value);
 }
 

@@ -1,6 +1,7 @@
 import type { Evaluated } from "../values";
 import { eager, fail, number, numbers } from "./arguments";
 import type { FunctionDefinition } from "./registry";
+import { compensatedSum } from "./sum";
 
 /**
  * Loan and savings arithmetic, with the sign convention other spreadsheets
@@ -54,10 +55,7 @@ function solve(f: (x: number) => number, guess: number, what: string): number {
 }
 
 function netPresentValue(rate: number, flows: readonly number[], firstPeriod: number): number {
-  return flows.reduce(
-    (total, flow, index) => total + flow / (1 + rate) ** (index + firstPeriod),
-    0,
-  );
+  return compensatedSum(flows.map((flow, index) => flow / (1 + rate) ** (index + firstPeriod)));
 }
 
 export const financialFunctions: Record<string, FunctionDefinition> = {

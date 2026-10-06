@@ -146,6 +146,17 @@ describe("formatValue", () => {
     expect(formatValue(1234.5)).toBe("1234.5");
     expect(formatValue(null)).toBe("");
   });
+
+  it.each<[number, string]>([
+    [0.1 + 0.2, "0.3"],
+    [-0.1 - 0.2, "-0.3"],
+    [1.234567890123456e100, "1.23456789012346e+100"],
+    [1.234567890123456e-100, "1.23456789012346e-100"],
+    [9007199254740992, "9007199254740990"],
+    [-0, "0"],
+  ])("shows %s as %s", (value, expected) => {
+    expect(formatValue(value)).toBe(expected);
+  });
 });
 
 describe("error", () => {

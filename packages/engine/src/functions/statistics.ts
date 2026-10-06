@@ -1,5 +1,6 @@
 import { identityOf, type Evaluated } from "../values";
 import { boolean, eager, fail, grid, items, lazy, number, numbers, scalar } from "./arguments";
+import { compensatedSum } from "./sum";
 import { mathFunctions } from "./math";
 import type { FunctionDefinition } from "./registry";
 
@@ -18,13 +19,13 @@ const SUBTOTAL_FUNCTIONS: Readonly<Record<number, string>> = {
 };
 
 function mean(values: readonly number[]): number {
-  return values.reduce((total, value) => total + value, 0) / values.length;
+  return compensatedSum(values) / values.length;
 }
 
 /** The sum of squared distances from the mean. */
 function squaredDeviations(values: readonly number[]): number {
   const center = mean(values);
-  return values.reduce((total, value) => total + (value - center) ** 2, 0);
+  return compensatedSum(values.map((value) => (value - center) ** 2));
 }
 
 /**
@@ -75,7 +76,7 @@ function covariance(both: readonly [number, number][], sample: boolean): number 
     );
   }
   const [meanX, meanY] = [mean(both.map(([x]) => x)), mean(both.map(([, y]) => y))];
-  return both.reduce((total, [x, y]) => total + (x - meanX) * (y - meanY), 0) / divisor;
+  return compensatedSum(both.map(([x, y]) => (x - meanX) * (y - meanY))) / divisor;
 }
 
 /** The straight line through pairs of numbers that leaves the least squared distance to them. */
@@ -84,9 +85,9 @@ function fit(ys: Evaluated, xs: Evaluated): { slope: number; intercept: number }
   const both = pairs(ys, xs);
   if (both.length < 2) fail("#DIV/0!", "A line needs at least two pairs of numbers");
   const [meanY, meanX] = [mean(both.map(([y]) => y)), mean(both.map(([, x]) => x))];
-  const spreadX = both.reduce((total, [, x]) => total + (x - meanX) ** 2, 0);
+  const spreadX = compensatedSum(both.map(([, x]) => (x - meanX) ** 2));
   if (spreadX === 0) fail("#DIV/0!", "The x values are all the same");
-  const slope = both.reduce((total, [y, x]) => total + (x - meanX) * (y - meanY), 0) / spreadX;
+  const slope = compensatedSum(both.map(([y, x]) => (x - meanX) * (y - meanY))) / spreadX;
   return { slope, intercept: meanY - slope * meanX };
 }
 
@@ -143,7 +144,7 @@ export const statisticsFunctions: Record<string, FunctionDefinition> = {
     const [xs, ys] = [both.map(([x]) => x), both.map(([, y]) => y)];
     if (both.length < 2) fail("#DIV/0!", "CORREL needs at least two pairs of numbers");
     const [meanX, meanY] = [mean(xs), mean(ys)];
-    const together = both.reduce((total, [x, y]) => total + (x - meanX) * (y - meanY), 0);
+    const together = compensatedSum(both.map(([x, y]) => (x - meanX) * (y - meanY)));
     const scale = Math.sqrt(squaredDeviations(xs) * squaredDeviations(ys));
     return scale === 0 ? fail("#DIV/0!", "One of the ranges does not vary") : together / scale;
   }),

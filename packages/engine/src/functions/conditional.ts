@@ -2,6 +2,7 @@ import type { CellValue, Evaluated } from "../values";
 import { eager, fail, grid, scalar } from "./arguments";
 import { criterion } from "./criteria";
 import type { FunctionDefinition } from "./registry";
+import { compensatedSum } from "./sum";
 
 interface Position {
   row: number;
@@ -41,7 +42,7 @@ function numbersAt(range: Evaluated, positions: readonly Position[]): number[] {
 }
 
 function sum(values: readonly number[]): number {
-  return values.reduce((total, value) => total + value, 0);
+  return compensatedSum(values);
 }
 
 function average(values: readonly number[]): number {
