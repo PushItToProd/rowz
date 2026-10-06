@@ -108,6 +108,12 @@ Before each commit:
    the checks. Don't request a second review round. Add the other findings to
    `todo.md`, and add any finding the fix round failed to resolve under "Bugs".
 
+Don't let Codex regenerate, edit, or delete a migration after any job has run
+`db:generate` for it, even if the migration is uncommitted. A dev server may
+already have applied it to `apps/server/.data/`, and a regenerated migration
+fails at the next start with `column ... already exists`. Tell Codex to add a
+follow-up migration instead. `CLAUDE.md` has the migration rules.
+
 To investigate a failing check, read code and run tests. Don't add debug output
 to a file in the working tree.
 
