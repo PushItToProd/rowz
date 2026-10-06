@@ -518,7 +518,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] **P5** Add tests for `BASE64DECODE` with malformed padding or trailing bits made of valid alphabet characters (`"A==="`, `"AA=A"`, `"AB=="`), and for `SLICE("abcdef", -4, -1)` (negative end index). #codebase
 - [ ] **P5** Add tests for `LOOKUP` and `XYLOOKUP` with empty search ranges, empty or single-row `XYLOOKUP` ranges, and mismatched key types. #codebase
 - [ ] **P5** Add tests for the date range helpers (`LASTXDAYS`, `LASTXWEEKS`, `LASTXMONTHS`, `DATEINTERVAL`) at the year 0 and 9999 boundaries, with negative and fractional counts, and for `LASTXMONTHS` clamping around February and month ends. Add `TIMEVALUE` with fractional seconds and more `YEARFRAC` day-count edge cases. #codebase
-- [ ] **P2** The `SUBTOTAL` tests for codes 7/107 and 10/110 use values 1, 2, 3, where `STDEV` and `VAR_S` are both 1, so swapped mappings would pass. Use a fixture such as 1, 2, 4. #codebase
+- [x] **P2** The `SUBTOTAL` tests for codes 7/107 and 10/110 use values 1, 2, 3, where `STDEV` and `VAR_S` are both 1, so swapped mappings would pass. Use a fixture such as 1, 2, 4. #codebase
 - [ ] **P5** The spill-resize keyboard tests (`press()` in `GridView.test.ts`) dispatch keydown straight to `.grid` and select cells with `mousedown`, so they do not check that the grid actually has focus when Alt+Enter is pressed. Add a test with real focus. #codebase
 
 ## Before sharing with others

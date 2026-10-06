@@ -598,19 +598,20 @@ describe("MARKDOWN", () => {
 });
 
 describe("SUBTOTAL", () => {
-  const values = { A1: "1", A2: "2", A3: "3" };
+  const values = { A1: "1", A2: "2", A3: "4" };
   const expected: readonly [number, number][] = [
-    [1, 2],
+    [1, 7 / 3],
     [2, 3],
     [3, 3],
-    [4, 3],
+    [4, 4],
     [5, 1],
-    [6, 6],
-    [7, 1],
-    [8, Math.sqrt(2 / 3)],
-    [9, 6],
-    [10, 1],
-    [11, 2 / 3],
+    [6, 8],
+    // For [1, 2, 4], the mean is 7/3 and the squared deviations sum to 14/3.
+    [7, Math.sqrt(7 / 3)], // STDEV.S: divide by 2, then take the square root.
+    [8, Math.sqrt(14 / 9)], // STDEV.P: divide by 3, then take the square root.
+    [9, 7],
+    [10, 7 / 3], // VAR.S: divide by 2.
+    [11, 14 / 9], // VAR.P: divide by 3.
   ];
 
   it.each(expected)("uses function code %i", (code, result) => {
