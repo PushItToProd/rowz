@@ -47,10 +47,34 @@ test("committing a formula closes parentheses left open at the end", async ({ pa
   await enter(page, "D2", "1");
   await enter(page, "D3", "2");
   await enter(page, "D4", "3");
-  await enter(page, "A1", "=SUM(D2:D4");
+  await cell(page, "A1").click();
+  await page.keyboard.type("=SUM(D2:D4)");
+  const editing = page.getByLabel("Cell content");
+  await expect(editing).toHaveText("=SUM(D2:D4)");
+  await page.keyboard.press("Backspace");
+  await expect(editing).toHaveText("=SUM(D2:D4");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("grid", { name: "Table 1", exact: true })).toBeFocused();
   await expect(cell(page, "A1")).toHaveText("6");
   await cell(page, "A1").click();
   await expect(page.getByLabel("Formula")).toHaveValue("=SUM(D2:D4)");
+});
+
+test("formula typing inserts matching parentheses and deletes an empty pair", async ({ page }) => {
+  await newSpreadsheet(page);
+
+  await cell(page, "A1").click();
+  await page.keyboard.type("=IF(");
+  const first = page.getByLabel("Cell content");
+  await expect(first).toHaveText("=IF()");
+  await page.keyboard.press("Backspace");
+  await expect(first).toHaveText("=IF");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+
+  await cell(page, "A2").click();
+  await page.keyboard.type("=SUM(A1");
+  await expect(page.getByLabel("Cell content")).toHaveText("=SUM(A1)");
 });
 
 test("a cell button asks before clearing cells", async ({ page }) => {

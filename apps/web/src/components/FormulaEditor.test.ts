@@ -32,6 +32,22 @@ function render(text: string, extra = {}) {
   return { wrapper, view };
 }
 
+function type(view: EditorView, text: string): void {
+  for (const character of text) {
+    const { from, to } = view.state.selection.main;
+    const insert = () =>
+      view.state.update({
+        changes: { from, to, insert: character },
+        selection: { anchor: from + character.length },
+        userEvent: "input.type",
+      });
+    const handled = view.state
+      .facet(EditorView.inputHandler)
+      .some((handler) => handler(view, from, to, character, insert));
+    if (!handled) view.dispatch(insert());
+  }
+}
+
 async function complete(view: EditorView) {
   startCompletion(view);
   await vi.waitFor(() => {
@@ -171,7 +187,10 @@ describe("shared formula editor", () => {
     expect(first.view.state.doc.toString()).toBe("=rou");
     await first.wrapper.get(".cm-content").trigger("keydown", { key: "ArrowDown", keyCode: 40 });
     await first.wrapper.get(".cm-content").trigger("keydown", { key: "Enter", keyCode: 13 });
-    expect(first.view.state.doc.toString()).toMatch(/^=ROUND/);
+    expect(first.view.state.doc.toString()).toBe("=ROUNDDOWN()");
+    expect(first.view.state.selection.main.head).toBe(first.view.state.doc.length - 1);
+    type(first.view, ")");
+    expect(first.view.state.doc.toString()).toBe("=ROUNDDOWN()");
     expect(first.wrapper.emitted("commit")).toHaveLength(1);
 
     const second = render("=rou");
@@ -179,6 +198,126 @@ describe("shared formula editor", () => {
     await second.wrapper.get(".cm-content").trigger("keydown", { key: "Tab", keyCode: 9 });
     expect(second.view.state.doc.toString()).toMatch(/^=ROUND/);
     expect(second.wrapper.emitted("commit")).toBeUndefined();
+  });
+
+  it.each([
+    ["an operator", "+1", "=ROUND()+1"],
+    ["a comma", ", next", "=ROUND(), next"],
+    ["the end of the formula", "", "=ROUND()"],
+    ["an existing closer", ")", "=ROUND()"],
+  ])("closes function completion before %s", async (_context, suffix, expected) => {
+    const { wrapper, view } = render(`=rou${suffix}`);
+    view.dispatch({ selection: { anchor: 4 } });
+    await complete(view);
+    await wrapper.get(".cm-content").trigger("keydown", { key: "Tab", keyCode: 9 });
+    expect(view.state.doc.toString()).toBe(expected);
+    expect(view.state.selection.main.head).toBe(expected.indexOf(")"));
+  });
+
+  it("pairs formula brackets, wraps selected text, skips closers, and deletes empty pairs", () => {
+    const { view } = render("=");
+    type(view, "(");
+    expect(view.state.doc.toString()).toBe("=()");
+    expect(view.state.selection.main.head).toBe(2);
+    type(view, "A1)");
+    expect(view.state.doc.toString()).toBe("=(A1)");
+    expect(view.state.selection.main.head).toBe(view.state.doc.length);
+
+    const wrapped = render("=A1");
+    wrapped.view.dispatch({ selection: { anchor: 1, head: 3 } });
+    type(wrapped.view, "(");
+    expect(wrapped.view.state.doc.toString()).toBe("=(A1)");
+    expect(wrapped.view.state.selection.main.from).toBe(2);
+    expect(wrapped.view.state.selection.main.to).toBe(4);
+
+    const empty = render("=");
+    type(empty.view, "(");
+    const backspace = new KeyboardEvent("keydown", {
+      key: "Backspace",
+      bubbles: true,
+      cancelable: true,
+    });
+    empty.view.contentDOM.dispatchEvent(backspace);
+    expect(backspace.defaultPrevented).toBe(true);
+    expect(empty.view.state.doc.toString()).toBe("=");
+  });
+
+  it("does not recurse through language data when typing in an existing formula", () => {
+    const { view } = render("=rou");
+    type(view, "x");
+    expect(view.state.doc.toString()).toBe("=roux");
+    type(view, "(");
+    expect(view.state.doc.toString()).toBe("=roux()");
+  });
+
+  it("pairs column brackets and quotes, follows doubled quote rules, and leaves braces alone", () => {
+    const column = render("=Sales");
+    type(column.view, "[");
+    expect(column.view.state.doc.toString()).toBe("=Sales[]");
+    expect(column.view.state.selection.main.head).toBe(7);
+    type(column.view, "Price]");
+    expect(column.view.state.doc.toString()).toBe("=Sales[Price]");
+
+    const text = render("=");
+    type(text.view, '"hello"');
+    expect(text.view.state.doc.toString()).toBe('="hello"');
+    expect(text.view.state.selection.main.head).toBe(text.view.state.doc.length);
+
+    const escaped = render('="x y"');
+    escaped.view.dispatch({ selection: { anchor: 3 } });
+    type(escaped.view, '""');
+    expect(escaped.view.state.doc.toString()).toBe('="x"" y"');
+
+    const escapedAtEnd = render("=");
+    type(escapedAtEnd.view, '"say ""hi"""');
+    expect(escapedAtEnd.view.state.doc.toString()).toBe('="say ""hi"""');
+
+    const braces = render("=");
+    type(braces.view, "{");
+    expect(braces.view.state.doc.toString()).toBe("={");
+  });
+
+  it("pairs apostrophes for quoted names, never inside double-quoted strings", () => {
+    const name = render("=");
+    type(name.view, "'Page 1'!A1");
+    expect(name.view.state.doc.toString()).toBe("='Page 1'!A1");
+
+    const escapedName = render("=");
+    type(escapedName.view, "'Joe''s Table'!A1");
+    expect(escapedName.view.state.doc.toString()).toBe("='Joe''s Table'!A1");
+
+    const string = render('="dont"');
+    string.view.dispatch({ selection: { anchor: 5 } });
+    type(string.view, "'");
+    expect(string.view.state.doc.toString()).toBe('="don\'t"');
+  });
+
+  it("keeps bracket behavior deliberate in cell, script, and Markdown editors", () => {
+    const literal = render("value", { mode: "cell" });
+    type(literal.view, "(");
+    expect(literal.view.state.doc.toString()).toBe("value(");
+
+    const formula = render("=", { mode: "cell" });
+    type(formula.view, "(");
+    expect(formula.view.state.doc.toString()).toBe("=()");
+
+    const formulaField = render("SUM", { mode: "formula" });
+    type(formulaField.view, "(");
+    expect(formulaField.view.state.doc.toString()).toBe("SUM()");
+
+    const script = render("", { mode: "script" });
+    type(script.view, "(");
+    expect(script.view.state.doc.toString()).toBe("()");
+
+    const markdown = render("", { mode: "markdown" });
+    type(markdown.view, "(");
+    expect(markdown.view.state.doc.toString()).toBe("()");
+    const markdownColumn = render("", { mode: "markdown" });
+    type(markdownColumn.view, "[");
+    expect(markdownColumn.view.state.doc.toString()).toBe("[");
+    const markdownTag = render("", { mode: "markdown" });
+    type(markdownTag.view, "{");
+    expect(markdownTag.view.state.doc.toString()).toBe("{");
   });
 
   it("dismisses completion before Escape cancels and does not commit during composition", async () => {

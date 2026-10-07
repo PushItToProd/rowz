@@ -1595,7 +1595,8 @@ describe("formula suggestions", () => {
     );
 
     await press("Tab");
-    expect(editor().state.doc.toString()).toBe("=ROUND(");
+    expect(editor().state.doc.toString()).toBe("=ROUND()");
+    expect(editor().state.selection.main.head).toBe(editor().state.doc.length - 1);
     expect(selectedAddress()).toBe("A1");
     expect(options()).toEqual([]);
     expect(document.querySelector(".formula-editor__signature")?.textContent).toContain(
@@ -1627,7 +1628,7 @@ describe("formula suggestions", () => {
     await press("ArrowUp");
     expect(selectedAddress()).toBe("A1");
     await press("Enter");
-    expect(editor().state.doc.toString()).toBe("=ROUNDDOWN(");
+    expect(editor().state.doc.toString()).toBe("=ROUNDDOWN()");
     expect(server.setCells).not.toHaveBeenCalled();
   });
 
@@ -1639,7 +1640,7 @@ describe("formula suggestions", () => {
     store.tables = store.tables.map((table) => ({ ...table }));
     await wrapper.vm.$nextTick();
     await press("Enter");
-    expect(editor().state.doc.toString()).toBe("=COUNTA(");
+    expect(editor().state.doc.toString()).toBe("=COUNTA()");
     expect(server.setCells).not.toHaveBeenCalled();
   });
 
@@ -1648,7 +1649,7 @@ describe("formula suggestions", () => {
     await type("=rou");
     await press("ArrowUp");
     await press("Enter");
-    expect(editor().state.doc.toString()).toBe("=ROUNDUP(");
+    expect(editor().state.doc.toString()).toBe("=ROUNDUP()");
   });
 
   it("closes the list on Escape, and cancels the edit on a second Escape", async () => {
@@ -1670,7 +1671,8 @@ describe("formula suggestions", () => {
     await new DOMWrapper(option).trigger("mousedown");
     await new DOMWrapper(option).trigger("click");
     await flushPromises();
-    expect(editor().state.doc.toString()).toBe("=ROUNDUP(");
+    expect(editor().state.doc.toString()).toBe("=ROUNDUP()");
+    expect(editor().state.selection.main.head).toBe(editor().state.doc.length - 1);
     // The editor keeps focus, so the click did not end the edit.
     expect(document.activeElement).toBe(editor().contentDOM);
     expect(server.setCells).not.toHaveBeenCalled();

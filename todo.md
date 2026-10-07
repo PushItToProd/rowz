@@ -230,7 +230,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [x] **P4** (Claude) color each reference in the formula being edited, and outline the cells it names in the same color
 - [ ] **P9** (GPT) Support reference picking by dragging across multiple named-column headers. Deferred from [the shared formula editor](plans/formula-editing.md); choose how a range of named columns is represented before implementing. #formula-editing
 - [ ] **P10** (GPT) Add nested-language editing assistance inside formula strings, such as the query text passed to `QUERY`. Deferred from [the shared formula editor](plans/formula-editing.md). #formula-editing
-- [ ] **P6** (GPT) Add automatic bracket insertion to the shared formula editor. Deferred from [the initial implementation](plans/formula-editing.md). #formula-editing
+- [x] **P6** (GPT) Add automatic bracket insertion to the shared formula editor. Deferred from [the initial implementation](plans/formula-editing.md). #formula-editing
   - [x] **P5** (Claude) close open parentheses when a formula is committed. `=SUM(D2:D4` shows `#ERROR! Expected )` today, and Excel and Sheets add the missing parenthesis. The author decided that a commit closes them. Only parentheses left open at the end of the formula are closed #formula-editing
 - [ ] **P5** (GPT) Add comprehensive inline diagnostics to the shared formula editor. Deferred from [the initial implementation](plans/formula-editing.md). #formula-editing
 - [x] **P7** when a spill error is caused by table dimensions, show a “Resize table to fit” button in its popover
@@ -688,3 +688,9 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] The CSV append confirmation does not say that cells starting with `=` are stored as formulas (as in replace import), so a file can add a button; actions still run only when the button is clicked (`TableCard.vue` near line 151) #documents
 
 - [ ] **P10** Copied deep links drop a reverse-proxy path prefix: `deepLinks.ts` builds root-relative `/s/...` paths and `clipboard.ts` resolves them from the origin root #small-apps
+
+- [ ] The bracket-pairing code (`apps/web/src/formula/closeBrackets.ts`) rescans the whole document on every edit (the state field) and on every bracket input (the language data provider), including in Markdown where the result is unused; keep the quote spans incremental or limit the scan to the nearby text #formula-editing
+- [ ] With several cursors from Ctrl+D, bracket pairing uses the main selection's rules for every cursor, so `(` can pair inside a string or comment at another cursor (`closeBrackets.ts` near line 148) #formula-editing
+- [ ] An unfinished quote in one script statement makes later statements look like string content, so bracket pairing stops there; script comment scanning already ends an open quote at the line end (`quoteSpans`, `closeBrackets.ts` near line 23) #formula-editing
+- [ ] Apostrophes can pair inside script comments, and apostrophe wrapping of a selected name depends on the selection direction (`closeBrackets.ts` near lines 168 and 169) #formula-editing
+- [ ] The escaped-quote handler in `closeBrackets.ts` (near line 178) can rewrite a skipped quote closer into doubled quotes while an IME composition is active #formula-editing

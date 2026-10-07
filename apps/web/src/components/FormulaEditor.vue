@@ -18,8 +18,11 @@ import {
 import {
   acceptCompletion,
   autocompletion,
+  closeBrackets,
+  closeBracketsKeymap,
   closeCompletion,
   completionStatus,
+  insertBracket,
   moveCompletionSelection,
 } from "@codemirror/autocomplete";
 import { analyzeSource } from "@spreadsheet-app/engine";
@@ -29,6 +32,7 @@ import { referenceHighlights } from "../formula/references";
 import { pickingSpan, useReferencePickingStore } from "../formula/picking";
 import { applySuggestion, signatureAt, suggestionsAt, type NamingContext } from "../formula/assist";
 import { selectNextOccurrenceKeymap } from "../formula/selectNextOccurrence";
+import { closeBracketLanguageData } from "../formula/closeBrackets";
 import type { FormulaMode } from "../formula/session";
 
 const props = withDefaults(
@@ -125,7 +129,9 @@ function extensions() {
     EditorState.allowMultipleSelections.of(true),
     drawSelection(),
     ...(multiline.value ? [EditorView.lineWrapping] : []),
+    closeBracketLanguageData(props.mode),
     ...(props.mode === "markdown" ? [markdownLanguage] : []),
+    closeBrackets(),
     tokens,
     EditorState.readOnly.of(props.readonly),
     EditorView.editable.of(!props.readonly),
@@ -179,17 +185,55 @@ function extensions() {
                   caret,
                   suggestion,
                 );
-                // Replace only the token; one transaction gives completion one undo step.
                 const suffix = text.length - (result.text.length - result.caret);
-                editor.dispatch({
+                const insertedText = result.text.slice(found.from, result.caret);
+                const closesCall =
+                  suggestion.insert.endsWith("(") &&
+                  insertedText.endsWith("(") &&
+                  result.text[result.caret] !== ")";
+                const replacementText = closesCall ? insertedText.slice(0, -1) : insertedText;
+                const replacementCaret = closesCall ? result.caret - 1 : result.caret;
+                const replacement = {
                   changes: {
                     from: found.from,
                     to: suffix,
-                    insert: result.text.slice(found.from, result.caret),
+                    insert: replacementText,
                   },
-                  selection: { anchor: result.caret },
+                  selection: { anchor: replacementCaret },
                   userEvent: "input.complete",
-                });
+                } as const;
+                if (!closesCall) {
+                  // Replace only the token; one transaction gives completion one undo step.
+                  editor.dispatch(replacement);
+                } else {
+                  // Remove the suffix in this temporary state so insertBracket can pair even
+                  // when the completion is followed by an operator or another argument.
+                  const completed = editor.state.update({
+                    changes: { from: found.from, to: text.length, insert: replacementText },
+                    selection: { anchor: replacementCaret },
+                    userEvent: "input.complete",
+                  });
+                  const bracket = insertBracket(completed.state, "(");
+                  if (!bracket) {
+                    editor.dispatch({
+                      changes: { from: found.from, to: suffix, insert: `${insertedText})` },
+                      selection: { anchor: result.caret },
+                      userEvent: "input.complete",
+                    });
+                  } else {
+                    editor.dispatch({
+                      changes: {
+                        from: found.from,
+                        to: suffix,
+                        insert: bracket.newDoc.sliceString(found.from),
+                      },
+                      selection: bracket.newSelection,
+                      effects: bracket.effects,
+                      userEvent: "input.complete",
+                      scrollIntoView: true,
+                    });
+                  }
+                }
                 closeCompletion(editor);
               },
             })),
@@ -261,7 +305,7 @@ function extensions() {
         },
       ]),
     ),
-    keymap.of([...historyKeymap, ...defaultKeymap]),
+    keymap.of([...closeBracketsKeymap, ...historyKeymap, ...defaultKeymap]),
     EditorView.domEventHandlers({
       compositionstart: () => {
         if (ownsPicking.value && picking.drag) picking.cancel();
@@ -290,10 +334,14 @@ function extensions() {
           event.data?.length !== 1
         )
           return false;
-        editor.dispatch(editor.state.replaceSelection(event.data), {
-          userEvent: "input.type",
-          scrollIntoView: true,
-        });
+        const selection = editor.state.selection.main;
+        const insertion = editor.state.replaceSelection(event.data);
+        const insert = () =>
+          editor.state.update(insertion, { userEvent: "input.type", scrollIntoView: true });
+        for (const handler of editor.state.facet(EditorView.inputHandler)) {
+          if (handler(editor, selection.from, selection.to, event.data, insert)) return true;
+        }
+        editor.dispatch(insert());
         return true;
       },
       focus: () => {

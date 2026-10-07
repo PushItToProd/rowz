@@ -377,6 +377,16 @@ const OPERATORS = [
         extra closing parentheses remain and still cause an error. An unfinished string, quoted
         name, column bracket, or brace group is left as typed so its error remains visible.
       </p>
+      <p>
+        Formula editors pair <code>(</code>, <code>[</code>, and double quotes. They pair an
+        apostrophe when it starts a quoted page or table name. Typing an opening delimiter around
+        selected text wraps it; typing a closer skips an automatically inserted closer, and
+        Backspace between an empty <code>()</code> deletes both characters. Formula strings escape a
+        double quote by doubling it; typing a quote inside an open string does not start another
+        pair. Accepting a function completion inserts its closing parenthesis with the caret inside.
+        Script editors use the same formula pairs. Markdown source pairs parentheses and double
+        quotes, but leaves square and curly brackets unpaired.
+      </p>
 
       <h3>Keyboard</h3>
       <table>

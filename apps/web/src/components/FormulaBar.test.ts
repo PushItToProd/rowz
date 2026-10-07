@@ -243,7 +243,8 @@ describe("FormulaBar", () => {
     });
     await press("ArrowDown");
     await press("Tab");
-    expect(view.state.doc.toString()).toBe("=ROUNDDOWN(");
+    expect(view.state.doc.toString()).toBe("=ROUNDDOWN()");
+    expect(view.state.selection.main.head).toBe(view.state.doc.length - 1);
     expect(server.setCells).not.toHaveBeenCalled();
   });
   it("identifies an array's spill anchor in the placeholder", async () => {
