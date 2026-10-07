@@ -233,6 +233,17 @@ export class TableResolver {
     return this.holders.filter((holder) => holder.kind === "table" && nameKey(holder.name) === key);
   }
 
+  /** The pages and table IDs that hold a table of this name, in page order. */
+  pagesWithTable(name: string): { pageId: string; pageName: string; tableId: string }[] {
+    const tableIdsByPage = new Map<string, string>();
+    for (const table of this.tablesNamed(name)) tableIdsByPage.set(table.pageId, table.id);
+
+    return [...this.pages.values()].flatMap(({ id, name }) => {
+      const tableId = tableIdsByPage.get(id);
+      return tableId === undefined ? [] : [{ pageId: id, pageName: name, tableId }];
+    });
+  }
+
   pageName(pageId: string): string | undefined {
     return this.pages.get(pageId)?.name;
   }

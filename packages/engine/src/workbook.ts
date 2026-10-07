@@ -1245,9 +1245,11 @@ export class Workbook {
   }
 
   private context(origin: CellId, traceSource = true): EvaluationContext {
-    const tableName = this.tables.table(origin.tableId)?.name;
+    const table = this.tables.table(origin.tableId);
+    const tableName = table?.name;
     return {
       origin,
+      ...(table === undefined ? {} : { homePageId: table.pageId }),
       ...(traceSource
         ? {
             traceSource: {
@@ -1263,6 +1265,7 @@ export class Workbook {
       controlTargetError: (cell) => this.controlTargetError(cell),
       extent: (tableId) => this.extent(tableId),
       columnNames: (tableId) => this.tables.table(tableId)?.columns?.map((column) => column.name),
+      tablePages: (name) => this.tables.pagesWithTable(name),
       now: this.readClock,
       document: this.scope(this.tables.table(origin.tableId)?.pageId),
     };
@@ -1286,6 +1289,7 @@ export class Workbook {
       controlTargetError: (cell) => this.controlTargetError(cell),
       extent: (tableId) => this.extent(tableId),
       columnNames: (tableId) => this.tables.table(tableId)?.columns?.map((column) => column.name),
+      tablePages: (name) => this.tables.pagesWithTable(name),
       now: this.readClock,
       document: this.scope(pageId),
     };

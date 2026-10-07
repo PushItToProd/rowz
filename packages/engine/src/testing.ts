@@ -22,10 +22,13 @@ export function at(address: string, tableId = "t1"): CellId {
   return { tableId, ...parsed };
 }
 
-/** Builds a workbook from inputs keyed by address, such as `{ A1: "1", B1: "=A1+1" }`, per table. */
-export function workbookWith(cells: Record<string, Record<string, string>>): Workbook {
+/** Builds a workbook from inputs keyed by address per table, using the default or supplied structure. */
+export function workbookWith(
+  cells: Record<string, Record<string, string>>,
+  structure: WorkbookStructure = STRUCTURE,
+): Workbook {
   const workbook = new Workbook();
-  workbook.setStructure(STRUCTURE);
+  workbook.setStructure(structure);
   for (const [tableId, inputs] of Object.entries(cells)) {
     for (const [address, input] of Object.entries(inputs)) {
       workbook.setCell(at(address, tableId), input);

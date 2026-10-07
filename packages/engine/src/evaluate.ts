@@ -3,6 +3,7 @@ import {
   formatReference,
   isColumnReference,
   isSingleCell,
+  quoteName,
   type BinaryOperator,
   type Node,
   type Reference,
@@ -32,6 +33,7 @@ import {
   type FunctionValue,
   type Scalar,
 } from "./values";
+import { sameColumnName } from "./structure";
 
 /**
  * The names a document defines, as a formula sees them from where it is
@@ -52,6 +54,8 @@ export interface EvaluationContext {
   origin: CellId;
   /** The page whose formula is being evaluated when it is not in a cell. */
   pageId?: string;
+  /** The page containing a cell formula, used to explain missing table references. */
+  homePageId?: string;
   functions: FunctionRegistry;
   /** Finds the cells a reference points at, or `undefined` if its table does not exist. */
   resolve(reference: Reference): CellRange | undefined;
@@ -62,6 +66,8 @@ export interface EvaluationContext {
   extent(tableId: string): { rows: number; cols: number };
   /** The names of a data table's columns, or `undefined` for a plain grid. */
   columnNames?(tableId: string): readonly string[] | undefined;
+  /** Pages that hold a table with the given name. */
+  tablePages?(name: string): readonly { pageId: string; pageName: string; tableId: string }[];
   /** Values bound by `LET` and `LAMBDA`, keyed by name in lower case. */
   names?: ReadonlyMap<string, Evaluated>;
   /** The names the document defines. A binding in `names` comes before them. */
@@ -232,16 +238,41 @@ function binary(
 }
 
 /** Why a reference could not be resolved. */
-function missing(reference: Reference): string {
+function missing(reference: Reference, context: EvaluationContext): string {
   if (!isColumnReference(reference)) return "The referenced table does not exist";
-  return reference.table === undefined
-    ? `This table has no column named ${reference.column}`
-    : `There is no table ${reference.table} with a column named ${reference.column}`;
+  if (reference.table === undefined) return `This table has no column named ${reference.column}`;
+
+  const fallback = `There is no table ${reference.table} with a column named ${reference.column}`;
+  const formulaPageId = context.homePageId ?? context.pageId;
+  if (reference.page !== undefined || formulaPageId === undefined || !context.tablePages)
+    return fallback;
+
+  const pages = context.tablePages(reference.table);
+  if (pages.some(({ pageId }) => pageId === formulaPageId)) return fallback;
+
+  const locations = pages
+    .filter(
+      ({ pageId, tableId }) =>
+        pageId !== formulaPageId &&
+        context.columnNames?.(tableId)?.some((name) => sameColumnName(name, reference.column)),
+    )
+    .map(({ pageName }) => pageName);
+  if (locations.length === 0) return fallback;
+
+  const noLocalTable = `There is no table ${reference.table} on this page.`;
+  if (locations.length === 1) {
+    const page = locations[0];
+    if (page === undefined) return fallback;
+    return `${noLocalTable} The table ${reference.table} is on page ${quoteName(page)}; write ${formatReference({ ...reference, page })}.`;
+  }
+
+  const suggestions = locations.map((page) => formatReference({ ...reference, page }));
+  return `${noLocalTable} ${reference.table} is on pages ${locations.map(quoteName).join(", ")}; write one of ${suggestions.join(", ")}.`;
 }
 
 function readReference(reference: Reference, context: EvaluationContext): Evaluated {
   const range = context.resolve(reference);
-  if (!range) fail("#REF!", missing(reference));
+  if (!range) fail("#REF!", missing(reference, context));
   const { tableId, startRow, startCol } = range;
   if (isSingleCell(reference)) return context.read({ tableId, row: startRow, col: startCol });
 
@@ -299,7 +330,7 @@ function operand(node: Node, context: EvaluationContext): Evaluated {
   const { reference } = node;
 
   const range = context.resolve(reference);
-  if (!range) fail("#REF!", missing(reference));
+  if (!range) fail("#REF!", missing(reference, context));
   const { tableId } = range;
   const extent = context.extent(tableId);
   const written = formatReference(reference);

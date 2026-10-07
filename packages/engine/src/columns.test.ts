@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { at } from "./testing";
+import { at, workbookWith as workbookWithStructure } from "./testing";
 import { formatReference } from "./ast";
 import {
   columnFormulasAfterEdit,
@@ -142,6 +142,167 @@ describe("reading named columns", () => {
       [tableId]: { ...(tableId === "t1" ? CELLS : {}), C3: formula },
     });
     expect(book.getValue(at("C3", tableId))).toMatchObject({ code: "#REF!", message });
+  });
+
+  it("names the only other page that has a missing table", () => {
+    const structure: WorkbookStructure = {
+      pages: [
+        { id: "p1", name: "Current" },
+        { id: "p2", name: "Page 2" },
+      ],
+      tables: [
+        { id: "source", pageId: "p1", name: "Source" },
+        { id: "sales2", pageId: "p2", name: "Sales", columns: SALES },
+      ],
+    };
+    const book = workbookWithStructure({ source: { A1: "=Sales[Qty]" } }, structure);
+
+    expect(book.getValue(at("A1", "source"))).toMatchObject({
+      code: "#REF!",
+      message:
+        "There is no table Sales on this page. The table Sales is on page 'Page 2'; write 'Page 2'!Sales[Qty].",
+    });
+  });
+
+  it("lists the other pages that have a missing table", () => {
+    const structure: WorkbookStructure = {
+      pages: [
+        { id: "p1", name: "Current" },
+        { id: "p2", name: "Page 2" },
+        { id: "p3", name: "Page 3" },
+      ],
+      tables: [
+        { id: "source", pageId: "p1", name: "Source" },
+        { id: "sales2", pageId: "p2", name: "Sales", columns: SALES },
+        {
+          id: "sales3",
+          pageId: "p3",
+          name: "Sales",
+          columns: [{ name: "qty", type: "any" }],
+        },
+      ],
+    };
+    const book = workbookWithStructure({ source: { A1: "=Sales[Qty]" } }, structure);
+
+    expect(book.getValue(at("A1", "source"))).toMatchObject({
+      code: "#REF!",
+      message:
+        "There is no table Sales on this page. Sales is on pages 'Page 2', 'Page 3'; write one of 'Page 2'!Sales[Qty], 'Page 3'!Sales[Qty].",
+    });
+  });
+
+  it("does not suggest a remote table that lacks the requested column", () => {
+    const structure: WorkbookStructure = {
+      pages: [
+        { id: "p1", name: "Current" },
+        { id: "p2", name: "Page 2" },
+      ],
+      tables: [
+        { id: "source", pageId: "p1", name: "Source" },
+        {
+          id: "sales2",
+          pageId: "p2",
+          name: "Sales",
+          columns: [{ name: "Item", type: "text" }],
+        },
+      ],
+    };
+    const book = workbookWithStructure({ source: { A1: "=Sales[Qty]" } }, structure);
+
+    expect(book.getValue(at("A1", "source"))).toMatchObject({
+      code: "#REF!",
+      message: "There is no table Sales with a column named Qty",
+    });
+  });
+
+  it("does not suggest a remote plain grid for a named column", () => {
+    const structure: WorkbookStructure = {
+      pages: [
+        { id: "p1", name: "Current" },
+        { id: "p2", name: "Page 2" },
+      ],
+      tables: [
+        { id: "source", pageId: "p1", name: "Source" },
+        { id: "sales2", pageId: "p2", name: "Sales" },
+      ],
+    };
+    const book = workbookWithStructure({ source: { A1: "=Sales[Qty]" } }, structure);
+
+    expect(book.getValue(at("A1", "source"))).toMatchObject({
+      code: "#REF!",
+      message: "There is no table Sales with a column named Qty",
+    });
+  });
+
+  it("lists only remote tables that have the requested column", () => {
+    const structure: WorkbookStructure = {
+      pages: [
+        { id: "p1", name: "Current" },
+        { id: "p2", name: "Page 2" },
+        { id: "p3", name: "Page 3" },
+      ],
+      tables: [
+        { id: "source", pageId: "p1", name: "Source" },
+        {
+          id: "sales2",
+          pageId: "p2",
+          name: "Sales",
+          columns: [{ name: "Item", type: "text" }],
+        },
+        { id: "sales3", pageId: "p3", name: "Sales", columns: SALES },
+      ],
+    };
+    const book = workbookWithStructure({ source: { A1: "=Sales[Qty]" } }, structure);
+
+    expect(book.getValue(at("A1", "source"))).toMatchObject({
+      code: "#REF!",
+      message:
+        "There is no table Sales on this page. The table Sales is on page 'Page 3'; write 'Page 3'!Sales[Qty].",
+    });
+  });
+
+  it("keeps the missing-table message when no table with that name exists", () => {
+    const structure: WorkbookStructure = {
+      pages: [
+        { id: "p1", name: "Current" },
+        { id: "p2", name: "Page 2" },
+      ],
+      tables: [
+        { id: "source", pageId: "p1", name: "Source" },
+        { id: "sales2", pageId: "p2", name: "Sales", columns: SALES },
+      ],
+    };
+    const book = workbookWithStructure({ source: { A1: "=Nowhere[Qty]" } }, structure);
+
+    expect(book.getValue(at("A1", "source"))).toMatchObject({
+      code: "#REF!",
+      message: "There is no table Nowhere with a column named Qty",
+    });
+  });
+
+  it("keeps the missing-column message when a same-named table is on this page", () => {
+    const structure: WorkbookStructure = {
+      pages: [
+        { id: "p1", name: "Current" },
+        { id: "p2", name: "Page 2" },
+      ],
+      tables: [
+        { id: "source", pageId: "p1", name: "Source" },
+        {
+          id: "sales1",
+          pageId: "p1",
+          name: "Sales",
+          columns: [{ name: "Item", type: "text" }],
+        },
+        { id: "sales2", pageId: "p2", name: "Sales", columns: SALES },
+      ],
+    };
+    const book = workbookWithStructure({ source: { A1: "=Sales[Qty]" } }, structure);
+
+    expect(book.getValue(at("A1", "source"))).toMatchObject({
+      code: "#REF!",
+      message: "There is no table Sales with a column named Qty",
+    });
   });
 
   it("cannot name a column in a formula that is on a page and not in a table", () => {
