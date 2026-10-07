@@ -1164,7 +1164,10 @@ const OPERATORS = [
           pages, the blocks on them, and everything typed into cells, formulas included.
           <strong>Import</strong>, on the list of documents, makes a new document from such a file.
           <strong>New from template</strong> creates an editable copy of an invoice, contacts list,
-          to-do list, or inventory example from the same document list.
+          to-do list, or inventory example from the same document list. Use
+          <strong>Browse samples and templates</strong> to choose one of those templates or a sample
+          document. The gallery makes a copy in your account and opens it; repeated copies get a
+          numbered name.
         </li>
         <li>
           On the Documents page, open a document's <strong>⋯</strong> menu to rename or delete a

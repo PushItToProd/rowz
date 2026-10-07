@@ -53,6 +53,17 @@ async function render(): Promise<VueWrapper> {
   return mounted;
 }
 
+async function waitForGallery(view: VueWrapper) {
+  const gallery = view.get('[role="dialog"][aria-labelledby="samples-gallery-title"]');
+  await vi.waitFor(
+    () => {
+      expect(gallery.findAll(".list__gallery-card")).toHaveLength(16);
+    },
+    { timeout: 5000 },
+  );
+  return gallery;
+}
+
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
@@ -89,6 +100,140 @@ it("imports and opens a selected document template", async () => {
   const todo = DOCUMENT_TEMPLATES.find(({ name }) => name === "To-do list");
   expect(todo).toBeDefined();
   expect(server.importSpreadsheet).toHaveBeenCalledWith(todo!.document);
+  expect(router?.currentRoute.value.name).toBe("editor");
+  expect(router?.currentRoute.value.params.spreadsheetId).toBe(created.id);
+});
+
+it("numbers direct template copies when the name is already in the document list", async () => {
+  server.listSpreadsheets.mockResolvedValue(
+    listed(
+      [],
+      [
+        { ...document(null), id: "first", name: "To-do list" },
+        { ...document(null), id: "second", name: "To-do list (2)" },
+      ],
+    ),
+  );
+  server.importSpreadsheet.mockResolvedValue({
+    id: "numbered-template",
+    name: "To-do list (3)",
+    updatedAt: "2026-10-06T12:00:00.000Z",
+  });
+  const view = await render();
+
+  await view.get('button[aria-controls="document-templates"]').trigger("click");
+  await view.get('button[aria-label="Create To-do list from template"]').trigger("click");
+  await flushPromises();
+
+  expect(server.importSpreadsheet.mock.calls[0]?.[0]?.name).toBe("To-do list (3)");
+  expect(router?.currentRoute.value.params.spreadsheetId).toBe("numbered-template");
+});
+
+it("renders the templates and samples gallery from the empty state", async () => {
+  server.listSpreadsheets.mockResolvedValue(listed([], []));
+  const view = await render();
+
+  const browse = view
+    .findAll("button")
+    .find((button) => button.text() === "Browse samples and templates");
+  expect(browse).toBeDefined();
+  await browse!.trigger("click");
+  const gallery = await waitForGallery(view);
+  expect(gallery.get("h2").text()).toBe("Samples and templates");
+  const invoice = gallery
+    .findAll(".list__gallery-card")
+    .find((card) => card.text().includes("Invoice"));
+  const sample = gallery
+    .findAll(".list__gallery-card")
+    .find((card) => card.text().includes("Gran Turismo 7 grind comparison"));
+  expect(invoice?.get(".list__gallery-category").text()).toBe("Templates");
+  expect(sample?.get(".list__gallery-category").text()).toBe("Samples");
+  expect(sample?.text()).toContain("Scripts");
+  expect(sample?.text()).toContain("Data tables");
+  expect(sample?.text()).toContain("Use this");
+  expect(sample?.get("button").attributes("aria-label")).toBe(
+    "Use Gran Turismo 7 grind comparison",
+  );
+});
+
+it("keeps focus in the gallery while an example import disables its button", async () => {
+  let completeImport!: () => void;
+  server.listSpreadsheets.mockResolvedValue(listed([], []));
+  server.importSpreadsheet.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        completeImport = () => {
+          resolve({
+            id: "focused-import",
+            name: "Gran Turismo 7 grind comparison",
+            updatedAt: "2026-10-06T12:00:00.000Z",
+          });
+        };
+      }),
+  );
+  const view = await render();
+
+  await view
+    .findAll("button")
+    .find((button) => button.text() === "Browse samples and templates")!
+    .trigger("click");
+  const gallery = await waitForGallery(view);
+  const card = gallery
+    .findAll(".list__gallery-card")
+    .find((item) => item.text().includes("Gran Turismo 7 grind comparison"));
+  expect(card).toBeDefined();
+  const useButton = card!.get("button");
+
+  await useButton.trigger("click");
+  await flushPromises();
+
+  const closeButton = gallery.get('button[aria-label="Close samples and templates"]');
+  expect(useButton.attributes("disabled")).toBeDefined();
+  expect(globalThis.document.activeElement).toBe(closeButton.element);
+  const dialogElement = globalThis.document.querySelector<HTMLElement>('[role="dialog"]');
+  expect(dialogElement).not.toBeNull();
+  dialogElement!.focus();
+  await gallery.trigger("keydown", { key: "Tab" });
+  expect(globalThis.document.activeElement).toBe(closeButton.element);
+
+  completeImport();
+  await flushPromises();
+});
+
+it("copies a selected sample with the next available name and opens it", async () => {
+  const created = {
+    id: "sample-document",
+    name: "Gran Turismo 7 grind comparison (3)",
+    updatedAt: "2026-10-06T12:00:00.000Z",
+  };
+  server.listSpreadsheets.mockResolvedValue(
+    listed(
+      [],
+      [
+        { ...document(null), id: "first", name: "Gran Turismo 7 grind comparison" },
+        { ...document(null), id: "second", name: "Gran Turismo 7 grind comparison (2)" },
+      ],
+    ),
+  );
+  server.importSpreadsheet.mockResolvedValue(created);
+  const view = await render();
+
+  await view
+    .findAll("button")
+    .find((button) => button.text() === "Browse samples and templates")!
+    .trigger("click");
+  const gallery = await waitForGallery(view);
+  const card = gallery
+    .findAll(".list__gallery-card")
+    .find((item) => item.text().includes("Gran Turismo 7 grind comparison"));
+  expect(card).toBeDefined();
+  await card!.get("button").trigger("click");
+  await flushPromises();
+
+  expect(server.importSpreadsheet).toHaveBeenCalledOnce();
+  const imported = server.importSpreadsheet.mock.calls[0]?.[0];
+  expect(imported?.name).toBe("Gran Turismo 7 grind comparison (3)");
+  expect(imported?.pages[0]?.blocks.some((block) => block.type === "text")).toBe(true);
   expect(router?.currentRoute.value.name).toBe("editor");
   expect(router?.currentRoute.value.params.spreadsheetId).toBe(created.id);
 });

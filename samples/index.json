@@ -1,0 +1,86 @@
+[
+  {
+    "id": "3d-print-quote-and-actuals",
+    "title": "3D-print quote and actual cost tracker",
+    "description": "Estimate print costs, quote work, and compare estimates with completed jobs.",
+    "category": "Samples",
+    "file": "3d-print-quote-and-actuals.json"
+  },
+  {
+    "id": "freelancer-invoicing-follow-up",
+    "title": "Freelancer invoicing and follow-up",
+    "description": "Turn tracked work into invoices, record payments, and follow up on overdue balances.",
+    "category": "Samples",
+    "file": "freelancer-invoicing-follow-up.json"
+  },
+  {
+    "id": "gt7-grind-comparison",
+    "title": "Gran Turismo 7 grind comparison",
+    "description": "Compare race payouts by run time and calculate earnings over 40 hours.",
+    "category": "Samples",
+    "file": "gt7-grind-comparison.json"
+  },
+  {
+    "id": "home-maintenance-history",
+    "title": "Home maintenance and service history",
+    "description": "Track service records, due dates, and the next maintenance tasks.",
+    "category": "Samples",
+    "file": "home-maintenance-history.json"
+  },
+  {
+    "id": "household-inventory",
+    "title": "Household inventory and warranties",
+    "description": "Track item locations, receipts, purchase dates, and warranty status.",
+    "category": "Samples",
+    "file": "household-inventory.json"
+  },
+  {
+    "id": "inventory-movements-reorder-desk",
+    "title": "Inventory movements and reorder desk",
+    "description": "Calculate stock from receipts and use, then flag products to reorder.",
+    "category": "Samples",
+    "file": "inventory-movements-reorder-desk.json"
+  },
+  {
+    "id": "meal-planning-pantry-shopping",
+    "title": "Meal planning, pantry, and shopping list",
+    "description": "Scale recipes, check pantry stock, and build a consolidated shopping list.",
+    "category": "Samples",
+    "file": "meal-planning-pantry-shopping.json"
+  },
+  {
+    "id": "monthly-budget",
+    "title": "Monthly budget",
+    "description": "Compare planned categories with September 2026 spending and chart the results.",
+    "category": "Samples",
+    "file": "monthly-budget.json"
+  },
+  {
+    "id": "one-hour-fix-queue",
+    "title": "One-hour fix queue",
+    "description": "Find tasks that fit an hour based on priority, tools, and materials.",
+    "category": "Samples",
+    "file": "one-hour-fix-queue.json"
+  },
+  {
+    "id": "payday-cash-planner",
+    "title": "Payday cash planner",
+    "description": "Compare cash forecasts with an editable reserve target, bills, and paychecks.",
+    "category": "Samples",
+    "file": "payday-cash-planner.json"
+  },
+  {
+    "id": "wedding-coordination-caterer-brief",
+    "title": "Wedding guest list and caterer brief",
+    "description": "Connect guests, RSVPs, meals, table capacity, deadlines, and headcount snapshots.",
+    "category": "Samples",
+    "file": "wedding-coordination-caterer-brief.json"
+  },
+  {
+    "id": "weekly-csv-update-history",
+    "title": "Weekly CSV update, history, and notes",
+    "description": "Validate staged rows and update records by key while preserving notes and history.",
+    "category": "Samples",
+    "file": "weekly-csv-update-history.json"
+  }
+]

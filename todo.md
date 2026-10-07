@@ -430,7 +430,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - [ ] **P8** a numeric value input roughly like (don't use this as a literal template; make it nicer) "<button>-</button> <input value="100"> <button>+</button>" where you can increment and decrement the value using the -/+ buttons (but also still support editing the number directly) #small-apps
 - [ ] **P6** cell validation - require the value to match a pattern, regex, or custom formula #data-tables
 - [ ] **P6** touch: select a range, fill by dragging, and a long-press menu on Android+iOS #everyday
-- [ ] **P5** add an in-app samples and templates gallery; selecting an example copies it into the user's account #documents
+- [x] **P5** add an in-app samples and templates gallery; selecting an example copies it into the user's account #documents
 - [ ] **P8** allow users to create and reuse their own document templates #documents
 - [x] generate example documents with multiple pages
 - build reference documents in rowz as far as its features allow, at the end of each theme
@@ -637,8 +637,8 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [ ] The origin-trace link in the cell error popover is not reachable by keyboard: the popover is teleported to the end of `<body>` and closes on focusout, so Tab leaves before reaching it (`CellError.vue`, `ErrorTrace.vue`). The errors list has the same link #everyday
 
-- [ ] Documents made from one template get the same name, so copies are hard to tell apart in the document list; number them or ask for a name (`SpreadsheetListView.vue`) #documents
-- [ ] The template picker's button has `aria-controls="document-templates"` while the panel is removed from the DOM when closed #documents
+- [x] Documents made from one template get the same name, so copies are hard to tell apart in the document list; number them or ask for a name (`SpreadsheetListView.vue`) #documents
+- [x] The template picker's button has `aria-controls="document-templates"` while the panel is removed from the DOM when closed #documents
 
 - [ ] Renaming the first of two same-name definitions in one script leaves `renamedNames` seeing the name in the after-set, so formulas that used it are not rewritten and then resolve to the second definition (`apps/server/src/repo/spreadsheets/views.ts` near line 83) #formula-language
 - [ ] Formula assist lists a duplicate script definition twice and qualifies it as if ambiguous (`apps/web/src/stores/workbook/values.ts` near line 67) #formula-editing
@@ -652,3 +652,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] On a narrow screen, frozen columns can cover every non-frozen column (three default-width columns are 360px, wider than a 320px viewport); cap the frozen width at part of the grid's width or ignore the freeze below a width (`GridView.vue` near line 367, `grid.css` near line 79) #small-apps
 
 - [ ] The Wrap text format does nothing for a choice-column value or a `TEXTBOX` cell, which render as native controls (`CellView.vue` near lines 213 and 346), so the toolbar shows it pressed while the value stays clipped #formatting
+
+- [ ] Numbering a copy's name ("Plan (2)") uses the client's document list, so two tabs with stale lists can pick the same name and the server permits both (`SpreadsheetListView.vue` near line 153, `files.ts` near line 241) #documents

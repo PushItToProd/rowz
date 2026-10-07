@@ -149,6 +149,133 @@
   white-space: normal;
 }
 
+.list__empty {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.list__empty p {
+  margin: 0;
+}
+
+.list__gallery-backdrop {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 42%);
+}
+
+.list__gallery {
+  display: grid;
+  gap: 16px;
+  box-sizing: border-box;
+  width: min(960px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 24%);
+}
+
+.list__gallery:focus {
+  outline: none;
+}
+
+.list__gallery-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.list__gallery-header h2,
+.list__gallery-header p {
+  margin: 0;
+}
+
+.list__gallery-header p,
+.list__gallery-status {
+  color: var(--muted);
+}
+
+.list__gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
+  gap: 12px;
+}
+
+.list__gallery-card {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--canvas);
+}
+
+.list__gallery-card-heading {
+  display: grid;
+  gap: 6px;
+}
+
+.list__gallery-category {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.list__gallery-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.list__gallery-description {
+  width: 100%;
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list__gallery-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list__gallery-features .badge {
+  font-size: 0.75rem;
+}
+
+.list__gallery-card > button {
+  margin-top: auto;
+}
+
+.list__gallery-import-error {
+  grid-column: 1 / -1;
+  color: var(--danger);
+}
+
+.list__gallery-status p {
+  margin-top: 0;
+}
+
 .list__folder-form {
   display: flex;
   flex-wrap: wrap;

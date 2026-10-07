@@ -9,6 +9,7 @@ import { api, type FolderRecord, type ListedSpreadsheetItem } from "../api/clien
 import type { Notice } from "../notice";
 import type { MenuItem } from "../components/menu";
 import { APP_NAME } from "../appName";
+import { loadGalleryExamples, uniqueDocumentName, type GalleryExample } from "../files/gallery";
 import { readSpreadsheetFile } from "../files/spreadsheetFile";
 import { DOCUMENT_TEMPLATES, type DocumentTemplate } from "../files/templates";
 import { usePageTitle } from "../pageTitle";
@@ -25,6 +26,12 @@ const documents = ref<ListedSpreadsheetItem[] | null>(null);
 const notice = ref<Notice | null>(null);
 const creatingFolder = ref(false);
 const showingTemplates = ref(false);
+const galleryOpen = ref(false);
+const galleryLoading = ref(false);
+const galleryLoadError = ref<string | null>(null);
+const galleryImportError = ref<string | null>(null);
+const galleryExamples = ref<GalleryExample[] | null>(null);
+const importingExampleId = ref<string | null>(null);
 const newFolderName = ref("");
 const editingFolderId = ref<string | null>(null);
 const editingFolderName = ref("");
@@ -32,6 +39,9 @@ const editingDocumentId = ref<string | null>(null);
 const editingDocumentName = ref("");
 const collapsed = ref(new Set<string>());
 const createFolderInput = ref<HTMLInputElement>();
+const galleryDialog = ref<HTMLElement>();
+const galleryCloseButton = ref<HTMLButtonElement>();
+const galleryOpener = ref<HTMLElement | null>(null);
 const moveMenu = ref<{ document: ListedSpreadsheetItem; x: number; y: number } | null>(null);
 const actionMenu = ref<{ document: ListedSpreadsheetItem; x: number; y: number } | null>(null);
 
@@ -64,9 +74,104 @@ const create = (): Promise<void> =>
 const createFromTemplate = (template: DocumentTemplate): Promise<void> =>
   run(async () => {
     showingTemplates.value = false;
-    const created = await api.importSpreadsheet(template.document);
+    if (documents.value === null) await refreshData();
+    const document = {
+      ...template.document,
+      name: uniqueDocumentName(
+        template.name,
+        (documents.value ?? []).map((item) => item.name),
+      ),
+    };
+    const created = await api.importSpreadsheet(document);
     await router.push({ name: "editor", params: { spreadsheetId: created.id } });
   });
+
+async function loadGallery(): Promise<void> {
+  if (galleryExamples.value !== null || galleryLoading.value) return;
+  galleryLoading.value = true;
+  galleryLoadError.value = null;
+  try {
+    galleryExamples.value = await loadGalleryExamples();
+  } catch (cause) {
+    galleryLoadError.value = cause instanceof Error ? cause.message : "Could not load examples";
+  } finally {
+    galleryLoading.value = false;
+  }
+}
+
+async function openGallery(): Promise<void> {
+  galleryOpener.value = globalThis.document.activeElement as HTMLElement | null;
+  galleryOpen.value = true;
+  galleryImportError.value = null;
+  await nextTick();
+  galleryCloseButton.value?.focus();
+  await loadGallery();
+}
+
+function closeGallery(restoreFocus = true): void {
+  galleryOpen.value = false;
+  if (restoreFocus) void nextTick(() => galleryOpener.value?.focus());
+}
+
+function handleGalleryKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeGallery();
+    return;
+  }
+  if (event.key !== "Tab") return;
+
+  const dialog = galleryDialog.value;
+  if (!dialog) return;
+  const focusable = Array.from(
+    dialog.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    ),
+  );
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (!first || !last) {
+    event.preventDefault();
+    dialog.focus();
+    return;
+  }
+
+  const active = globalThis.document.activeElement;
+  if (!(active instanceof HTMLElement) || !focusable.includes(active)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  } else if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+async function useExample(example: GalleryExample): Promise<void> {
+  if (importingExampleId.value !== null) return;
+  importingExampleId.value = example.id;
+  galleryImportError.value = null;
+  galleryCloseButton.value?.focus();
+  try {
+    if (documents.value === null) await refreshData();
+    const document = {
+      ...example.document,
+      name: uniqueDocumentName(
+        example.title,
+        (documents.value ?? []).map((item) => item.name),
+      ),
+    };
+    const created = await api.importSpreadsheet(document);
+    closeGallery(false);
+    await router.push({ name: "editor", params: { spreadsheetId: created.id } });
+  } catch (cause) {
+    galleryImportError.value = cause instanceof Error ? cause.message : "Could not create example";
+  } finally {
+    importingExampleId.value = null;
+  }
+}
 
 /** Creates a document from a chosen file that an export wrote, and opens it. */
 const importFile = (event: Event): Promise<void> =>
@@ -295,7 +400,7 @@ onMounted(refresh);
           New from template
         </button>
         <div
-          v-if="showingTemplates"
+          v-show="showingTemplates"
           id="document-templates"
           class="list__templates"
           role="group"
@@ -314,6 +419,7 @@ onMounted(refresh);
           </button>
         </div>
       </div>
+      <button type="button" @click="openGallery">Browse samples and templates</button>
       <button type="button" @click="beginCreateFolder">New folder</button>
       <label class="file-button">
         Import
@@ -342,9 +448,10 @@ onMounted(refresh);
     </form>
 
     <p v-if="documents === null && !notice">Loading…</p>
-    <p v-else-if="documents?.length === 0 && folders.length === 0" class="list__empty">
-      No documents yet. Create one to get started.
-    </p>
+    <div v-else-if="documents?.length === 0 && folders.length === 0" class="list__empty">
+      <p>No documents yet. Create one to get started.</p>
+      <button type="button" @click="openGallery">Browse samples and templates</button>
+    </div>
     <div v-else-if="documents !== null" class="list__groups">
       <section v-for="group in groups" :key="group.id" class="list__group">
         <header class="list__group-header">
@@ -468,5 +575,66 @@ onMounted(refresh);
       :items="actionItems"
       @close="actionMenu = null"
     />
+
+    <div v-if="galleryOpen" class="list__gallery-backdrop" @click.self="closeGallery()">
+      <section
+        ref="galleryDialog"
+        class="list__gallery"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="samples-gallery-title"
+        tabindex="-1"
+        @keydown="handleGalleryKeydown"
+      >
+        <header class="list__gallery-header">
+          <div>
+            <h2 id="samples-gallery-title">Samples and templates</h2>
+            <p>Start with an editable copy in your documents.</p>
+          </div>
+          <button
+            ref="galleryCloseButton"
+            type="button"
+            aria-label="Close samples and templates"
+            @click="closeGallery()"
+          >
+            Close
+          </button>
+        </header>
+
+        <p v-if="galleryLoading" class="list__gallery-status" role="status">Loading examples…</p>
+        <div v-else-if="galleryLoadError" class="list__gallery-status" role="alert">
+          <p>Examples could not be loaded: {{ galleryLoadError }}</p>
+          <button type="button" @click="loadGallery">Try again</button>
+        </div>
+        <div v-else-if="galleryExamples" class="list__gallery-grid">
+          <article v-for="example in galleryExamples" :key="example.id" class="list__gallery-card">
+            <div class="list__gallery-card-heading">
+              <span class="list__gallery-category">{{ example.category }}</span>
+              <h3>{{ example.title }}</h3>
+            </div>
+            <p class="list__gallery-description" :title="example.description">
+              {{ example.description }}
+            </p>
+            <ul class="list__gallery-features" :aria-label="`Features in ${example.title}`">
+              <li v-for="feature in example.features" :key="feature" class="badge">
+                {{ feature }}
+              </li>
+            </ul>
+            <button
+              type="button"
+              class="primary"
+              :aria-label="`Use ${example.title}`"
+              :disabled="importingExampleId !== null"
+              @click="useExample(example)"
+            >
+              {{ importingExampleId === example.id ? "Creating…" : "Use this" }}
+            </button>
+          </article>
+          <p v-if="galleryImportError" class="list__gallery-import-error" role="alert">
+            {{ galleryImportError }}
+          </p>
+        </div>
+      </section>
+    </div>
   </div>
 </template>

@@ -27,6 +27,8 @@ export default defineConfig(({ mode }) => {
     server: {
       // Vite listens on localhost alone and refuses other Host headers unless told otherwise.
       ...(remote ? { host: true, allowedHosts: [baseUrl.hostname] } : {}),
+      // The samples and their manifest live outside apps/web and are imported by the gallery.
+      fs: { allow: [REPOSITORY_ROOT] },
       ...(baseUrl.port === "" ? {} : { port: Number(baseUrl.port) }),
       // The API server trusts requests from `BASE_URL` alone, so the next free port would not work.
       strictPort: true,
