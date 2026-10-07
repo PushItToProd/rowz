@@ -163,6 +163,26 @@ const KEYS = [
   ["Up or Down, while suggestions show", "Move the highlight. Enter then accepts it."],
   ["Delete or Backspace", "Clear the selected cells."],
   ["Shift with an arrow key", "Select a range of cells."],
+  [
+    "Ctrl/Cmd+Arrow keys",
+    "Jump to the edge of a contiguous non-empty region in that direction; from an empty cell or beside an empty cell, move to the next non-empty cell, or to the table edge. Vertical movement follows displayed row order. Shift extends the selection.",
+  ],
+  [
+    "Home, End",
+    "Move to the first column of the row or the last column of the table. Shift extends the selection.",
+  ],
+  [
+    "Ctrl/Cmd+Home, Ctrl/Cmd+End",
+    "Move to A1 or the bottom-right cell of the used range (A1 when empty). Shift extends the selection.",
+  ],
+  [
+    "PageUp, PageDown",
+    "Move up or down by the number of rows visible in the viewport. Shift extends the selection.",
+  ],
+  [
+    "Ctrl/Cmd+B, Ctrl/Cmd+I",
+    "Toggle bold or italic on the selected cells; the shortcut clears a format only when every selected cell has it.",
+  ],
   ["Ctrl+C, Ctrl+X, Ctrl+V", "Copy, cut, and paste the selected cells."],
   [
     "Ctrl/Cmd+Z, Ctrl/Cmd+Y",

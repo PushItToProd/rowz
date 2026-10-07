@@ -449,8 +449,8 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] **P8** use icons to make the toolbar denser #everyday
 - [ ] **P7** (Claude) the help page is about 60,000 characters with a list of sections and no search. Add a search field that filters sections and functions #everyday
 - [ ] **P9** (Claude) the grid does not tell a screen reader which cell is selected: it has no `aria-activedescendant`, and a cell has no label naming its address. Every button and input checked has a label #everyday
-- [ ] **P5** plan to add keyboard shortcuts #everyday
-  - (Claude) missing on 2026-10-05: Ctrl+Arrow moves one cell and does not jump to the edge of the data. Home, Ctrl+Home, Ctrl+End, and PageDown do nothing in the grid, and End and PageUp were not tried. Ctrl+B and Ctrl+I do not format the selection
+- [x] **P5** plan to add keyboard shortcuts #everyday
+  - (Codex) completed on 2026-10-07: Ctrl/Cmd+Arrow jumps through the displayed data region; Home, End, Ctrl/Cmd+Home (A1), Ctrl/Cmd+End (bottom-right of the used range, or A1 when empty), PageUp, PageDown, Ctrl/Cmd+B, and Ctrl/Cmd+I are supported, with Shift extending navigation selections.
 - [x] identify where we should use in-app modals instead of browser-based `input` and alerts -- we have specific tasks for a couple of these already so this would just cover identifying anything I missed
   - (Claude) [docs/native-browser-ui-audit.md](docs/native-browser-ui-audit.md) lists them with replacement options
 - [x] **P4** (Claude) replace the native `prompt`, `confirm`, and `alert` calls with in-app dialogs, following the audit. The 13 former confirmation call sites use the shared dialog host. #everyday

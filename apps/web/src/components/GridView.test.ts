@@ -9,6 +9,7 @@ import {
   clickResult,
   identifiedAt,
   notifyJournaled,
+  positionalFormatRange,
   sizedTable,
   snapshotWith,
   TABLE,
@@ -103,6 +104,35 @@ describe("windowed grids", () => {
     expect(store.selection.row).toBe(999);
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
     expect(wrapper.find('[data-cell="CV1000"]').exists()).toBe(true);
+  });
+
+  it("scrolls an already-selected cell into view on Ctrl/Cmd+Home", async () => {
+    await largeGrid();
+    const grid = wrapper.element as HTMLElement;
+    let top = 0;
+    vi.spyOn(grid, "getBoundingClientRect").mockImplementation(() => ({ top }) as DOMRect);
+    vi.mocked(Element.prototype.scrollIntoView).mockImplementation(function (this: Element) {
+      if (this instanceof HTMLElement && this.style.position === "absolute") {
+        top = -Number.parseFloat(this.style.top);
+        grid.scrollLeft = Number.parseFloat(this.style.left);
+      }
+    });
+    const store = useWorkbookStore();
+    store.selection = { tableId: TABLE.id, row: 0, col: 0 };
+    await flushPromises();
+    grid.focus();
+    top = -15000;
+    window.dispatchEvent(new Event("scroll"));
+    await flushPromises();
+    expect(wrapper.find('[data-cell="A1"]').exists()).toBe(false);
+
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    await wrapper.trigger("keydown", { key: "Home", ctrlKey: true });
+    await flushPromises();
+
+    expect(store.selection).toEqual({ tableId: TABLE.id, row: 0, col: 0 });
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(wrapper.find('[data-cell="A1"]').exists()).toBe(true);
   });
 
   it.each([8, 100])("measures the windowed DOM for 1000 x %i", async (colCount) => {
@@ -319,7 +349,7 @@ async function setEditorText(text: string): Promise<void> {
 }
 async function press(
   key: string,
-  options: { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean } = {},
+  options: { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean } = {},
 ): Promise<void> {
   const editor = wrapper.find(".grid__editor .cm-content");
   await (editor.exists() ? editor : wrapper.get(".grid")).trigger("keydown", { key, ...options });
@@ -748,6 +778,81 @@ describe("selection", () => {
     expect(selectedAddress()).toBe("C4");
   });
 
+  it("supports Home, End, and Ctrl/Cmd+Home/End with Shift extension", async () => {
+    await mountGrid({ A1: "first", C4: "last" });
+    await select("B2");
+    await press("Home");
+    expect(selectedAddress()).toBe("A2");
+    await press("End");
+    expect(selectedAddress()).toBe("C2");
+    await press("Home", { shiftKey: true });
+    expect(useWorkbookStore().selectedRange).toMatchObject({
+      startRow: 1,
+      endRow: 1,
+      startCol: 0,
+      endCol: 2,
+    });
+
+    await press("Home", { ctrlKey: true });
+    expect(selectedAddress()).toBe("A1");
+    await press("End", { ctrlKey: true });
+    expect(selectedAddress()).toBe("C4");
+    await press("Home", { ctrlKey: true, shiftKey: true });
+    expect(useWorkbookStore().selectedRange).toMatchObject({
+      startRow: 0,
+      endRow: 3,
+      startCol: 0,
+      endCol: 2,
+    });
+  });
+
+  it("moves Ctrl/Cmd+End to A1 when the table has no data", async () => {
+    await mountGrid();
+    await select("B2");
+    await press("End", { ctrlKey: true });
+    expect(selectedAddress()).toBe("A1");
+  });
+
+  it("jumps through data regions and extends the range with Ctrl/Cmd+Shift+Arrow", async () => {
+    await mountGrid({ A1: "one", A2: "two", A3: "three" });
+    await select("A1");
+    await press("ArrowDown", { ctrlKey: true });
+    expect(selectedAddress()).toBe("A3");
+    await press("ArrowDown", { ctrlKey: true });
+    expect(selectedAddress()).toBe("A4");
+
+    await select("A1");
+    await press("ArrowDown", { ctrlKey: true, shiftKey: true });
+    expect(useWorkbookStore().selectedRange).toMatchObject({
+      startRow: 0,
+      endRow: 2,
+      startCol: 0,
+      endCol: 0,
+    });
+  });
+
+  it("moves PageUp and PageDown by visible rows and extends with Shift", async () => {
+    const previousHeight = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 91 });
+    try {
+      await mountGrid();
+      await select("A1");
+      await press("PageDown");
+      expect(selectedAddress()).toBe("A3");
+      await press("PageUp");
+      expect(selectedAddress()).toBe("A1");
+      await press("PageDown", { shiftKey: true });
+      expect(useWorkbookStore().selectedRange).toMatchObject({
+        startRow: 0,
+        endRow: 2,
+        startCol: 0,
+        endCol: 0,
+      });
+    } finally {
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: previousHeight });
+    }
+  });
+
   it("ignores keys when nothing is selected", async () => {
     await mountGrid();
     await press("ArrowDown");
@@ -1027,6 +1132,81 @@ describe("editing", () => {
     await select("A1");
     await press("c", { ctrlKey: true });
     expect(wrapper.find(".grid__editor").exists()).toBe(false);
+  });
+
+  it("leaves formatting shortcuts to cell inputs and the CodeMirror editor", async () => {
+    await mountGrid({ A1: "=TEXTBOX(A2)" });
+    await select("A1");
+    const input = cellAt("A1").get("input").element;
+    const inputKey = dispatchKey(input, "b", { ctrlKey: true });
+    expect(inputKey.defaultPrevented).toBe(false);
+    expect(server.formatCells).not.toHaveBeenCalled();
+
+    await select("B1");
+    await press("x");
+    const editorKey = dispatchKey(wrapper.get(".grid__editor .cm-content").element, "ArrowDown", {
+      ctrlKey: true,
+    });
+    expect(editorKey.defaultPrevented).toBe(false);
+    expect(selectedAddress()).toBe("B1");
+  });
+});
+
+describe("keyboard formatting", () => {
+  it("toggles bold across the selected cells based on every cell's format", async () => {
+    await mountGrid({ A1: "one", B1: "two" });
+    const store = useWorkbookStore();
+    server.formatCells.mockImplementation((_tableId, identityRange, format, reset) =>
+      Promise.resolve(
+        changeWith({
+          ...TABLE,
+          formats: [
+            { ...positionalFormatRange(identityRange), format, ...(reset ? { reset } : {}) },
+          ],
+        }),
+      ),
+    );
+
+    store.selection = at("A1");
+    await store.formatSelection({ bold: true });
+    await cellAt("B1").trigger("mousedown", { shiftKey: true });
+    await press("b", { ctrlKey: true });
+    expect(server.formatCells).toHaveBeenLastCalledWith(
+      "t1",
+      { startRowId: "r0", endRowId: "r0", startColId: "c1", endColId: "c2" },
+      { bold: true },
+      false,
+    );
+
+    await press("b", { metaKey: true });
+    expect(server.formatCells).toHaveBeenLastCalledWith(
+      "t1",
+      { startRowId: "r0", endRowId: "r0", startColId: "c1", endColId: "c2" },
+      { bold: false },
+      false,
+    );
+
+    await press("i", { ctrlKey: true });
+    expect(server.formatCells).toHaveBeenLastCalledWith(
+      "t1",
+      { startRowId: "r0", endRowId: "r0", startColId: "c1", endColId: "c2" },
+      { italic: true },
+      false,
+    );
+  });
+
+  it.each([
+    ["Shift", { shiftKey: true }],
+    ["Alt", { altKey: true }],
+  ] as const)("leaves Ctrl+%s+B/I unhandled", async (_modifier, modifiers) => {
+    await mountGrid({ A1: "one" });
+    await select("A1");
+    const grid = wrapper.get(".grid").element;
+    for (const key of ["b", "i"]) {
+      const event = dispatchKey(grid, key, { ctrlKey: true, ...modifiers });
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(server.formatCells).not.toHaveBeenCalled();
   });
 });
 
@@ -2358,8 +2538,9 @@ describe("a sorted and filtered data table", () => {
   async function mountShown(
     display: (typeof TABLE)["display"],
     inputs: Record<string, string> = INPUTS,
+    formats: TableRecord["formats"] = [],
   ): Promise<void> {
-    const table = { ...TABLE, columns: COLUMNS, display };
+    const table = { ...TABLE, columns: COLUMNS, display, formats };
     server.getSnapshot.mockResolvedValue(
       wireSnapshot({ ...snapshotWith(inputs), tables: [table] }),
     );
@@ -2416,6 +2597,70 @@ describe("a sorted and filtered data table", () => {
     expect(selectedAddress()).toBe("A2");
     await press("ArrowUp");
     expect(selectedAddress()).toBe("A4");
+  });
+
+  it("jumps through sorted and filtered rows in displayed order", async () => {
+    await mountShown({ sort: [{ colId: "c2", descending: true }], filter: "=[Qty] > 1" });
+    await select("A4");
+    await press("ArrowDown", { ctrlKey: true });
+    expect(selectedAddress()).toBe("A2");
+    await press("Home");
+    expect(selectedAddress()).toBe("A2");
+    await press("Home", { ctrlKey: true });
+    expect(selectedAddress()).toBe("A4");
+    await press("End", { ctrlKey: true });
+    expect(selectedAddress()).toBe("C2");
+  });
+
+  it("treats computed formula-column cells as non-empty when jumping", async () => {
+    await mountShown(SORTED);
+    await select("C3");
+    await press("ArrowDown", { ctrlKey: true });
+    expect(selectedAddress()).toBe("C2");
+  });
+
+  it("formats the selected displayed row by its stored row identity", async () => {
+    await mountShown(SORTED);
+    const store = useWorkbookStore();
+    server.formatCells.mockImplementation((_tableId, identityRange, format, reset) =>
+      Promise.resolve(
+        changeWith({
+          ...store.tables.find((table) => table.id === "t1")!,
+          formats: [
+            { ...positionalFormatRange(identityRange), format, ...(reset ? { reset } : {}) },
+          ],
+        }),
+      ),
+    );
+    await select("A3");
+    await press("b", { ctrlKey: true });
+    expect(server.formatCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      { startRowId: "r2", endRowId: "r2", startColId: "c1", endColId: "c1" },
+      { bold: true },
+      false,
+    );
+  });
+
+  it("decides a whole-column format toggle from filtered-out stored rows too", async () => {
+    await mountShown({ sort: [], filter: "=[Qty] > 2" }, INPUTS, [
+      { startRow: 2, endRow: 3, startCol: 0, endCol: 0, format: { bold: true } },
+    ]);
+    const store = useWorkbookStore();
+    expect(store.formatOf(at("A1")).bold).toBeUndefined();
+    expect(store.formatOf(at("A3")).bold).toBe(true);
+    server.formatCells.mockResolvedValue(changeWith());
+
+    await wrapper.findAll("thead th")[1]!.trigger("mousedown");
+    expect(store.selectedRange).toMatchObject({ entireColumn: true, startCol: 0, endCol: 0 });
+    await press("b", { ctrlKey: true });
+
+    expect(server.formatCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      { startRowId: "r0", endRowId: null, startColId: "c1", endColId: "c1" },
+      { bold: true },
+      false,
+    );
   });
 
   it("moves from the top of a whole column when its anchor row is filtered out", async () => {

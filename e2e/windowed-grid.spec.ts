@@ -30,6 +30,31 @@ test("a large grid windows cells and keeps an offscreen edit alive", async ({ pa
   await expect.poll(() => grid.locator('[role="gridcell"]').count()).toBeLessThan(1000);
 });
 
+test("grid keyboard shortcuts jump through data and format the selection", async ({ page }) => {
+  await newSpreadsheet(page);
+  await cell(page, "A1").click();
+  await page.keyboard.press("Control+End");
+  await expect(cell(page, "A1")).toHaveAttribute("aria-selected", "true");
+
+  await enter(page, "A1", "one");
+  await enter(page, "A2", "two");
+  await enter(page, "A3", "three");
+
+  const grid = page.getByRole("grid", { name: "Table 1", exact: true });
+  await cell(page, "A1").click();
+  await page.keyboard.press("Control+ArrowDown");
+  await expect(cell(page, "A3")).toHaveAttribute("aria-selected", "true");
+
+  await page.keyboard.press("Control+Home");
+  await expect(cell(page, "A1")).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Control+End");
+  await expect(cell(page, "A3")).toHaveAttribute("aria-selected", "true");
+
+  await page.keyboard.press("Control+b");
+  await expect(page.getByRole("button", { name: "Bold" })).toHaveAttribute("aria-pressed", "true");
+  await expect(grid).toBeFocused();
+});
+
 test("Markdown line breaks do not change windowed row geometry", async ({ page }) => {
   await newSpreadsheet(page);
   const csv = Array.from({ length: 201 }, (_, row) =>

@@ -26,6 +26,7 @@ import SessionFormulaField from "./SessionFormulaField.vue";
 import CellView from "./CellView.vue";
 import EditableName from "./EditableName.vue";
 import type { ErrorTraceFrame } from "@spreadsheet-app/engine";
+import { countVisibleRows, dataRegionDestination, usedRangeDestination } from "./gridNavigation";
 
 const props = defineProps<{ table: TableRecord }>();
 /**
@@ -111,6 +112,17 @@ function placeOf(row: number): number {
 /** A cell at a place and a column, named by the stored row it shows. */
 function cellAt(place: number, col: number): CellId {
   return cell(storedRow(place), col);
+}
+
+/** A cell has data when it has input, a value, or a spill result. */
+function isNonEmpty(at: CellAddress): boolean {
+  const id = cellAt(at.row, at.col);
+  return (
+    store.inputOf(id) !== "" ||
+    store.valueOf(id) !== null ||
+    store.filledBy(id) !== undefined ||
+    (columnAt(at.col)?.type === "formula" && id.row < props.table.rowCount)
+  );
 }
 
 /** A place and column as the stored address the store's selection names. */
@@ -605,6 +617,69 @@ function extend(rows: number, cols: number): void {
   }
 }
 
+/** The active corner moves when Shift extends an existing range. */
+function selectionCorner(): CellAddress | null {
+  if (!selected.value) return null;
+  const end = store.selectionEnd;
+  if (range.value?.entireColumn)
+    return { row: 0, col: end?.col ?? selectedPlace.value?.col ?? selected.value.col };
+  return end ? { row: placeOf(end.row), col: end.col } : selectedPlace.value;
+}
+
+/** Moves to a display place, optionally extending the current range to it. */
+function navigateTo(target: CellAddress, extendRange = false, preserveWholeColumn = false): void {
+  store.resetTabTraversal();
+  const next = clamp(target);
+  const current = selectedPlace.value;
+  const scrollTarget = extendRange || (current?.row === next.row && current.col === next.col);
+  if (extendRange) {
+    const wholeColumn = preserveWholeColumn && range.value?.entireColumn === true;
+    store.extendSelection(stored(next), wholeColumn ? "col" : undefined);
+  } else store.selection = cellAt(next.row, next.col);
+  if (scrollTarget)
+    void nextTick(() => {
+      scrollSelection(stored(next));
+    });
+}
+
+function moveToEdge(key: "Home" | "End", extendRange: boolean, wholeTable: boolean): void {
+  const from = extendRange ? selectionCorner() : selectedPlace.value;
+  if (!from) return;
+  if (wholeTable && key === "End") {
+    navigateTo(
+      usedRangeDestination(shownRows.value, props.table.colCount, isNonEmpty),
+      extendRange,
+    );
+    return;
+  }
+  const row = wholeTable ? 0 : from.row;
+  const col = key === "Home" ? 0 : props.table.colCount - 1;
+  navigateTo({ row, col }, extendRange, !wholeTable);
+}
+
+function toggleFormat(property: "bold" | "italic"): void {
+  const selectedRange = range.value;
+  if (!selectedRange || !selected.value || !store.canEdit) return;
+  const rows = view.value;
+  const entireColumn = selectedRange.entireColumn === true;
+  let allFormatted = true;
+  const firstRow = entireColumn ? 0 : selectedRange.startRow;
+  const lastRow = entireColumn ? props.table.rowCount - 1 : selectedRange.endRow;
+  for (let row = firstRow; row <= lastRow; row++) {
+    const stored = entireColumn ? row : rows.storedRow(row);
+    for (let col = selectedRange.startCol; col <= selectedRange.endCol; col++) {
+      if (store.formatOf(cell(stored, col))[property] !== true) allFormatted = false;
+    }
+  }
+  void store.formatSelection(
+    property === "bold" ? { bold: !allFormatted } : { italic: !allFormatted },
+  );
+}
+
+function pageRows(): number {
+  return Math.max(1, countVisibleRows(rowOffsets.value, viewport.value.top, viewport.value.bottom));
+}
+
 /**
  * What a mouse drag in the grid is doing: selecting a range, selecting whole
  * rows or columns from the header where it began, or filling from the fill handle.
@@ -902,7 +977,9 @@ function onGridKeydown(event: KeyboardEvent): void {
   // While editing, keys belong to the editor input. An input control in a cell
   // also keeps its own keys, such as the arrows that change a choice.
   const inControl =
-    event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement;
+    event.target instanceof Element &&
+    event.target.closest('input, select, textarea, [contenteditable="true"], [role="textbox"]') !==
+      null;
   if (draft.value !== null) {
     if (document.activeElement !== grid.value || inControl) return;
     const { key } = event;
@@ -927,51 +1004,83 @@ function onGridKeydown(event: KeyboardEvent): void {
   }
   if (!selected.value || inControl) return;
   const { key } = event;
-  if (key === " ") {
-    const id = selected.value;
-    const value = store.valueOf(id);
-    const checkboxColumn = columnAt(id.col)?.type === "checkbox";
-    const checkboxControl = isControl(value) && value.control === "checkbox";
-    if (checkboxColumn || checkboxControl) {
-      event.preventDefault();
-      if (
-        event.repeat ||
-        event.shiftKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        event.metaKey ||
-        store.selectionEnd !== null ||
-        !store.canEdit
-      )
-        return;
-      if (checkboxColumn) {
-        if (value === null || typeof value === "boolean")
-          void store.setCell(id, value === true ? "FALSE" : "TRUE");
+  const command = event.ctrlKey || event.metaKey;
+  const plain = !command && !event.altKey;
+  if (command && !event.altKey && MOVES[key]) {
+    const step = MOVES[key];
+    const from = event.shiftKey ? selectionCorner() : selectedPlace.value;
+    if (!from) return;
+    const target = dataRegionDestination(
+      from,
+      { row: step[0], col: step[1] },
+      displayedRows.value,
+      props.table.colCount,
+      isNonEmpty,
+    );
+    navigateTo(target, event.shiftKey, step[0] === 0);
+  } else if (command && !event.altKey && key === "Home") moveToEdge(key, event.shiftKey, true);
+  else if (command && !event.altKey && key === "End") moveToEdge(key, event.shiftKey, true);
+  else if (plain && key === "Home") moveToEdge(key, event.shiftKey, false);
+  else if (plain && key === "End") moveToEdge(key, event.shiftKey, false);
+  else if (plain && (key === "PageUp" || key === "PageDown")) {
+    const from = event.shiftKey ? selectionCorner() : selectedPlace.value;
+    if (!from) return;
+    navigateTo(
+      { ...from, row: from.row + (key === "PageDown" ? pageRows() : -pageRows()) },
+      event.shiftKey,
+    );
+  } else if (command && !event.altKey && !event.shiftKey && key.toLowerCase() === "b") {
+    if (!store.canEdit) return;
+    toggleFormat("bold");
+  } else if (command && !event.altKey && !event.shiftKey && key.toLowerCase() === "i") {
+    if (!store.canEdit) return;
+    toggleFormat("italic");
+  } else {
+    if (key === " ") {
+      const id = selected.value;
+      const value = store.valueOf(id);
+      const checkboxColumn = columnAt(id.col)?.type === "checkbox";
+      const checkboxControl = isControl(value) && value.control === "checkbox";
+      if (checkboxColumn || checkboxControl) {
+        event.preventDefault();
+        if (
+          event.repeat ||
+          event.shiftKey ||
+          event.ctrlKey ||
+          event.altKey ||
+          event.metaKey ||
+          store.selectionEnd !== null ||
+          !store.canEdit
+        )
+          return;
+        if (checkboxColumn) {
+          if (value === null || typeof value === "boolean")
+            void store.setCell(id, value === true ? "FALSE" : "TRUE");
+          return;
+        }
+        if (checkboxControl) void store.input(id, value.value !== true);
         return;
       }
-      if (checkboxControl) void store.input(id, value.value !== true);
-      return;
     }
+    const step = MOVES[key];
+    if (key === "Enter" && event.altKey && !command && focusSpillResizeAction())
+      event.preventDefault();
+    else if (step && !command && event.shiftKey) extend(...step);
+    else if (step && !command) move(...step);
+    else if (key === "Tab") store.prepareCellMove("Tab", event.shiftKey)();
+    else if (key === "Enter" || key === "F2") void edit();
+    else if (key === "Delete" || key === "Backspace") void store.clearSelection();
+    else if (key === "ContextMenu" || (key === "F10" && event.shiftKey)) openMenuAtSelection();
+    else if (command && key.toLowerCase() === "a") selectAll();
+    else if (command && key.toLowerCase() === "z" && !event.shiftKey) void store.undo();
+    else if (command && (key.toLowerCase() === "y" || key.toLowerCase() === "z")) void store.redo();
+    else if (command && key.toLowerCase() === "d") fillSelection("down");
+    else if (command && key.toLowerCase() === "r") fillSelection("right");
+    else if (key.length === 1 && !command && !event.altKey) {
+      // Typing replaces the cell's content, starting with the typed character.
+      void edit(key);
+    } else return;
   }
-  const step = MOVES[key];
-  const command = event.ctrlKey || event.metaKey;
-  if (key === "Enter" && event.altKey && !command && focusSpillResizeAction())
-    event.preventDefault();
-  else if (step && event.shiftKey) extend(...step);
-  else if (step) move(...step);
-  else if (key === "Tab") store.prepareCellMove("Tab", event.shiftKey)();
-  else if (key === "Enter" || key === "F2") void edit();
-  else if (key === "Delete" || key === "Backspace") void store.clearSelection();
-  else if (key === "ContextMenu" || (key === "F10" && event.shiftKey)) openMenuAtSelection();
-  else if (command && key.toLowerCase() === "a") selectAll();
-  else if (command && key.toLowerCase() === "z" && !event.shiftKey) void store.undo();
-  else if (command && (key.toLowerCase() === "y" || key.toLowerCase() === "z")) void store.redo();
-  else if (command && key.toLowerCase() === "d") fillSelection("down");
-  else if (command && key.toLowerCase() === "r") fillSelection("right");
-  else if (key.length === 1 && !command && !event.altKey) {
-    // Typing replaces the cell's content, starting with the typed character.
-    void edit(key);
-  } else return;
   event.preventDefault();
 }
 </script>

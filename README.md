@@ -95,6 +95,8 @@ A unique table name by itself refers to all of its rows. `QUERY(Sales, "select C
 
 The toolbar under the formula bar gives the selected cells bold, italic, an alignment, a number format, a text color, or a fill color. Formats are stored per table as rules over ranges, so a whole column is one rule.
 
+With focus in a table grid, the arrow keys move one cell, and Shift+Arrow extends the selection. Ctrl/Cmd+Arrow jumps to the edge of a contiguous non-empty region in that direction: from a non-empty cell with a non-empty neighbor it moves to the end of that run; otherwise it moves to the next non-empty cell, or to the table edge. Vertical movement follows displayed row order. Home and End move to the first or last column of the row. Ctrl/Cmd+Home and Ctrl/Cmd+End move to A1 or the bottom-right cell of the used range (A1 when empty). PageUp and PageDown move by the number of rows visible in the viewport. Shift extends the selection for these moves. Ctrl/Cmd+B and Ctrl/Cmd+I toggle bold and italic across the selected cells, clearing the format only when every selected cell already has it.
+
 Conditional formats give cells a fill, a text color, or bold when their own value meets a `COUNTIF`-style criterion such as `>100`, or shade a range of numbers with a two-color scale. A quoted text criterion such as `="foobar"` compares the cell's value to a string using the formula language's text equality. Rules are stored per table, follow rows and columns as they are inserted and deleted, and are laid over the plain formats.
 
 Each table also exports to CSV (the values shown) and imports from CSV.
