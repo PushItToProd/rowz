@@ -222,6 +222,18 @@ describe("row and column actions", () => {
   });
 });
 
+describe("table side panes", () => {
+  it("shows one table side pane at a time", async () => {
+    await render();
+    await button("Names").trigger("click");
+    expect(wrapper.find('[aria-label="Names in Table 1"]').exists()).toBe(true);
+
+    await button("Conditional formats").trigger("click");
+    expect(wrapper.find('[aria-label="Names in Table 1"]').exists()).toBe(false);
+    expect(wrapper.find('[aria-label="Conditional formats of Table 1"]').exists()).toBe(true);
+  });
+});
+
 describe("table actions", () => {
   it("adds a row from the strip under the grid, and a column from the strip beside it", async () => {
     await render();

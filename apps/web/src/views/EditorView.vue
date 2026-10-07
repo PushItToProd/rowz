@@ -33,12 +33,14 @@ import TableCard from "../components/TableCard.vue";
 import ScriptCard from "../components/ScriptCard.vue";
 import TextCard from "../components/TextCard.vue";
 import { useWorkbookStore } from "../stores/workbook";
+import { SIDE_PANES, provideActiveSidePane, tableIdOfSidePane } from "../sidePane";
 
 const props = defineProps<{ spreadsheetId: string; pageId?: string }>();
 const store = useWorkbookStore();
 const router = useRouter();
 const formulas = useFormulaSessionStore();
 const picking = useReferencePickingStore();
+const activeSidePane = provideActiveSidePane();
 const replayed = new WeakSet<Event>();
 
 function pageNavigation(target: Element): boolean {
@@ -146,12 +148,12 @@ function exportFile(): void {
   }
 }
 
-const historyOpen = ref(false);
-const runsOpen = ref(false);
-const shareOpen = ref(false);
-const assertionsOpen = ref(false);
-const errorsOpen = ref(false);
-const findOpen = ref(false);
+const historyOpen = activeSidePane.isOpen(SIDE_PANES.history);
+const runsOpen = activeSidePane.isOpen(SIDE_PANES.runs);
+const shareOpen = activeSidePane.isOpen(SIDE_PANES.share);
+const assertionsOpen = activeSidePane.isOpen(SIDE_PANES.assertions);
+const errorsOpen = activeSidePane.isOpen(SIDE_PANES.errors);
+const findOpen = activeSidePane.isOpen(SIDE_PANES.find);
 const findPanel = ref<InstanceType<typeof FindPanel>>();
 const selectedBlock = ref<string>();
 watch(
@@ -175,7 +177,7 @@ function findKey(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
     event.preventDefault();
     event.stopPropagation();
-    findOpen.value = true;
+    activeSidePane.open(SIDE_PANES.find);
     void nextTick(() => {
       findPanel.value?.focus();
     });
@@ -186,7 +188,7 @@ function findKey(event: KeyboardEvent) {
   } else if (event.key === "Escape" && findOpen.value && !formulas.active) {
     event.preventDefault();
     event.stopPropagation();
-    findOpen.value = false;
+    activeSidePane.close(SIDE_PANES.find);
   }
 }
 async function goToMatch(match: SearchMatch) {
@@ -209,8 +211,21 @@ async function goToMatch(match: SearchMatch) {
 watch(
   () => props.spreadsheetId,
   () => {
-    findOpen.value = false;
+    activeSidePane.closeActive();
     selectedBlock.value = undefined;
+  },
+);
+watch(
+  [() => props.pageId, () => store.tables.map((table) => `${table.id}:${table.pageId}`)],
+  () => {
+    const paneId = activeSidePane.active.value;
+    if (!paneId) return;
+    const tableId = tableIdOfSidePane(paneId);
+    if (
+      tableId !== undefined &&
+      !store.tables.some((table) => table.id === tableId && table.pageId === props.pageId)
+    )
+      activeSidePane.close(paneId);
   },
 );
 async function goToError(
@@ -277,7 +292,7 @@ async function reload(): Promise<void> {
 }
 
 async function openCopy(spreadsheetId: string): Promise<void> {
-  historyOpen.value = false;
+  activeSidePane.closeActive();
   await router.push({ name: "editor", params: { spreadsheetId } });
 }
 
@@ -439,7 +454,7 @@ watch(
           class="editor__errors"
           :aria-label="`${store.errors.length} ${store.errors.length === 1 ? 'error' : 'errors'}`"
           aria-haspopup="dialog"
-          @click="errorsOpen = true"
+          @click="activeSidePane.open(SIDE_PANES.errors)"
         >
           <ErrorWarning label="Document contains errors" />
           {{ store.errors.length }} {{ store.errors.length === 1 ? "error" : "errors" }}
@@ -448,17 +463,28 @@ watch(
           v-if="loaded && store.assertions.length > 0"
           type="button"
           class="editor__assertions"
-          @click="assertionsOpen = true"
+          @click="activeSidePane.open(SIDE_PANES.assertions)"
         >
           {{ store.assertions.length }} failing
           {{ store.assertions.length === 1 ? "assertion" : "assertions" }}
         </button>
-        <button v-if="loaded" type="button" class="editor__export" @click="shareOpen = true">
+        <button
+          v-if="loaded"
+          type="button"
+          class="editor__export"
+          @click="activeSidePane.open(SIDE_PANES.share)"
+        >
           Share
         </button>
-        <button v-if="loaded" type="button" @click="historyOpen = true">History</button>
-        <button v-if="loaded" type="button" @click="findOpen = true">Find</button>
-        <button v-if="loaded" type="button" @click="runsOpen = true">Runs</button>
+        <button v-if="loaded" type="button" @click="activeSidePane.open(SIDE_PANES.history)">
+          History
+        </button>
+        <button v-if="loaded" type="button" @click="activeSidePane.open(SIDE_PANES.find)">
+          Find
+        </button>
+        <button v-if="loaded" type="button" @click="activeSidePane.open(SIDE_PANES.runs)">
+          Runs
+        </button>
         <button v-if="loaded" type="button" @click="exportFile">Export</button>
         <button v-if="loaded" type="button" :disabled="copying || store.saving" @click="saveCopy">
           Save a copy
@@ -545,35 +571,39 @@ watch(
       :spreadsheet-id="spreadsheetId"
       :owner="store.spreadsheet?.role === 'owner'"
       :user-id="session.user?.id"
-      @close="shareOpen = false"
+      @close="activeSidePane.close(SIDE_PANES.share)"
       @left="router.push({ name: 'spreadsheets' })"
     />
-    <ErrorsPanel v-if="errorsOpen && loaded" @close="errorsOpen = false" @go="goToError" />
+    <ErrorsPanel
+      v-if="errorsOpen && loaded"
+      @close="activeSidePane.close(SIDE_PANES.errors)"
+      @go="goToError"
+    />
     <FindPanel
       v-if="findOpen && loaded && page"
       ref="findPanel"
       :page-id="page.id"
       :block-id="findBlockId"
-      @close="findOpen = false"
+      @close="activeSidePane.close(SIDE_PANES.find)"
       @go="goToMatch"
     />
     <AssertionsPanel
       v-if="assertionsOpen && loaded"
-      @close="assertionsOpen = false"
+      @close="activeSidePane.close(SIDE_PANES.assertions)"
       @go="goToAssertion"
     />
     <HistoryPanel
       v-if="historyOpen && loaded"
       :spreadsheet-id="spreadsheetId"
       :can-restore="store.canEdit"
-      @close="historyOpen = false"
+      @close="activeSidePane.close(SIDE_PANES.history)"
       @restored="reload"
       @copied="openCopy"
     />
     <RunsPanel
       v-if="runsOpen && loaded"
       :spreadsheet-id="spreadsheetId"
-      @close="runsOpen = false"
+      @close="activeSidePane.close(SIDE_PANES.runs)"
     />
 
     <NoticeMessage v-if="store.notice" :notice="store.notice" @dismiss="store.notice = null" />

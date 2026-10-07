@@ -625,8 +625,11 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] In `TableCard.vue` (column type conversion), the handler sets `sessions.columnPopover` after the confirmation dialog without checking the card is still mounted #data-tables
 
 - [ ] **P2** errors that come from a function are hard to trace. With a script function `PayoutByDuration(with_spa) = QUERY(Runs, "select Race, sum('Payout (40 hrs)') " & IF(with_spa, "", "where Race <> 'Spa' ") & "group by Race pivot Duration")` and a cell `=PayoutByDuration(FALSE)`, the cell shows `#VALUE!` with "The data has no column Spa", and the person has to hunt for the source. Let them go from the error back to where it arose (the function, the line, the call chain) #formula-language
-- [ ] **P3** opening a side pane should close the one already open. With History open, the Errors button opens the errors pane behind it, and it shows only after History closes #everyday
+- [x] **P3** opening a side pane should close the one already open. With History open, the Errors button opens the errors pane behind it, and it shows only after History closes #everyday
 - [ ] **P6** allow collapsing a block to just its header, so a long table is easy to scroll past #small-apps
 - [ ] **P6** limit a block taller than a set height to that height and scroll its contents on their own #small-apps
 - [ ] **P8** make block heights customizable, following the maximum-height limit for long blocks #small-apps
 - [ ] Displayed-value search searches a Markdown cell's raw text (`**hello**`, link destinations) and not the rendered text (`apps/web/src/stores/workbook/search.ts`) #everyday
+
+- [ ] The Choices panel (`choosingFor` in `TableCard.vue`) is outside the one-open-side-pane state, so it can stay open beside Names or Conditional formats #everyday
+- [ ] Escape does not close the Names and Conditional formats panels #everyday

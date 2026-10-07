@@ -31,6 +31,7 @@ async function render(
   empty = false,
   focusCards = false,
   inputs: Record<string, string> = {},
+  realTableCard = false,
 ) {
   const snapshot = snapshotWith(inputs, role);
   server.getSnapshot.mockResolvedValue(
@@ -76,13 +77,15 @@ async function render(
   await router.push({ name: "editor", params: { spreadsheetId: "s1" } });
   const wrapper = mount(EditorView, {
     props: { spreadsheetId: "s1", pageId: "p1" },
-    attachTo: focusCards ? document.body : undefined,
+    attachTo: focusCards || realTableCard ? document.body : undefined,
     global: {
       plugins: [router],
       stubs: {
-        TableCard: focusCards
-          ? { template: '<div role="grid" tabindex="0" aria-label="Table grid"></div>' }
-          : true,
+        TableCard: realTableCard
+          ? false
+          : focusCards
+            ? { template: '<div role="grid" tabindex="0" aria-label="Table grid"></div>' }
+            : true,
         ChartCard: focusCards ? { template: '<button type="button">Card control</button>' } : true,
         ScriptCard: focusCards ? { template: '<button type="button">Card control</button>' } : true,
         TextCard: focusCards ? { template: '<button type="button">Card control</button>' } : true,
@@ -131,6 +134,39 @@ it("captures Ctrl/Cmd+F only inside the editor and F3 navigates an open find pan
   expect(store.selection).toEqual({ tableId: "t1", row: 0, col: 0 });
   await wrapper.get('[aria-label="Find text"]').trigger("keydown", { key: "Escape" });
   expect(wrapper.find('[aria-label="Find and replace"]').exists()).toBe(false);
+  wrapper.unmount();
+});
+
+it("replaces the open side pane when another one opens", async () => {
+  const wrapper = await render("owner", false, false, { A1: "=1/0" });
+  const historyButton = wrapper.findAll("button").find((button) => button.text() === "History");
+  await historyButton!.trigger("click");
+  expect(wrapper.find('[role="dialog"][aria-label="History"]').exists()).toBe(true);
+
+  await wrapper.get(".editor__errors").trigger("click");
+  expect(wrapper.find('[role="dialog"][aria-label="Document errors"]').exists()).toBe(true);
+  expect(wrapper.find('[role="dialog"][aria-label="History"]').exists()).toBe(false);
+  wrapper.unmount();
+});
+
+it.each([
+  ["Names", '[aria-label="Names in Table 1"]'],
+  ["Conditional formats", '[aria-label="Conditional formats of Table 1"]'],
+])("closes the %s pane when its page is left", async (label, paneSelector) => {
+  const wrapper = await render("owner", false, false, {}, true);
+  const store = useWorkbookStore();
+  store.pages = [...store.pages, { id: "p2", name: "Page 2", position: 1 }];
+  const paneButton = wrapper
+    .findAll(".table-card__actions button")
+    .find((button) => button.text().startsWith(label));
+  await paneButton!.trigger("click");
+  expect(wrapper.find(paneSelector).exists()).toBe(true);
+
+  await wrapper.setProps({ pageId: "p2" });
+  await flushPromises();
+  await wrapper.setProps({ pageId: "p1" });
+  await flushPromises();
+  expect(wrapper.find(paneSelector).exists()).toBe(false);
   wrapper.unmount();
 });
 

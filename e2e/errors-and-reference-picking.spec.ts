@@ -16,8 +16,12 @@ test("errors stay visible across pages and in the document list", async ({ page 
   await page.keyboard.press("Escape");
   await expect(page.getByRole("tooltip")).toHaveCount(0);
   await page.getByRole("button", { name: "Add page", exact: true }).click();
+  await page.getByRole("button", { name: "History", exact: true }).click();
+  const history = page.getByRole("dialog", { name: "History" });
+  await expect(history).toBeVisible();
   await page.getByRole("button", { name: "1 error", exact: true }).click();
   const errors = page.getByRole("dialog", { name: "Document errors" });
+  await expect(history).toHaveCount(0);
   await expect(errors).toContainText("Page 1");
   await errors.getByRole("button", { name: /'Table 1'!A1/ }).click();
   await expect(errors).toBeVisible();

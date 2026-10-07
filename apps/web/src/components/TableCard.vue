@@ -21,11 +21,15 @@ import ResizeTable from "./ResizeTable.vue";
 import ResizeLines from "./ResizeLines.vue";
 import TableDisplayBar from "./TableDisplayBar.vue";
 import type { MenuItem, MenuScope } from "./menu";
+import { useActiveSidePane } from "../sidePane";
 
 const props = defineProps<{ table: TableRecord }>();
 const store = useWorkbookStore();
 const sessions = useFormulaSessionStore();
 const dialog = useDialog();
+const activeSidePane = useActiveSidePane();
+const namesPaneId: `names:${string}` = `names:${props.table.id}`;
+const conditionalFormatsPaneId: `conditional-formats:${string}` = `conditional-formats:${props.table.id}`;
 
 /** The selected cell when it is in this table. Row and column actions apply to it. */
 const selected = computed(() =>
@@ -164,13 +168,13 @@ async function resize({
 }
 
 /** Whether the panel of the table's conditional formats is open. */
-const conditionalOpen = ref(false);
+const conditionalOpen = activeSidePane.isOpen(conditionalFormatsPaneId);
 
 /** Whether the panel of the table's names is open, and the formula a new name starts with. */
 const formulaFor = computed(() =>
   sessions.columnPopover?.tableId === props.table.id ? sessions.columnPopover.colId : undefined,
 );
-const namesOpen = ref(false);
+const namesOpen = activeSidePane.isOpen(namesPaneId);
 const nameSuggestion = ref<string>();
 
 /** Opens the names panel with a new name for the selected range. */
@@ -180,7 +184,7 @@ function nameRange(): void {
   const start = formatAddress({ row: range.startRow, col: range.startCol });
   const end = formatAddress({ row: range.endRow, col: range.endCol });
   nameSuggestion.value = start === end ? start : `${start}:${end}`;
-  namesOpen.value = true;
+  activeSidePane.open(namesPaneId);
 }
 
 /** Where the menu that offers the two ways to name columns is open, if it is. */
@@ -554,14 +558,14 @@ const menuLabel = computed(() => {
           type="button"
           data-open-names
           :aria-expanded="namesOpen"
-          @click="namesOpen = !namesOpen"
+          @click="activeSidePane.toggle(namesPaneId)"
         >
           Names{{ table.names.length > 0 ? ` (${table.names.length})` : "" }}
         </button>
         <button
           type="button"
           :aria-expanded="conditionalOpen"
-          @click="conditionalOpen = !conditionalOpen"
+          @click="activeSidePane.toggle(conditionalFormatsPaneId)"
         >
           Conditional formats{{
             table.conditionalFormats.length > 0 ? ` (${table.conditionalFormats.length})` : ""
@@ -582,7 +586,7 @@ const menuLabel = computed(() => {
           type="button"
           data-open-names
           :aria-expanded="namesOpen"
-          @click="namesOpen = !namesOpen"
+          @click="activeSidePane.toggle(namesPaneId)"
         >
           Names ({{ table.names.length }})
         </button>
@@ -602,13 +606,13 @@ const menuLabel = computed(() => {
       v-if="namesOpen && !table.columns"
       :table="table"
       :suggestion="nameSuggestion"
-      @close="namesOpen = false"
+      @close="activeSidePane.close(namesPaneId)"
     />
 
     <ConditionalFormatsPanel
       v-if="conditionalOpen"
       :table="table"
-      @close="conditionalOpen = false"
+      @close="activeSidePane.close(conditionalFormatsPaneId)"
     />
 
     <!-- Always present, so selecting a cell does not push the grid down. -->
