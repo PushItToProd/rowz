@@ -307,6 +307,38 @@ test("a conditional format fills the cells that meet a criterion and follows the
   await expect(cell(page, "A2")).toHaveCSS("background-color", "rgb(253, 226, 223)");
 });
 
+test("a whole-column selection stays whole when the table sort is removed", async ({ page }) => {
+  await newSpreadsheet(page);
+  for (const [row, values] of [
+    ["Item", "Qty"],
+    ["pear", "3"],
+    ["apple", "1"],
+    ["fig", "2"],
+  ].entries()) {
+    for (const [col, value] of values.entries())
+      await enter(page, `${"AB"[col] ?? ""}${String(row + 1)}`, value);
+  }
+  await page.getByRole("button", { name: "Name columns" }).click();
+  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+  await page.getByRole("button", { name: "Add sort", exact: true }).click();
+  await page.getByLabel("Sort column 1").selectOption({ label: "Qty" });
+  await page.getByLabel("Sort direction 1").selectOption("descending");
+  await expect(page.getByRole("button", { name: "Remove sort by Qty" })).toBeVisible();
+
+  const qtyHeader = page.locator('[data-table="Table 1"] thead th[data-column="Qty"]');
+  await qtyHeader.click();
+  await page.getByRole("button", { name: "Conditional formats", exact: true }).click();
+  const panel = page.locator(".conditional-panel");
+  await expect(panel.locator("form p")).toHaveText("Applies to B1:B.");
+
+  // Clear the sort from the column header menu while the conditional formats panel is open.
+  await qtyHeader.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Clear sort", exact: true }).click();
+  await expect(panel.locator("form p")).toHaveText("Applies to B1:B.");
+  await panel.getByRole("button", { name: "Add rule" }).click();
+  await expect(panel.locator(".conditional-panel__area")).toHaveText("B1:B");
+});
+
 test("the Gran Turismo sample imports its comparison and checkbox, and preserves its color scale on export", async ({
   page,
 }, testInfo) => {

@@ -162,13 +162,15 @@ function isSelected(place: number, col: number): boolean {
   return selected.value?.row === storedRow(place) && selected.value.col === col;
 }
 
-/** The selected cell as a place. */
-const selectedPlace = computed<CellAddress | null>(() =>
-  selected.value ? { row: placeOf(selected.value.row), col: selected.value.col } : null,
-);
-
 /** The selected cells, when the selection is in this table. */
 const range = computed(() => (selected.value ? store.selectedRange : null));
+
+/** The selected cell as a place. */
+const selectedPlace = computed<CellAddress | null>(() =>
+  selected.value
+    ? { row: range.value?.entireColumn ? 0 : placeOf(selected.value.row), col: selected.value.col }
+    : null,
+);
 
 function inRange(place: number, col: number): boolean {
   return range.value !== null && contains(range.value, { row: place, col });
@@ -459,7 +461,7 @@ function selectLines(axis: Axis, from: number, to: number): void {
   const anchor = axis === "row" ? cellAt(from, 0) : cellAt(0, from);
   const end = stored(axis === "row" ? { row: to, col: last.col } : { row: last.row, col: to });
   store.selection = anchor;
-  store.extendSelection(end);
+  store.extendSelection(end, axis);
   focusGrid();
 }
 
@@ -584,9 +586,17 @@ function move(rows: number, cols: number): void {
 function extend(rows: number, cols: number): void {
   store.resetTabTraversal();
   const end = store.selectionEnd;
-  const corner = end ? { row: placeOf(end.row), col: end.col } : selectedPlace.value;
+  const wholeColumn = range.value?.entireColumn === true && rows === 0 && cols !== 0;
+  const corner = wholeColumn
+    ? { row: 0, col: end?.col ?? selectedPlace.value?.col ?? 0 }
+    : end
+      ? { row: placeOf(end.row), col: end.col }
+      : selectedPlace.value;
   if (corner) {
-    store.extendSelection(stored(clamp({ row: corner.row + rows, col: corner.col + cols })));
+    store.extendSelection(
+      stored(clamp({ row: corner.row + rows, col: corner.col + cols })),
+      wholeColumn ? "col" : undefined,
+    );
     const target = store.selectionEnd;
     if (virtual.value && target)
       void nextTick(() => {

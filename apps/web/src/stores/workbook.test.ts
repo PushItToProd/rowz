@@ -2324,6 +2324,7 @@ describe("a sorted and filtered data table", () => {
     return store;
   }
   const SORTED = { sort: [{ colId: "c1", descending: false }] };
+  const QTY_DESC = { sort: [{ colId: "c2", descending: true }] };
 
   it("gives the rows in display order and maps places to stored rows and back", async () => {
     const store = await openSorted(SORTED);
@@ -2371,6 +2372,139 @@ describe("a sorted and filtered data table", () => {
     expect(store.selectedRange).toEqual({ startRow: 0, endRow: 2, startCol: 0, endCol: 0 });
   });
 
+  it("keeps a whole-column selection across sort changes and operates on visible rows", async () => {
+    const store = await openSorted({ ...QTY_DESC, filter: "=[Qty] >= 2" });
+    store.selection = at("B4");
+    store.extendSelection(at("B2"), "col");
+    expect(store.selectedRange).toEqual({
+      startRow: 0,
+      endRow: 2,
+      startCol: 1,
+      endCol: 1,
+      entireColumn: true,
+    });
+    expect(store.copySelection()).toBe("4\n3\n2");
+    server.setConditionalFormats.mockResolvedValue(changeWith());
+    expect(
+      await store.addConditionalFormat({
+        kind: "criterion",
+        criterion: ">0",
+        format: { bold: true },
+      }),
+    ).toBe(true);
+    expect(server.setConditionalFormats).toHaveBeenCalledExactlyOnceWith("t1", [
+      {
+        range: { startRowId: "r0", endRowId: null, startColId: "c2", endColId: "c2" },
+        kind: "criterion",
+        criterion: ">0",
+        format: { bold: true },
+      },
+    ]);
+
+    store.tables[0]!.display = { sort: [], filter: "=[Qty] >= 2" };
+    expect(store.selectedRange).toEqual({
+      startRow: 0,
+      endRow: 2,
+      startCol: 1,
+      endCol: 1,
+      entireColumn: true,
+    });
+    expect(store.copySelection()).toBe("2\n3\n4");
+
+    store.tables[0]!.display = { sort: [], filter: "=[Qty] >= 3" };
+    expect(store.selectedRange).toEqual({
+      startRow: 0,
+      endRow: 1,
+      startCol: 1,
+      endCol: 1,
+      entireColumn: true,
+    });
+    expect(store.copySelection()).toBe("3\n4");
+
+    store.tables[0]!.display = { sort: [{ colId: "c2", descending: true }], filter: "=[Qty] >= 3" };
+    expect(store.selectedRange).toEqual({
+      startRow: 0,
+      endRow: 1,
+      startCol: 1,
+      endCol: 1,
+      entireColumn: true,
+    });
+    expect(store.copySelection()).toBe("4\n3");
+
+    server.setCells.mockResolvedValue(changeWith());
+    await store.clearSelection();
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [
+        { rowId: "r3", colId: "c2", input: "" },
+        { rowId: "r2", colId: "c2", input: "" },
+      ],
+      expect.any(String),
+      expect.any(Number),
+      [],
+    );
+  });
+
+  it("pastes a whole-column selection from the first displayed row when its anchor is filtered out", async () => {
+    const store = await openSorted({ sort: [], filter: "=[Qty] < 3" });
+    expect(store.rowView("t1").rows).toEqual([0, 1]);
+    store.selection = at("B4");
+    store.extendSelection(at("B4"), "col");
+
+    await store.paste("5\n6");
+
+    expect(server.setCells.mock.calls[0]?.[1]).toEqual([
+      { rowId: "r0", colId: "c2", input: "5" },
+      { rowId: "r1", colId: "c2", input: "6" },
+    ]);
+  });
+
+  it("fills every visible row of a whole-column selection in display order", async () => {
+    const store = await openSorted({ ...SORTED, filter: "=[Qty] >= 2" });
+    store.selection = at("B3");
+    store.extendSelection(at("B2"), "col");
+    const selected = store.selectedRange!;
+    server.setCells.mockResolvedValue(changeWith());
+    await store.fill("t1", { ...selected, endRow: selected.startRow }, selected);
+    expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      [
+        { rowId: "r3", colId: "c2", input: "3" },
+        { rowId: "r1", colId: "c2", input: "3" },
+      ],
+      expect.any(String),
+      expect.any(Number),
+      [],
+    );
+  });
+
+  it("keeps a whole-row selection with its stored row through sorting and clears it when filtered out", async () => {
+    const store = await openSorted({ ...QTY_DESC, filter: "=[Qty] > 0" });
+    store.selection = at("A3");
+    store.extendSelection(at("B3"), "row");
+    expect(store.selectedRange).toEqual({
+      startRow: 1,
+      endRow: 1,
+      startCol: 0,
+      endCol: 2,
+      entireRow: true,
+    });
+
+    store.tables[0]!.display = { sort: [], filter: "=[Qty] > 0" };
+    expect(store.selection).toEqual(at("A3"));
+    expect(store.selectedRange).toEqual({
+      startRow: 2,
+      endRow: 2,
+      startCol: 0,
+      endCol: 2,
+      entireRow: true,
+    });
+
+    store.tables[0]!.display = { sort: [], filter: "=[Qty] > 3" };
+    expect(store.selection).toBeNull();
+    expect(store.selectedRange).toBeNull();
+  });
+
   it("clears the selection when a filter hides its row", async () => {
     const store = await openSorted({ sort: [], filter: "=[Qty] > 1" });
     store.selection = at("B2");
@@ -2402,6 +2536,26 @@ describe("a sorted and filtered data table", () => {
       axis: "row",
       kind: "delete",
       ids: ["r0", "r3"],
+    });
+  });
+
+  it("keeps a whole-column span when the row at its endpoint is deleted", async () => {
+    const table = { ...TABLE, columns: [...COLUMNS, { name: "Other", type: "any" as const }] };
+    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(), tables: [table] }));
+    const store = useWorkbookStore();
+    await store.load("s1");
+    store.selection = at("B1");
+    store.extendSelection(at("C4"), "col");
+    server.editTable.mockResolvedValue(
+      changeWith({ table: { ...table, rowCount: 3, rows: table.rows.slice(0, 3) } }),
+    );
+
+    await store.deleteLines("t1", "row", [3]);
+
+    expect(store.selectedRange).toMatchObject({
+      startCol: 1,
+      endCol: 2,
+      entireColumn: true,
     });
   });
 

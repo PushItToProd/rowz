@@ -61,6 +61,11 @@ const selected = computed(() =>
 const selectedText = computed(() => {
   const range = selected.value;
   if (!range) return "";
+  if (range.entireColumn) {
+    const start = formatAddress({ row: 0, col: range.startCol });
+    const end = formatAddress({ row: 0, col: range.endCol }).replace(/\d+$/, "");
+    return `${start}:${end}`;
+  }
   const row = store.rowView(props.table.id).storedRow;
   const start = formatAddress({ row: row(range.startRow), col: range.startCol });
   const end = formatAddress({ row: row(range.endRow), col: range.endCol });

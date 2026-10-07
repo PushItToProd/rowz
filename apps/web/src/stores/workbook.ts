@@ -76,6 +76,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     get selection() {
       return selection;
     },
+    get selectionKind() {
+      return selectionKind;
+    },
     get tables() {
       return tables;
     },
@@ -370,10 +373,19 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const views = ref<ViewRecord[]>([]);
   /** The selected cell: the one the keyboard edits and the formula bar shows. */
   const selection = ref<CellId | null>(null);
+  /** Whether the selected range came from a row or column header. */
+  const selectionKind = ref<"row" | "col" | null>(null);
   /** The far corner of a selected range, when more than one cell is selected. */
   const selectionEnd = ref<CellAddress | null>(null);
   // Selecting another cell selects just that cell.
-  watch(selection, () => (selectionEnd.value = null), { flush: "sync" });
+  watch(
+    selection,
+    () => {
+      selectionEnd.value = null;
+      selectionKind.value = null;
+    },
+    { flush: "sync" },
+  );
   watch(
     selection,
     (current, previous) => {
@@ -404,6 +416,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     () => {
       const anchor = selection.value;
       if (!anchor) return;
+      // A whole-column selection is independent of which rows the current
+      // sort and filter happen to put at its ends.
+      if (selectionKind.value === "col") return;
       const view = rowView(anchor.tableId);
       if (view.place(anchor.row) === undefined) selection.value = null;
       else if (selectionEnd.value && view.place(selectionEnd.value.row) === undefined) {

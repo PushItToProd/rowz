@@ -25,6 +25,7 @@ import type { Notice, RowView } from "../workbook";
 /** Private store dependencies. Mutable queue state is accessed through getters and setters. */
 export interface WorkbookContext {
   selection: Ref<CellId | null>;
+  selectionKind: Ref<"row" | "col" | null>;
   tables: Ref<TableRecord[]>;
   gridFocusRequests: Ref<number, number>;
   selectionEnd: Ref<CellAddress | null>;
@@ -95,7 +96,7 @@ export interface WorkbookContext {
   withStableSelection: (change: () => void) => void;
   syncStructure: () => void;
   syncCells: (cells: readonly IdentifiedCell[]) => void;
-  extendSelection: (address: CellAddress) => void;
+  extendSelection: (address: CellAddress, kind?: "row" | "col") => void;
   hasTable: (tableId: string) => boolean;
   unansweredCount: Ref<number, number>;
   submitFormulaDraft: (target: EditingTarget, text: string) => Promise<"saved" | "deleted">;

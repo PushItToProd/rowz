@@ -86,6 +86,25 @@ describe("ConditionalFormatsPanel", () => {
     expect(add.element.disabled).toBe(false);
   });
 
+  it("describes a header selection as a whole column and applies the rule to all rows", async () => {
+    const store = await render();
+    store.selection = at("B1");
+    store.extendSelection(at("B4"), "col");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Applies to B1:B");
+
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(server.setConditionalFormats).toHaveBeenCalledExactlyOnceWith("t1", [
+      {
+        range: { startRowId: "r0", endRowId: null, startColId: "c2", endColId: "c2" },
+        kind: "criterion",
+        criterion: ">0",
+        format: { fill: "green" },
+      },
+    ]);
+  });
+
   it("adds a criterion rule over the selection with the chosen style", async () => {
     const store = await render();
     store.selection = at("B2");

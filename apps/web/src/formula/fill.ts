@@ -14,6 +14,10 @@ export interface GridRange {
   startCol: number;
   endRow: number;
   endCol: number;
+  /** The selected columns extend through every row shown by the table. */
+  entireColumn?: boolean;
+  /** The selected rows extend through every column of the table. */
+  entireRow?: boolean;
 }
 
 export function rangeOf(a: CellAddress, b: CellAddress = a): GridRange {

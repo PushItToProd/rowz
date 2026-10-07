@@ -91,9 +91,10 @@ export function createFormats(context: WorkbookContext) {
     const view = context.rowView(table.id);
     const shown = view.rows.length;
     // With rows hidden, every row shown is not every row of the column.
+    const wholeColumn = selected.entireColumn === true;
     const wholeRows = selected.startRow === 0 && selected.endRow >= shown - 1 && view.hidden === 0;
     const wholeCols = selected.startCol === 0 && selected.endCol >= table.colCount - 1;
-    if (view.reordered && !wholeRows && selected.startRow !== selected.endRow) {
+    if (view.reordered && !wholeRows && !wholeColumn && selected.startRow !== selected.endRow) {
       const hasFilter = table.display.filter !== undefined && table.display.filter !== "";
       const hasSort = table.display.sort.length > 0;
       const clear =
@@ -104,18 +105,25 @@ export function createFormats(context: WorkbookContext) {
       };
       return undefined;
     }
-    const startRow = wholeRows ? 0 : view.storedRow(selected.startRow);
-    const endRow = view.storedRow(selected.endRow);
+    const startRow = wholeRows || wholeColumn ? 0 : view.storedRow(selected.startRow);
     const start = context.identityOf({ tableId: table.id, row: startRow, col: selected.startCol });
-    const end = context.identityOf({ tableId: table.id, row: endRow, col: selected.endCol });
-    if (!start || !end) return undefined;
+    const end =
+      wholeRows || wholeColumn
+        ? undefined
+        : context.identityOf({
+            tableId: table.id,
+            row: view.storedRow(selected.endRow),
+            col: selected.endCol,
+          });
+    const endColId = wholeCols ? null : table.colIds[selected.endCol];
+    if (!start || (!wholeRows && !wholeColumn && !end) || endColId === undefined) return undefined;
     return {
       tableId: table.id,
       range: {
         startRowId: start.rowId,
-        endRowId: wholeRows ? null : end.rowId,
+        endRowId: wholeRows || wholeColumn ? null : (end?.rowId ?? null),
         startColId: start.colId,
-        endColId: wholeCols ? null : end.colId,
+        endColId,
       },
     };
   }

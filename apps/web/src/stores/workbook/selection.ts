@@ -39,10 +39,29 @@ export function createSelection(context: WorkbookContext) {
     if (!anchor) return null;
     const view = rowView(anchor.tableId);
     const end = context.selectionEnd.value ?? anchor;
-    return rangeOf(
+    const selected = rangeOf(
       { row: view.place(anchor.row) ?? anchor.row, col: anchor.col },
       { row: view.place(end.row) ?? end.row, col: end.col },
     );
+    const kind = context.selectionKind.value;
+    if (kind === "col") {
+      const last = Math.max(0, view.rows.length - 1);
+      return {
+        ...rangeOf({ row: 0, col: anchor.col }, { row: last, col: end.col }),
+        entireColumn: true,
+      };
+    }
+    if (kind === "row") {
+      const table = context.tables.value.find((candidate) => candidate.id === anchor.tableId);
+      if (table)
+        return {
+          ...selected,
+          startCol: 0,
+          endCol: Math.max(0, table.colCount - 1),
+          entireRow: true,
+        };
+    }
+    return selected;
   });
 
   /** The tables that show their rows in an order or with some left out, which are the ones worth computing. */
@@ -97,7 +116,7 @@ export function createSelection(context: WorkbookContext) {
       };
     const view = rowView(table.id);
     const count = view.rows.length + (table.columns && table.rowCount < LIMITS.tableRows ? 1 : 0);
-    const place = view.place(from.row) ?? from.row;
+    const place = context.selectionKind.value === "col" ? 0 : (view.place(from.row) ?? from.row);
     const start = key === "Tab" ? (tabStart ?? { tableId: table.id, col: from.col }) : undefined;
     const nextPlace = Math.max(
       0,
@@ -148,11 +167,12 @@ export function createSelection(context: WorkbookContext) {
   }
 
   /** Makes the selection a range from the selected cell to `address`. */
-  function extendSelection(address: CellAddress): void {
+  function extendSelection(address: CellAddress, kind?: "row" | "col"): void {
     const anchor = context.selection.value;
     if (!anchor) return;
     const single = anchor.row === address.row && anchor.col === address.col;
     context.selectionEnd.value = single ? null : { row: address.row, col: address.col };
+    context.selectionKind.value = kind ?? null;
   }
 
   /**
@@ -224,7 +244,10 @@ export function createSelection(context: WorkbookContext) {
     const at = context.selection.value;
     if (!at || !context.canEdit.value) return;
     const view = rowView(at.tableId);
-    const place = { row: view.place(at.row) ?? at.row, col: at.col };
+    const place = {
+      row: context.selectionKind.value === "col" ? 0 : (view.place(at.row) ?? at.row),
+      col: at.col,
+    };
     // Text this app put on the clipboard stands for the cells it was copied from.
     const own = copied?.text === text ? copied : undefined;
     const rows = own?.rows ?? fromClipboardText(text);

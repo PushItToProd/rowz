@@ -1743,14 +1743,25 @@ describe("row and column headers, and the menu", () => {
     expect(wrapper.emitted("menu")).toBeUndefined();
     expect(formulas.active?.state.doc.toString()).toBe("draft");
   });
-  const range = () => useWorkbookStore().selectedRange;
+  const range = () => {
+    const selected = useWorkbookStore().selectedRange;
+    if (!selected) return null;
+    return {
+      startRow: selected.startRow,
+      startCol: selected.startCol,
+      endRow: selected.endRow,
+      endCol: selected.endCol,
+    };
+  };
 
   it("selects a whole row or column from its header", async () => {
     await mountGrid();
     await wrapper.findAll("tbody th")[1]!.trigger("mousedown");
     expect(range()).toEqual({ startRow: 1, endRow: 1, startCol: 0, endCol: 2 });
+    expect(useWorkbookStore().selectedRange).toMatchObject({ entireRow: true });
     await wrapper.findAll("thead th")[2]!.trigger("mousedown");
     expect(range()).toEqual({ startRow: 0, endRow: 3, startCol: 1, endCol: 1 });
+    expect(useWorkbookStore().selectedRange).toMatchObject({ entireColumn: true });
     expect(document.activeElement).toBe(wrapper.get(".grid").element);
   });
 
@@ -1959,6 +1970,7 @@ describe("a data table", () => {
       endRow: 3,
       startCol: 1,
       endCol: 1,
+      entireColumn: true,
     });
   });
 
@@ -2350,6 +2362,47 @@ describe("a sorted and filtered data table", () => {
     expect(selectedAddress()).toBe("A2");
     await press("ArrowUp");
     expect(selectedAddress()).toBe("A4");
+  });
+
+  it("moves from the top of a whole column when its anchor row is filtered out", async () => {
+    await mountShown({
+      sort: [{ colId: "c2", descending: true }],
+      filter: "=[Qty] < 3",
+    });
+    const store = useWorkbookStore();
+    store.selection = at("B4");
+    store.extendSelection(at("B4"), "col");
+
+    await press("ArrowRight");
+
+    expect(selectedAddress()).toBe("C2");
+  });
+
+  it("keeps a whole-column selection when Shift extends it across columns", async () => {
+    await mountShown({
+      sort: [{ colId: "c2", descending: true }],
+      filter: "=[Qty] >= 3",
+    });
+    const store = useWorkbookStore();
+    store.selection = at("B4");
+    store.extendSelection(at("B3"), "col");
+
+    await press("ArrowRight", { shiftKey: true });
+
+    expect(store.selectedRange).toMatchObject({
+      startCol: 1,
+      endCol: 2,
+      entireColumn: true,
+    });
+    server.setConditionalFormats.mockResolvedValue(changeWith());
+    expect(
+      await store.addConditionalFormat({
+        kind: "criterion",
+        criterion: ">0",
+        format: { bold: true },
+      }),
+    ).toBe(true);
+    expect(server.setConditionalFormats).toHaveBeenCalledOnce();
   });
 
   it("selects a rectangle of the rows shown", async () => {

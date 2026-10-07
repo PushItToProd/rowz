@@ -39,8 +39,57 @@ export function createSync(context: WorkbookContext) {
       : undefined;
   }
 
+  interface StableColumnSelection {
+    tableId: string;
+    anchorColId: string | undefined;
+    anchor: IdentifiedCell | undefined;
+    anchorRow: number;
+    endColId: string | undefined;
+  }
+
+  /** Keeps a whole-column selection in column identities, independent of its endpoint rows. */
+  function stableColumnSelection(): StableColumnSelection | undefined {
+    const anchor = context.selection.value;
+    if (!anchor || context.selectionKind.value !== "col") return undefined;
+    const table = context.tables.value.find((candidate) => candidate.id === anchor.tableId);
+    const end = context.selectionEnd.value;
+    return {
+      tableId: anchor.tableId,
+      anchorColId: table?.colIds[anchor.col],
+      anchor: identityOf(anchor),
+      anchorRow: anchor.row,
+      endColId: end ? table?.colIds[end.col] : undefined,
+    };
+  }
+
+  /** Restores the columns, using a surviving row only as the stored cell anchor. */
+  function restoreColumnSelection(saved: StableColumnSelection): void {
+    const table = context.tables.value.find((candidate) => candidate.id === saved.tableId);
+    const anchorCol = table?.colIds.indexOf(saved.anchorColId ?? "") ?? -1;
+    if (!table || anchorCol < 0) {
+      context.selection.value = null;
+      context.selectionEnd.value = null;
+      context.selectionKind.value = null;
+      return;
+    }
+    const row =
+      (saved.anchor && positionOf(saved.anchor)?.row) ??
+      Math.min(saved.anchorRow, Math.max(0, table.rowCount - 1));
+    context.selection.value = { tableId: saved.tableId, row, col: anchorCol };
+    const endCol = saved.endColId ? table.colIds.indexOf(saved.endColId) : -1;
+    context.selectionEnd.value = endCol >= 0 ? { row, col: endCol } : null;
+    context.selectionKind.value = "col";
+  }
+
   function withStableSelection(change: () => void): void {
+    const columns = stableColumnSelection();
+    if (columns) {
+      change();
+      restoreColumnSelection(columns);
+      return;
+    }
     const anchor = context.selection.value && identityOf(context.selection.value);
+    const kind = context.selectionKind.value;
     const end =
       context.selection.value &&
       context.selectionEnd.value &&
@@ -50,6 +99,7 @@ export function createSync(context: WorkbookContext) {
       context.selection.value = positionOf(anchor) ?? null;
       context.selectionEnd.value =
         context.selection.value && end ? (positionOf(end) ?? null) : null;
+      context.selectionKind.value = context.selection.value ? kind : null;
     }
   }
 
@@ -224,16 +274,27 @@ export function createSync(context: WorkbookContext) {
     )
       return;
 
-    const anchored = context.selection.value && identityOf(context.selection.value);
-    const end =
-      context.selection.value &&
-      context.selectionEnd.value &&
-      identityOf({ tableId: context.selection.value.tableId, ...context.selectionEnd.value });
+    const columns = stableColumnSelection();
+    const anchored = columns
+      ? undefined
+      : context.selection.value && identityOf(context.selection.value);
+    const kind = context.selectionKind.value;
+    const end = columns
+      ? undefined
+      : context.selection.value &&
+        context.selectionEnd.value &&
+        identityOf({ tableId: context.selection.value.tableId, ...context.selectionEnd.value });
     installSnapshot(snapshot);
+
+    if (columns) {
+      restoreColumnSelection(columns);
+      return;
+    }
 
     const selected = anchored && positionOf(anchored);
     context.selection.value = selected ?? null;
     context.selectionEnd.value = selected && end ? (positionOf(end) ?? null) : null;
+    context.selectionKind.value = selected ? kind : null;
   }
 
   /** Applies the content the server restored, then keeps or moves the selection. */
