@@ -345,6 +345,12 @@ const OPERATORS = [
         Cell edits save when you commit or leave the editor. Other open sessions receive saved
         changes.
       </p>
+      <p>
+        When you commit a formula starting with <code>=</code>, rowz adds closing parentheses left
+        open at the end. Parentheses inside strings, quoted names, brackets, and braces are ignored;
+        extra closing parentheses remain and still cause an error. An unfinished string, quoted
+        name, column bracket, or brace group is left as typed so its error remains visible.
+      </p>
 
       <h3>Keyboard</h3>
       <table>

@@ -6,6 +6,7 @@ import {
   type IdentityCellInput,
 } from "@spreadsheet-app/shared";
 import { api, type Change } from "../../api/client";
+import { closeOpenFormulaParentheses } from "../../formula/commit";
 import { type EditingTarget } from "../../formula/session";
 import type { WorkbookContext } from "./context";
 type CellChange = IdentityCellInput;
@@ -27,8 +28,12 @@ export function createWrites(context: WorkbookContext) {
     await setCell(position, input, writtenAt);
   }
 
-  /** Saves exact draft text to its current target, without a starting-revision restriction. */
+  /** Saves a draft to its current target, without a starting-revision restriction. */
   function submitFormulaDraft(target: EditingTarget, text: string): Promise<"saved" | "deleted"> {
+    const committedText =
+      target.kind === "script" || target.kind === "markdown"
+        ? text
+        : closeOpenFormulaParentheses(text);
     return context.enqueueWrite(async () => {
       if (!context.canEdit.value) throw new Error("You cannot edit this document");
       const table =
@@ -42,10 +47,10 @@ export function createWrites(context: WorkbookContext) {
           case "cell": {
             const position = context.positionOf(target);
             if (!position) return "deleted";
-            if (text === context.inputOf(position)) return "saved";
+            if (committedText === context.inputOf(position)) return "saved";
             change = await api.setCells(
               target.tableId,
-              [{ rowId: target.rowId, colId: target.colId, input: text }],
+              [{ rowId: target.rowId, colId: target.colId, input: committedText }],
               crypto.randomUUID(),
               context.revision.value,
               [],
@@ -54,12 +59,12 @@ export function createWrites(context: WorkbookContext) {
           }
           case "append": {
             if (!table?.colIds.includes(target.colId)) return "deleted";
-            if (text === "") return "saved";
+            if (committedText === "") return "saved";
             const rowId = target.rowId ?? crypto.randomUUID();
             const existing = table.rows.some((row) => row.id === rowId);
             change = await api.setCells(
               table.id,
-              [{ rowId, colId: target.colId, input: text }],
+              [{ rowId, colId: target.colId, input: committedText }],
               crypto.randomUUID(),
               context.revision.value,
               existing ? [] : [rowId],
@@ -69,17 +74,20 @@ export function createWrites(context: WorkbookContext) {
           case "column":
             if (!table?.columns?.[table.colIds.indexOf(target.colId)]) return "deleted";
             change = await api.updateColumn(target.tableId, target.colId, {
-              formula: text,
+              formula: committedText,
               type: "formula",
             });
             break;
           case "name": {
-            change = await api.updateNamedFormula(target.tableId, target.name, text);
+            change = await api.updateNamedFormula(target.tableId, target.name, committedText);
             break;
           }
           case "filter":
             if (!table) return "deleted";
-            change = await api.setTableDisplay(target.tableId, { ...table.display, filter: text });
+            change = await api.setTableDisplay(target.tableId, {
+              ...table.display,
+              filter: committedText,
+            });
             break;
           case "script":
           case "markdown":
@@ -87,9 +95,9 @@ export function createWrites(context: WorkbookContext) {
             {
               const view = context.views.value.find((item) => item.id === target.viewId);
               if (!view) return "deleted";
-              if (text === view.source) return "saved";
+              if (committedText === view.source) return "saved";
             }
-            change = await api.updateView(target.viewId, { source: text });
+            change = await api.updateView(target.viewId, { source: committedText });
             break;
         }
         await context.receiveChange(change);

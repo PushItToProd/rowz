@@ -58,6 +58,53 @@ describe("draft submissions", () => {
     expect(server.setTableNames).not.toHaveBeenCalled();
   });
 
+  it("closes formula targets but leaves script and Markdown sources unchanged", async () => {
+    const store = await open();
+    store.views = [
+      {
+        id: "chart",
+        pageId: "p1",
+        kind: "chart",
+        name: "Chart",
+        source: "A1",
+        chartType: "bar",
+        position: 0,
+      },
+      {
+        id: "script",
+        pageId: "p1",
+        kind: "script",
+        name: "Script",
+        source: "",
+        chartType: null,
+        position: 1,
+      },
+      {
+        id: "text",
+        pageId: "p1",
+        kind: "text",
+        name: "Text",
+        source: "",
+        chartType: null,
+        position: 2,
+      },
+    ];
+    server.updateNamedFormula.mockResolvedValue(changeWith());
+    server.updateView.mockResolvedValue(changeWith());
+
+    await store.submitFormulaDraft({ kind: "name", tableId: "t1", name: "Total" }, "=SUM(B2");
+    await store.submitFormulaDraft({ kind: "chart", viewId: "chart" }, "=SUM(B2");
+    await store.submitFormulaDraft({ kind: "script", viewId: "script" }, "=SUM(B2");
+    await store.submitFormulaDraft({ kind: "markdown", viewId: "text" }, "=SUM(B2");
+
+    expect(server.updateNamedFormula).toHaveBeenCalledExactlyOnceWith("t1", "Total", "=SUM(B2)");
+    expect(server.updateView.mock.calls).toEqual([
+      ["chart", { source: "=SUM(B2)" }],
+      ["script", { source: "=SUM(B2" }],
+      ["text", { source: "=SUM(B2" }],
+    ]);
+  });
+
   it("does not recreate a renamed or deleted named target or update its old list position", async () => {
     const store = await open();
     store.tables = store.tables.map((table) => ({

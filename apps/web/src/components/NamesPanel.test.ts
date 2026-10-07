@@ -97,6 +97,18 @@ describe("NamesPanel", () => {
     ]);
   });
 
+  it("closes trailing parentheses when adding a named formula", async () => {
+    server.setTableNames.mockResolvedValue(changeWith());
+    await render([]);
+    await wrapper.get('[aria-label="New name"]').setValue("Total");
+    await edit("Formula of the new name", "=SUM(A1");
+    await wrapper.get(".names-panel__add").trigger("submit");
+    await flushPromises();
+    expect(server.setTableNames).toHaveBeenCalledExactlyOnceWith("t1", [
+      { name: "Total", formula: "=SUM(A1)" },
+    ]);
+  });
+
   it("removes a name", async () => {
     server.setTableNames.mockResolvedValue(changeWith());
     await render([

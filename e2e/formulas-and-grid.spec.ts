@@ -25,6 +25,17 @@ test("a button writes the sum of two cells into a third, and the result persists
   await expect(page.getByRole("button", { name: "Sum range" })).toBeVisible();
 });
 
+test("committing a formula closes parentheses left open at the end", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "D2", "1");
+  await enter(page, "D3", "2");
+  await enter(page, "D4", "3");
+  await enter(page, "A1", "=SUM(D2:D4");
+  await expect(cell(page, "A1")).toHaveText("6");
+  await cell(page, "A1").click();
+  await expect(page.getByLabel("Formula")).toHaveValue("=SUM(D2:D4)");
+});
+
 test("a cell button asks before clearing cells", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "keep this");

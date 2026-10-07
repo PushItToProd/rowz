@@ -6,6 +6,7 @@ import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import { EditorState } from "@codemirror/state";
 import { namingContext } from "../formula/context";
+import { closeOpenFormulaParentheses } from "../formula/commit";
 import { useFormulaSessionStore } from "../formula/session";
 import FormulaEditor from "./FormulaEditor.vue";
 import SessionFormulaField from "./SessionFormulaField.vue";
@@ -69,7 +70,7 @@ async function add(): Promise<void> {
   try {
     if (!(await submitDraft())) return;
     const name = newName.value.trim();
-    const formula = newFormula.value.trim();
+    const formula = closeOpenFormulaParentheses(newFormula.value.trim());
     const table = store.tables.find((table) => table.id === props.table.id);
     if (!table || name === "" || formula === "") return;
     if (await store.setTableNames(table.id, [...table.names, { name, formula }])) discardNew();
