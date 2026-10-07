@@ -182,7 +182,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [x] add `CLAMP(val, min, max)`, equivalent to `IFS(val < min, min, val > max, max, 1=1, val)`
 
 - [/] (Claude) for the author: review the smaller candidates left in docs/rows-functions.md and determine which to include
-- [ ] **P6** the reference functions `OFFSET`, `INDIRECT`, `ADDRESS`, `ISFORMULA`, `ISREF` #formula-language
+- [ ] **P6** the reference functions `OFFSET`, `INDIRECT`, `ADDRESS`, `ISFORMULA`, `ISREF` #formula-language (plan: plans/reference-functions.md)
 - [ ] **P7** random numbers #formula-language
 - [x] **P6** date helpers except for `TO_TIMEZONE` since we don't use time zones here
 - [x] other text - `SLICE`, `SLUGIFY`, `DECODEURL`, `BASE64`, `BASE64DECODE`, `DOMAIN`, `RELATIVE_URL`
