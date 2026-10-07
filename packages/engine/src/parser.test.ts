@@ -1,6 +1,11 @@
-import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { printNode, type BinaryOperator, type Node, type ReferenceCell } from "./ast";
+import {
+  printNode,
+  type BinaryOperator,
+  type Node,
+  type Reference,
+  type ReferenceCell,
+} from "./ast";
 import { parseFormula, parseFormulaWithReferences } from "./parser";
 import { FormulaSyntaxError } from "./tokenizer";
 import { ERROR_CODES } from "./values";
@@ -16,6 +21,148 @@ const binary = (operator: BinaryOperator, left: Node, right: Node): Node => ({
   left,
   right,
 });
+
+function randomInteger(random: () => number, limit: number): number {
+  return Math.floor(random() * limit);
+}
+
+function randomUnicodeString(random: () => number): string {
+  const specialCharacters = ["\n", "\r", "\t", "\0", "\\", "'", '"', "\u2028", "\u2029"];
+  const length = randomInteger(random, 25);
+  let text = "";
+  for (let index = 0; index < length; index += 1) {
+    if (random() < 0.35) {
+      text += specialCharacters[randomInteger(random, specialCharacters.length)]!;
+      continue;
+    }
+    const codePoint = randomInteger(random, 0x11_0000);
+    text += String.fromCodePoint(codePoint);
+  }
+  return text;
+}
+
+function randomFiniteDouble(random: () => number): number {
+  const bits = new DataView(new ArrayBuffer(8));
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const high = BigInt(randomInteger(random, 0x1_0000_0000));
+    const low = BigInt(randomInteger(random, 0x1_0000_0000));
+    bits.setBigUint64(0, (high << 32n) | low);
+    const value = bits.getFloat64(0);
+    if (Number.isFinite(value)) return Math.abs(value) + 0;
+  }
+  return Number.MAX_VALUE;
+}
+
+function randomCell(random: () => number): ReferenceCell {
+  return {
+    row: randomInteger(random, 10_000),
+    col: randomInteger(random, 18_278),
+    rowAbsolute: random() < 0.5,
+    colAbsolute: random() < 0.5,
+  };
+}
+
+function randomCorner(random: () => number): ReferenceCell {
+  const kind = randomInteger(random, 3);
+  if (kind === 0) return randomCell(random);
+  if (kind === 1)
+    return {
+      row: null,
+      col: randomInteger(random, 18_278),
+      rowAbsolute: false,
+      colAbsolute: random() < 0.5,
+    };
+  return {
+    row: randomInteger(random, 10_000),
+    col: null,
+    rowAbsolute: random() < 0.5,
+    colAbsolute: false,
+  };
+}
+
+function randomWord(random: () => number, upperCase = false): string {
+  const length = randomInteger(random, 5) + 4;
+  const first = upperCase ? 65 : 97;
+  let word = "";
+  for (let index = 0; index < length; index += 1) {
+    word += String.fromCharCode(first + randomInteger(random, 26));
+  }
+  return word;
+}
+
+function randomColumnName(random: () => number): string {
+  return randomUnicodeString(random).trim() || "A";
+}
+
+function randomReference(random: () => number): Reference {
+  const page = randomUnicodeString(random);
+  const table = randomUnicodeString(random);
+  const qualified = randomInteger(random, 3);
+  const qualifiers = qualified === 0 ? {} : qualified === 1 ? { table } : { page, table };
+  if (random() < 0.15) return { ...qualifiers, column: randomColumnName(random) };
+  if (random() < 0.5) return { ...qualifiers, start: randomCell(random) };
+  return { ...qualifiers, start: randomCorner(random), end: randomCorner(random) };
+}
+
+function randomNode(random: () => number, depth = 0): Node {
+  const kind = randomInteger(random, depth >= 4 ? 6 : 10);
+  if (kind === 0) return number(randomFiniteDouble(random));
+  if (kind === 1) return { type: "string", value: randomUnicodeString(random) };
+  if (kind === 2) return { type: "boolean", value: random() < 0.5 };
+  if (kind === 3)
+    return { type: "error", code: ERROR_CODES[randomInteger(random, ERROR_CODES.length)]! };
+  if (kind === 4) return { type: "reference", reference: randomReference(random) };
+  if (kind === 5) return { type: "name", name: randomWord(random) };
+  if (kind === 6)
+    return {
+      type: "unary",
+      operator: random() < 0.5 ? "+" : "-",
+      operand: randomNode(random, depth + 1),
+    };
+  if (kind === 7) {
+    const operators: BinaryOperator[] = [
+      "+",
+      "-",
+      "*",
+      "/",
+      "^",
+      "&",
+      "=",
+      "<>",
+      "!=",
+      "<",
+      ">",
+      "<=",
+      ">=",
+      "and",
+      "or",
+    ];
+    return binary(
+      operators[randomInteger(random, operators.length)]!,
+      randomNode(random, depth + 1),
+      randomNode(random, depth + 1),
+    );
+  }
+  if (kind === 8) {
+    const args = Array.from({ length: randomInteger(random, 4) }, () =>
+      randomNode(random, depth + 1),
+    );
+    return { type: "call", name: randomWord(random, true), args };
+  }
+  return {
+    type: "apply",
+    target: randomNode(random, depth + 1),
+    args: Array.from({ length: randomInteger(random, 3) }, () => randomNode(random, depth + 1)),
+  };
+}
+
+function seededRandom(seed: number): () => number {
+  let state = seed;
+  return () => {
+    state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+    return state / 0x1_0000_0000;
+  };
+}
 
 describe("literals", () => {
   it.each<[string, Node]>([
@@ -398,83 +545,12 @@ describe("names and calls of values", () => {
 });
 
 describe("printNode", () => {
-  const referenceCell = fc.record({
-    row: fc.nat(9999),
-    col: fc.nat(18_277),
-    rowAbsolute: fc.boolean(),
-    colAbsolute: fc.boolean(),
-  });
-  // A corner of a range may name only a column or only a row. The `$` marker
-  // of the side left out cannot be written, so it is always false.
-  const corner = fc.oneof(
-    referenceCell,
-    referenceCell.map((cell) => ({ ...cell, row: null, rowAbsolute: false })),
-    referenceCell.map((cell) => ({ ...cell, col: null, colAbsolute: false })),
-  );
-  const cells = fc.oneof(
-    fc.record({ start: referenceCell }),
-    fc.record({ start: corner, end: corner }),
-  );
-  const reference = fc.oneof(
-    cells,
-    fc.tuple(fc.string(), cells).map(([table, rest]) => ({ table, ...rest })),
-    fc
-      .tuple(fc.string(), fc.string(), cells)
-      .map(([page, table, rest]) => ({ page, table, ...rest })),
-  );
-
-  const { node: anyNode } = fc.letrec<{ node: Node }>((tie) => ({
-    node: fc.oneof(
-      { depthSize: "small" },
-      // Negative numbers are written with unary minus, so literals are never negative.
-      fc
-        .double({ min: 0, noNaN: true, noDefaultInfinity: true })
-        .map((value) => number(Math.abs(value))),
-      fc.string().map((value): Node => ({ type: "string", value })),
-      fc.boolean().map((value): Node => ({ type: "boolean", value })),
-      fc.constantFrom(...ERROR_CODES).map((code): Node => ({ type: "error", code })),
-      reference.map((value): Node => ({ type: "reference", reference: value })),
-      fc
-        .tuple(fc.constantFrom<"+" | "-">("+", "-"), tie("node"))
-        .map(([operator, operand]): Node => ({ type: "unary", operator, operand })),
-      fc
-        .tuple(
-          fc.constantFrom<BinaryOperator>(
-            "+",
-            "-",
-            "*",
-            "/",
-            "^",
-            "&",
-            "=",
-            "<>",
-            "!=",
-            "<",
-            ">",
-            "<=",
-            ">=",
-          ),
-          tie("node"),
-          tie("node"),
-        )
-        .map(([operator, left, right]) => binary(operator, left, right)),
-      // Four letters or more, so a name is never read as a cell address or a column.
-      fc.stringMatching(/^[a-z_]{4,8}$/).map((name): Node => ({ type: "name", name })),
-      fc
-        .tuple(fc.stringMatching(/^[A-Z_]{4,8}$/), fc.array(tie("node"), { maxLength: 3 }))
-        .map(([name, args]): Node => ({ type: "call", name, args })),
-      fc
-        .tuple(tie("node"), fc.array(tie("node"), { maxLength: 2 }))
-        .map(([target, args]): Node => ({ type: "apply", target, args })),
-    ),
-  }));
-
   it("prints text that parses back to the same AST", () => {
-    fc.assert(
-      fc.property(anyNode, (node) => {
-        expect(parseFormula(printNode(node))).toEqual(node);
-      }),
-    );
+    const random = seededRandom(0x9e3779b9);
+    for (let sample = 0; sample < 500; sample += 1) {
+      const node = randomNode(random);
+      expect(parseFormula(printNode(node))).toEqual(node);
+    }
   });
 
   it("prints a readable formula", () => {

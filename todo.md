@@ -67,6 +67,7 @@ A reference document is the acceptance test of a theme: the theme is done when i
 
 ## Bugs
 
+- [ ] **P8** `printNode` does not round-trip a column name with leading or trailing whitespace because the tokenizer trims whitespace inside brackets #formula-language
 - [ ] **P8** `CLAMP(A1:A3, 0, C1:C2)` with `A3` an error returns `#N/A` for the third cell, not the error: the array path fetches the cells of all three arguments before it checks any of them (`packages/engine/src/functions/math.ts`) #formula-language
 - [ ] **P6** A button cannot be pressed from the keyboard: in the grid, Enter on a selected cell starts editing and Space starts a space-prefixed edit, so the handler cancels the browser's activation of a focused `<button>`; in a text view, the delegated key handler prevents Enter for every descendant including buttons (`apps/web/src/components/GridView.vue`, `TextCard.vue`) #everyday
 - [ ] **P7** A confirmation prompt names the button as it was when the dialog opened, but confirming sends the same cell identity or loop occurrence; if the formula or the rendered loop changes while the dialog is open, a different action can run under the old prompt (`apps/web/src/components/TextCard.vue`, `apps/server/src/actions/run.ts`) #small-apps
@@ -523,7 +524,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [x] (Claude) run `pnpm e2e` and the server tests against Postgres (`TEST_DATABASE_URL`) after the review fixes: neither runs in the sandbox
   - (author) e2e run and full CI run are passing as of `87b20ea`
 - [x] (Claude) make the tests that guard a design rule find what they guard. `access.test.ts` and `undo.test.ts` ran over lists of routes written by hand, so a new route that nobody added passed both, and the stream at `/spreadsheets/:id/events` was missing from `access.test.ts`. Each now compares what it covers with the routes the app registers and fails for one that is left out
-- [ ] **P5** (Claude) a lint rule that keeps `packages/engine` free of imports from outside it and of Node and browser globals. Its `package.json` has no dependencies, and nothing fails if one is added #codebase
+- [x] **P5** (Claude) a lint rule that keeps `packages/engine` free of imports from outside it and of Node and browser globals. Its `package.json` has no dependencies, and nothing fails if one is added #codebase
 
 ## Test gaps
 
@@ -531,7 +532,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [x] **P5** Add tests for `LOOKUP` and `XYLOOKUP` with empty search ranges, empty or single-row `XYLOOKUP` ranges, and mismatched key types. #codebase
 - [x] **P5** Add tests for the date range helpers (`LASTXDAYS`, `LASTXWEEKS`, `LASTXMONTHS`, `DATEINTERVAL`) at the year 0 and 9999 boundaries, with negative and fractional counts, and for `LASTXMONTHS` clamping around February and month ends. Add `TIMEVALUE` with fractional seconds and more `YEARFRAC` day-count edge cases. #codebase
 - [x] **P2** The `SUBTOTAL` tests for codes 7/107 and 10/110 use values 1, 2, 3, where `STDEV` and `VAR_S` are both 1, so swapped mappings would pass. Use a fixture such as 1, 2, 4. #codebase
-- [ ] **P5** The spill-resize keyboard tests (`press()` in `GridView.test.ts`) dispatch keydown straight to `.grid` and select cells with `mousedown`, so they do not check that the grid actually has focus when Alt+Enter is pressed. Add a test with real focus. #codebase
+- [x] **P5** The spill-resize keyboard tests (`press()` in `GridView.test.ts`) dispatch keydown straight to `.grid` and select cells with `mousedown`, so they do not check that the grid actually has focus when Alt+Enter is pressed. Add a test with real focus. #codebase
 
 ## Before sharing with others
 

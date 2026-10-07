@@ -250,8 +250,7 @@ describe("a function in a cell", () => {
 });
 
 describe("function names", () => {
-  it("never look like a cell address, which would be read as a call of that cell", async () => {
-    const { defaultFunctions } = await import("./index");
+  it("never look like a cell address, which would be read as a call of that cell", () => {
     for (const name of defaultFunctions.keys()) expect(name).not.toMatch(/^[A-Z]{1,3}[0-9]+$/);
   });
 });

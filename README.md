@@ -292,6 +292,8 @@ Rows and columns have persistent UUIDs. Cells and undo entries name those IDs; i
 
 The engine is pure. Evaluating an action formula returns a description of the effect, and `Workbook.planAction` turns that description into a list of effects such as `setCell` or `sendEmail`. The engine never applies them.
 
+ESLint keeps `packages/engine` on relative imports and rejects Node and browser globals. It permits ECMAScript globals except dynamic `eval` and `Function` calls, plus the cross-runtime `URL`, `TextEncoder`, and `TextDecoder` APIs used by formula functions. Engine tests may import `vitest` and use `performance` for timing assertions.
+
 The same engine runs in two places. The browser runs it to show values as soon as a cell changes. The server runs it when a button is clicked: it loads the stored inputs, evaluates the clicked cell or the text view's selected button occurrence, plans the action, and applies the effects. The browser sends a cell's identity or a view ID and button occurrence, so it cannot ask the server for an effect that the stored formula does not describe.
 
 Cell writes and a record in `action_runs` commit in one transaction. Email is sent after the commit.

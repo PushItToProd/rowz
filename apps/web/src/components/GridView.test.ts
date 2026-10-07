@@ -399,6 +399,60 @@ describe("rendering", () => {
     expect(document.activeElement).toBe(wrapper.get(".grid").element);
   });
 
+  it("resizes a spill with Alt+Enter when the grid has focus", async () => {
+    const resized = sizedTable({ rowCount: 6, colCount: 4 });
+    server.updateTable.mockResolvedValue(
+      changeWith({ table: resized, cells: [], views: [], tables: [] }),
+    );
+    await mountGrid({ A1: "=SEQUENCE(6, 4)" });
+    await select("A1");
+    window.dispatchEvent(new MouseEvent("mouseup"));
+
+    const grid = wrapper.get<HTMLElement>(".grid").element;
+    expect(document.activeElement).toBe(grid);
+    const activeGrid = document.activeElement;
+    if (!(activeGrid instanceof HTMLElement)) throw new Error("Expected the grid to have focus");
+    dispatchKey(activeGrid, "Enter", { altKey: true });
+    await flushPromises();
+
+    const button = document.querySelector<HTMLButtonElement>(".cell-error-popover__action");
+    if (!button) throw new Error("Expected the spill resize button");
+    expect(document.activeElement).toBe(button);
+    dispatchKey(button, "Enter");
+    await vi.waitFor(() => {
+      expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
+        rowCount: 6,
+        colCount: 4,
+        grow: true,
+      });
+    });
+    expect(useWorkbookStore().valueOf(at("D6"))).toBe(24);
+  });
+
+  it("does not resize a spill with Alt+Enter when focus is outside the grid", async () => {
+    await mountGrid({ A1: "=SEQUENCE(6, 4)" });
+    await select("A1");
+    window.dispatchEvent(new MouseEvent("mouseup"));
+
+    const input = document.createElement("input");
+    document.body.append(input);
+    try {
+      input.focus();
+      expect(document.activeElement).toBe(input);
+      const focusedInput = document.activeElement;
+      if (!(focusedInput instanceof HTMLElement))
+        throw new Error("Expected the input to have focus");
+      dispatchKey(focusedInput, "Enter", { altKey: true });
+      await flushPromises();
+
+      expect(document.activeElement).toBe(input);
+      expect(document.querySelector(".cell-error-popover__action")).toBeNull();
+      expect(server.updateTable).not.toHaveBeenCalled();
+    } finally {
+      input.remove();
+    }
+  });
+
   it.each(["Enter", " "])(
     "resizes the table with %s after Alt+Enter focuses the action",
     async (key) => {

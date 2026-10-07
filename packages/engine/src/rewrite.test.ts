@@ -412,7 +412,9 @@ describe("inputsAfterMove", () => {
     const before = values(STRUCTURE, cells);
     expect(before).toEqual([14, 7, 14, 15, 15, 15]);
 
-    const moved = structuredClone(cells) as Record<string, Record<string, string>>;
+    const moved = Object.fromEntries(
+      Object.entries(cells).map(([tableId, inputs]) => [tableId, { ...inputs }]),
+    ) as Record<string, Record<string, string>>;
     const data: WorkbookData = {
       ...STRUCTURE,
       cells: Object.entries(cells).flatMap(([tableId, inputs]) =>

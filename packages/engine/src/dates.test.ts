@@ -1,4 +1,3 @@
-import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { dateFromParts, dateParts, formatDate, isDate, parseDate, startOfDay } from "./dates";
 
@@ -38,18 +37,20 @@ describe("parseDate and formatDate", () => {
   });
 
   it("reads back every date it writes", () => {
-    fc.assert(
-      fc.property(
-        fc.integer({ min: 1, max: 9999 }),
-        fc.integer({ min: 1, max: 12 }),
-        fc.integer({ min: 1, max: 28 }),
-        fc.integer({ min: 0, max: 86_399 }),
-        (year, month, day, seconds) => {
-          const value = dateFromParts(year, month, day, 0, 0, seconds);
-          expect(parseDate(formatDate(value))).toEqual(value);
-        },
-      ),
-    );
+    let seed = 0x4d595df4;
+    const nextInteger = (limit: number): number => {
+      seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+      return seed % limit;
+    };
+
+    for (let sample = 0; sample < 500; sample += 1) {
+      const year = nextInteger(9999) + 1;
+      const month = nextInteger(12) + 1;
+      const day = nextInteger(28) + 1;
+      const seconds = nextInteger(86_400);
+      const value = dateFromParts(year, month, day, 0, 0, seconds);
+      expect(parseDate(formatDate(value))).toEqual(value);
+    }
   });
 });
 

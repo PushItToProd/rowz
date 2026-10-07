@@ -1,4 +1,3 @@
-import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   error,
@@ -74,18 +73,61 @@ describe("literalInput", () => {
   });
 
   it("produces an input that reads back as the same value and never as a formula", () => {
-    const scalar = fc.oneof(
-      fc.string().filter((text) => text !== ""),
-      fc.double({ noNaN: true, noDefaultInfinity: true }).map((value) => value + 0),
-      fc.boolean(),
-    );
-    fc.assert(
-      fc.property(scalar, (value) => {
-        const input = literalInput(value);
-        expect(isFormulaInput(input)).toBe(false);
-        expect(parseLiteralInput(input)).toBe(value);
-      }),
-    );
+    let seed = 0x6d2b79f5;
+    const next = (): number => {
+      seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+      return seed / 0x1_0000_0000;
+    };
+    const nextInteger = (limit: number): number => Math.floor(next() * limit);
+    const specialCharacters = ["\n", "\r", "\t", "\0", "\\", "'", '"', "\u2028", "\u2029"];
+    const randomUnicodeString = (): string => {
+      const length = nextInteger(24) + 1;
+      let text = "";
+      for (let index = 0; index < length; index += 1) {
+        if (next() < 0.35) {
+          text += specialCharacters[nextInteger(specialCharacters.length)]!;
+          continue;
+        }
+        const codePoint = nextInteger(0x11_0000);
+        text += String.fromCodePoint(codePoint);
+      }
+      return text;
+    };
+    const values: Scalar[] = [
+      "hello",
+      "42",
+      "true",
+      "=A1",
+      "2026-09-30",
+      "'quoted",
+      "line\nbreak",
+      'back\\slash and "quotes"',
+      "Ω😀",
+      0,
+      -1,
+      0.1,
+      Number.MAX_VALUE,
+      Number.MIN_VALUE,
+      true,
+      false,
+    ];
+
+    for (let sample = 0; sample < 300; sample += 1) {
+      if (sample % 3 === 0) {
+        values.push(randomUnicodeString());
+      } else if (sample % 3 === 1) {
+        const sign = nextInteger(2) === 0 ? -1 : 1;
+        values.push((sign * (nextInteger(1_000_000) + 1)) / (nextInteger(10_000) + 1));
+      } else {
+        values.push(nextInteger(2) === 0);
+      }
+    }
+
+    for (const value of values) {
+      const input = literalInput(value);
+      expect(isFormulaInput(input)).toBe(false);
+      expect(parseLiteralInput(input)).toBe(value);
+    }
   });
 });
 

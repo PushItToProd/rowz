@@ -1,4 +1,3 @@
-import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   cellKey,
@@ -26,12 +25,10 @@ describe("column labels", () => {
     expect(columnIndex("ab")).toBe(27);
   });
 
-  it("round-trips every index", () => {
-    fc.assert(
-      fc.property(fc.nat(18_000), (index) => {
-        expect(columnIndex(columnLabel(index))).toBe(index);
-      }),
-    );
+  it("round-trips every index through 18,000", () => {
+    for (let index = 0; index <= 18_000; index += 1) {
+      expect(columnIndex(columnLabel(index))).toBe(index);
+    }
   });
 });
 
