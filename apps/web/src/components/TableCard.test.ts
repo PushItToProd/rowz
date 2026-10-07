@@ -154,12 +154,12 @@ describe("row and column actions", () => {
     confirm.mockReturnValue(false);
 
     await button("Delete row").trigger("click");
-    expect(confirm).toHaveBeenCalledExactlyOnceWith("Delete row 3 and what it holds?");
+    expect(confirm).toHaveBeenCalledExactlyOnceWith("Delete row 3 and its contents?");
     expect(server.editTable).not.toHaveBeenCalled();
 
     await select("A1");
     await button("Delete column").trigger("click");
-    expect(confirm).toHaveBeenLastCalledWith("Delete column A and what it holds?");
+    expect(confirm).toHaveBeenLastCalledWith("Delete column A and its contents?");
     expect(server.editTable).not.toHaveBeenCalled();
 
     confirm.mockReturnValue(true);
@@ -245,7 +245,7 @@ describe("table actions", () => {
     confirm.mockReturnValue(false);
     await resizeTo("2", "4");
     expect(confirm).toHaveBeenCalledExactlyOnceWith(
-      "Resizing Table 1 to 2 columns and 4 rows deletes what its other rows and columns hold. Resize it?",
+      "Resizing Table 1 to 2 columns and 4 rows deletes content beyond the new size. Resize it?",
     );
     expect(server.updateTable).not.toHaveBeenCalled();
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
@@ -402,8 +402,13 @@ describe("the menu of row, column, and cell actions", () => {
   it("asks before deleting several rows or columns when one of them holds content", async () => {
     await openOnRange("B2", "C4");
     confirm.mockReturnValue(false);
+    await item("Delete rows 2-4").trigger("click");
+    expect(confirm).toHaveBeenCalledExactlyOnceWith("Delete rows 2-4 and their contents?");
+    expect(server.editTable).not.toHaveBeenCalled();
+
+    await wrapper.get('[data-cell="C4"]').trigger("contextmenu");
     await item("Delete columns B-C").trigger("click");
-    expect(confirm).toHaveBeenCalledExactlyOnceWith("Delete columns B-C and what they hold?");
+    expect(confirm).toHaveBeenLastCalledWith("Delete columns B-C and their contents?");
     expect(server.editTable).not.toHaveBeenCalled();
   });
 
@@ -540,7 +545,9 @@ describe("files", () => {
     await render({ C3: "kept" });
     confirm.mockReturnValue(false);
     await choose("data.csv", "x");
-    expect(confirm).toHaveBeenCalledExactlyOnceWith("Import data.csv over what Table 1 holds?");
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(
+      "Replace the contents of Table 1 with data.csv?",
+    );
     expect(server.setCells).not.toHaveBeenCalled();
 
     confirm.mockReturnValue(true);
@@ -619,7 +626,7 @@ describe("column names", () => {
     expect(server.dropColumns).toHaveBeenCalledExactlyOnceWith("t1");
   });
 
-  it("lists what a column can hold in the menu, with the current one ticked", async () => {
+  it("lists the available column types in the menu, with the current one ticked", async () => {
     await renderData();
     await wrapper.get('[data-cell="A1"]').trigger("contextmenu");
     const labels = wrapper.findAll('[role="menuitem"]').map((found) => found.text());

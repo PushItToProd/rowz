@@ -1924,7 +1924,7 @@ describe("a data table", () => {
 
   const header = (name: string) => wrapper.get(`thead th[data-column="${name}"]`);
 
-  it("heads each column with its name, its letter, and what it holds", async () => {
+  it("heads each column with its name, its letter, and its type", async () => {
     await mountData();
     const part = (selector: string): string[] =>
       wrapper.findAll(`thead th ${selector}`).map((found) => found.text());

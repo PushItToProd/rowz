@@ -187,7 +187,11 @@ describe("names in a workbook", () => {
       structure,
     );
 
-    expect(workbook.getValue(at("A1", "t1"))).toMatchObject({ code: "#NAME?" });
+    const value = workbook.getValue(at("A1", "t1"));
+    expect(value).toMatchObject({ code: "#NAME?" });
+    expect(messageOf(value)).toBe(
+      "Summary!Total has more than one meaning: Archive!Summary!Total, Summary!Total. Use one of these qualified names.",
+    );
   });
 
   it("recalculates a whole-table use when a cell in that table changes", () => {
@@ -324,8 +328,9 @@ describe("ambiguous names", () => {
     const workbook = workbookWith(twice, { t1: { A1: "=Total" } });
     const value = workbook.getValue(at("A1"));
     expect(value).toMatchObject({ code: "#NAME?" });
-    expect(messageOf(value)).toContain("'Page 1'!Summary!Total");
-    expect(messageOf(value)).toContain("Archive!Rates!Total");
+    expect(messageOf(value)).toBe(
+      "Total has more than one meaning: 'Page 1'!Summary!Total, Archive!Rates!Total. Use one of these qualified names.",
+    );
   });
 
   it("still reads each of them qualified", () => {
@@ -351,7 +356,9 @@ describe("ambiguous names", () => {
       { t1: { A1: "=Fee", A2: "=Summary!Fee" } },
       structure,
     );
-    expect(messageOf(workbook.getValue(at("A1")))).toContain("Archive!Fee");
+    expect(messageOf(workbook.getValue(at("A1")))).toBe(
+      "Fee has more than one meaning: 'Page 1'!Summary!Fee, Archive!Fee. Use one of these qualified names.",
+    );
     expect(workbook.getValue(at("A2"))).toBe(1);
   });
 });

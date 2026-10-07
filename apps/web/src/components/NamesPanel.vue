@@ -164,7 +164,7 @@ function commitNew(key: "Enter" | "Tab", backwards: boolean): void {
       </tbody>
     </table>
     <p v-else class="names-panel__empty">
-      This table holds no names. Select a range and choose "Name this range", or add one below.
+      This table has no names. Select a range and choose "Name this range", or add one below.
     </p>
 
     <form v-if="store.canEdit" class="names-panel__add" @submit.prevent="add">

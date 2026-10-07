@@ -400,17 +400,17 @@ The next items came from a QA pass through the running app in a browser on 2026-
 
 - [x] rebrand the app as "rowz" instead of "Spreadsheet". don't change package names but just update the UI. make the name configurable via an env var as well so it's easy to update in the future.
 - [x] update the page title to show the name of the spreadsheet being edited or, for the help page, "Help". include the app name `rowz` at the end - e.g. `Help | rowz` or `My budget | rowz`
-- [ ] **P4** remove awkward or unnecessary agent-written wording from the UI and help text #everyday
+- [x] **P4** remove awkward or unnecessary agent-written wording from the UI and help text #everyday
   - [x] remove "Select a cell to insert or delete its row or column." from the table view - that functionality is obvious
-  - [ ] replace Claudeslop phrasing like "what it holds"
+  - [x] replace Claudeslop phrasing like "what it holds"
     - replacements the author approved:
       - `HelpView.vue`, shortcut list: "Edit the selected cell, keeping what it holds." becomes "Edit the selected cell's current contents."
       - `HelpView.vue`, data tables: "Right-click a column to choose what it holds." becomes "Right-click a column to set its type."
       - `HistoryPanel.vue`, restore prompt: "Put the document back as it was on {date}? What it holds now is kept as a version, so this can be undone." becomes "Restore the version from {date}? The current document is saved as a version first, so you can undo this."
       - `TableCard.vue`, delete prompt: "Delete row 3 and what it holds?" becomes "Delete row 3 and its contents?", and "Delete rows 3-5 and their contents?" for several
-  - [ ] revise "row of this column" help text in autocomplete
+  - [x] revise "row of this column" help text in autocomplete
     - (Claude) the text is "column of this row", in `assist.ts`, shown beside a `[Column]` suggestion. The author approved "this row's value". A `Table[Column]` suggestion says "column of Sales", which can stay
-  - [ ] revise "Write the one meant" in `workbook.ts`
+  - [x] revise "Write the one meant" in `workbook.ts`
     - (Claude) it is in the engine's two ambiguous-name messages, in [workbook.ts](packages/engine/src/workbook.ts). The author approved: "Total has more than one meaning: February!Total, March!Total. Use one of these qualified names." For a name and a table on one holder, the same sentence with the two meanings listed
 - [x] make errors highly visible throughout the document
   - [x] show a button in the editor header whenever the document has errors, like the failing-assertions indicator; open a popup listing all errors with links to their locations
@@ -612,3 +612,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - (Claude) numbers and dates shown in the reader's locale
 
 - allow table cells to contain structs/arrays/nested tables
+
+- [ ] An ambiguous-name message can recommend a qualified name (`Summary!Total`) that is itself still ambiguous, for a name and a table on one holder (`workbook.ts`, near line 961). Offer a spelling that resolves #formula-language

@@ -67,7 +67,7 @@ function describeResult(rows: CellValue[][]): string {
 
 const results = exampleResults();
 const exampleCells = Object.entries(EXAMPLE_CELLS)
-  .map(([address, input]) => `${address} holds ${input}`)
+  .map(([address, input]) => `${address} = ${input}`)
   .join(", ");
 
 const byCategory = FUNCTION_CATEGORIES.map((category: FunctionCategory) => ({
@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
 const KEYS = [
   ["Arrow keys, outside an editor", "Move the selection."],
   ["Any character", "Start typing over the selected cell."],
-  ["Enter or F2", "Edit the selected cell, keeping what it holds."],
+  ["Enter or F2", "Edit the selected cell's current contents."],
   ["Alt+Enter, on a table-size spill error", "Focus the Resize table to fit button."],
   [
     "Enter, while editing a cell",
@@ -222,7 +222,7 @@ const QUERY_CLAUSES = [
 const QUERY_TESTS = [
   ["= != < > <= >=", "Compare. An empty cell passes none of them."],
   ["and, or, not", "Combine tests."],
-  ['A contains "an"', "Text that holds other text. Also `starts with` and `ends with`."],
+  ['A contains "an"', "Text that contains other text. Also `starts with` and `ends with`."],
   [
     'A like "b%"',
     "Text that fits a pattern, where `%` is any run of characters and `_` is any one.",
@@ -297,7 +297,7 @@ const OPERATORS = [
         <thead>
           <tr>
             <th>You type</th>
-            <th>The cell holds</th>
+            <th>The cell's value</th>
           </tr>
         </thead>
         <tbody>
@@ -365,7 +365,7 @@ const OPERATORS = [
       <p>
         Drag across cells, or hold Shift and click or press the arrow keys, to select a range. The
         last cell of the selection has a small square at its corner. Drag that square down or across
-        to fill more cells with what the selection holds.
+        to extend the values or formulas in the selection into more cells.
       </p>
       <ul>
         <li>
@@ -462,14 +462,13 @@ const OPERATORS = [
           <code>[</code> in a formula lists the columns.
         </li>
         <li>
-          Right-click a column to choose what it holds. <strong>Text</strong> keeps what is typed as
-          it is, so <code>007</code> stays <code>007</code>. <strong>Number</strong> and
+          Right-click a column to set its type. <strong>Text</strong> preserves typed text, so
+          <code>007</code> stays <code>007</code>. <strong>Number</strong> and
           <strong>Date</strong> show <code>#VALUE!</code> for anything else.
           <strong>Checkbox</strong> shows a checkbox in every row. <strong>A choice</strong> shows a
           dropdown in every row. Its choices are a list you write, one on each line, or the values
           of a column of a data table, which follow that column. A value that is not among the
-          choices stays and is marked. <strong>Anything</strong> reads what is typed as an ordinary
-          cell does.
+          choices stays and is marked. <strong>Anything</strong> behaves like a regular cell.
         </li>
         <li>
           <strong>A formula</strong> makes a formula column: one formula computed in every stored
@@ -875,10 +874,11 @@ const OPERATORS = [
         </li>
         <li>
           Three actions move many rows at once. <code>INSERT(data, range)</code> adds every row of
-          the data below what the range holds. <code>UPDATE(data, key_columns, range)</code> writes
-          each row over the row with the same key and adds the rows with new keys, so running it
-          twice does not add anything twice. In a data table, open-ended INSERT and UPDATE
-          destinations append after the last stored row. <code>OVERWRITE(data, range)</code>
+          each data row below the range's existing content.
+          <code>UPDATE(data, key_columns, range)</code> writes each row over the row with the same
+          key and adds the rows with new keys, so running it twice does not add anything twice. In a
+          data table, open-ended INSERT and UPDATE destinations append after the last stored row.
+          <code>OVERWRITE(data, range)</code>
           empties the range first and deletes surplus rows of a data table when the range covers
           every writable column. The data can be a range or a formula:
           <code>=BUTTON("Archive", INSERT(FILTER(A2:C99, C2:C99 = "done"), Archive!A:C))</code>.
@@ -1034,9 +1034,8 @@ const OPERATORS = [
           every ten minutes while the document is being changed.
         </li>
         <li>
-          <strong>Restore</strong> puts the whole document back as the version has it. What the
-          document held is kept as a version first, so a restore can be undone by restoring that
-          one.
+          <strong>Restore</strong> puts the whole document back as the version has it. The current
+          document is saved as a version first, so you can undo the restore.
         </li>
         <li>
           <strong>Open a copy</strong> makes a new document from the version and leaves this one
@@ -1067,7 +1066,7 @@ const OPERATORS = [
         </li>
         <li>
           <strong>Export CSV</strong> saves one table as a CSV file that other spreadsheet apps
-          open. It holds the values the cells show, not their formulas.
+          open. The file contains the values the cells show, not their formulas.
         </li>
         <li>
           <strong>Import CSV</strong> reads a CSV file into a table, starting at A1. The table grows

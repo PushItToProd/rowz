@@ -47,7 +47,7 @@ describe("HelpView", () => {
     expect(wrapper.get('[data-function="BUTTON"]').text()).toContain(
       "gives a button labeled “Reset”",
     );
-    expect(wrapper.text()).toContain("A1 holds 1, A2 holds 2, A3 holds 3");
+    expect(wrapper.text()).toContain("A1 = 1, A2 = 2, A3 = 3");
     expect(wrapper.get('[data-function="CHECKBOX"]').text()).toContain(
       "gives a checkbox labeled “Done”",
     );

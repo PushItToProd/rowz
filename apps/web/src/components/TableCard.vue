@@ -51,7 +51,10 @@ async function importCsv(event: Event): Promise<void> {
   if (!file) return;
   const rows = parseCsv(await file.text());
   const replaces = store.shownRows(props.table).length > 0;
-  if (replaces && !window.confirm(`Import ${file.name} over what ${props.table.name} holds?`)) {
+  if (
+    replaces &&
+    !window.confirm(`Replace the contents of ${props.table.name} with ${file.name}?`)
+  ) {
     return;
   }
   await store.importRows(props.table.id, rows);
@@ -112,8 +115,9 @@ function insert(axis: Axis, index: number, count = 1): void {
 
 /** Deletes rows or columns, asking first when that would discard content. */
 function removeLines(lines: Lines): void {
-  const held = lines.count === 1 ? "what it holds" : "what they hold";
-  if (holdContent(lines) && !window.confirm(`Delete ${describeLines(lines)} and ${held}?`)) return;
+  const contents = lines.count === 1 ? "its contents" : "their contents";
+  if (holdContent(lines) && !window.confirm(`Delete ${describeLines(lines)} and ${contents}?`))
+    return;
   void store.deleteLines(props.table.id, lines.axis, indexesOf(lines));
 }
 
@@ -135,7 +139,7 @@ function holdsContentPast(rowCount: number, colCount: number): boolean {
 function resize({ rowCount, colCount }: { rowCount: number; colCount: number }): void {
   const { id, name } = props.table;
   const size = `${String(colCount)} ${colCount === 1 ? "column" : "columns"} and ${String(rowCount)} ${rowCount === 1 ? "row" : "rows"}`;
-  const asked = `Resizing ${name} to ${size} deletes what its other rows and columns hold. Resize it?`;
+  const asked = `Resizing ${name} to ${size} deletes content beyond the new size. Resize it?`;
   if (holdsContentPast(rowCount, colCount) && !window.confirm(asked)) return;
   resizing.value = false;
   if (rowCount === props.table.rowCount && colCount === props.table.colCount) return;

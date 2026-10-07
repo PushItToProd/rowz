@@ -251,7 +251,7 @@ export function suggestionsAt(
             (table) =>
               table.pageId === columnPage && table.name.toLowerCase() === tableName.toLowerCase(),
           )?.columns;
-    const where = tableName === undefined ? "column of this row" : `column of ${tableName}`;
+    const detail = tableName === undefined ? "this row's value" : `column of ${tableName}`;
     return {
       from: caret - typedColumn.length - 1,
       items: (columns ?? [])
@@ -260,7 +260,7 @@ export function suggestionsAt(
           kind: "column",
           label: column.name,
           insert: `[${column.name}]`,
-          detail: where,
+          detail,
         }))
         .slice(0, MAX_SUGGESTIONS),
     };

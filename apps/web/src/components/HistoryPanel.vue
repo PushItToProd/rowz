@@ -38,7 +38,7 @@ const refresh = (): Promise<void> =>
   });
 
 function restore(version: VersionListItem): Promise<void> {
-  const asked = `Put the document back as it was on ${when(version)}? What it holds now is kept as a version, so this can be undone.`;
+  const asked = `Restore the version from ${when(version)}? The current document is saved as a version first, so you can undo this.`;
   if (!window.confirm(asked)) return Promise.resolve();
   return run(version.id, async () => {
     await store.restoreVersion(props.spreadsheetId, version.id);

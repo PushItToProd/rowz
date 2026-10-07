@@ -906,7 +906,10 @@ export class Workbook {
         ...names.map((record) => this.written(record.holder, record.name)),
         ...tables.map((table) => this.written(table)),
       ];
-      fail("#NAME?", `${word} has more than one meaning: ${all.join(", ")}. Write the one meant`);
+      fail(
+        "#NAME?",
+        `${word} has more than one meaning: ${all.join(", ")}. Use one of these qualified names.`,
+      );
     }
     if (names[0]) return names[0];
     const table = tables[0];
@@ -955,7 +958,7 @@ export class Workbook {
       });
       fail(
         "#NAME?",
-        `${node.holder}!${node.name} has more than one meaning: ${writtenName}, ${writtenTable}. Write the one meant`,
+        `${node.holder}!${node.name} has more than one meaning: ${writtenName}, ${writtenTable}. Use one of these qualified names.`,
       );
     }
     if (record) return record;

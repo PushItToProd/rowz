@@ -235,8 +235,8 @@ describe("column names", () => {
     expect(suggest("=[")).toEqual({
       from: 1,
       items: [
-        { kind: "column", label: "Item", insert: "[Item]", detail: "column of this row" },
-        { kind: "column", label: "In stock", insert: "[In stock]", detail: "column of this row" },
+        { kind: "column", label: "Item", insert: "[Item]", detail: "this row's value" },
+        { kind: "column", label: "In stock", insert: "[In stock]", detail: "this row's value" },
       ],
     });
     expect(labels("=1 + [in")).toEqual(["In stock"]);
