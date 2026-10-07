@@ -727,3 +727,4 @@ export interface RowRecord {
 export interface ApiError {
   error: { code: string; message: string };
 }
+export * from "./search.ts";

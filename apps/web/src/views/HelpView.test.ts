@@ -100,7 +100,7 @@ describe("HelpView", () => {
   it("links each contents entry to a section on the page", () => {
     const wrapper = render();
     const targets = wrapper.findAll(".help__contents a").map((link) => link.attributes("href"));
-    expect(targets).toHaveLength(20);
+    expect(targets).toHaveLength(21);
     for (const target of targets)
       expect(wrapper.find(`section${target ?? ""}`).exists()).toBe(true);
   });
@@ -113,9 +113,11 @@ describe("HelpView", () => {
     expect(reading(wrapper)).toEqual(["Typing into cells"]);
 
     await scrollTo(wrapper, 1000);
-    expect(reading(wrapper)).toEqual(["Pages and tables"]);
+    expect(reading(wrapper)).toEqual(["Find and replace"]);
     // A section counts once its heading nears the top of the window.
     await scrollTo(wrapper, 1400);
+    expect(reading(wrapper)).toEqual(["Pages and tables"]);
+    await scrollTo(wrapper, 1900);
     expect(reading(wrapper)).toEqual(["Tables with named columns"]);
     await scrollTo(wrapper, 0);
     expect(reading(wrapper)).toEqual(["Typing into cells"]);

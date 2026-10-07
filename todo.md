@@ -262,10 +262,10 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [x] **P2** (Claude) draw only the rows and columns in view. `GridView` makes a cell component for every row and column of a table, 100,000 of them for a table of 1,000 rows and 100 columns, and a page shows every table on it. Each edit also triggers the one ref that holds the engine, so everything that read a value through it is computed again. Do this before raising `tableRows` #everyday
   - (Claude) measured in headless Chromium against the Vite dev build on 2026-10-05, after importing a CSV of 1,000 rows and 5 columns into a table 8 columns wide (8,000 cells, 19,165 DOM nodes): the first keystroke in a cell took 1.9 s, each later keystroke about 0.6 s, a commit 1.1 s, and an arrow key 0.19 s. In a 20-row table the same steps took 183 ms, 67 ms, 126 ms, and 34 ms. Scrolling stayed at 60 frames a second. The measurements do not separate drawing from the engine rebuild described under Server, performance, and reliability
   - Windowed rendering implemented on 2026-10-06 with row and column overscan, retained editors/focused cells and headers, stable configured row heights, layout observation, and full rendering for small tables and printing. Fixed duplicate child keys and verified Vue template compilation directly. The author reports all 55 e2e tests pass and all review fixes are done. DOM-count tests for 1,000 x 8 and 1,000 x 100 mount only the window, assert fewer than 500 cells and 1,500 descendant elements, and compare against calculated totals of 8,000 and 100,000 unwindowed cells. Printing and window restoration are tested separately on 201 x 1; no large unwindowed baseline is mounted. This session cannot report measured counts or unit-test runtimes because Vitest fails before collecting tests with ENOENT under /tmp.
-- [ ] find and replace within a block, page, or document
-  - [ ] **P4** standalone find without replace - search just the current document #everyday
-    - [ ] **P4** allow filtering by just the current page or block #everyday
-  - [ ] **P4** find and replace within a document #everyday
+- [x] find and replace within a block, page, or document
+  - [x] **P4** standalone find without replace - search just the current document #everyday
+    - [x] **P4** allow filtering by just the current page or block #everyday
+  - [x] **P4** find and replace within a document #everyday
   - [ ] **P5** cross-document search #everyday
   - don't implement cross-document find and replace -- too risky
 - [ ] **P7** support hiding rows and columns #everyday
@@ -623,3 +623,10 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [ ] In `router.ts`, a navigation guard that awaits the leave-document dialog can discard a formula draft after a newer navigation (browser Back) superseded it; check the navigation is still current after the dialog #formula-editing
 - [ ] In `TableCard.vue` (column type conversion), the handler sets `sessions.columnPopover` after the confirmation dialog without checking the card is still mounted #data-tables
+
+- [ ] **P2** errors that come from a function are hard to trace. With a script function `PayoutByDuration(with_spa) = QUERY(Runs, "select Race, sum('Payout (40 hrs)') " & IF(with_spa, "", "where Race <> 'Spa' ") & "group by Race pivot Duration")` and a cell `=PayoutByDuration(FALSE)`, the cell shows `#VALUE!` with "The data has no column Spa", and the person has to hunt for the source. Let them go from the error back to where it arose (the function, the line, the call chain) #formula-language
+- [ ] **P3** opening a side pane should close the one already open. With History open, the Errors button opens the errors pane behind it, and it shows only after History closes #everyday
+- [ ] **P6** allow collapsing a block to just its header, so a long table is easy to scroll past #small-apps
+- [ ] **P6** limit a block taller than a set height to that height and scroll its contents on their own #small-apps
+- [ ] **P8** make block heights customizable, following the maximum-height limit for long blocks #small-apps
+- [ ] Displayed-value search searches a Markdown cell's raw text (`**hello**`, link destinations) and not the rendered text (`apps/web/src/stores/workbook/search.ts`) #everyday

@@ -1,6 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import {
   eventsQuery,
+  replaceBody,
   memberParam,
   moveSpreadsheetFolderBody,
   nameBody,
@@ -56,6 +57,15 @@ export function spreadsheetRoutes(changes: ChangeFeed, shutdown?: AbortSignal) {
       )
       .post("/:spreadsheetId/undo", zValidator("param", spreadsheetParam, onInvalid), async (c) =>
         c.json(await c.var.repository.undo(c.req.valid("param").spreadsheetId)),
+      )
+      .post(
+        "/:spreadsheetId/replace",
+        zValidator("param", spreadsheetParam, onInvalid),
+        zValidator("json", replaceBody, onInvalid),
+        async (c) =>
+          c.json(
+            await c.var.repository.replace(c.req.valid("param").spreadsheetId, c.req.valid("json")),
+          ),
       )
       .post("/:spreadsheetId/redo", zValidator("param", spreadsheetParam, onInvalid), async (c) =>
         c.json(await c.var.repository.redo(c.req.valid("param").spreadsheetId)),

@@ -19,6 +19,8 @@ import type {
 import { CLIENT_ID_HEADER, STEP_ID_HEADER, UNDOABLE_HEADER } from "@spreadsheet-app/shared";
 import type {
   ApiError,
+  ReplaceBody,
+  ReplaceReport,
   IdentityCellInput,
   IdentifiedCell,
   ViewInputBody,
@@ -138,6 +140,13 @@ function clock(): { headers: Record<string, string> } {
  * throws `ApiRequestError`.
  */
 export const api = {
+  replace: (spreadsheetId: string, request: ReplaceBody): Promise<Change & ReplaceReport> =>
+    body(
+      routes.spreadsheets[":spreadsheetId"].replace.$post({
+        param: { spreadsheetId },
+        json: request,
+      }),
+    ),
   listSpreadsheets: (): Promise<DocumentListItem> => body(routes.spreadsheets.$get()),
   createFolder: (name: string): Promise<FolderRecord> =>
     body(routes.folders.$post({ json: { name } })),

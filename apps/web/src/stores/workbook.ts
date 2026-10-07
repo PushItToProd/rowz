@@ -27,6 +27,7 @@ import { createSync } from "./workbook/sync";
 import { createUndo } from "./workbook/undo";
 import { createValues } from "./workbook/values";
 import { createWrites } from "./workbook/writes";
+import { createSearch } from "./workbook/search";
 
 /** What a conditional format does where it applies, before a range is chosen for it. */
 export type ConditionalAction =
@@ -345,6 +346,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     documentNames,
   } = createValues(context);
   const { enqueueWrite, stored, fail, attempt } = createQueue(context);
+  const { find, replace } = createSearch(context, formatOf);
 
   const spreadsheet = ref<{ id: string; name: string; role: string } | null>(null);
   const pages = ref<PageRecord[]>([]);
@@ -445,6 +447,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const unsavedChanges = new Set<{ tableId: string; changes: CellChange[] }>();
 
   return {
+    find,
+    replace,
     revision,
     appendCell,
     rejectedDraft,

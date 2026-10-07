@@ -83,6 +83,7 @@ function segments(text: string): { text: string; code: boolean }[] {
 const SECTIONS = [
   ["basics", "Typing into cells"],
   ["filling", "Selecting, filling, and copying"],
+  ["find", "Find and replace"],
   ["structure", "Pages and tables"],
   ["columns", "Tables with named columns"],
   ["references", "References"],
@@ -404,6 +405,31 @@ const OPERATORS = [
       </ul>
     </section>
 
+    <section id="find">
+      <h2>Find and replace</h2>
+      <p>
+        Click Find or press Ctrl/Cmd+F with focus in the editor. Search the whole document, current
+        page, or selected block. Choose stored inputs (formulas as written) or displayed cell
+        values. Both modes search text/Markdown, chart, and script sources, column formulas,
+        filters, and named formulas. Case sensitive and whole cell/entire source options are
+        available; queries are literal text. Current page and selected block scopes follow
+        navigation while Find is open.
+      </p>
+      <p>
+        Matches list their page, block, and cell address or source. Click a match to jump to it.
+        Enter or F3 advances; Shift+Enter or Shift+F3 goes back. Escape closes Find. Browser find
+        works outside the editor. Find counts every match and shows the first 1,000.
+      </p>
+      <p>
+        In Stored inputs mode, Replace one replaces the selected occurrence, and Replace all
+        replaces every occurrence in scope, including matches beyond the displayed list and text
+        inside formulas. Inputs and sources whose replacement would introduce a syntax error stay
+        unchanged and appear in the skipped replacements list. Unresolved names are allowed. Formula
+        column cells are computed and skipped; their column formulas can be replaced. Ctrl/Cmd+Z in
+        the grid undoes the entire replacement in one step. Replacements too large for the undo
+        journal are refused; choose a smaller scope.
+      </p>
+    </section>
     <section id="structure">
       <h2>Pages and tables</h2>
       <p>

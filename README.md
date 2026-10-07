@@ -33,7 +33,7 @@ The aim is to do what a traditional spreadsheet does, and do it better. I build 
 ### Features of other spreadsheets
 
 - **Layout:** merged cells, borders, wrapping text in a cell, hiding rows and columns, and freezing header rows.
-- **Working with data:** a dedicated pivot-table editor, find and replace, and validation of what a cell accepts. Tables already support sorting, filtering, conditional formats, and `QUERY` pivot clauses.
+- **Working with data:** a dedicated pivot-table editor and validation of what a cell accepts. Tables already support sorting, filtering, conditional formats, find and replace, and `QUERY` pivot clauses.
 - **Functions:** coverage follows what I use. Less common financial, statistical, and scientific functions are missing or lightly tested. There are no random numbers, and no `INDIRECT` or `OFFSET`.
 - **Charts:** four kinds, with no axis titles, colors, or stacking.
 - **Files:** rowz does not open or save Excel files. It has no layout for printing.
@@ -262,6 +262,12 @@ Single quotes delimit column names and aliases, including names with spaces or r
 String literals, date literals, and `label` text use double quotes only. Inside the formula string, double each query double quote: `=QUERY(People, "select * where 'Favorite food' = ""Pizza""")`. A double quote within a query string is doubled again, so `=QUERY(People, "select * where Note = ""say """"hello""""""")` matches `say "hello"`. Backslashes do not escape quotes.
 
 ## History and files
+
+**Find** searches the current document, page, or selected block. Ctrl/Cmd+F opens it while focus is in the editor; browser find remains available elsewhere. Search stored cell inputs (including formulas as written) or displayed values. Both modes also search Markdown/text, chart, and script sources, column formulas, table filters, and named formulas. Matches show their page, block, and cell address or source. Enter/F3 advances to the next match; Shift+Enter/Shift+F3 goes back. Case sensitive and whole cell/entire source options narrow the search. Search text is literal, with no regular expressions.
+
+Current page and selected block scopes follow navigation while Find is open. The panel counts every match and shows the first 1,000.
+
+In **Stored inputs** mode, **Replace one** changes the selected occurrence and **Replace all** changes every occurrence in the chosen scope, including matches beyond the displayed list. Replacement text is literal, including inside formulas. An input or source whose replacement would introduce a syntax error stays unchanged and appears in the skipped replacements list; unresolved names are allowed. Computed cells in formula columns are skipped; edit their column formula through find and replace instead. One document undo step reverses the entire replacement. Replacements that exceed the undo journal's size limit are refused without changing the document; choose a smaller scope. Escape closes the panel.
 
 **Save a copy** in the editor creates a document in your own workspace, including all pages, blocks, formulas, and formatting. Anyone with read access can copy a document. The copy has fresh IDs, no shares, and no history; edits to it do not change the original.
 

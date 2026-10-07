@@ -14,6 +14,8 @@ import ContextMenu from "../components/ContextMenu.vue";
 import type { MenuItem } from "../components/menu";
 import FormatBar from "../components/FormatBar.vue";
 import ErrorsPanel from "../components/ErrorsPanel.vue";
+import FindPanel from "../components/FindPanel.vue";
+import type { SearchMatch } from "../stores/workbook/search";
 import ErrorWarning from "../components/ErrorWarning.vue";
 import { formatAddress, type DocumentError } from "@spreadsheet-app/engine";
 import AssertionsPanel from "../components/AssertionsPanel.vue";
@@ -149,7 +151,71 @@ const runsOpen = ref(false);
 const shareOpen = ref(false);
 const assertionsOpen = ref(false);
 const errorsOpen = ref(false);
-async function goToError(target: DocumentError): Promise<void> {
+const findOpen = ref(false);
+const findPanel = ref<InstanceType<typeof FindPanel>>();
+const selectedBlock = ref<string>();
+watch(
+  () => store.selection?.tableId,
+  (id) => {
+    if (id) selectedBlock.value = id;
+  },
+);
+const findBlockId = computed(() => {
+  const id = selectedBlock.value ?? store.selection?.tableId;
+  return [...store.tables, ...store.views].find(
+    (block) => block.id === id && block.pageId === props.pageId,
+  )?.id;
+});
+function rememberBlock(event: FocusEvent) {
+  const block = event.target instanceof Element ? event.target.closest(".editor__block") : null;
+  if (block) selectedBlock.value = block.id.slice("block-".length);
+}
+function findKey(event: KeyboardEvent) {
+  if (!loaded.value) return;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+    event.preventDefault();
+    event.stopPropagation();
+    findOpen.value = true;
+    void nextTick(() => {
+      findPanel.value?.focus();
+    });
+  } else if (event.key === "F3" && findOpen.value) {
+    event.preventDefault();
+    event.stopPropagation();
+    findPanel.value?.next(event.shiftKey);
+  } else if (event.key === "Escape" && findOpen.value && !formulas.active) {
+    event.preventDefault();
+    event.stopPropagation();
+    findOpen.value = false;
+  }
+}
+async function goToMatch(match: SearchMatch) {
+  const keepFindFocus = !!document.activeElement?.matches(
+    '.find-panel input[aria-label="Find text"]',
+  );
+  if (formulas.active && !(await formulas.submit(store.submitFormulaDraft))) {
+    formulas.focus();
+    return;
+  }
+  await goToError({
+    pageId: match.pageId,
+    blockId: match.blockId,
+    label: match.label,
+    ...(match.cell ? { cell: match.cell } : {}),
+    ...(match.target.kind === "name" ? { name: match.target.name } : {}),
+  });
+  if (keepFindFocus) findPanel.value?.focus();
+}
+watch(
+  () => props.spreadsheetId,
+  () => {
+    findOpen.value = false;
+    selectedBlock.value = undefined;
+  },
+);
+async function goToError(
+  target: Pick<DocumentError, "pageId" | "blockId" | "label" | "cell" | "name" | "line" | "column">,
+): Promise<void> {
   await router.push({
     name: "editor",
     params: { spreadsheetId: props.spreadsheetId, pageId: target.pageId },
@@ -343,6 +409,8 @@ watch(
     :data-saving="store.saving ? '' : undefined"
     @click.capture="guardControl"
     @mousedown.capture="preserveNavigationFocus"
+    @keydown.capture="findKey"
+    @focusin="rememberBlock"
   >
     <div class="editor__chrome">
       <header class="editor__header">
@@ -389,6 +457,7 @@ watch(
           Share
         </button>
         <button v-if="loaded" type="button" @click="historyOpen = true">History</button>
+        <button v-if="loaded" type="button" @click="findOpen = true">Find</button>
         <button v-if="loaded" type="button" @click="runsOpen = true">Runs</button>
         <button v-if="loaded" type="button" @click="exportFile">Export</button>
         <button v-if="loaded" type="button" :disabled="copying || store.saving" @click="saveCopy">
@@ -480,6 +549,14 @@ watch(
       @left="router.push({ name: 'spreadsheets' })"
     />
     <ErrorsPanel v-if="errorsOpen && loaded" @close="errorsOpen = false" @go="goToError" />
+    <FindPanel
+      v-if="findOpen && loaded && page"
+      ref="findPanel"
+      :page-id="page.id"
+      :block-id="findBlockId"
+      @close="findOpen = false"
+      @go="goToMatch"
+    />
     <AssertionsPanel
       v-if="assertionsOpen && loaded"
       @close="assertionsOpen = false"

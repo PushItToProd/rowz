@@ -37,6 +37,8 @@ import {
   type Created,
 } from "./spreadsheets/records";
 import { RepositoryContext } from "./spreadsheets/context";
+import { replace } from "./spreadsheets/replace";
+import type { ReplaceBody, ReplaceReport } from "@spreadsheet-app/shared";
 export type {
   Access,
   MemberRecord,
@@ -61,6 +63,9 @@ export type { Change, ChangedContent } from "./journal";
  * The internal context shares authorization and transactions across concern modules.
  */
 export class SpreadsheetRepository {
+  async replace(spreadsheetId: string, request: ReplaceBody): Promise<Change & ReplaceReport> {
+    return replace(this.context, spreadsheetId, request);
+  }
   private readonly context: RepositoryContext;
   constructor(db: Database, userId: string, options: RepositoryOptions = {}) {
     this.context = new RepositoryContext(

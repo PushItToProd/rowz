@@ -139,6 +139,24 @@ interface Route {
 
 const routeCases: Route[] = [
   {
+    name: "replace cells and block sources together",
+    async prepare({ id, tableId, pageId }) {
+      await owner.json(
+        "PUT",
+        `/tables/${tableId}/cells`,
+        cellsBody({ A1: "old old", A2: '=UPPER("old")' }),
+      );
+      const view = await createView(owner, pageId);
+      await owner.json("PATCH", `/views/${view.id}`, { source: "old {{ 1 }}" });
+      return {
+        method: "POST",
+        path: `/spreadsheets/${id}/replace`,
+        body: { query: "old", replacement: "new", scope: { kind: "document" } },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "create page",
     prepare({ id }) {
       return {

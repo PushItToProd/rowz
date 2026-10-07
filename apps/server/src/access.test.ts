@@ -102,6 +102,11 @@ function writeRoutes(): Route[] {
     ["POST", `/spreadsheets/${snapshot.id}/pages`, {}],
     ["POST", `/spreadsheets/${snapshot.id}/undo`],
     ["POST", `/spreadsheets/${snapshot.id}/redo`],
+    [
+      "POST",
+      `/spreadsheets/${snapshot.id}/replace`,
+      { query: "missing", replacement: "new", scope: { kind: "document" } },
+    ],
     ["PATCH", `/pages/${page}`, { name: "Taken over" }],
     ["PUT", `/pages/${page}/order`, { blocks: [view, textView, table] }],
     ["PUT", `/spreadsheets/${snapshot.id}/pages/order`, { pages: [page] }],
@@ -337,8 +342,8 @@ describe("an editor", () => {
     // The restore names a version that does not exist. The page order leaves out the page just
     // added, and each move names the page the block is on. Sharing and deleting are the owner's.
     expect(await statuses(editor, writeRoutes())).toEqual([
-      404, 204, 201, 200, 200, 200, 200, 409, 422, 422, 201, 200, 200, 200, 200, 200, 200, 200, 200,
-      200, 200, 200, 200, 200, 200, 200, 200, 201, 200, 200, 200, 200, 403, 403, 403,
+      404, 204, 201, 200, 200, 200, 200, 200, 409, 422, 422, 201, 200, 200, 200, 200, 200, 200, 200,
+      200, 200, 200, 200, 200, 200, 200, 200, 200, 201, 200, 200, 200, 200, 403, 403, 403,
     ]);
     await owner.json("DELETE", `/spreadsheets/${snapshot.id}`, undefined, 204);
     await editor.json("GET", `/spreadsheets/${snapshot.id}`, undefined, 404);

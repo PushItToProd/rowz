@@ -289,6 +289,7 @@ export type MockedApi = { [K in keyof typeof api]: Mock<(typeof api)[K]> };
 /** A stand-in for the API module in which every call succeeds with an empty result. */
 export function mockApi(): MockedApi {
   return {
+    replace: vi.fn(),
     listSpreadsheets: vi.fn().mockResolvedValue({ folders: [], documents: [] }),
     createFolder: vi.fn(),
     renameFolder: vi.fn(),

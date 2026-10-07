@@ -26,8 +26,13 @@ afterEach(() => {
   else Reflect.deleteProperty(window, "matchMedia");
 });
 
-async function render(role = "owner", empty = false, focusCards = false) {
-  const snapshot = snapshotWith({}, role);
+async function render(
+  role = "owner",
+  empty = false,
+  focusCards = false,
+  inputs: Record<string, string> = {},
+) {
+  const snapshot = snapshotWith(inputs, role);
   server.getSnapshot.mockResolvedValue(
     wireSnapshot({
       ...snapshot,
@@ -90,6 +95,44 @@ async function render(role = "owner", empty = false, focusCards = false) {
   await flushPromises();
   return wrapper;
 }
+
+it("captures Ctrl/Cmd+F only inside the editor and F3 navigates an open find panel", async () => {
+  const wrapper = await render("owner", false, true, { A1: "needle", A2: "needle" });
+  const store = useWorkbookStore();
+  const outside = new KeyboardEvent("keydown", {
+    key: "f",
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  document.body.dispatchEvent(outside);
+  expect(outside.defaultPrevented).toBe(false);
+  const grid = wrapper.get('[role="grid"]');
+  await grid.trigger("keydown", { key: "f", metaKey: true });
+  await flushPromises();
+  expect(wrapper.find('[aria-label="Find and replace"]').exists()).toBe(true);
+  const findInput = wrapper.get('[aria-label="Find text"]');
+  await findInput.setValue("needle");
+  expect(document.activeElement).toBe(findInput.element);
+  expect(wrapper.get('[aria-label="Find and replace"] [role="status"]').text()).toBe("2 matches");
+  // The leading template comment gives EditorView a fragment root. Its wrapper
+  // targets the mount container, outside .editor; keyboard events start at the focused input.
+  await findInput.trigger("keydown", { key: "F3" });
+  await flushPromises();
+  expect(wrapper.get('[aria-label="Find and replace"] [role="status"]').text()).toBe(
+    "2 matches · 1 of 2",
+  );
+  expect(store.selection).toEqual({ tableId: "t1", row: 0, col: 0 });
+  await findInput.trigger("keydown", { key: "F3" });
+  await flushPromises();
+  expect(store.selection).toEqual({ tableId: "t1", row: 1, col: 0 });
+  await findInput.trigger("keydown", { key: "F3", shiftKey: true });
+  await flushPromises();
+  expect(store.selection).toEqual({ tableId: "t1", row: 0, col: 0 });
+  await wrapper.get('[aria-label="Find text"]').trigger("keydown", { key: "Escape" });
+  expect(wrapper.find('[aria-label="Find and replace"]').exists()).toBe(false);
+  wrapper.unmount();
+});
 
 it("blocks page-control clicks on save failure, and cancel does not replay them", async () => {
   const wrapper = await render();
