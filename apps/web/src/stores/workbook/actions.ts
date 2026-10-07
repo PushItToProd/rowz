@@ -60,15 +60,27 @@ export function createActions(context: WorkbookContext) {
     context.running.add(key);
     const queuedSaves = context.saves;
     const failedBefore = context.failedSaves;
+    const previousNotice = context.notice.value;
     try {
-      return await context.enqueueWrite(async () => {
-        // The server evaluates stored inputs, so pending edits must be stored first. When one
-        // could not be, the action would run on something other than what was typed.
-        if (!(await context.stored(queuedSaves, failedBefore))) return undefined;
-        const result = await request();
-        if (result.change) await context.receiveChange(result.change);
-        return result;
-      });
+      const result = await context.enqueueWrite(
+        async () => {
+          // The server evaluates stored inputs, so pending edits must be stored first. When one
+          // could not be, the action would run on something other than what was typed.
+          if (!(await context.stored(queuedSaves, failedBefore))) return undefined;
+          const result = await request();
+          if (result.change) await context.receiveChange(result.change);
+          return result;
+        },
+        false,
+        false,
+      );
+      if (
+        result?.status === "succeeded" &&
+        previousNotice?.kind === "error" &&
+        context.notice.value === previousNotice
+      )
+        context.notice.value = null;
+      return result;
     } catch (cause) {
       context.fail(cause, "The action could not be run");
       return undefined;

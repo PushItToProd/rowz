@@ -52,7 +52,11 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-afterEach(() => wrapper?.unmount());
+afterEach(() => {
+  wrapper?.unmount();
+  wrapper = undefined;
+  vi.useRealTimers();
+});
 
 it("shows folders as collapsible groups with their documents", async () => {
   server.listSpreadsheets.mockResolvedValue(
@@ -124,4 +128,48 @@ it("creates, renames, and deletes folders, and moves a document between groups",
   expect(server.deleteFolder).toHaveBeenCalledWith("f1");
   expect(view.findAll(".list__group")).toHaveLength(1);
   expect(view.get(".list__group").text()).toContain("Plan");
+});
+
+it("auto-dismisses a duplicate-folder error", async () => {
+  vi.useFakeTimers();
+  server.listSpreadsheets.mockResolvedValue(listed([], [document(null)]));
+  server.createFolder.mockRejectedValueOnce(new Error("A folder named Projects already exists"));
+  const view = await render();
+
+  await view
+    .findAll("button")
+    .find((button) => button.text() === "New folder")!
+    .trigger("click");
+  await view.get('[aria-label="New folder name"]').setValue("Projects");
+  await view.get('form[aria-label="Create folder"]').trigger("submit");
+  await flushPromises();
+  expect(view.get('[role="alert"]').text()).toContain("A folder named Projects already exists");
+  expect(view.get('[role="alert"]').classes()).toContain("notice--floating");
+
+  await vi.advanceTimersByTimeAsync(7999);
+  expect(view.find('[role="alert"]').exists()).toBe(true);
+  await vi.advanceTimersByTimeAsync(1);
+  await flushPromises();
+  expect(view.find('[role="alert"]').exists()).toBe(false);
+});
+
+it("clears a folder error after the next action succeeds", async () => {
+  server.listSpreadsheets.mockResolvedValue(listed([], [document(null)]));
+  server.createFolder
+    .mockRejectedValueOnce(new Error("A folder named Projects already exists"))
+    .mockResolvedValueOnce({ id: "f1", name: "Projects" });
+  const view = await render();
+
+  await view
+    .findAll("button")
+    .find((button) => button.text() === "New folder")!
+    .trigger("click");
+  await view.get('[aria-label="New folder name"]').setValue("Projects");
+  await view.get('form[aria-label="Create folder"]').trigger("submit");
+  await flushPromises();
+  expect(view.find('[role="alert"]').exists()).toBe(true);
+
+  await view.get('form[aria-label="Create folder"]').trigger("submit");
+  await flushPromises();
+  expect(view.find('[role="alert"]').exists()).toBe(false);
 });

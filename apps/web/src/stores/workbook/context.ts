@@ -51,7 +51,11 @@ export interface WorkbookContext {
   running: Set<string>;
   saves: Promise<void>;
   failedSaves: number;
-  enqueueWrite: <T>(change: () => Promise<T>, draftWrite?: boolean) => Promise<T>;
+  enqueueWrite: <T>(
+    change: () => Promise<T>,
+    draftWrite?: boolean,
+    clearPreviousError?: boolean,
+  ) => Promise<T>;
   stored: (queue?: Promise<void>, before?: number) => Promise<boolean>;
   fail: (cause: unknown, fallback: string) => void;
   views: Ref<ViewRecord[]>;

@@ -120,6 +120,30 @@ test("folders organize documents in the list, and deleting one returns them to U
   await expect(unfiled.getByRole("link", { name: "Untitled document" })).toBeVisible();
 });
 
+test("duplicate-folder errors dismiss on Escape without moving the document list", async ({
+  page,
+}) => {
+  await signUp(page);
+  await page.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("New folder name").fill("Planning");
+  await page.getByRole("button", { name: "Create folder" }).click();
+  await expect(page.locator(".list__group")).toHaveCount(2);
+
+  await page.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("New folder name").fill("Planning");
+  const groups = page.locator(".list__groups");
+  const listTop = await groups.evaluate((element) => element.getBoundingClientRect().top);
+
+  await page.getByRole("button", { name: "Create folder" }).click();
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("already exists");
+  expect(await groups.evaluate((element) => element.getBoundingClientRect().top)).toBe(listTop);
+
+  await page.keyboard.press("Escape");
+  await expect(alert).toHaveCount(0);
+  expect(await groups.evaluate((element) => element.getBoundingClientRect().top)).toBe(listTop);
+});
+
 test("a spreadsheet is shared with another account, which can edit it until the share ends", async ({
   page,
   browser,

@@ -8,6 +8,7 @@ import {
 import { TableLayout, type IdentifiedCell, type IdentityCellInput } from "@spreadsheet-app/shared";
 import { defineStore } from "pinia";
 import { computed, reactive, ref, shallowRef, watch } from "vue";
+import type { Notice } from "../notice";
 import {
   setJournaledHandler,
   type PageRecord,
@@ -32,10 +33,7 @@ export type ConditionalAction =
   | { kind: "criterion"; criterion: string; format: FormatPatch }
   | { kind: "scale"; low: FormatColor | null; high: FormatColor };
 
-export interface Notice {
-  kind: "success" | "error";
-  text: string;
-}
+export type { Notice } from "../notice";
 
 /**
  * The rows of a table as it shows them. A sorted or filtered table shows its

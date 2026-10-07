@@ -21,7 +21,11 @@ export function createQueue(context: WorkbookContext) {
     return request;
   }
 
-  function enqueueWrite<T>(change: () => Promise<T>, draftWrite = false): Promise<T> {
+  function enqueueWrite<T>(
+    change: () => Promise<T>,
+    draftWrite = false,
+    clearPreviousError = true,
+  ): Promise<T> {
     const sessions = useFormulaSessionStore();
     if (!draftWrite && sessions.active) {
       return sessions.submit(context.submitFormulaDraft).then((saved) => {
@@ -32,7 +36,17 @@ export function createQueue(context: WorkbookContext) {
         return enqueueWrite(change, true);
       });
     }
-    const queued = mutations.then(change);
+    const queued = mutations.then(async () => {
+      const previousNotice = context.notice.value;
+      const result = await change();
+      if (
+        clearPreviousError &&
+        previousNotice?.kind === "error" &&
+        context.notice.value === previousNotice
+      )
+        context.notice.value = null;
+      return result;
+    });
     mutations = queued.catch(() => undefined);
     return countUnanswered(queued);
   }

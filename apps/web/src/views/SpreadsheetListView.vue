@@ -4,7 +4,9 @@ import { useRouter } from "vue-router";
 import { LIMITS } from "@spreadsheet-app/shared";
 import ContextMenu from "../components/ContextMenu.vue";
 import ErrorWarning from "../components/ErrorWarning.vue";
+import NoticeMessage from "../components/NoticeMessage.vue";
 import { api, type FolderRecord, type ListedSpreadsheetItem } from "../api/client";
+import type { Notice } from "../notice";
 import type { MenuItem } from "../components/menu";
 import { APP_NAME } from "../appName";
 import { readSpreadsheetFile } from "../files/spreadsheetFile";
@@ -17,7 +19,7 @@ usePageTitle("Documents");
 
 const folders = ref<FolderRecord[]>([]);
 const documents = ref<ListedSpreadsheetItem[] | null>(null);
-const error = ref<string | null>(null);
+const error = ref<Notice | null>(null);
 const creatingFolder = ref(false);
 const newFolderName = ref("");
 const editingFolderId = ref<string | null>(null);
@@ -27,11 +29,14 @@ const createFolderInput = ref<HTMLInputElement>();
 const moveMenu = ref<{ document: ListedSpreadsheetItem; x: number; y: number } | null>(null);
 
 async function run(action: () => Promise<void>): Promise<void> {
-  error.value = null;
   try {
     await action();
+    if (error.value) error.value = null;
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "Something went wrong";
+    error.value = {
+      kind: "error",
+      text: cause instanceof Error ? cause.message : "Something went wrong",
+    };
   }
 }
 
@@ -200,7 +205,7 @@ onMounted(refresh);
       <button type="button" @click="signOut">Sign out</button>
     </header>
 
-    <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+    <NoticeMessage v-if="error" :notice="error" @dismiss="error = null" />
 
     <div class="list__actions">
       <button type="button" class="primary" @click="create">New document</button>

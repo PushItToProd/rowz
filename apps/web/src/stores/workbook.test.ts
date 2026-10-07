@@ -1165,6 +1165,14 @@ describe("structure", () => {
     expect(store.pages[0]?.name).toBe("Summary");
   });
 
+  it("clears an earlier error after the next successful change", async () => {
+    const store = await open();
+    store.notice = { kind: "error", text: "The previous change failed" };
+
+    expect(await store.renamePage("p1", "Overview")).toBe(true);
+    expect(store.notice).toBeNull();
+  });
+
   it("deletes a table and drops a selection inside it", async () => {
     const store = await open({ A1: "1" });
     store.selection = at("A1");

@@ -19,6 +19,7 @@ import { formatAddress, type DocumentError } from "@spreadsheet-app/engine";
 import AssertionsPanel from "../components/AssertionsPanel.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
 import RunsPanel from "../components/RunsPanel.vue";
+import NoticeMessage from "../components/NoticeMessage.vue";
 import SharePanel from "../components/SharePanel.vue";
 import { useSessionStore } from "../stores/session";
 import { watchSpreadsheet } from "../api/live";
@@ -298,21 +299,6 @@ watch(
   },
   { immediate: true },
 );
-
-// A success notice clears itself. An error stays until dismissed.
-const NOTICE_MS = 4000;
-watch(
-  () => store.notice,
-  (notice, _previous, onCleanup) => {
-    if (notice?.kind !== "success") return;
-    const timer = window.setTimeout(() => {
-      if (store.notice === notice) store.notice = null;
-    }, NOTICE_MS);
-    onCleanup(() => {
-      window.clearTimeout(timer);
-    });
-  },
-);
 </script>
 
 <template>
@@ -472,14 +458,6 @@ watch(
       @close="runsOpen = false"
     />
 
-    <div
-      v-if="store.notice"
-      class="notice notice--floating"
-      :class="`notice--${store.notice.kind}`"
-      :role="store.notice.kind === 'error' ? 'alert' : 'status'"
-    >
-      {{ store.notice.text }}
-      <button type="button" aria-label="Dismiss" @click="store.notice = null">×</button>
-    </div>
+    <NoticeMessage v-if="store.notice" :notice="store.notice" @dismiss="store.notice = null" />
   </div>
 </template>
