@@ -348,7 +348,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] **P7** data tables - allow choices to be drawn from a formula's result (when the formula value changes, keep the raw underlying value in the cell but flag it visibly as invalid) #data-tables
 - [ ] **P6** allow creating links to navigate directly to a page, table cell, block, etc. #small-apps
 - [ ] **P7** (Claude) the editor for a formula column's formula looks unfinished beside the other panels: its heading is small, "Pick reference" is smaller than the other buttons, and Apply and Cancel touch. See `_scratch/qa/15-formula-col.png` #formula-editing
-- [ ] **P4** (Claude) a block added below the visible part of the page is not scrolled into view, so nothing seems to happen after "Add chart". Scroll to a new block and put the keyboard focus in it #small-apps
+- [x] **P4** (Claude) a block added below the visible part of the page is not scrolled into view, so nothing seems to happen after "Add chart". Scroll to a new block and put the keyboard focus in it #small-apps
 - [ ] **P7** (Claude) the row of "Add table", "Add chart", "Add text", and "Add script" buttons between every two blocks takes a line of each gap on a page of five blocks. Consider showing the rows between blocks only when the pointer or the focus is in the gap, and keeping the first and last #small-apps
 - [ ] **P5** (Claude) the label of a `TEXTBOX` or `NUMBERBOX` in a cell is cut to one letter at the default column width ("N…" for "Name"), because the input keeps a fixed width. Let the input shrink before the label does #small-apps
 - [ ] **P7** (Claude) a column's name is renamed by double-clicking its text. A double-click elsewhere in the header cell does nothing. Take the double-click anywhere in the header outside the resize handle #data-tables
@@ -619,3 +619,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] In `SpreadsheetListView.vue`, an older successful request can clear a newer request's error, and cancelling a delete clears the error #everyday
 
 - [x] **P0** Investigate a flaky e2e test: `e2e/data-tables-and-formatting.spec.ts:5` ("a spreadsheet is exported to a file and imported again, and a table to and from CSV") failed once in a full `pnpm e2e:remote` run (15.1s) and passed when the spec file ran alone. Added waits for chart editing to finish and saves to settle, and a reload to verify CSV persistence. Reproduction and browser validation remain blocked by sandbox `EPERM` connecting to `127.0.0.1:3200`; the original cause is unconfirmed #codebase
+
+- [ ] When another session adds a table while this user's "Add chart" request is pending, the new-block focus step can focus the other session's table (`AddBlockRow.vue` captures block IDs before the request) #small-apps

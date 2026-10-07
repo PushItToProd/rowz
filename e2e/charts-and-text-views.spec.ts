@@ -270,3 +270,23 @@ test("text-view input controls commit to their bound cells", async ({ page }) =>
   await expect(restoredText.getByRole("textbox", { name: "Name" })).toHaveValue("updated name");
   await expect(restoredText.getByRole("spinbutton", { name: "Count" })).toHaveValue("3.25");
 });
+
+test("adding a chart below the viewport scrolls to it and focuses its name", async ({ page }) => {
+  await newSpreadsheet(page);
+
+  for (let number = 1; number <= 5; number += 1) {
+    await page.getByRole("button", { name: "Add chart", exact: true }).last().click();
+    await expect(page.locator(`[data-view="Chart ${String(number)}"]`)).toBeVisible();
+  }
+
+  const dimensions = await page.evaluate(() => ({
+    height: window.innerHeight,
+    scrollHeight: document.documentElement.scrollHeight,
+  }));
+  expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.height);
+
+  await page.getByRole("button", { name: "Add chart", exact: true }).last().click();
+  const added = page.locator('[data-view="Chart 6"]');
+  await expect(added).toBeInViewport();
+  await expect(added.locator(".editable-name")).toBeFocused();
+});

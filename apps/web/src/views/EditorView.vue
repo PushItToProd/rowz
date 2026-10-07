@@ -411,7 +411,13 @@ watch(
     <main v-else-if="page" class="editor__page">
       <template v-for="(block, index) in blocks" :key="block.record.id">
         <AddBlockRow :page-id="page.id" :position="index" />
-        <div :id="`block-${block.record.id}`" tabindex="-1" class="editor__block">
+        <div
+          :id="`block-${block.record.id}`"
+          tabindex="-1"
+          role="region"
+          :aria-label="block.record.name"
+          class="editor__block"
+        >
           <TableCard v-if="block.table" :table="block.table" />
           <ChartCard v-else-if="block.view.kind === 'chart'" :view="block.view" />
           <ScriptCard v-else-if="block.view.kind === 'script'" :view="block.view" />

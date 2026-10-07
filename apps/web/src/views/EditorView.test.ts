@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { api } from "../api/client";
 import { changeWith, snapshotWith, wireSnapshot, type MockedApi } from "../testing";
@@ -14,13 +14,19 @@ vi.mock("../api/client", async () => {
 });
 vi.mock("../api/live", () => ({ watchSpreadsheet: () => vi.fn() }));
 const server = api as unknown as MockedApi;
+const matchMediaDescriptor = Object.getOwnPropertyDescriptor(window, "matchMedia");
 
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
 });
 
-async function render(role = "owner", empty = false) {
+afterEach(() => {
+  if (matchMediaDescriptor) Object.defineProperty(window, "matchMedia", matchMediaDescriptor);
+  else Reflect.deleteProperty(window, "matchMedia");
+});
+
+async function render(role = "owner", empty = false, focusCards = false) {
   const snapshot = snapshotWith({}, role);
   server.getSnapshot.mockResolvedValue(
     wireSnapshot({
@@ -65,9 +71,20 @@ async function render(role = "owner", empty = false) {
   await router.push({ name: "editor", params: { spreadsheetId: "s1" } });
   const wrapper = mount(EditorView, {
     props: { spreadsheetId: "s1", pageId: "p1" },
+    attachTo: focusCards ? document.body : undefined,
     global: {
       plugins: [router],
-      stubs: { TableCard: true, TextCard: true, FormulaBar: true, FormatBar: true, PageTabs: true },
+      stubs: {
+        TableCard: focusCards
+          ? { template: '<div role="grid" tabindex="0" aria-label="Table grid"></div>' }
+          : true,
+        ChartCard: focusCards ? { template: '<button type="button">Card control</button>' } : true,
+        ScriptCard: focusCards ? { template: '<button type="button">Card control</button>' } : true,
+        TextCard: focusCards ? { template: '<button type="button">Card control</button>' } : true,
+        FormulaBar: true,
+        FormatBar: true,
+        PageTabs: true,
+      },
     },
   });
   await flushPromises();
@@ -170,6 +187,89 @@ it("places insertion controls before, between, and after blocks and sends their 
   expect(rows[0]!.findAll("button").every((button) => button.attributes("tabindex") !== "-1")).toBe(
     true,
   );
+  wrapper.unmount();
+});
+
+it("scrolls to and focuses each kind of block after it is added", async () => {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn().mockReturnValue({ matches: false }),
+  });
+  const wrapper = await render("owner", true, true);
+  const store = useWorkbookStore();
+  const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+  vi.spyOn(store, "addTable").mockImplementation((pageId, position) => {
+    store.tables.push({
+      ...snapshotWith().tables[0]!,
+      id: "added-table",
+      pageId,
+      name: "Added Table",
+      position: position ?? 0,
+    });
+    return Promise.resolve(true);
+  });
+  vi.spyOn(store, "addView").mockImplementation((pageId, kind, position) => {
+    store.views.push({
+      id: `added-${kind}`,
+      pageId,
+      name: `Added ${kind}`,
+      kind,
+      source: "",
+      chartType: kind === "chart" ? "bar" : null,
+      position: position ?? 0,
+    });
+    return Promise.resolve(true);
+  });
+
+  for (const name of ["Add table", "Add chart", "Add text", "Add script"]) {
+    const row = wrapper.findAll("[data-insert-position]").at(-1)!;
+    const button = row.findAll("button").find((candidate) => candidate.text() === name)!;
+    expect(document.activeElement).not.toBe(button.element);
+    await button.trigger("click");
+    await flushPromises();
+
+    const card = wrapper.findAll(".editor__block").at(-1)!;
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: "nearest", behavior: "smooth" });
+    expect(card.element.contains(document.activeElement)).toBe(true);
+    const focused = name === "Add table" ? card.find('[role="grid"]') : card.find("button");
+    expect(document.activeElement).toBe(focused.element);
+    if (name === "Add table")
+      expect(store.selection).toEqual({ tableId: "added-table", row: 0, col: 0 });
+  }
+  wrapper.unmount();
+});
+
+it("does not take focus back when the user moves while a block is being added", async () => {
+  const wrapper = await render("owner", false, true);
+  const store = useWorkbookStore();
+  const tableGrid = wrapper.find<HTMLElement>('[role="grid"]');
+  store.selection = { tableId: "t1", row: 0, col: 0 };
+  let finishAdd: ((success: boolean) => void) | undefined;
+  vi.spyOn(store, "addTable").mockImplementation((pageId, position) => {
+    return new Promise((resolve) => {
+      finishAdd = (success) => {
+        if (success)
+          store.tables.push({
+            ...snapshotWith().tables[0]!,
+            id: "pending-table",
+            pageId,
+            name: "Pending Table",
+            position: position ?? 0,
+          });
+        resolve(success);
+      };
+    });
+  });
+
+  const addButton = wrapper.findAll("button").find((button) => button.text() === "Add table")!;
+  addButton.element.focus();
+  await addButton.trigger("click");
+  tableGrid.element.focus();
+  finishAdd!(true);
+  await flushPromises();
+
+  expect(document.activeElement).toBe(tableGrid.element);
+  expect(store.selection).toEqual({ tableId: "t1", row: 0, col: 0 });
   wrapper.unmount();
 });
 
