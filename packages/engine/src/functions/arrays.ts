@@ -26,6 +26,12 @@ function width(rows: readonly CellValue[][]): number {
   return rows[0]?.length ?? 0;
 }
 
+function sortDirection(value: Evaluated): number {
+  const direction = number(value);
+  if (direction !== 1 && direction !== -1) fail("#VALUE!", "Sort order must be 1 or -1");
+  return direction;
+}
+
 function result(rows: CellValue[][], whenEmpty: string): Evaluated {
   return rows.length === 0 || width(rows) === 0 ? fail("#N/A", whenEmpty) : array(rows);
 }
@@ -101,6 +107,21 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
     );
   }),
 
+  /** Selects columns by their 1-based positions; negative positions count from the right. */
+  CHOOSECOLS: eager(2, Infinity, (source, ...columnNumbers) => {
+    const rows = grid(source);
+    const columns = width(rows);
+    const selected = columnNumbers.map((columnNumber) => {
+      const position = integer(columnNumber);
+      if (position === 0 || Math.abs(position) > columns) {
+        fail("#VALUE!", "A column number is not in the range");
+      }
+      return position > 0 ? position - 1 : columns + position;
+    });
+    limitCells(rows.length * selected.length);
+    return array(rows.map((cells) => selected.map((column) => cells[column] ?? null)));
+  }),
+
   /**
    * Sorts the rows of a range. Without more arguments it sorts by the first
    * column, ascending. Otherwise the arguments are pairs of a column number
@@ -129,6 +150,57 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
         return 0;
       }),
     );
+  }),
+
+  /** Sorts rows by column arrays, or columns by row arrays, keeping the input order for ties. */
+  SORTBY: lazy(2, Infinity, (args) => {
+    if (args.length > 3 && (args.length - 3) % 2 !== 0) {
+      fail("#VALUE!", "Each additional sort key needs a sort order");
+    }
+    const rows = grid(args[0]?.() ?? null);
+    const rowCount = rows.length;
+    const columnCount = width(rows);
+    const firstKey = grid(args[1]?.() ?? null);
+    const vertical = firstKey.length === rowCount && firstKey.every((cells) => cells.length === 1);
+    const horizontal = firstKey.length === 1 && width(firstKey) === columnCount;
+    if (!vertical && !horizontal) {
+      fail("#VALUE!", "A sort key must be one row or column matching the array");
+    }
+    const sortRows = vertical;
+    const keyValues = (keyRows: CellValue[][]): CellValue[] => {
+      const matches = sortRows
+        ? keyRows.length === rowCount && keyRows.every((cells) => cells.length === 1)
+        : keyRows.length === 1 && width(keyRows) === columnCount;
+      if (!matches) fail("#VALUE!", "A sort key must be one row or column matching the array");
+      return sortRows ? keyRows.map((cells) => cells[0] ?? null) : [...(keyRows[0] ?? [])];
+    };
+    const criteria = [
+      {
+        values: keyValues(firstKey),
+        direction: args[2] === undefined ? 1 : sortDirection(args[2]()),
+      },
+    ];
+    for (let index = 3; index < args.length; index += 2) {
+      const keyRows = grid(args[index]?.() ?? null);
+      const order = args[index + 1];
+      if (!order) fail("#VALUE!", "Each additional sort key needs a sort order");
+      criteria.push({ values: keyValues(keyRows), direction: sortDirection(order()) });
+    }
+
+    const compareIndexes = (left: number, right: number): number => {
+      for (const { values, direction } of criteria) {
+        const order = cellOrder(values[left] ?? null, values[right] ?? null, direction);
+        if (order !== 0) return order;
+      }
+      return 0;
+    };
+    const indexes = Array.from(
+      { length: sortRows ? rowCount : columnCount },
+      (_, index) => index,
+    ).toSorted(compareIndexes);
+    return sortRows
+      ? array(indexes.map((row) => rows[row] ?? []))
+      : array(rows.map((cells) => indexes.map((column) => cells[column] ?? null)));
   }),
 
   /** The rows of a range with repeats removed, keeping the first of each. */
@@ -248,6 +320,28 @@ export const arrayFunctions: Record<string, FunctionDefinition> = {
         (soFar, cell) => callFunction(step, [soFar, cell], context),
         initial?.() ?? null,
       );
+  }),
+
+  /** Returns each running accumulator value in the same arrangement as the input array. */
+  SCAN: lazy(2, 3, (args, context) => {
+    const hasInitial = args.length === 3;
+    const step = functionValue(args.at(-1)?.() ?? null);
+    const rows = grid(args[hasInitial ? 1 : 0]?.() ?? null);
+    let accumulator: Evaluated = hasInitial ? (args[0]?.() ?? null) : null;
+    let started = hasInitial;
+    return array(
+      rows.map((cells) =>
+        cells.map((cell) => {
+          if (!started) {
+            accumulator = cell;
+            started = true;
+            return cell;
+          }
+          accumulator = element(() => callFunction(step, [accumulator, cell], context));
+          return accumulator;
+        }),
+      ),
+    );
   }),
 
   /** Calls a function on each row of a range and gives a column of the results. */

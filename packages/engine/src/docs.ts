@@ -714,12 +714,28 @@ const ENTRIES: readonly FunctionDoc[] = [
     example: "FILTER_COLUMNS(A1:B3, A1:B1 <> 1)",
   },
   {
+    name: "CHOOSECOLS",
+    category: "Arrays",
+    syntax: "CHOOSECOLS(array, col_num1, [col_num2, ...])",
+    summary:
+      "Returns the selected columns in the order given. Column numbers start at 1; negative numbers count from the right, and columns may repeat.",
+    example: "CHOOSECOLS(A1:B3, 2, 1)",
+  },
+  {
     name: "SORT",
     category: "Arrays",
     syntax: "SORT(range, [column], [ascending], ...)",
     summary:
       "Sorts the rows of the range by a column, counting from 1. Without a column it sorts by the first, ascending. FALSE or -1 sorts descending. More column and direction pairs break ties.",
     example: "SORT(A1:B3, 1, FALSE)",
+  },
+  {
+    name: "SORTBY",
+    category: "Arrays",
+    syntax: "SORTBY(array, by_array1, [sort_order1], [by_array2, sort_order2], ...)",
+    summary:
+      "Sorts rows by matching column arrays, or columns by matching row arrays. Sort order defaults to 1; use -1 for descending. Ties keep their original order unless another key breaks them.",
+    example: "SORTBY(A1:B3, A1:A3, -1)",
   },
   {
     name: "UNIQUE",
@@ -809,6 +825,14 @@ const ENTRIES: readonly FunctionDoc[] = [
     summary:
       "Folds a range into one value. A LAMBDA or pure built-in function receives the value so far and the next cell.",
     example: "REDUCE(0, A1:A3, SUM)",
+  },
+  {
+    name: "SCAN",
+    category: "Arrays",
+    syntax: "SCAN([initial_value], array, lambda)",
+    summary:
+      "Returns the running accumulator values in the input array's arrangement. The LAMBDA receives the accumulator and each value; without an initial value, the first cell starts the accumulator.",
+    example: "SCAN(0, A1:A3, LAMBDA(total, n, total + n))",
   },
   {
     name: "BYROW",

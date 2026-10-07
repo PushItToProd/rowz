@@ -112,6 +112,38 @@ describe("FILTER_COLUMNS", () => {
   });
 });
 
+describe("CHOOSECOLS", () => {
+  it("selects columns in the requested order, including repeats", () => {
+    expect(run("=CHOOSECOLS(A1:C3, 3, 1, 3)")).toEqual([
+      [12, "banana", 12],
+      [5, "apple", 5],
+      [40, "cherry", 40],
+    ]);
+  });
+
+  it("counts negative column numbers from the right", () => {
+    expect(run("=CHOOSECOLS(A1:C3, -1, -3)")).toEqual([
+      [12, "banana"],
+      [5, "apple"],
+      [40, "cherry"],
+    ]);
+  });
+
+  it.each([
+    ["=CHOOSECOLS(A1:C3, 0)", "#VALUE!"],
+    ["=CHOOSECOLS(A1:C3, 4)", "#VALUE!"],
+    ["=CHOOSECOLS(A1:C3, -4)", "#VALUE!"],
+    ["=CHOOSECOLS(A1:C3, 1/0)", "#DIV/0!"],
+  ])("%s is %s", (formula, code) => {
+    expectError(formula, code);
+  });
+
+  it("checks the result size before making the selected columns", () => {
+    const repeatedColumns = Array.from({ length: 101 }, () => "1").join(", ");
+    expectError(`=CHOOSECOLS(SEQUENCE(1000), ${repeatedColumns})`, "#VALUE!");
+  });
+});
+
 describe("SORT", () => {
   it("sorts rows by the first column, ascending, ignoring letter case", () => {
     expect(run("=SORT(A1:A5)").flat()).toEqual(["apple", "Apple", "banana", "cherry", "date"]);
@@ -157,6 +189,65 @@ describe("SORT", () => {
     ["=SORT(A1:C5, 4)", "#VALUE!"],
     ["=SORT(A1:C5, 0)", "#VALUE!"],
     ['=SORT(A1:C5, 1, "up")', "#VALUE!"],
+  ])("%s is %s", (formula, code) => {
+    expectError(formula, code);
+  });
+});
+
+describe("SORTBY", () => {
+  it("sorts rows by a key and keeps tied rows in their original order", () => {
+    expect(run("=SORTBY(A1:C5, C1:C5)").map(([fruit]) => fruit)).toEqual([
+      "apple",
+      "date",
+      "Apple",
+      "banana",
+      "cherry",
+    ]);
+  });
+
+  it("sorts descending and uses additional keys to break ties", () => {
+    expect(run("=SORTBY(A1:C5, C1:C5, -1)").map(([fruit]) => fruit)).toEqual([
+      "cherry",
+      "banana",
+      "Apple",
+      "apple",
+      "date",
+    ]);
+    expect(run("=SORTBY(A1:C5, B1:B5, 1, C1:C5, -1)").map(([fruit]) => fruit)).toEqual([
+      "date",
+      "Apple",
+      "cherry",
+      "apple",
+      "banana",
+    ]);
+  });
+
+  it("sorts columns when the sort keys are row vectors", () => {
+    expect(run("=SORTBY(A1:C2, A9:C9)", { ...DATA, A9: "3", B9: "1", C9: "2" })).toEqual([
+      ["yellow", 12, "banana"],
+      ["red", 5, "apple"],
+    ]);
+  });
+
+  it("orders mixed types like SORT and puts error keys last", () => {
+    const data = { A1: "a", A2: "b", A3: "c", B1: "2", B2: "=1/0", B3: "1" };
+    expect(run("=SORTBY(A1:A3, B1:B3)", data)).toEqual([["c"], ["a"], ["b"]]);
+  });
+
+  it("matches existing whole-column behavior on an empty sheet", () => {
+    expect(run("=SORT(A:A)", {})).toEqual([[null]]);
+    expect(run("=MAP(A:A, LAMBDA(value, value))", {})).toEqual([[null]]);
+    expect(run("=FILTER(A:A, A:A)", {})).toMatchObject([[{ kind: "error", code: "#N/A" }]]);
+    expect(run("=SORTBY(A:A, A:A)", {})).toEqual([[null]]);
+  });
+
+  it.each([
+    ["=SORTBY(A1:C5, B1:B4)", "#VALUE!"],
+    ["=SORTBY(A1:C5, A9:B9)", "#VALUE!"],
+    ["=SORTBY(A1:C5, A1:B2)", "#VALUE!"],
+    ["=SORTBY(A1:C5, B1:B5, 0)", "#VALUE!"],
+    ['=SORTBY(A1:C5, B1:B5, "up")', "#VALUE!"],
+    ["=SORTBY(A1:C5, 1/0)", "#DIV/0!"],
   ])("%s is %s", (formula, code) => {
     expectError(formula, code);
   });
@@ -302,7 +393,7 @@ describe("SEQUENCE, TRANSPOSE, TAKE, DROP, ROWS, COLUMNS", () => {
   });
 });
 
-describe("MAP, REDUCE, BYROW, BYCOL", () => {
+describe("MAP, REDUCE, SCAN, BYROW, BYCOL", () => {
   it.each<[string, CellValue[][]]>([
     ["=MAP(C1:C3, LAMBDA(n, n * 2))", [[24], [10], [80]]],
     ["=MAP(A1:A3, UPPER)", [["BANANA"], ["APPLE"], ["CHERRY"]]],
@@ -323,6 +414,15 @@ describe("MAP, REDUCE, BYROW, BYCOL", () => {
     ["=REDUCE(0, C1:C5, SUM)", [[70]]],
     ['=REDUCE("", A1:A3, LAMBDA(text, name, text & LEFT(name, 1)))', [["bac"]]],
     ["=REDUCE(100, C9:C9, LAMBDA(total, n, total + n))", [[100]]],
+    ["=SCAN(0, C1:C5, LAMBDA(balance, change, balance + change))", [[12], [17], [57], [65], [70]]],
+    ["=SCAN(C1:C3, LAMBDA(total, n, total + n))", [[12], [17], [57]]],
+    [
+      "=SCAN(0, SEQUENCE(2, 2), LAMBDA(total, n, total + n))",
+      [
+        [1, 3],
+        [6, 10],
+      ],
+    ],
     ["=BYROW(SEQUENCE(2, 3), LAMBDA(row, SUM(row)))", [[6], [15]]],
     ["=BYROW(A1:C3, SUM)", [[12], [5], [40]]],
     ["=BYCOL(SEQUENCE(2, 3), LAMBDA(col, MAX(col)))", [[4, 5, 6]]],
@@ -344,9 +444,26 @@ describe("MAP, REDUCE, BYROW, BYCOL", () => {
     expect(run("=MAP(SEQUENCE(2), LAMBDA(n, SEQUENCE(1, 3, n * 10)))")).toEqual([[10], [20]]);
   });
 
+  it("keeps the blank cell from an empty whole-column range", () => {
+    expect(run("=SCAN(A:A, LAMBDA(total, n, total + n))", {})).toEqual([[null]]);
+  });
+
+  it("propagates a lambda error through the running accumulator", () => {
+    expect(run("=SCAN(0, SEQUENCE(3), LAMBDA(total, n, total + 1/(n-2)))")).toMatchObject([
+      [-1],
+      [{ code: "#DIV/0!" }],
+      [{ code: "#DIV/0!" }],
+    ]);
+  });
+
   it.each([
     [
       "=MAP(C1:C3, 5)",
+      "#VALUE!",
+      "Expected a function made with LAMBDA or a built-in function name",
+    ],
+    [
+      "=SCAN(0, C1:C3, 5)",
       "#VALUE!",
       "Expected a function made with LAMBDA or a built-in function name",
     ],

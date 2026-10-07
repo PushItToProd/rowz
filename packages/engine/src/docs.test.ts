@@ -83,7 +83,23 @@ describe("array examples", () => {
     ["FILTER", [["banana"], ["cherry"]]],
     ["FILTER_COLUMNS", [["apple"], ["banana"], ["cherry"]]],
     [
+      "CHOOSECOLS",
+      [
+        ["apple", 1],
+        ["banana", 2],
+        ["cherry", 3],
+      ],
+    ],
+    [
       "SORT",
+      [
+        [3, "cherry"],
+        [2, "banana"],
+        [1, "apple"],
+      ],
+    ],
+    [
+      "SORTBY",
       [
         [3, "cherry"],
         [2, "banana"],
@@ -110,6 +126,7 @@ describe("array examples", () => {
     ["DROP", [["banana"], ["cherry"]]],
     ["MAP", [["APPLE"], ["BANANA"], ["CHERRY"]]],
     ["REDUCE", [[6]]],
+    ["SCAN", [[1], [3], [6]]],
     ["BYROW", [[1], [2], [3]]],
     ["BYCOL", [[3, 3]]],
   ])("the %s example gives %j", (name, expected) => {

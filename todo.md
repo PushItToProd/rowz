@@ -194,9 +194,9 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] **P99** `FLOOKUP` #formula-language
 
 
-- [ ] **P6** `CHOOSECOLS` #formula-language
-- [ ] **P6** `SORTBY` #formula-language
-- [ ] **P6** `SCAN` for running totals, balances, and cumulative state #formula-language
+- [x] **P6** `CHOOSECOLS` #formula-language
+- [x] **P6** `SORTBY` #formula-language
+- [x] **P6** `SCAN` for running totals, balances, and cumulative state #formula-language
 - [ ] **P7** more text processing: "regex matching, extraction, replacement; literal substring predicates; text-before/text-after helpers" #formula-language
   - (Claude) the regex functions are done. Substring predicates and text-before and text-after helpers remain
 - [ ] **P6** reusable function ergonomics: parameter help for user defined functions and better arg-specific errors #formula-language
@@ -669,3 +669,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [ ] The failing-assertions panel drops the optional error trace, so an assertion propagated from a script function has no Open definition button (`apps/web/src/stores/workbook/values.ts` near line 32, `AssertionsPanel.vue`) #everyday
 - [ ] `useCopyFeedback.ts` creates its 2-second timer after the clipboard promise resolves, so a copy that completes after the panel unmounts leaves a timer running #everyday
+
+- [ ] `SORTBY` treats error keys and blank keys as equal, so a blank key can stay ahead of an error key; Excel puts errors before blanks, and blanks last (`packages/engine/src/functions/arrays.ts` near line 192, `cellOrder`) #formula-language
