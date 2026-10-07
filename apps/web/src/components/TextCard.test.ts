@@ -643,7 +643,9 @@ describe("TextCard", () => {
   it("shows a viewer the text without the means to change it", async () => {
     await render("hello", "viewer");
     expect(shown().text()).toBe("hello");
-    expect(wrapper.find("button").exists()).toBe(false);
+    expect(
+      wrapper.findAll("button").map((candidate) => candidate.attributes("aria-label")),
+    ).toEqual(["Collapse Text 1", "Block actions for Text 1"]);
     await shown().trigger("dblclick");
     expect(wrapper.find(".cm-content").exists()).toBe(false);
   });

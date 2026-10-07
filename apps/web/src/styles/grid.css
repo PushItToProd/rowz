@@ -3,7 +3,7 @@
 .grid {
   position: relative;
   max-width: 100%;
-  max-height: 70vh;
+  max-height: var(--block-max-height);
   overflow: auto;
   overflow-anchor: none;
 }

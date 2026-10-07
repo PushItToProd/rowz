@@ -8,6 +8,7 @@ import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
 import ContextMenu from "./ContextMenu.vue";
 import type { MenuItem } from "./menu";
+import { isBlockCollapsed, setBlocksCollapsed } from "../blockCollapse";
 
 const props = defineProps<{ spreadsheetId: string; activePageId: string }>();
 const store = useWorkbookStore();
@@ -41,7 +42,6 @@ function pageAt(pageId: string): PageRecord | undefined {
 }
 
 function showPageMenu(page: PageRecord, x: number, y: number): void {
-  if (!store.canEdit) return;
   const name = document
     .getElementById(`page-tab-${page.id}`)
     ?.querySelector<HTMLElement>(".editable-name:not(input)");
@@ -50,7 +50,6 @@ function showPageMenu(page: PageRecord, x: number, y: number): void {
 }
 
 function onPageContextMenu(event: MouseEvent, page: PageRecord): void {
-  if (!store.canEdit) return;
   if (event.target instanceof Element && event.target.closest("button, input")) return;
   event.preventDefault();
   event.stopPropagation();
@@ -60,7 +59,6 @@ function onPageContextMenu(event: MouseEvent, page: PageRecord): void {
 function onPageKeydown(event: KeyboardEvent, page: PageRecord): void {
   if (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey)) return;
   if (event.target instanceof Element && event.target.closest("button, input")) return;
-  if (!store.canEdit) return;
   event.preventDefault();
   event.stopPropagation();
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -81,11 +79,26 @@ function renamePage(pageId: string): void {
 
 const pageMenuItems = computed((): MenuItem[] => {
   const page = pageAt(pageMenu.value?.pageId ?? "");
-  if (!page || !store.canEdit) return [];
+  if (!page) return [];
+  const blockIds = [...store.tables, ...store.views]
+    .filter((block) => block.pageId === page.id)
+    .map((block) => block.id);
+  const allCollapsed =
+    blockIds.length > 0 && blockIds.every((id) => isBlockCollapsed(props.spreadsheetId, id));
+  const collapseItem: MenuItem = {
+    label: allCollapsed ? "Expand all" : "Collapse all",
+    disabled: blockIds.length === 0,
+    run: () => {
+      setBlocksCollapsed(props.spreadsheetId, blockIds, !allCollapsed);
+    },
+  };
+  if (!store.canEdit) return [collapseItem];
   const index = store.pages.findIndex((candidate) => candidate.id === page.id);
   return [
+    collapseItem,
     {
       label: "Rename",
+      separated: true,
       run: () => {
         renamePage(page.id);
       },

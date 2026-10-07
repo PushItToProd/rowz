@@ -269,6 +269,9 @@ describe("ChartCard", () => {
     expect(wrapper.findAll("[data-chart-value]")).toHaveLength(3);
     expect(wrapper.find("select").exists()).toBe(false);
     expect(wrapper.find("input").exists()).toBe(false);
-    expect(wrapper.find("button").exists()).toBe(false);
+    expect(wrapper.findAll("button").map((button) => button.attributes("aria-label"))).toEqual([
+      "Collapse Chart 1",
+      "Block actions for Chart 1",
+    ]);
   });
 });

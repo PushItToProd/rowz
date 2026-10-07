@@ -313,6 +313,12 @@
   font-size: 0.92rem;
 }
 
+.script__content {
+  max-height: var(--block-max-height);
+  overflow: auto;
+  overscroll-behavior-y: auto;
+}
+
 .script th,
 .script td {
   padding: 4px 8px;

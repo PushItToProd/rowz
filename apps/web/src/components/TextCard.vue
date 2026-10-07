@@ -7,7 +7,7 @@ import {
   type TemplateInline,
 } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, nextTick, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { ViewRecord } from "../api/client";
 import { markdown } from "../markdown";
 import { formattedText } from "../formatStyle";
@@ -20,8 +20,10 @@ import ErrorWarning from "./ErrorWarning.vue";
 import ConfirmDialog from "./ConfirmDialog.vue";
 import { useDialog } from "../useDialog";
 
-const props = defineProps<{ view: ViewRecord }>();
-const emit = defineEmits<{ actions: [event: MouseEvent] }>();
+const props = withDefaults(defineProps<{ view: ViewRecord; collapsed?: boolean }>(), {
+  collapsed: false,
+});
+const emit = defineEmits<{ actions: [event: MouseEvent]; "toggle-collapse": [] }>();
 const store = useWorkbookStore();
 const dialog = useDialog();
 
@@ -303,6 +305,25 @@ const parts = computed(() => {
   );
 });
 
+const textScrollable = ref(false);
+let textResizeObserver: ResizeObserver | undefined;
+function updateTextScrollable(): void {
+  const element = textView.value;
+  textScrollable.value = !!element && element.scrollHeight > element.clientHeight + 1;
+}
+watch([parts, editing], async () => {
+  await nextTick();
+  updateTextScrollable();
+});
+onMounted(() => {
+  if (typeof ResizeObserver !== "undefined" && textView.value) {
+    textResizeObserver = new ResizeObserver(updateTextScrollable);
+    textResizeObserver.observe(textView.value);
+  }
+  updateTextScrollable();
+});
+onBeforeUnmount(() => textResizeObserver?.disconnect());
+
 function runTextButton(event: MouseEvent): void {
   const target = event.target;
   if (!(target instanceof Element)) return;
@@ -425,25 +446,38 @@ function editFromText(event: MouseEvent): void {
 </script>
 
 <template>
-  <section class="view-card" :data-view="view.name">
-    <header class="view-card__header">
-      <h2>
-        <ErrorWarning
-          v-if="store.errorBlocks.has(view.id)"
-          :label="`${view.name} contains errors`"
-        />
-        <EditableName
-          :value="view.name"
-          label="Text view name"
-          :disabled="!store.canEdit"
-          @rename="store.updateView(view.id, { name: $event })"
-        />
-      </h2>
-      <div v-if="store.canEdit" class="view-card__actions">
-        <button v-if="!editing" type="button" data-block-action="Edit" @click="edit">Edit</button>
-        <button type="button" data-block-action="Delete text" class="danger" @click="remove">
-          Delete text
+  <section class="view-card" :data-view="view.name" data-view-kind="text">
+    <header class="view-card__header" :class="{ 'view-card__header--collapsed': collapsed }">
+      <div class="block-card__title">
+        <button
+          type="button"
+          class="block-collapse"
+          :aria-expanded="!collapsed"
+          :aria-label="`${collapsed ? 'Expand' : 'Collapse'} ${view.name}`"
+          @click.stop="emit('toggle-collapse')"
+        >
+          <span aria-hidden="true">{{ collapsed ? "›" : "⌄" }}</span>
         </button>
+        <h2>
+          <ErrorWarning
+            v-if="store.errorBlocks.has(view.id)"
+            :label="`${view.name} contains errors`"
+          />
+          <EditableName
+            :value="view.name"
+            label="Text view name"
+            :disabled="!store.canEdit"
+            @rename="store.updateView(view.id, { name: $event })"
+          />
+        </h2>
+      </div>
+      <div class="view-card__actions">
+        <div v-if="store.canEdit" v-show="!collapsed" class="view-card__direct-actions">
+          <button v-if="!editing" type="button" data-block-action="Edit" @click="edit">Edit</button>
+          <button type="button" data-block-action="Delete text" class="danger" @click="remove">
+            Delete text
+          </button>
+        </div>
         <button
           type="button"
           class="view-card__menu-trigger"
@@ -456,60 +490,65 @@ function editFromText(event: MouseEvent): void {
       </div>
     </header>
 
-    <ViewSourceEditor v-if="editing" :view="view" mode="markdown" label="Text view source" />
+    <div v-show="!collapsed" class="block-card__body" :inert="collapsed">
+      <ViewSourceEditor v-if="editing" :view="view" mode="markdown" label="Text view source" />
 
-    <ConfirmDialog
-      v-if="confirmation !== null"
-      :message="confirmation"
-      :return-focus="returnFocus"
-      @confirm="confirmTextButton"
-      @cancel="cancelConfirmation"
-    />
+      <ConfirmDialog
+        v-if="confirmation !== null"
+        :message="confirmation"
+        :return-focus="returnFocus"
+        @confirm="confirmTextButton"
+        @cancel="cancelConfirmation"
+      />
 
-    <div
-      ref="textView"
-      class="text-view"
-      :title="store.canEdit && !editing ? 'Double-click to edit' : undefined"
-      @input="rememberTextInput"
-      @keydown="commitTextInput"
-      @focusout="commitTextInput"
-      @click="runTextButton"
-      @dblclick="editFromText"
-    >
-      <template v-for="(part, index) in parts" :key="index">
-        <!-- eslint-disable-next-line vue/no-v-html -- markdown-it output with raw HTML disabled -->
-        <div v-if="part.type === 'markdown'" class="text-view__markdown" v-html="part.html"></div>
-        <table v-else-if="part.type === 'table'" class="text-view__table">
-          <tbody>
-            <tr v-for="(cells, row) in part.rows" :key="row">
-              <td
-                v-for="(cell, col) in cells"
-                :key="col"
-                :class="{ 'text-view__number': typeof cell === 'number' }"
-              >
-                <span
-                  v-if="isError(cell)"
-                  class="md-error"
-                  :aria-label="`${cell.code} ${cell.message ?? cell.code}`"
-                  :title="cell.message ?? cell.code"
+      <div
+        ref="textView"
+        class="text-view"
+        :role="textScrollable ? 'region' : undefined"
+        :tabindex="textScrollable ? 0 : undefined"
+        :aria-label="textScrollable ? `${view.name} content` : undefined"
+        :title="store.canEdit && !editing ? 'Double-click to edit' : undefined"
+        @input="rememberTextInput"
+        @keydown="commitTextInput"
+        @focusout="commitTextInput"
+        @click="runTextButton"
+        @dblclick="editFromText"
+      >
+        <template v-for="(part, index) in parts" :key="index">
+          <!-- eslint-disable-next-line vue/no-v-html -- markdown-it output with raw HTML disabled -->
+          <div v-if="part.type === 'markdown'" class="text-view__markdown" v-html="part.html"></div>
+          <table v-else-if="part.type === 'table'" class="text-view__table">
+            <tbody>
+              <tr v-for="(cells, row) in part.rows" :key="row">
+                <td
+                  v-for="(cell, col) in cells"
+                  :key="col"
+                  :class="{ 'text-view__number': typeof cell === 'number' }"
                 >
-                  {{ cell.code }}
-                  <span class="md-error__message">{{ cell.message ?? cell.code }}</span>
-                </span>
-                <template v-else>{{ formatValue(cell) }}</template>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <ChartView
-          v-else-if="part.type === 'chart'"
-          :chart="part.chart.chart"
-          :rows="part.chart.rows"
-          :title="part.chart.title"
-        />
-        <p v-else class="view-card__problem" role="alert">{{ part.message }}</p>
-      </template>
-      <p v-if="parts.length === 0" class="view-card__problem">This view is empty.</p>
+                  <span
+                    v-if="isError(cell)"
+                    class="md-error"
+                    :aria-label="`${cell.code} ${cell.message ?? cell.code}`"
+                    :title="cell.message ?? cell.code"
+                  >
+                    {{ cell.code }}
+                    <span class="md-error__message">{{ cell.message ?? cell.code }}</span>
+                  </span>
+                  <template v-else>{{ formatValue(cell) }}</template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <ChartView
+            v-else-if="part.type === 'chart'"
+            :chart="part.chart.chart"
+            :rows="part.chart.rows"
+            :title="part.chart.title"
+          />
+          <p v-else class="view-card__problem" role="alert">{{ part.message }}</p>
+        </template>
+        <p v-if="parts.length === 0" class="view-card__problem">This view is empty.</p>
+      </div>
     </div>
   </section>
 </template>

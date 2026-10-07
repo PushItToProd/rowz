@@ -91,11 +91,17 @@
 
   .table-card__header h2,
   .view-card__header h2 {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .block-card__title {
     flex-basis: 100%;
   }
 
   .table-card__actions,
   .view-card__actions {
+    flex-basis: 100%;
     flex-wrap: wrap;
     justify-content: flex-start;
   }

@@ -13,6 +13,7 @@ export function focusBlock(block: HTMLElement): void {
   block.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "instant" : "smooth" });
   const target =
     block.querySelector<HTMLElement>('[role="grid"]') ??
+    block.querySelector<HTMLElement>(".editable-name:not(input)") ??
     block.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ??
     block;
   target.focus({ preventScroll: true });

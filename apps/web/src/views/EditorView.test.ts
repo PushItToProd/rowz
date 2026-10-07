@@ -91,9 +91,24 @@ async function render(
           : focusCards
             ? { template: '<div role="grid" tabindex="0" aria-label="Table grid"></div>' }
             : true,
-        ChartCard: focusCards ? { template: '<button type="button">Card control</button>' } : true,
-        ScriptCard: focusCards ? { template: '<button type="button">Card control</button>' } : true,
-        TextCard: focusCards ? { template: '<button type="button">Card control</button>' } : true,
+        ChartCard: focusCards
+          ? {
+              template:
+                '<div><button type="button">Collapse</button><span class="editable-name" role="button" tabindex="0">Card name</span></div>',
+            }
+          : true,
+        ScriptCard: focusCards
+          ? {
+              template:
+                '<div><button type="button">Collapse</button><span class="editable-name" role="button" tabindex="0">Card name</span></div>',
+            }
+          : true,
+        TextCard: focusCards
+          ? {
+              template:
+                '<div><button type="button">Collapse</button><span class="editable-name" role="button" tabindex="0">Card name</span></div>',
+            }
+          : true,
         FormulaBar: true,
         FormatBar: true,
         PageTabs: true,
@@ -279,6 +294,57 @@ it("opens block actions from card margins and leaves grid cell menus to the tabl
   wrapper.unmount();
 });
 
+it("collapses a block to its header and restores its body from the block menu", async () => {
+  const wrapper = await render("owner", false, false, {}, true);
+
+  await wrapper.get('button[aria-label="Collapse Table 1"]').trigger("click");
+  await flushPromises();
+  expect(wrapper.get('button[aria-label="Expand Table 1"]').attributes("aria-expanded")).toBe(
+    "false",
+  );
+  expect(wrapper.find('[data-table="Table 1"] .table-card__header').exists()).toBe(true);
+  expect(wrapper.find('[data-table="Table 1"] .table-card__menu-trigger').exists()).toBe(true);
+  expect(wrapper.get('[data-table="Table 1"] .table-card__grid').isVisible()).toBe(false);
+
+  await wrapper.get(".editor__block").trigger("contextmenu", {
+    button: 2,
+    clientX: 90,
+    clientY: 110,
+  });
+  await flushPromises();
+  const menu = wrapper.get('[role="menu"][aria-label="Actions for Table 1"]');
+  expect(menu.findAll('[role="menuitem"]').map((item) => item.text())).toContain("Expand");
+  await menu
+    .findAll('[role="menuitem"]')
+    .find((item) => item.text() === "Expand")!
+    .trigger("click");
+  await flushPromises();
+
+  expect(wrapper.get('button[aria-label="Collapse Table 1"]').attributes("aria-expanded")).toBe(
+    "true",
+  );
+  expect(wrapper.get('[data-table="Table 1"] .table-card__grid').isVisible()).toBe(true);
+  wrapper.unmount();
+});
+
+it("expands a collapsed table before revealing one of its errors", async () => {
+  const wrapper = await render("owner", false, false, { A1: "=1/0" }, true);
+  await wrapper.get('button[aria-label="Collapse Table 1"]').trigger("click");
+  await flushPromises();
+  expect(wrapper.get(".table-card__grid").isVisible()).toBe(false);
+
+  await wrapper.get(".editor__errors").trigger("click");
+  await flushPromises();
+  await wrapper.get(".errors__location").trigger("click");
+  await flushPromises();
+
+  expect(wrapper.get('button[aria-label="Collapse Table 1"]').attributes("aria-expanded")).toBe(
+    "true",
+  );
+  expect(wrapper.get(".table-card__grid").isVisible()).toBe(true);
+  wrapper.unmount();
+});
+
 it.each([
   ["Names", '[aria-label="Names in Table 1"]'],
   ["Conditional formats", '[aria-label="Conditional formats of Table 1"]'],
@@ -440,7 +506,8 @@ it("scrolls to and focuses each kind of block after it is added", async () => {
     const card = wrapper.findAll(".editor__block").at(-1)!;
     expect(scrollIntoView).toHaveBeenLastCalledWith({ block: "nearest", behavior: "smooth" });
     expect(card.element.contains(document.activeElement)).toBe(true);
-    const focused = name === "Add table" ? card.find('[role="grid"]') : card.find("button");
+    const focused =
+      name === "Add table" ? card.find('[role="grid"]') : card.find(".editable-name:not(input)");
     expect(document.activeElement).toBe(focused.element);
     if (name === "Add table")
       expect(store.selection).toEqual({ tableId: "added-table", row: 0, col: 0 });

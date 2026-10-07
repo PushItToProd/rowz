@@ -628,8 +628,8 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [x] **P2** errors that come from a function are hard to trace. With a script function `PayoutByDuration(with_spa) = QUERY(Runs, "select Race, sum('Payout (40 hrs)') " & IF(with_spa, "", "where Race <> 'Spa' ") & "group by Race pivot Duration")` and a cell `=PayoutByDuration(FALSE)`, the cell shows `#VALUE!` with "The data has no column Spa", and the person has to hunt for the source. Let them go from the error back to where it arose (the function, the line, the call chain) #formula-language
 - [x] **P3** opening a side pane should close the one already open. With History open, the Errors button opens the errors pane behind it, and it shows only after History closes #everyday
-- [ ] **P6** allow collapsing a block to just its header, so a long table is easy to scroll past #small-apps
-- [ ] **P6** limit a block taller than a set height to that height and scroll its contents on their own #small-apps
+- [x] **P6** allow collapsing a block to just its header, so a long table is easy to scroll past #small-apps
+- [x] **P6** limit a block taller than a set height to that height and scroll its contents on their own #small-apps
 - [ ] **P8** make block heights customizable, following the maximum-height limit for long blocks #small-apps
 - [ ] Displayed-value search searches a Markdown cell's raw text (`**hello**`, link destinations) and not the rendered text (`apps/web/src/stores/workbook/search.ts`) #everyday
 
@@ -671,3 +671,7 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] `useCopyFeedback.ts` creates its 2-second timer after the clipboard promise resolves, so a copy that completes after the panel unmounts leaves a timer running #everyday
 
 - [ ] `SORTBY` treats error keys and blank keys as equal, so a blank key can stay ahead of an error key; Excel puts errors before blanks, and blanks last (`packages/engine/src/functions/arrays.ts` near line 192, `cellOrder`) #formula-language
+
+- [ ] Collapsed-block preferences: a `getItem` failure replaces the in-memory set with an empty one, so navigating away and back can lose preferences while storage is unavailable (`apps/web/src/blockCollapse.ts` near lines 33 and 46) #small-apps
+- [ ] Collapsed-block preferences leave a localStorage key for each document, including deleted ones and ones with nothing collapsed; remove the key when a document is deleted or its set is empty (`blockCollapse.ts`, `SpreadsheetListView.vue` near line 307) #small-apps
+- [ ] A chart legend with many or long series labels can be clipped by the chart card's maximum height (`charts-text-views.css` near line 69, `ChartView.vue` near line 211) #charts

@@ -81,9 +81,9 @@ Use an `https` URL. The app calls `crypto.randomUUID`, which browsers provide ov
 
 ## Pages and blocks
 
-A document holds pages, and a page holds blocks: tables, charts, text views, and scripts. Right-click a page tab to rename or delete it, or move it left or right among the tabs. Deleting a page offers an Undo notice.
+A document holds pages, and a page holds blocks: tables, charts, text views, and scripts. Right-click a page tab to rename or delete it, move it left or right among the tabs, or collapse or expand every block on that page. Deleting a page offers an Undo notice.
 
-Right-click a block's header or the padding around its card, or click the card's **⋮** button, to open its actions. The menu includes the actions already available for that block, such as rename, delete, move, add a block below, and export a table as CSV. Right-clicking table cells still opens the cell menu. Inputs, buttons, links, grids, rendered text, and source editors keep their own behavior. Press the Context Menu key or Shift+F10 on a page tab or block to open its menu; use the arrow keys, Home, or End to move through it, and Escape to close it and restore focus.
+Use the chevron at the left of a block header to collapse it to its name, error indicator, and actions menu. **Collapse** or **Expand** is also in the block menu. The page tab menu collapses or expands all blocks on that page. These per-viewer preferences stay in browser local storage under the document and block IDs; opening a document drops preferences for blocks that were deleted. Right-click a block's header or the padding around its card, or click the card's **⋮** button, to open its actions. The menu includes the actions already available for that block, such as rename, delete, move, add a block below, and export a table as CSV. Right-clicking table cells still opens the cell menu. Inputs, buttons, links, grids, rendered text, and source editors keep their own behavior. Press the Context Menu key or Shift+F10 on a page tab or block to open its menu; use the arrow keys, Home, or End to move through it, and Escape to close it and restore focus.
 
 ### Tables
 
@@ -91,7 +91,7 @@ A table is a grid of cells with its own column letters and row numbers.
 
 Drag a column header's right border to change its width, or a row header's bottom border to change its height. Double-click the border to reset its size. A header's context menu offers **Resize column** or **Resize row** with a size in pixels; it applies to all selected columns or rows. Sizes follow the rows and columns through structural edits, persist with the document, and support undo and redo.
 
-Use **Freeze** in a table's **⋮** menu to set how many leading rows and columns stay in view while its grid scrolls. A row or column header's context menu can freeze through that row or column, or unfreeze it. A data table keeps its named-column header in view and can freeze leading columns. Tall grids scroll inside the table card.
+Use **Freeze** in a table's **⋮** menu to set how many leading rows and columns stay in view while its grid scrolls. A row or column header's context menu can freeze through that row or column, or unfreeze it. A data table keeps its named-column header in view and can freeze leading columns. Tall grids, text view output, and script source or results scroll inside their own content areas, up to the shared 70vh maximum. Charts fit their block without an inner scrollbar.
 
 A table can have named columns, which makes it a data table. `[Price]` is the cell of that column in the formula's own row, and `Sales[Price]` is the whole column of the table Sales. A column can be typed (text, number, date, checkbox), be a dropdown whose choices are a list or the values of a column of another data table, or be a formula column, which computes one formula in every stored row. A data table holds the rows added to it, including rows whose values were later cleared, and can have no rows. An empty line below its last row adds a row when you type into it. Naming columns removes trailing empty rows.
 

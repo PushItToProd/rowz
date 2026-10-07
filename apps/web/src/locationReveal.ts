@@ -2,6 +2,7 @@ import { formatAddress, type CellId } from "@spreadsheet-app/engine";
 import type { Router } from "vue-router";
 import { nextTick } from "vue";
 import type { useWorkbookStore } from "./stores/workbook";
+import { setBlockCollapsed } from "./blockCollapse";
 
 export interface RevealLocationTarget {
   pageId: string;
@@ -64,6 +65,8 @@ export function useLocationReveal(
   }
 
   async function revealLocation(target: RevealLocationTarget): Promise<void> {
+    const blockId = target.blockId ?? target.cell?.tableId ?? target.scriptId;
+    if (blockId) setBlockCollapsed(spreadsheetId(), blockId, false);
     const cellIsVisible =
       target.cell !== undefined &&
       store.rowView(target.cell.tableId).place(target.cell.row) !== undefined;
@@ -75,7 +78,6 @@ export function useLocationReveal(
     });
     await nextTick();
 
-    const blockId = target.blockId ?? target.cell?.tableId ?? target.scriptId;
     const block = blockId ? document.getElementById(`block-${blockId}`) : null;
     const behavior: ScrollBehavior = prefersReducedMotion() ? "instant" : "smooth";
     scrollElementIntoView(block, { block: "center", behavior });

@@ -7,6 +7,7 @@ import { api } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import { appDialog, mountDialogHost, snapshotWith, type MockedApi } from "../testing";
 import PageTabs from "./PageTabs.vue";
+import { isBlockCollapsed } from "../blockCollapse";
 
 vi.mock("../api/client", async () => {
   const testing = await import("../testing");
@@ -117,15 +118,16 @@ describe("PageTabs", () => {
     const menu = wrapper.get('[role="menu"]');
     expect(menu.attributes("aria-label")).toBe("Actions for Page 1");
     expect(menu.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+      "Collapse all",
       "Rename",
       "Delete",
       "Move left",
       "Move right",
     ]);
-    expect(menu.get('[role="menuitem"]:nth-child(3)').attributes("disabled")).toBeDefined();
-    expect(menu.get('[role="menuitem"]:nth-child(4)').attributes("disabled")).toBeUndefined();
+    expect(menu.get('[role="menuitem"]:nth-child(4)').attributes("disabled")).toBeDefined();
+    expect(menu.get('[role="menuitem"]:nth-child(5)').attributes("disabled")).toBeUndefined();
 
-    await menu.get('[role="menuitem"]:nth-child(4)').trigger("click");
+    await menu.get('[role="menuitem"]:nth-child(5)').trigger("click");
     await flushPromises();
     expect(server.reorderPages).toHaveBeenCalledExactlyOnceWith("s1", ["p2", "p1"]);
   });
@@ -138,7 +140,7 @@ describe("PageTabs", () => {
 
     const menu = wrapper.get('[role="menu"]');
     expect(menu.attributes("aria-label")).toBe("Actions for Page 2");
-    expect(menu.get('[role="menuitem"]:nth-child(4)').attributes("disabled")).toBeDefined();
+    expect(menu.get('[role="menuitem"]:nth-child(5)').attributes("disabled")).toBeDefined();
     await wrapper.get('[role="menu"]').trigger("keydown", { key: "Escape" });
     await flushPromises();
     expect(wrapper.find('[role="menu"]').exists()).toBe(false);
@@ -150,7 +152,10 @@ describe("PageTabs", () => {
     const wrapper = await render();
     await wrapper.get('[data-page-id="p2"]').trigger("contextmenu", { button: 2 });
     await flushPromises();
-    await wrapper.get('[role="menuitem"]:first-child').trigger("click");
+    await wrapper
+      .findAll('[role="menuitem"]')
+      .find((item) => item.text() === "Rename")!
+      .trigger("click");
     await flushPromises();
 
     const input = wrapper.get<HTMLInputElement>('input[aria-label="Page name"]');
@@ -159,11 +164,33 @@ describe("PageTabs", () => {
     expect(server.renamePage).toHaveBeenCalledExactlyOnceWith("p2", "Summary");
   });
 
+  it("collapses and expands every block on a page from its tab menu", async () => {
+    const wrapper = await render();
+    const page = wrapper.get('[data-page-id="p1"]');
+    await page.trigger("contextmenu", { button: 2, clientX: 40, clientY: 50 });
+
+    await wrapper
+      .findAll('[role="menuitem"]')
+      .find((item) => item.text() === "Collapse all")!
+      .trigger("click");
+    expect(isBlockCollapsed("s1", "t1")).toBe(true);
+
+    await page.trigger("contextmenu", { button: 2, clientX: 40, clientY: 50 });
+    await wrapper
+      .findAll('[role="menuitem"]')
+      .find((item) => item.text() === "Expand all")!
+      .trigger("click");
+    expect(isBlockCollapsed("s1", "t1")).toBe(false);
+  });
+
   it("deletes the open page without asking and offers undo", async () => {
     const wrapper = await render();
     await wrapper.get('[data-page-id="p1"]').trigger("contextmenu", { button: 2 });
     await flushPromises();
-    await wrapper.get('[role="menuitem"]:nth-child(2)').trigger("click");
+    await wrapper
+      .findAll('[role="menuitem"]')
+      .find((item) => item.text() === "Delete")!
+      .trigger("click");
     await flushPromises();
 
     expect(appDialog()).toBeNull();
@@ -181,6 +208,12 @@ describe("PageTabs", () => {
     await wrapper.findAll("a")[0]!.trigger("keydown", { key: "F2" });
     expect(wrapper.find("input").exists()).toBe(false);
     expect(wrapper.findAll("button")).toEqual([]);
+
+    await wrapper.findAll("a")[0]!.trigger("contextmenu", { button: 2 });
+    await flushPromises();
+    expect(wrapper.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+      "Collapse all",
+    ]);
   });
 });
 

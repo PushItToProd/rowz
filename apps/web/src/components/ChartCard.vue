@@ -6,13 +6,15 @@ import type { ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import ChartView from "./ChartView.vue";
 import SessionFormulaField from "./SessionFormulaField.vue";
-import { useFormulaSessionStore } from "../formula/session";
+import { sameEditingTarget, useFormulaSessionStore } from "../formula/session";
 import { useDialog } from "../useDialog";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
 
-const props = defineProps<{ view: ViewRecord }>();
-const emit = defineEmits<{ actions: [event: MouseEvent] }>();
+const props = withDefaults(defineProps<{ view: ViewRecord; collapsed?: boolean }>(), {
+  collapsed: false,
+});
+const emit = defineEmits<{ actions: [event: MouseEvent]; "toggle-collapse": [] }>();
 const store = useWorkbookStore();
 const dialog = useDialog();
 
@@ -24,6 +26,11 @@ const TYPES: readonly { value: ChartType; label: string }[] = [
 ];
 
 const sessions = useFormulaSessionStore();
+const sourceEditing = computed(
+  () =>
+    sessions.active &&
+    sameEditingTarget(sessions.active.target, { kind: "chart", viewId: props.view.id }),
+);
 async function ready(): Promise<boolean> {
   const saved = await sessions.submit(store.submitFormulaDraft);
   if (!saved) sessions.focus();
@@ -77,35 +84,53 @@ const data = computed((): { rows: CellValue[][] } | { problem: string } => {
 </script>
 
 <template>
-  <section class="view-card" :data-view="view.name">
-    <header class="view-card__header">
-      <h2>
-        <ErrorWarning
-          v-if="store.errorBlocks.has(view.id)"
-          :label="`${view.name} contains errors`"
-        />
-        <EditableName
-          :value="view.name"
-          label="Chart name"
-          :disabled="!store.canEdit"
-          @rename="rename"
-        />
-      </h2>
-      <div v-if="store.canEdit" class="view-card__actions">
-        <button type="button" data-block-action="Edit" @click="editSource">Edit</button>
-        <select
-          data-block-action="Chart type"
-          aria-label="Chart type"
-          :value="view.chartType ?? 'bar'"
-          @change="setType"
+  <section
+    class="view-card"
+    :data-view="view.name"
+    data-view-kind="chart"
+    :data-source-editing="sourceEditing ? '' : undefined"
+  >
+    <header class="view-card__header" :class="{ 'view-card__header--collapsed': collapsed }">
+      <div class="block-card__title">
+        <button
+          type="button"
+          class="block-collapse"
+          :aria-expanded="!collapsed"
+          :aria-label="`${collapsed ? 'Expand' : 'Collapse'} ${view.name}`"
+          @click.stop="emit('toggle-collapse')"
         >
-          <option v-for="type in TYPES" :key="type.value" :value="type.value">
-            {{ type.label }}
-          </option>
-        </select>
-        <button type="button" data-block-action="Delete chart" class="danger" @click="remove">
-          Delete chart
+          <span aria-hidden="true">{{ collapsed ? "›" : "⌄" }}</span>
         </button>
+        <h2>
+          <ErrorWarning
+            v-if="store.errorBlocks.has(view.id)"
+            :label="`${view.name} contains errors`"
+          />
+          <EditableName
+            :value="view.name"
+            label="Chart name"
+            :disabled="!store.canEdit"
+            @rename="rename"
+          />
+        </h2>
+      </div>
+      <div class="view-card__actions">
+        <div v-if="store.canEdit" v-show="!collapsed" class="view-card__direct-actions">
+          <button type="button" data-block-action="Edit" @click="editSource">Edit</button>
+          <select
+            data-block-action="Chart type"
+            aria-label="Chart type"
+            :value="view.chartType ?? 'bar'"
+            @change="setType"
+          >
+            <option v-for="type in TYPES" :key="type.value" :value="type.value">
+              {{ type.label }}
+            </option>
+          </select>
+          <button type="button" data-block-action="Delete chart" class="danger" @click="remove">
+            Delete chart
+          </button>
+        </div>
         <button
           type="button"
           class="view-card__menu-trigger"
@@ -118,21 +143,23 @@ const data = computed((): { rows: CellValue[][] } | { problem: string } => {
       </div>
     </header>
 
-    <label v-if="store.canEdit" class="view-card__source">
-      Data
-      <SessionFormulaField
-        ref="sourceField"
-        :target="{ kind: 'chart', viewId: view.id }"
-        :context="{ pageId: view.pageId }"
-        :value="view.source"
-        label="Chart data"
-        :target-label="`${store.pages.find((page) => page.id === view.pageId)?.name ?? ''} · ${view.name} · Chart data`"
-        placeholder="'Table 1'!A1:B10"
-        :max-length="LIMITS.viewSourceLength"
-      />
-    </label>
+    <div v-show="!collapsed" class="block-card__body" :inert="collapsed">
+      <label v-if="store.canEdit" class="view-card__source">
+        Data
+        <SessionFormulaField
+          ref="sourceField"
+          :target="{ kind: 'chart', viewId: view.id }"
+          :context="{ pageId: view.pageId }"
+          :value="view.source"
+          label="Chart data"
+          :target-label="`${store.pages.find((page) => page.id === view.pageId)?.name ?? ''} · ${view.name} · Chart data`"
+          placeholder="'Table 1'!A1:B10"
+          :max-length="LIMITS.viewSourceLength"
+        />
+      </label>
 
-    <p v-if="'problem' in data" class="view-card__problem">{{ data.problem }}</p>
-    <ChartView v-else :chart="view.chartType ?? 'bar'" :rows="data.rows" title="" />
+      <p v-if="'problem' in data" class="view-card__problem">{{ data.problem }}</p>
+      <ChartView v-else :chart="view.chartType ?? 'bar'" :rows="data.rows" title="" />
+    </div>
   </section>
 </template>

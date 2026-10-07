@@ -13,7 +13,8 @@
 
 .chart__canvas {
   width: 100%;
-  height: clamp(240px, 40vw, 360px);
+  height: clamp(120px, min(40vw, calc(var(--block-max-height) - 11rem)), 360px);
+  max-height: var(--block-max-height);
 }
 
 .chart__summary {
@@ -65,6 +66,11 @@
   background: var(--surface);
 }
 
+.view-card[data-view-kind="chart"]:not([data-source-editing]) {
+  max-height: var(--block-max-height);
+  overflow: hidden;
+}
+
 .view-card__header {
   display: flex;
   gap: 16px;
@@ -76,6 +82,7 @@
 .view-card__actions {
   display: flex;
   gap: 6px;
+  align-items: center;
 }
 
 .view-card__actions select {
@@ -127,6 +134,15 @@
 
 .text-view {
   line-height: 1.55;
+  max-height: var(--block-max-height);
+  overflow: auto;
+  overscroll-behavior-y: auto;
+}
+
+.text-view:focus-visible,
+.script__content:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .text-view__button {

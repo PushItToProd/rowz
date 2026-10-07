@@ -789,3 +789,9 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 **Cost.** A row shows only as many lines as its height permits; resize it to show more.
 
 - `MROUND` with a nonzero value and multiple of opposite signs returns a new `#NUM!` error, as Excel and Sheets do. The engine had no `#NUM!` code, so the change adds it to the error codes, the help page's error list, and the cell error label. `FLOOR` and `CEILING` keep their previous behavior for opposite signs.
+
+## Block collapse and content scrolling
+
+**Choice.** Keep collapsed block IDs as per-viewer UI preferences in browser local storage, grouped by spreadsheet ID. Load them against the document's current block IDs and discard IDs for deleted blocks. Do not include collapse state in document content or API requests. Keep collapsed card bodies mounted and hide them with `v-show` and `inert`, preserving editor state while removing body controls from view and keyboard navigation.
+
+**Choice.** Define `--block-max-height` once in `layout.css` and use it for table grids, text output, and script content. Make text and script overflow areas keyboard-focusable and labeled only when their contents exceed the available height. Keep charts sized to their block without a nested scroll area.

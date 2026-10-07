@@ -30,10 +30,13 @@ import TableDisplayBar from "./TableDisplayBar.vue";
 import type { MenuItem, MenuScope } from "./menu";
 import { useActiveSidePane } from "../sidePane";
 
-const props = defineProps<{ table: TableRecord }>();
+const props = withDefaults(defineProps<{ table: TableRecord; collapsed?: boolean }>(), {
+  collapsed: false,
+});
 const emit = defineEmits<{
   trace: [trace: ErrorTraceFrame[]];
   actions: [event: MouseEvent];
+  "toggle-collapse": [];
 }>();
 const store = useWorkbookStore();
 const sessions = useFormulaSessionStore();
@@ -708,81 +711,111 @@ const menuLabel = computed(() => {
 
 <template>
   <section class="table-card" :data-table="table.name">
-    <header class="table-card__header">
-      <h2>
-        <ErrorWarning
-          v-if="store.errorBlocks.has(table.id)"
-          :label="`${table.name} contains errors`"
-        />
-        <EditableName
-          :value="table.name"
-          label="Table name"
-          :disabled="!store.canEdit"
-          @rename="store.updateTable(table.id, { name: $event })"
-        />
-      </h2>
-      <div v-if="store.canEdit" class="table-card__actions">
+    <header class="table-card__header" :class="{ 'table-card__header--collapsed': collapsed }">
+      <div class="block-card__title">
         <button
           type="button"
-          data-block-action="Resize"
-          aria-haspopup="dialog"
-          @click="resizing = !resizing"
+          class="block-collapse"
+          :aria-expanded="!collapsed"
+          :aria-label="`${collapsed ? 'Expand' : 'Collapse'} ${table.name}`"
+          @click.stop="emit('toggle-collapse')"
         >
-          Resize
+          <span aria-hidden="true">{{ collapsed ? "›" : "⌄" }}</span>
         </button>
-        <button
-          type="button"
-          data-block-action="Freeze rows and columns"
-          aria-haspopup="dialog"
-          @click="openFreezeSettings"
-        >
-          Freeze
-        </button>
-        <button
-          v-if="!table.columns"
-          type="button"
-          data-block-action="Names"
-          data-open-names
-          :aria-expanded="namesOpen"
-          @click="activeSidePane.toggle(namesPaneId)"
-        >
-          Names{{ table.names.length > 0 ? ` (${table.names.length})` : "" }}
-        </button>
-        <button
-          type="button"
-          data-block-action="Conditional formats"
-          :aria-expanded="conditionalOpen"
-          @click="activeSidePane.toggle(conditionalFormatsPaneId)"
-        >
-          Conditional formats{{
-            table.conditionalFormats.length > 0 ? ` (${table.conditionalFormats.length})` : ""
-          }}
-        </button>
-        <button
-          v-if="table.columns"
-          type="button"
-          data-block-action="Remove column names"
-          @click="dropColumns"
-        >
-          Remove column names
-        </button>
-        <button
-          v-else
-          type="button"
-          data-block-action="Name columns"
-          aria-haspopup="menu"
-          @click="openNaming"
-        >
-          Name columns
-        </button>
-        <label class="file-button" data-block-action="Import CSV">
-          Import CSV
-          <input type="file" accept=".csv,.tsv,.txt,text/csv" @change="importCsv" />
-        </label>
-        <button type="button" data-block-action="Export CSV" @click="exportCsv">Export CSV</button>
-        <button type="button" data-block-action="Delete table" class="danger" @click="remove">
-          Delete table
-        </button>
+        <h2>
+          <ErrorWarning
+            v-if="store.errorBlocks.has(table.id)"
+            :label="`${table.name} contains errors`"
+          />
+          <EditableName
+            :value="table.name"
+            label="Table name"
+            :disabled="!store.canEdit"
+            @rename="store.updateTable(table.id, { name: $event })"
+          />
+        </h2>
+      </div>
+      <div class="table-card__actions">
+        <div v-if="store.canEdit" v-show="!collapsed" class="table-card__direct-actions">
+          <button
+            type="button"
+            data-block-action="Resize"
+            aria-haspopup="dialog"
+            @click="resizing = !resizing"
+          >
+            Resize
+          </button>
+          <button
+            type="button"
+            data-block-action="Freeze rows and columns"
+            aria-haspopup="dialog"
+            @click="openFreezeSettings"
+          >
+            Freeze
+          </button>
+          <button
+            v-if="!table.columns"
+            type="button"
+            data-block-action="Names"
+            data-open-names
+            :aria-expanded="namesOpen"
+            @click="activeSidePane.toggle(namesPaneId)"
+          >
+            Names{{ table.names.length > 0 ? ` (${table.names.length})` : "" }}
+          </button>
+          <button
+            type="button"
+            data-block-action="Conditional formats"
+            :aria-expanded="conditionalOpen"
+            @click="activeSidePane.toggle(conditionalFormatsPaneId)"
+          >
+            Conditional formats{{
+              table.conditionalFormats.length > 0 ? ` (${table.conditionalFormats.length})` : ""
+            }}
+          </button>
+          <button
+            v-if="table.columns"
+            type="button"
+            data-block-action="Remove column names"
+            @click="dropColumns"
+          >
+            Remove column names
+          </button>
+          <button
+            v-else
+            type="button"
+            data-block-action="Name columns"
+            aria-haspopup="menu"
+            @click="openNaming"
+          >
+            Name columns
+          </button>
+          <label class="file-button" data-block-action="Import CSV">
+            Import CSV
+            <input type="file" accept=".csv,.tsv,.txt,text/csv" @change="importCsv" />
+          </label>
+          <button type="button" data-block-action="Export CSV" @click="exportCsv">
+            Export CSV
+          </button>
+          <button type="button" data-block-action="Delete table" class="danger" @click="remove">
+            Delete table
+          </button>
+        </div>
+        <div v-else v-show="!collapsed" class="table-card__direct-actions">
+          <button
+            v-if="!table.columns && table.names.length > 0"
+            type="button"
+            data-block-action="Names"
+            data-open-names
+            :aria-expanded="namesOpen"
+            @click="activeSidePane.toggle(namesPaneId)"
+          >
+            Names ({{ table.names.length }})
+          </button>
+          <button type="button" data-block-action="Export CSV" @click="exportCsv">
+            Export CSV
+          </button>
+        </div>
         <button
           type="button"
           class="table-card__menu-trigger"
@@ -793,146 +826,137 @@ const menuLabel = computed(() => {
           ⋮
         </button>
       </div>
-      <div v-else class="table-card__actions">
-        <button
-          v-if="!table.columns && table.names.length > 0"
-          type="button"
-          data-block-action="Names"
-          data-open-names
-          :aria-expanded="namesOpen"
-          @click="activeSidePane.toggle(namesPaneId)"
-        >
-          Names ({{ table.names.length }})
-        </button>
-        <button type="button" data-block-action="Export CSV" @click="exportCsv">Export CSV</button>
-        <button
-          type="button"
-          class="table-card__menu-trigger"
-          aria-haspopup="menu"
-          :aria-label="`Block actions for ${table.name}`"
-          @click.stop="emit('actions', $event)"
-        >
-          ⋮
-        </button>
-      </div>
-      <ResizeTable v-if="resizing" :table="table" @close="resizing = false" @resize="resize" />
+      <ResizeTable
+        v-if="resizing && !collapsed"
+        :table="table"
+        @close="resizing = false"
+        @resize="resize"
+      />
       <FreezeSettings
-        v-if="freezeSettingsOpen"
+        v-if="freezeSettingsOpen && !collapsed"
         :table="table"
         @close="freezeSettingsOpen = false"
         @save="saveFreezeSettings"
       />
     </header>
 
-    <ColumnFormulaPopover
-      v-if="formulaFor"
-      :table="table"
-      :col-id="formulaFor"
-      @close="sessions.columnPopover = undefined"
-    />
+    <div v-show="!collapsed" class="block-card__body" :inert="collapsed">
+      <ColumnFormulaPopover
+        v-if="formulaFor"
+        :table="table"
+        :col-id="formulaFor"
+        @close="sessions.columnPopover = undefined"
+      />
 
-    <NamesPanel
-      v-if="namesOpen && !table.columns"
-      :table="table"
-      :suggestion="nameSuggestion"
-      @close="activeSidePane.close(namesPaneId)"
-    />
+      <NamesPanel
+        v-if="namesOpen && !table.columns"
+        :table="table"
+        :suggestion="nameSuggestion"
+        @close="activeSidePane.close(namesPaneId)"
+      />
 
-    <ConditionalFormatsPanel
-      v-if="conditionalOpen"
-      :table="table"
-      @close="activeSidePane.close(conditionalFormatsPaneId)"
-    />
+      <ConditionalFormatsPanel
+        v-if="conditionalOpen"
+        :table="table"
+        @close="activeSidePane.close(conditionalFormatsPaneId)"
+      />
 
-    <!-- Always present, so selecting a cell does not push the grid down. -->
-    <div v-if="store.canEdit" class="table-card__lines">
-      <span v-if="selected" role="group" :aria-label="`Row ${selected.row + 1}`">
-        <span class="table-card__line">Row {{ selected.row + 1 }}</span>
-        <button
-          type="button"
-          :disabled="rowsFull || view.reordered"
-          :title="view.reordered ? 'Not while the table is sorted or filtered' : undefined"
-          @click="insert('row', selected.row)"
-        >
-          Insert row above
-        </button>
-        <button
-          type="button"
-          class="danger"
-          :disabled="selected.row >= table.rowCount || (!table.columns && table.rowCount <= 1)"
-          @click="
-            removeLines({ axis: 'row', first: view.place(selected.row) ?? selected.row, count: 1 })
-          "
-        >
-          Delete row
-        </button>
-      </span>
-      <span v-if="selected" role="group" :aria-label="`Column ${columnLabel(selected.col)}`">
-        <span class="table-card__line">Column {{ columnLabel(selected.col) }}</span>
-        <button type="button" :disabled="colsFull" @click="insert('col', selected.col)">
-          Insert column left
-        </button>
-        <button
-          type="button"
-          class="danger"
-          :disabled="table.colCount <= 1"
-          @click="removeLines({ axis: 'col', first: selected.col, count: 1 })"
-        >
-          Delete column
-        </button>
-      </span>
+      <!-- Always present, so selecting a cell does not push the grid down. -->
+      <div v-if="store.canEdit" class="table-card__lines">
+        <span v-if="selected" role="group" :aria-label="`Row ${selected.row + 1}`">
+          <span class="table-card__line">Row {{ selected.row + 1 }}</span>
+          <button
+            type="button"
+            :disabled="rowsFull || view.reordered"
+            :title="view.reordered ? 'Not while the table is sorted or filtered' : undefined"
+            @click="insert('row', selected.row)"
+          >
+            Insert row above
+          </button>
+          <button
+            type="button"
+            class="danger"
+            :disabled="selected.row >= table.rowCount || (!table.columns && table.rowCount <= 1)"
+            @click="
+              removeLines({
+                axis: 'row',
+                first: view.place(selected.row) ?? selected.row,
+                count: 1,
+              })
+            "
+          >
+            Delete row
+          </button>
+        </span>
+        <span v-if="selected" role="group" :aria-label="`Column ${columnLabel(selected.col)}`">
+          <span class="table-card__line">Column {{ columnLabel(selected.col) }}</span>
+          <button type="button" :disabled="colsFull" @click="insert('col', selected.col)">
+            Insert column left
+          </button>
+          <button
+            type="button"
+            class="danger"
+            :disabled="table.colCount <= 1"
+            @click="removeLines({ axis: 'col', first: selected.col, count: 1 })"
+          >
+            Delete column
+          </button>
+        </span>
+      </div>
+
+      <ChoicesPanel
+        v-if="choosingFor !== null && table.columns?.[choosingFor]"
+        :key="choosingFor"
+        :table="table"
+        :col="choosingFor"
+        :save-choices="saveChoices"
+        @close="choosingFor = null"
+      />
+
+      <TableDisplayBar v-if="table.columns" :table="table" />
+
+      <!-- A strip along the right edge adds a column, and one along the bottom edge adds a row. -->
+      <div class="table-card__grid">
+        <GridView :table="table" @menu="menuAt = $event" @trace="emit('trace', $event)" />
+        <template v-if="store.canEdit">
+          <button
+            type="button"
+            class="table-card__grow table-card__grow--col"
+            aria-label="Add column"
+            title="Add column"
+            :disabled="colsFull"
+            @click="store.updateTable(table.id, { colCount: table.colCount + 1 })"
+            @contextmenu="openGrowMenu($event, 'col')"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            class="table-card__grow table-card__grow--row"
+            aria-label="Add row"
+            title="Add row"
+            :disabled="rowsFull"
+            @click="
+              store.editTable(table.id, { axis: 'row', kind: 'insert', index: table.rowCount })
+            "
+            @contextmenu="openGrowMenu($event, 'row')"
+          >
+            +
+          </button>
+        </template>
+      </div>
+      <ResizeLines
+        v-if="resizingLines && store.canEdit"
+        :key="resizingLines.axis + resizingLines.ids.join(',')"
+        :axis="resizingLines.axis"
+        :initial="resizingLines.initial"
+        @resize="applyLineResize"
+        @close="
+          resizingLines = null;
+          store.focusGrid();
+        "
+      />
     </div>
-
-    <ChoicesPanel
-      v-if="choosingFor !== null && table.columns?.[choosingFor]"
-      :key="choosingFor"
-      :table="table"
-      :col="choosingFor"
-      :save-choices="saveChoices"
-      @close="choosingFor = null"
-    />
-
-    <TableDisplayBar v-if="table.columns" :table="table" />
-
-    <!-- A strip along the right edge adds a column, and one along the bottom edge adds a row. -->
-    <div class="table-card__grid">
-      <GridView :table="table" @menu="menuAt = $event" @trace="emit('trace', $event)" />
-      <template v-if="store.canEdit">
-        <button
-          type="button"
-          class="table-card__grow table-card__grow--col"
-          aria-label="Add column"
-          title="Add column"
-          :disabled="colsFull"
-          @click="store.updateTable(table.id, { colCount: table.colCount + 1 })"
-          @contextmenu="openGrowMenu($event, 'col')"
-        >
-          +
-        </button>
-        <button
-          type="button"
-          class="table-card__grow table-card__grow--row"
-          aria-label="Add row"
-          title="Add row"
-          :disabled="rowsFull"
-          @click="store.editTable(table.id, { axis: 'row', kind: 'insert', index: table.rowCount })"
-          @contextmenu="openGrowMenu($event, 'row')"
-        >
-          +
-        </button>
-      </template>
-    </div>
-    <ResizeLines
-      v-if="resizingLines && store.canEdit"
-      :key="resizingLines.axis + resizingLines.ids.join(',')"
-      :axis="resizingLines.axis"
-      :initial="resizingLines.initial"
-      @resize="applyLineResize"
-      @close="
-        resizingLines = null;
-        store.focusGrid();
-      "
-    />
     <ContextMenu
       v-if="namingAt"
       :x="namingAt.x"

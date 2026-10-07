@@ -520,6 +520,15 @@ const OPERATORS = [
           focus.
         </li>
         <li>
+          Use the chevron at the left of a block header to collapse it to its name, error indicator,
+          and actions menu. The block menu also has <strong>Collapse</strong> or
+          <strong>Expand</strong>; the page tab menu collapses or expands every block on that page.
+          These per-viewer preferences stay in browser storage under the document and block IDs.
+          Deleted block preferences are dropped the next time the document opens. Tall tables, text
+          views, and scripts scroll inside their own content areas up to 70vh. Charts fit their
+          blocks without an inner scrollbar.
+        </li>
+        <li>
           Two pages in a document cannot share a name, and neither can two tables on a page. Names
           are compared without regard to letter case.
         </li>

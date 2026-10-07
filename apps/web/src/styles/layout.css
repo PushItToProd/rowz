@@ -1,3 +1,7 @@
+:root {
+  --block-max-height: 70vh;
+}
+
 /* The app's name, on the pages that show it */
 
 .brand {
@@ -251,9 +255,77 @@ input.editable-name--editing {
   margin-bottom: 10px;
 }
 
-.table-card__actions {
+.table-card__header--collapsed,
+.view-card__header--collapsed {
+  margin-bottom: 0;
+}
+
+.block-card__title {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.block-card__title h2 {
   display: flex;
   gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.block-collapse {
+  display: inline-grid;
+  flex: 0 0 28px;
+  place-items: center;
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.block-collapse span {
+  display: block;
+  transform: translateY(-1px);
+}
+
+.table-card__header--collapsed,
+.view-card__header--collapsed {
+  min-height: 28px;
+}
+
+.table-card__header--collapsed .table-card__actions,
+.view-card__header--collapsed .view-card__actions {
+  margin-left: auto;
+}
+
+.table-card__direct-actions,
+.view-card__direct-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.block-card__body {
+  min-width: 0;
+}
+
+@media print {
+  /* v-show writes display:none inline; print every block body anyway. */
+  .block-card__body {
+    display: block !important;
+  }
+}
+
+.table-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
 }
 
 /* The form that sets a table's size, which opens under the table's buttons. */

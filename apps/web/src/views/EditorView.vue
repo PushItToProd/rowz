@@ -36,6 +36,12 @@ import TextCard from "../components/TextCard.vue";
 import { useWorkbookStore } from "../stores/workbook";
 import { SIDE_PANES, provideActiveSidePane, tableIdOfSidePane, type SidePaneId } from "../sidePane";
 import { useLocationReveal } from "../locationReveal";
+import {
+  isBlockCollapsed,
+  loadCollapsedBlocks,
+  setBlockCollapsed,
+  toggleBlockCollapsed,
+} from "../blockCollapse";
 
 const props = defineProps<{ spreadsheetId: string; pageId?: string }>();
 const store = useWorkbookStore();
@@ -291,7 +297,17 @@ const session = useSessionStore();
 
 /** Reads the spreadsheet again after a version was restored. Its pages are new, so the first one opens. */
 async function reload(): Promise<void> {
-  await store.load(props.spreadsheetId);
+  const wasOpened = opened.value;
+  opened.value = null;
+  try {
+    await store.load(props.spreadsheetId);
+    loadCollapsedBlocks(props.spreadsheetId, [
+      ...store.tables.map((table) => table.id),
+      ...store.views.map((view) => view.id),
+    ]);
+  } finally {
+    opened.value = wasOpened;
+  }
   store.notice = { kind: "success", text: "The version was restored" };
 }
 
@@ -304,6 +320,16 @@ const opened = ref<string | null>(null);
 const loaded = computed(
   () => opened.value === props.spreadsheetId && store.spreadsheet?.id === props.spreadsheetId,
 );
+watch(
+  () => [store.selection?.tableId, store.selection?.row, store.selection?.col] as const,
+  ([blockId]) => {
+    if (loaded.value && blockId && isBlockCollapsed(props.spreadsheetId, blockId))
+      setBlockCollapsed(props.spreadsheetId, blockId, false);
+  },
+);
+function toggleBlockCollapse(blockId: string): void {
+  toggleBlockCollapsed(props.spreadsheetId, blockId);
+}
 // The store may still hold the spreadsheet that was open before this one.
 usePageTitle(() => (loaded.value ? store.spreadsheet?.name : undefined));
 const page = computed(() => store.pages.find((candidate) => candidate.id === props.pageId));
@@ -351,6 +377,7 @@ function actionControls(blockId: string): HTMLElement[] {
 }
 
 function runBlockAction(blockId: string, action: string): void {
+  setBlockCollapsed(props.spreadsheetId, blockId, false);
   void nextTick(() => {
     actionControls(blockId)
       .find((control) => control.dataset.blockAction === action)
@@ -392,7 +419,16 @@ const blockMenuItems = computed((): MenuItem[] => {
       },
     };
   });
-  const groups: MenuItem[][] = [];
+  const groups: MenuItem[][] = [
+    [
+      {
+        label: isBlockCollapsed(props.spreadsheetId, block.record.id) ? "Expand" : "Collapse",
+        run: () => {
+          toggleBlockCollapsed(props.spreadsheetId, block.record.id);
+        },
+      },
+    ],
+  ];
   if (store.canEdit) {
     groups.push([
       {
@@ -465,7 +501,6 @@ function openBlockMenu(event: MouseEvent, block: { id: string; name: string }): 
     )
   )
     return;
-  if (!store.canEdit && !store.tables.some((table) => table.id === block.id)) return;
   event.preventDefault();
   event.stopPropagation();
   const container = event.currentTarget as HTMLElement;
@@ -481,11 +516,7 @@ function openBlockActionMenu(event: MouseEvent, block: { id: string; name: strin
 
 function onBlockKeydown(event: KeyboardEvent, block: { id: string; name: string }): void {
   if (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey)) return;
-  if (
-    event.target !== event.currentTarget ||
-    (!store.canEdit && !store.tables.some((table) => table.id === block.id))
-  )
-    return;
+  if (event.target !== event.currentTarget) return;
   event.preventDefault();
   event.stopPropagation();
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -527,6 +558,10 @@ watch(
       return;
     }
     if (!isActive()) return;
+    loadCollapsedBlocks(spreadsheetId, [
+      ...store.tables.map((table) => table.id),
+      ...store.views.map((view) => view.id),
+    ]);
     opened.value = spreadsheetId;
     const savedCopy = pendingCopyNotice.value;
     if (savedCopy?.spreadsheetId === spreadsheetId) {
@@ -684,26 +719,38 @@ watch(
           <TableCard
             v-if="block.table"
             :table="block.table"
+            :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
             @trace="goToTrace"
             @actions="openBlockActionMenu($event, block.record)"
+            @toggle-collapse="toggleBlockCollapse(block.record.id)"
           />
           <ChartCard
             v-else-if="block.view.kind === 'chart'"
             :view="block.view"
+            :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
             @actions="openBlockActionMenu($event, block.record)"
+            @toggle-collapse="toggleBlockCollapse(block.record.id)"
           />
           <ScriptCard
             v-else-if="block.view.kind === 'script'"
             :view="block.view"
+            :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
             @actions="openBlockActionMenu($event, block.record)"
+            @toggle-collapse="toggleBlockCollapse(block.record.id)"
           />
           <TextCard
             v-else
             :view="block.view"
+            :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
             @actions="openBlockActionMenu($event, block.record)"
+            @toggle-collapse="toggleBlockCollapse(block.record.id)"
           />
           <div
-            v-if="store.canEdit && (blocks.length > 1 || store.pages.length > 1)"
+            v-if="
+              !isBlockCollapsed(spreadsheetId, block.record.id) &&
+              store.canEdit &&
+              (blocks.length > 1 || store.pages.length > 1)
+            "
             class="editor__move"
           >
             <template v-if="blocks.length > 1">
