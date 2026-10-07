@@ -22,22 +22,25 @@ usePageTitle("Documents");
 
 const folders = ref<FolderRecord[]>([]);
 const documents = ref<ListedSpreadsheetItem[] | null>(null);
-const error = ref<Notice | null>(null);
+const notice = ref<Notice | null>(null);
 const creatingFolder = ref(false);
 const showingTemplates = ref(false);
 const newFolderName = ref("");
 const editingFolderId = ref<string | null>(null);
 const editingFolderName = ref("");
+const editingDocumentId = ref<string | null>(null);
+const editingDocumentName = ref("");
 const collapsed = ref(new Set<string>());
 const createFolderInput = ref<HTMLInputElement>();
 const moveMenu = ref<{ document: ListedSpreadsheetItem; x: number; y: number } | null>(null);
+const actionMenu = ref<{ document: ListedSpreadsheetItem; x: number; y: number } | null>(null);
 
 async function run(action: () => Promise<void>): Promise<void> {
   try {
     await action();
-    if (error.value) error.value = null;
+    if (notice.value?.kind === "error") notice.value = null;
   } catch (cause) {
-    error.value = {
+    notice.value = {
       kind: "error",
       text: cause instanceof Error ? cause.message : "Something went wrong",
     };
@@ -79,6 +82,7 @@ const importFile = (event: Event): Promise<void> =>
 
 const remove = (document: ListedSpreadsheetItem): Promise<void> =>
   run(async () => {
+    if (document.role !== "owner") return;
     if (
       !(await dialog.confirm({
         title: "Delete document",
@@ -90,6 +94,40 @@ const remove = (document: ListedSpreadsheetItem): Promise<void> =>
       return;
     await api.deleteSpreadsheet(document.id);
     await refreshData();
+  });
+
+async function beginRenameDocument(document: ListedSpreadsheetItem): Promise<void> {
+  if (document.role !== "owner") return;
+  editingDocumentId.value = document.id;
+  editingDocumentName.value = document.name;
+  await nextTick();
+  const input = globalThis.document.getElementById(`document-name-${document.id}`);
+  if (input instanceof HTMLInputElement) {
+    input.focus();
+    input.select();
+  }
+}
+
+function cancelRenameDocument(): void {
+  editingDocumentId.value = null;
+  editingDocumentName.value = "";
+}
+
+const submitRenameDocument = (document: ListedSpreadsheetItem): Promise<void> =>
+  run(async () => {
+    if (document.role !== "owner") return;
+    const name = editingDocumentName.value.trim();
+    if (!name) return;
+    if (name !== document.name) await api.renameSpreadsheet(document.id, name);
+    cancelRenameDocument();
+    await refreshData();
+  });
+
+const duplicate = (document: ListedSpreadsheetItem): Promise<void> =>
+  run(async () => {
+    const copy = await api.copySpreadsheet(document.id);
+    await refreshData();
+    notice.value = { kind: "success", text: `Created "${copy.name}"` };
   });
 
 async function beginCreateFolder(): Promise<void> {
@@ -185,6 +223,10 @@ function openMoveMenu(event: MouseEvent, document: ListedSpreadsheetItem): void 
   moveMenu.value = { document, x: event.clientX, y: event.clientY };
 }
 
+function openActionMenu(event: MouseEvent, document: ListedSpreadsheetItem): void {
+  actionMenu.value = { document, x: event.clientX, y: event.clientY };
+}
+
 const moveItems = computed<MenuItem[]>(() => {
   const target = moveMenu.value?.document;
   if (!target) return [];
@@ -200,6 +242,21 @@ const moveItems = computed<MenuItem[]>(() => {
       run: () => void moveDocument(target, folder.id),
     })),
   ];
+});
+
+const actionItems = computed<MenuItem[]>(() => {
+  const target = actionMenu.value?.document;
+  if (!target) return [];
+  const items: MenuItem[] = [
+    ...(target.role === "owner"
+      ? [{ label: "Rename", run: () => void beginRenameDocument(target) }]
+      : []),
+    { label: "Duplicate", run: () => void duplicate(target) },
+    ...(target.role === "owner"
+      ? [{ label: "Delete", danger: true, separated: true, run: () => void remove(target) }]
+      : []),
+  ];
+  return items;
 });
 
 async function signOut(): Promise<void> {
@@ -224,7 +281,7 @@ onMounted(refresh);
       <button type="button" @click="signOut">Sign out</button>
     </header>
 
-    <NoticeMessage v-if="error" :notice="error" @dismiss="error = null" />
+    <NoticeMessage v-if="notice" :notice="notice" @dismiss="notice = null" />
 
     <div class="list__actions">
       <button type="button" class="primary" @click="create">New document</button>
@@ -284,7 +341,7 @@ onMounted(refresh);
       <button type="button" @click="cancelCreateFolder">Cancel</button>
     </form>
 
-    <p v-if="documents === null && !error">Loading…</p>
+    <p v-if="documents === null && !notice">Loading…</p>
     <p v-else-if="documents?.length === 0 && folders.length === 0" class="list__empty">
       No documents yet. Create one to get started.
     </p>
@@ -345,7 +402,24 @@ onMounted(refresh);
 
         <ul v-show="!collapsed.has(group.id)" :id="groupId(group.id)" class="list__items">
           <li v-for="document in group.documents" :key="document.id">
-            <RouterLink :to="{ name: 'editor', params: { spreadsheetId: document.id } }">
+            <form
+              v-if="editingDocumentId === document.id"
+              class="list__document-rename"
+              :aria-label="`Rename document ${document.name}`"
+              @submit.prevent="submitRenameDocument(document)"
+            >
+              <input
+                :id="`document-name-${document.id}`"
+                v-model="editingDocumentName"
+                :aria-label="`Document name for ${document.name}`"
+                :maxlength="LIMITS.nameLength"
+                required
+                @keydown.esc.stop.prevent="cancelRenameDocument"
+              />
+              <button type="submit" class="primary">Save</button>
+              <button type="button" @click="cancelRenameDocument">Cancel</button>
+            </form>
+            <RouterLink v-else :to="{ name: 'editor', params: { spreadsheetId: document.id } }">
               <ErrorWarning v-if="document.hasErrors" :label="`${document.name} contains errors`" />
               {{ document.name }}
             </RouterLink>
@@ -354,21 +428,21 @@ onMounted(refresh);
             </span>
             <time :datetime="document.updatedAt">{{ formatDate(document.updatedAt) }}</time>
             <button
+              type="button"
+              aria-haspopup="menu"
+              :aria-expanded="actionMenu?.document.id === document.id"
+              :aria-label="`Actions for ${document.name}`"
+              @click="openActionMenu($event, document)"
+            >
+              ⋯
+            </button>
+            <button
               v-if="folders.length > 0"
               type="button"
               :aria-label="`Move ${document.name} to a folder`"
               @click="openMoveMenu($event, document)"
             >
               Move
-            </button>
-            <button
-              v-if="document.role === 'owner'"
-              type="button"
-              class="danger"
-              :aria-label="`Delete document ${document.name}`"
-              @click="remove(document)"
-            >
-              Delete
             </button>
           </li>
           <li v-if="group.documents.length === 0" class="list__group-empty">
@@ -385,6 +459,14 @@ onMounted(refresh);
       :label="`Move ${moveMenu.document.name}`"
       :items="moveItems"
       @close="moveMenu = null"
+    />
+    <ContextMenu
+      v-if="actionMenu"
+      :x="actionMenu.x"
+      :y="actionMenu.y"
+      :label="`Actions for ${actionMenu.document.name}`"
+      :items="actionItems"
+      @close="actionMenu = null"
     />
   </div>
 </template>

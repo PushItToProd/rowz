@@ -1122,6 +1122,13 @@ const OPERATORS = [
           to-do list, or inventory example from the same document list.
         </li>
         <li>
+          On the Documents page, open a document's <strong>⋯</strong> menu to rename or delete a
+          document you own, or to duplicate any document you can read. A duplicate is created in
+          your workspace, and the list stays open. Deleting a document asks for confirmation and
+          cannot be undone. The separate <strong>Move</strong> menu files a document into one of
+          your folders.
+        </li>
+        <li>
           <strong>Export CSV</strong> saves one table as a CSV file that other spreadsheet apps
           open. The file contains the values the cells show, not their formulas.
         </li>

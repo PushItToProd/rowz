@@ -456,7 +456,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [x] **P4** (Claude) replace the native `prompt`, `confirm`, and `alert` calls with in-app dialogs, following the audit. The 13 former confirmation call sites use the shared dialog host. #everyday
   - [x] remove the prompts for reversible deletes: deleting a row, a column, or a page, including ranges, is undone with its formulas and formats. See [DECISIONS.md](DECISIONS.md), "An action that undo reverses asks for no confirmation"
   - [x] (Claude) update end-to-end tests to interact with the in-app dialogs.
-- [ ] **P5** allow renaming, deleting, and duplicating docs from the docs list view #documents
+- [x] **P5** allow renaming, deleting, and duplicating docs from the docs list view #documents
   - (Claude) the list also has no search and no choice of sort order, and it allows two documents with one name: importing an exported file makes a second "QA Sales Book"
 
 ## Import and export
@@ -642,3 +642,6 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [ ] Renaming the first of two same-name definitions in one script leaves `renamedNames` seeing the name in the after-set, so formulas that used it are not rewritten and then resolve to the second definition (`apps/server/src/repo/spreadsheets/views.ts` near line 83) #formula-language
 - [ ] Formula assist lists a duplicate script definition twice and qualifies it as if ambiguous (`apps/web/src/stores/workbook/values.ts` near line 67) #formula-editing
+
+- [ ] Inline rename in the document list: a whitespace-only name does nothing and says nothing; a list refresh leaves a stale draft that can revert a newer rename made elsewhere (`SpreadsheetListView.vue` near lines 50 and 119) #documents
+- [ ] The flaky export/import e2e test (`data-tables-and-formatting.spec.ts:5`) failed once more in a full run (20.2s) after the hardening commit and passed in 11 later full runs; capture its trace on the next failure (`pnpm e2e:remote` with Playwright trace retained) #codebase

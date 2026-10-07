@@ -145,6 +145,33 @@ test("folders organize documents in the list, and deleting one returns them to U
   await expect(unfiled.getByRole("link", { name: "Untitled document" })).toBeVisible();
 });
 
+test("renames, duplicates, and deletes a document from the list", async ({ page }) => {
+  await newSpreadsheet(page);
+  await page.getByRole("link", { name: "← Documents" }).click();
+
+  await page.getByRole("button", { name: "Actions for Untitled document" }).click();
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  const name = page.getByRole("textbox", { name: "Document name for Untitled document" });
+  await name.fill("Planning doc");
+  await name.press("Enter");
+  await expect(page.getByRole("link", { name: "Planning doc" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Actions for Planning doc" }).click();
+  await page.getByRole("menuitem", { name: "Duplicate" }).click();
+  await expect(page.getByRole("status")).toContainText('Created "Planning doc (copy)"');
+  const copy = page.getByRole("link", { name: "Planning doc (copy)" });
+  await expect(copy).toBeVisible();
+
+  await page.getByRole("button", { name: "Actions for Planning doc (copy)" }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Delete document" });
+  await expect(confirm).toContainText("Delete Planning doc (copy)? This cannot be undone.");
+  await confirm.getByRole("button", { name: "Delete document" }).click();
+
+  await expect(copy).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Planning doc" })).toBeVisible();
+});
+
 test("duplicate-folder errors dismiss on Escape without moving the document list", async ({
   page,
 }) => {

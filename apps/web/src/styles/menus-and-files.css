@@ -215,6 +215,19 @@
   color: var(--muted);
 }
 
+.list__document-rename {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.list__document-rename input {
+  flex: 1;
+  min-width: 0;
+}
+
 .table-card__actions {
   flex-wrap: wrap;
   justify-content: flex-end;
