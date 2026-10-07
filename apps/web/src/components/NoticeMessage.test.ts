@@ -85,3 +85,24 @@ it("keeps notices with action links until dismissed", async () => {
   await wrapper.get('[aria-label="Dismiss"]').trigger("click");
   expect(wrapper.emitted("dismiss")).toHaveLength(1);
 });
+
+it("runs and briefly shows an action button", async () => {
+  vi.useFakeTimers();
+  const run = vi.fn();
+  wrapper = mount(NoticeMessage, {
+    props: {
+      notice: { kind: "success", text: "Deleted row 3", action: { label: "Undo", run } },
+    },
+  });
+
+  expect(wrapper.get(".notice__action").text()).toBe("Undo");
+  await wrapper.get(".notice__action").trigger("click");
+  expect(run).toHaveBeenCalledOnce();
+  expect(wrapper.emitted("dismiss")).toHaveLength(1);
+
+  await wrapper.setProps({
+    notice: { kind: "success", text: "Deleted row 3", action: { label: "Undo", run } },
+  });
+  await vi.advanceTimersByTimeAsync(4000);
+  expect(wrapper.emitted("dismiss")).toHaveLength(2);
+});

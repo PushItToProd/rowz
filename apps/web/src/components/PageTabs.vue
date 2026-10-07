@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router";
 import type { PageRecord } from "../api/client";
+import { undoNotice } from "../notice";
 import { useWorkbookStore } from "../stores/workbook";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
@@ -23,9 +24,10 @@ async function add(): Promise<void> {
 }
 
 async function remove(page: PageRecord): Promise<void> {
-  if (!window.confirm(`Delete ${page.name} and every table on it?`)) return;
   const next = store.pages.find((candidate) => candidate.id !== page.id);
-  if ((await store.deletePage(page.id)) && next && page.id === props.activePageId) {
+  if (!(await store.deletePage(page.id))) return;
+  store.notice = undoNotice(`Deleted page ${page.name}`, () => void store.undo());
+  if (next && page.id === props.activePageId) {
     await open(next.id);
   }
 }

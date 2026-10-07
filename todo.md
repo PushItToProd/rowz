@@ -407,7 +407,6 @@ The next items came from a QA pass through the running app in a browser on 2026-
       - `HelpView.vue`, shortcut list: "Edit the selected cell, keeping what it holds." becomes "Edit the selected cell's current contents."
       - `HelpView.vue`, data tables: "Right-click a column to choose what it holds." becomes "Right-click a column to set its type."
       - `HistoryPanel.vue`, restore prompt: "Put the document back as it was on {date}? What it holds now is kept as a version, so this can be undone." becomes "Restore the version from {date}? The current document is saved as a version first, so you can undo this."
-      - `TableCard.vue`, delete prompt: "Delete row 3 and what it holds?" becomes "Delete row 3 and its contents?", and "Delete rows 3-5 and their contents?" for several
   - [x] revise "row of this column" help text in autocomplete
     - (Claude) the text is "column of this row", in `assist.ts`, shown beside a `[Column]` suggestion. The author approved "this row's value". A `Table[Column]` suggestion says "column of Sales", which can stay
   - [x] revise "Write the one meant" in `workbook.ts`
@@ -453,9 +452,9 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - (Claude) missing on 2026-10-05: Ctrl+Arrow moves one cell and does not jump to the edge of the data. Home, Ctrl+Home, Ctrl+End, and PageDown do nothing in the grid, and End and PageUp were not tried. Ctrl+B and Ctrl+I do not format the selection
 - [x] identify where we should use in-app modals instead of browser-based `input` and alerts -- we have specific tasks for a couple of these already so this would just cover identifying anything I missed
   - (Claude) [docs/native-browser-ui-audit.md](docs/native-browser-ui-audit.md) lists them with replacement options
-- [ ] **P4** (Claude) replace the native `prompt`, `confirm`, and `alert` calls with in-app dialogs, following the audit. 15 call sites remain: six in `TableCard.vue`, and one each in `router.ts`, `SpreadsheetListView.vue`, `ScriptCard.vue`, `ConditionalFormatsPanel.vue`, `PageTabs.vue`, `HistoryPanel.vue`, `TextCard.vue`, `ChartCard.vue`, and `SharePanel.vue` #everyday
-  - the author decided that an action undo reverses asks for no confirmation. Deleting a row, a column, or a page asks today, and undo restores each of them with its formulas and formats. Remove those confirmations first, which leaves fewer dialogs to replace. See [DECISIONS.md](DECISIONS.md), "An action that undo reverses asks for no confirmation"
-  - (Claude) a native dialog also pauses browser automation, so an end-to-end test of these flows has to answer or replace it
+- [ ] **P4** (Claude) replace the native `prompt`, `confirm`, and `alert` calls with in-app dialogs, following the audit. 13 call sites remain: five in `TableCard.vue`, and one each in `router.ts`, `SpreadsheetListView.vue`, `ScriptCard.vue`, `ConditionalFormatsPanel.vue`, `HistoryPanel.vue`, `TextCard.vue`, `ChartCard.vue`, and `SharePanel.vue` #everyday
+  - [x] remove the prompts for reversible deletes: deleting a row, a column, or a page, including ranges, is undone with its formulas and formats. See [DECISIONS.md](DECISIONS.md), "An action that undo reverses asks for no confirmation"
+  - (Claude) a native dialog also pauses browser automation, so an end-to-end test of the remaining native-dialog flows has to answer or replace it
 - [ ] **P5** allow renaming, deleting, and duplicating docs from the docs list view #documents
   - (Claude) the list also has no search and no choice of sort order, and it allows two documents with one name: importing an exported file makes a second "QA Sales Book"
 

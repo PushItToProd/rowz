@@ -436,6 +436,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const canRedo = computed(() => canEdit.value && redoable.value);
 
   setJournaledHandler(() => {
+    if (notice.value?.dismissOnHistoryChange) notice.value = null;
     undoable.value = true;
     redoable.value = false;
   });

@@ -13,6 +13,7 @@ export function createUndo(context: WorkbookContext) {
       context.undoable.value = result.undoable;
       context.redoable.value = result.redoable;
       if (result.outcome === "done") {
+        if (context.notice.value?.dismissOnHistoryChange) context.notice.value = null;
         if (result.change) await context.receiveChange(result.change);
         if (
           result.change?.changed &&

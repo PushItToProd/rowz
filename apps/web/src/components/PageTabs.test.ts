@@ -13,6 +13,7 @@ vi.mock("../api/client", async () => {
   return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
 });
 const server = api as unknown as MockedApi;
+const confirm = vi.spyOn(window, "confirm");
 
 let router: Router;
 
@@ -48,6 +49,7 @@ async function render(role = "owner"): Promise<VueWrapper> {
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
+  confirm.mockReturnValue(false);
 });
 
 describe("PageTabs", () => {
@@ -93,6 +95,22 @@ describe("PageTabs", () => {
     ).toBeDefined();
     // The click moved the page and did not open one.
     expect(router.currentRoute.value.path).toBe("/");
+  });
+
+  it("deletes the open page without asking and offers undo", async () => {
+    const wrapper = await render();
+    await wrapper.get('button[aria-label="Delete Page 1"]').trigger("click");
+    await flushPromises();
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(server.deletePage).toHaveBeenCalledExactlyOnceWith("p1");
+    expect(router.currentRoute.value.params).toEqual({ spreadsheetId: "s1", pageId: "p2" });
+    expect(useWorkbookStore().notice).toMatchObject({
+      kind: "success",
+      text: "Deleted page Page 1",
+      action: { label: "Undo" },
+    });
+    wrapper.unmount();
   });
 
   it("gives a viewer links, and no way to rename or delete", async () => {

@@ -162,7 +162,6 @@ test("a deleted row is brought back from the history, and a version opens as a c
   await enter(page, "A1", "keep me");
   await enter(page, "A2", "and me");
   await cell(page, "A1").click();
-  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Delete row" }).click();
   await expect(cell(page, "A1")).toHaveText("and me");
 
@@ -187,4 +186,31 @@ test("a deleted row is brought back from the history, and a version opens as a c
   await expect(history).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Untitled document (copy)");
   await expect(cell(page, "A1")).toHaveText("and me");
+});
+
+test("deleting a page can be undone immediately with its formulas and formats", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "5");
+  const pages = page.getByRole("navigation", { name: "Pages" });
+  await page.getByRole("button", { name: "Add page" }).click();
+  await expect(pages.locator('[aria-current="page"]')).toHaveText(/Page 2/);
+  await enter(page, "A1", "='Page 1'!'Table 1'!A1*2");
+  await expect(cell(page, "A1")).toHaveText("10");
+  await cell(page, "A1").click();
+  await page.getByRole("toolbar", { name: "Format" }).getByRole("button", { name: "Bold" }).click();
+  await expect(cell(page, "A1").locator(".cell-value")).toHaveCSS("font-weight", "700");
+
+  await pages.getByRole("button", { name: "Delete Page 2" }).click();
+  await expect(pages.locator('[aria-current="page"]')).toHaveText(/Page 1/);
+  const deletionNotice = page
+    .locator('.notice--floating[role="status"]')
+    .filter({ hasText: "Deleted page Page 2" });
+  await deletionNotice.getByRole("button", { name: "Undo" }).click();
+
+  await expect(pages.getByText("Page 2")).toBeVisible();
+  await pages.getByText("Page 2").click();
+  await expect(cell(page, "A1")).toHaveText("10");
+  await expect(cell(page, "A1").locator(".cell-value")).toHaveCSS("font-weight", "700");
 });

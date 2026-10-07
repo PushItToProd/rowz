@@ -12,7 +12,7 @@ const ERROR_MS = 8000;
 watch(
   () => props.notice,
   (notice, _previous, onCleanup) => {
-    if (notice.action) return;
+    if (notice.action && !("run" in notice.action)) return;
 
     const timer = window.setTimeout(
       () => {
@@ -31,6 +31,13 @@ function dismissOnEscape(event: KeyboardEvent): void {
   if (event.key === "Escape") emit("dismiss");
 }
 
+function runAction(): void {
+  const action = props.notice.action;
+  if (!action || !("run" in action)) return;
+  action.run();
+  emit("dismiss");
+}
+
 onMounted(() => {
   document.addEventListener("keydown", dismissOnEscape, true);
 });
@@ -46,9 +53,21 @@ onUnmounted(() => {
     :role="notice.kind === 'error' ? 'alert' : 'status'"
   >
     <span>{{ notice.text }}</span>
-    <RouterLink v-if="notice.action" class="notice__action" :to="notice.action.to">
+    <RouterLink
+      v-if="notice.action && 'to' in notice.action"
+      class="notice__action"
+      :to="notice.action.to"
+    >
       {{ notice.action.label }}
     </RouterLink>
+    <button
+      v-else-if="notice.action && 'run' in notice.action"
+      type="button"
+      class="notice__action"
+      @click="runAction"
+    >
+      {{ notice.action.label }}
+    </button>
     <button type="button" aria-label="Dismiss" @click="emit('dismiss')">×</button>
   </div>
 </template>

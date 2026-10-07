@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { download } from "../files/download";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, snapshotWith, TABLE, type MockedApi } from "../testing";
+import { at, notifyJournaled, savedCells, snapshotWith, TABLE, type MockedApi } from "../testing";
 import { EditorView } from "@codemirror/view";
 import { useFormulaSessionStore } from "../formula/session";
 import FormulaBar from "./FormulaBar.vue";
@@ -148,25 +148,56 @@ describe("row and column actions", () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 
-  it("asks before deleting a row or column that holds content, and stops if refused", async () => {
+  it("deletes a row or column that holds content without asking and offers undo", async () => {
     await render({ A3: "keep me" });
     await select("B3");
-    confirm.mockReturnValue(false);
 
     await button("Delete row").trigger("click");
-    expect(confirm).toHaveBeenCalledExactlyOnceWith("Delete row 3 and its contents?");
-    expect(server.editTable).not.toHaveBeenCalled();
+    await flushPromises();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(server.editTable).toHaveBeenCalledOnce();
+    expect(useWorkbookStore().notice).toMatchObject({
+      kind: "success",
+      text: "Deleted row 3",
+      action: { label: "Undo" },
+    });
 
+    server.editTable.mockClear();
     await select("A1");
     await button("Delete column").trigger("click");
-    expect(confirm).toHaveBeenLastCalledWith("Delete column A and its contents?");
-    expect(server.editTable).not.toHaveBeenCalled();
-
-    confirm.mockReturnValue(true);
-    await button("Delete column").trigger("click");
-    await vi.waitFor(() => {
-      expect(server.editTable).toHaveBeenCalledOnce();
+    await flushPromises();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(server.editTable).toHaveBeenCalledOnce();
+    expect(useWorkbookStore().notice).toMatchObject({
+      kind: "success",
+      text: "Deleted column A",
+      action: { label: "Undo" },
     });
+  });
+
+  it("dismisses the delete Undo notice after a later cell edit", async () => {
+    await render();
+    await select("A3");
+    server.editTable.mockImplementationOnce(() => {
+      notifyJournaled();
+      return Promise.resolve(
+        changeWith({
+          table: { ...TABLE, rowCount: 3, rows: TABLE.rows.filter((row) => row.id !== "r2") },
+        }),
+      );
+    });
+
+    await button("Delete row").trigger("click");
+    await flushPromises();
+    expect(useWorkbookStore().notice?.action).toMatchObject({ label: "Undo" });
+
+    server.setCells.mockImplementationOnce((...args) => {
+      notifyJournaled();
+      return savedCells(...args);
+    });
+    await useWorkbookStore().setCell(at("A1"), "edited");
+
+    expect(useWorkbookStore().notice).toBeNull();
   });
 
   it("are hidden from a viewer", async () => {
@@ -399,17 +430,28 @@ describe("the menu of row, column, and cell actions", () => {
     expect(server.editTable).toHaveBeenCalledExactlyOnceWith("t1", expectedEdit(edit));
   });
 
-  it("asks before deleting several rows or columns when one of them holds content", async () => {
+  it("deletes selected rows and columns with content without asking and offers undo", async () => {
     await openOnRange("B2", "C4");
-    confirm.mockReturnValue(false);
     await item("Delete rows 2-4").trigger("click");
-    expect(confirm).toHaveBeenCalledExactlyOnceWith("Delete rows 2-4 and their contents?");
-    expect(server.editTable).not.toHaveBeenCalled();
+    await flushPromises();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(server.editTable).toHaveBeenCalledOnce();
+    expect(useWorkbookStore().notice).toMatchObject({
+      kind: "success",
+      text: "Deleted rows 2-4",
+      action: { label: "Undo" },
+    });
 
     await wrapper.get('[data-cell="C4"]').trigger("contextmenu");
     await item("Delete columns B-C").trigger("click");
-    expect(confirm).toHaveBeenLastCalledWith("Delete columns B-C and their contents?");
-    expect(server.editTable).not.toHaveBeenCalled();
+    await flushPromises();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(server.editTable).toHaveBeenCalledTimes(2);
+    expect(useWorkbookStore().notice).toMatchObject({
+      kind: "success",
+      text: "Deleted columns B-C",
+      action: { label: "Undo" },
+    });
   });
 
   it("does not offer to delete every row or every column", async () => {

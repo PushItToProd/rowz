@@ -6,6 +6,7 @@ import { parseCsv, toCsv } from "../files/csv";
 import { download, fileName } from "../files/download";
 import type { TableRecord } from "../api/client";
 import { useFormulaSessionStore } from "../formula/session";
+import { undoNotice } from "../notice";
 import { useWorkbookStore } from "../stores/workbook";
 import ContextMenu from "./ContextMenu.vue";
 import ChoicesPanel from "./ChoicesPanel.vue";
@@ -95,30 +96,17 @@ function describeLines(lines: Lines): string {
   return `${noun}s ${label(first)}-${label(last)}`;
 }
 
-/** Whether any cell of the rows or columns holds something. */
-function holdContent(lines: Lines): boolean {
-  const { id, rowCount, colCount } = props.table;
-  const across = lines.axis === "row" ? colCount : rowCount;
-  for (const index of indexesOf(lines)) {
-    for (let other = 0; other < across; other += 1) {
-      const cell = lines.axis === "row" ? { row: index, col: other } : { row: other, col: index };
-      if (store.inputOf({ tableId: id, ...cell }) !== "") return true;
-    }
-  }
-  return false;
-}
-
 /** Inserts `count` rows or columns, the first of them at `index`. */
 function insert(axis: Axis, index: number, count = 1): void {
   void store.editTable(props.table.id, { axis, kind: "insert", index, count });
 }
 
-/** Deletes rows or columns, asking first when that would discard content. */
-function removeLines(lines: Lines): void {
-  const contents = lines.count === 1 ? "its contents" : "their contents";
-  if (holdContent(lines) && !window.confirm(`Delete ${describeLines(lines)} and ${contents}?`))
-    return;
-  void store.deleteLines(props.table.id, lines.axis, indexesOf(lines));
+/** Deletes rows or columns and offers the matching undo step. */
+async function removeLines(lines: Lines): Promise<void> {
+  const description = describeLines(lines);
+  if (await store.deleteLines(props.table.id, lines.axis, indexesOf(lines))) {
+    store.notice = undoNotice(`Deleted ${description}`, () => void store.undo());
+  }
 }
 
 /** Whether the form that sets the table's size is open. */
@@ -441,7 +429,7 @@ function lineItems(lines: Lines): MenuItem[] {
       // Plain grids keep one row; every table keeps one column.
       disabled: count >= size && (!rows || !props.table.columns),
       run: () => {
-        removeLines(lines);
+        void removeLines(lines);
       },
     },
   ];

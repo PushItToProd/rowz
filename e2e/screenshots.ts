@@ -63,7 +63,7 @@ async function trim(page: Page, table: string, rows: number, columns: number): P
 test("capture the README screenshots", async ({ page }) => {
   test.setTimeout(180_000);
 
-  // Deleting a row or column asks for confirmation, and a formula column asks for its formula.
+  // A formula column asks for its formula.
   page.on("dialog", (dialog) => void dialog.accept("=[Price] * [Qty]"));
 
   await page.goto("/signup");

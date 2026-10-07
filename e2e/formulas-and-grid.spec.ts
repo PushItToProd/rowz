@@ -174,7 +174,23 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
 
   // Delete row 2: the sum shrinks, and the formula that named A2 loses its target.
   await cell(page, "A2").click();
-  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("toolbar", { name: "Format" }).getByRole("button", { name: "Bold" }).click();
+  await page.getByRole("button", { name: "Delete row" }).click();
+  await expect(cell(page, "A2")).toHaveText("3");
+  await expect(cell(page, "B1")).toHaveText("4");
+  await expect(cell(page, "C1")).toHaveText("#REF!");
+
+  const deletionNotice = page
+    .locator('.notice--floating[role="status"]')
+    .filter({ hasText: "Deleted row 2" });
+  await deletionNotice.getByRole("button", { name: "Undo" }).click();
+  await expect(cell(page, "A2")).toHaveText("2");
+  await expect(cell(page, "B1")).toHaveText("6");
+  await expect(cell(page, "C1")).toHaveText("20");
+  await expect(cell(page, "A2").locator(".cell-value")).toHaveCSS("font-weight", "700");
+
+  // Return to the deleted state so the rest of the test can exercise shifted formulas.
+  await cell(page, "A2").click();
   await page.getByRole("button", { name: "Delete row" }).click();
   await expect(cell(page, "A2")).toHaveText("3");
   await expect(cell(page, "B1")).toHaveText("4");
@@ -268,6 +284,28 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
   await reload(page);
   await expect(table.locator("tbody tr")).toHaveCount(3);
   await expect(cell(page, "B1")).toHaveText("#REF!");
+});
+
+test("deleting a column can be undone immediately with its formula and format", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "1");
+  await enter(page, "B1", "2");
+  await enter(page, "C1", "=SUM(A1:B1)");
+  await cell(page, "B1").click();
+  await page.getByRole("toolbar", { name: "Format" }).getByRole("button", { name: "Bold" }).click();
+  await cell(page, "B1").click();
+  await page.getByRole("button", { name: "Delete column" }).click();
+  await expect(cell(page, "B1")).toHaveText("1");
+
+  const deletionNotice = page
+    .locator('.notice--floating[role="status"]')
+    .filter({ hasText: "Deleted column B" });
+  await deletionNotice.getByRole("button", { name: "Undo" }).click();
+  await expect(cell(page, "B1")).toHaveText("2");
+  await expect(cell(page, "C1")).toHaveText("3");
+  await expect(cell(page, "B1").locator(".cell-value")).toHaveCSS("font-weight", "700");
 });
 
 test("a formula with several results fills the cells around it", async ({ page }) => {

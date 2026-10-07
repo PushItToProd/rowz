@@ -408,7 +408,9 @@ export function createStructure(context: WorkbookContext) {
 
   function restoreVersion(spreadsheetId: string, versionId: string): Promise<void> {
     return context.enqueueWrite(async () => {
-      await context.receiveChange(await api.restoreVersion(spreadsheetId, versionId));
+      const change = await api.restoreVersion(spreadsheetId, versionId);
+      if (context.notice.value?.dismissOnHistoryChange) context.notice.value = null;
+      await context.receiveChange(change);
     });
   }
   return {
