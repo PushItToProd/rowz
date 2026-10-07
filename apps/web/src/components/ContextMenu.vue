@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { inject, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import type { MenuItem } from "./menu";
 import { registerContextMenu } from "./contextMenuState";
+import { contextMenuPosition, type ViewportBounds } from "./contextMenuPosition";
+import { contextMenuClickGuardKey } from "./contextMenuControl";
 
 const props = defineProps<{
-  /** Where the menu opens, in viewport coordinates. */
+  /** Where the menu opens, in visual viewport coordinates. */
   x: number;
   y: number;
   label: string;
   items: readonly MenuItem[];
 }>();
 const emit = defineEmits<{ close: [] }>();
+const controlGuard = inject(contextMenuClickGuardKey);
 
 const menu = ref<HTMLElement>();
 const position = ref({ left: props.x, top: props.y });
@@ -56,12 +59,21 @@ function cycleTab(event: KeyboardEvent): void {
 }
 
 function reposition(): void {
-  const box = menu.value?.getBoundingClientRect();
-  if (!box) return;
-  position.value = {
-    left: Math.max(0, Math.min(props.x, window.innerWidth - box.width - 4)),
-    top: Math.max(0, Math.min(props.y, window.innerHeight - box.height - 4)),
+  const element = menu.value;
+  if (!element) return;
+  const viewport: ViewportBounds = {
+    left: window.visualViewport?.offsetLeft ?? 0,
+    top: window.visualViewport?.offsetTop ?? 0,
+    width: window.visualViewport?.width ?? window.innerWidth,
+    height: window.visualViewport?.height ?? window.innerHeight,
   };
+  const availableWidth = Math.max(0, viewport.width - 8);
+  const availableHeight = Math.max(0, viewport.height - 8);
+  element.style.minWidth = `${Math.min(190, availableWidth).toString()}px`;
+  element.style.maxWidth = `${availableWidth.toString()}px`;
+  element.style.maxHeight = `${availableHeight.toString()}px`;
+  const box = element.getBoundingClientRect();
+  position.value = contextMenuPosition(props.x, props.y, box.width, box.height, viewport);
 }
 
 function close(): void {
@@ -73,6 +85,10 @@ function close(): void {
 function choose(item: MenuItem): void {
   if (!item.keepOpen) close();
   item.run();
+}
+
+function beforeMenuAction(event: MouseEvent): void {
+  controlGuard?.(event);
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -125,6 +141,8 @@ onMounted(async () => {
   window.addEventListener("scroll", close, true);
   window.addEventListener("resize", close);
   window.addEventListener("blur", close);
+  window.visualViewport?.addEventListener("scroll", reposition);
+  window.visualViewport?.addEventListener("resize", reposition);
 });
 
 onBeforeUnmount(() => {
@@ -135,38 +153,43 @@ onBeforeUnmount(() => {
   window.removeEventListener("scroll", close, true);
   window.removeEventListener("resize", close);
   window.removeEventListener("blur", close);
+  window.visualViewport?.removeEventListener("scroll", reposition);
+  window.visualViewport?.removeEventListener("resize", reposition);
   if (opener instanceof HTMLElement) opener.focus({ preventScroll: true });
 });
 </script>
 
 <template>
-  <div
-    ref="menu"
-    class="context-menu"
-    role="menu"
-    tabindex="-1"
-    :aria-label="label"
-    :style="{
-      left: `${position.left}px`,
-      top: `${position.top}px`,
-      visibility: positioned ? 'visible' : 'hidden',
-    }"
-    @keydown="onKeydown"
-    @contextmenu.prevent
-  >
-    <button
-      v-for="item in items"
-      :key="item.label"
-      type="button"
-      role="menuitem"
+  <Teleport to="body">
+    <div
+      ref="menu"
+      class="context-menu"
+      role="menu"
       tabindex="-1"
-      :data-formula-field="item.keepDraft ? '' : undefined"
-      :class="{ danger: item.danger, 'context-menu__item--separated': item.separated }"
-      :disabled="item.disabled"
-      @click="choose(item)"
+      :aria-label="label"
+      :style="{
+        left: `${position.left}px`,
+        top: `${position.top}px`,
+        visibility: positioned ? 'visible' : 'hidden',
+      }"
+      @keydown="onKeydown"
+      @click.capture="beforeMenuAction"
+      @contextmenu.prevent
     >
-      {{ item.label }}
-    </button>
-    <slot name="content" />
-  </div>
+      <button
+        v-for="item in items"
+        :key="item.label"
+        type="button"
+        role="menuitem"
+        tabindex="-1"
+        :data-formula-field="item.keepDraft ? '' : undefined"
+        :class="{ danger: item.danger, 'context-menu__item--separated': item.separated }"
+        :disabled="item.disabled"
+        @click="choose(item)"
+      >
+        {{ item.label }}
+      </button>
+      <slot name="content" />
+    </div>
+  </Teleport>
 </template>

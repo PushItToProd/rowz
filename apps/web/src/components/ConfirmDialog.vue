@@ -72,7 +72,7 @@ function onKeydown(event: KeyboardEvent): void {
 .confirm-dialog__backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: var(--z-dialog);
   display: grid;
   place-items: center;
   padding: 16px;

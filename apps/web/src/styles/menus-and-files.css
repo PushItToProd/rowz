@@ -2,7 +2,7 @@
 
 .context-menu {
   position: fixed;
-  z-index: 30;
+  z-index: var(--z-menu);
   display: flex;
   flex-direction: column;
   min-width: min(190px, calc(100vw - 8px));
@@ -190,7 +190,7 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  z-index: 4;
+  z-index: var(--z-popover);
   display: grid;
   gap: 4px;
   width: min(360px, calc(100vw - 32px));
@@ -229,7 +229,7 @@
 
 .list__gallery-backdrop {
   position: fixed;
-  z-index: 40;
+  z-index: var(--z-dialog);
   inset: 0;
   display: grid;
   place-items: center;

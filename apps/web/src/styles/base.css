@@ -9,6 +9,20 @@
   --danger: #c0362c;
   --danger-soft: #fdecea;
   --success-soft: #e7f6ec;
+  --z-content-raised: 1;
+  --z-grid-checkbox: 1;
+  --z-editor-chrome: 2;
+  --z-grid-interactive: 2;
+  --z-grid-frozen-column: 2;
+  --z-grid-frozen-row: 3;
+  --z-grid-header: 4;
+  --z-grid-frozen-header: 6;
+  --z-grid-corner: 7;
+  --z-grid-control: 8;
+  --z-popover: 20;
+  --z-menu: 30;
+  --z-dialog: 40;
+  --z-notice: 50;
   --radius: 6px;
   font-family:
     system-ui,
@@ -114,6 +128,7 @@ input {
 
 .notice--floating {
   position: fixed;
+  z-index: var(--z-notice);
   right: 16px;
   bottom: 16px;
   display: flex;

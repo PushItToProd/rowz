@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { api, type ViewRecord } from "../api/client";
+import { bodyFindAll, bodyGet, bodyHas } from "../testing/teleported";
 import { takeQueuedListNotice } from "../notice";
 import { changeWith, snapshotWith, wireSnapshot, type MockedApi } from "../testing";
 import EditorView from "./EditorView.vue";
@@ -257,7 +258,7 @@ it("opens block actions from card margins and leaves grid cell menus to the tabl
   await block.trigger("contextmenu", { button: 2, clientX: 90, clientY: 110 });
   await flushPromises();
 
-  const menu = wrapper.get('[role="menu"][aria-label="Actions for Table 1"]');
+  const menu = bodyGet('[role="menu"][aria-label="Actions for Table 1"]');
   const labels = menu.findAll('[role="menuitem"]').map((item) => item.text());
   expect(labels).toContain("Export CSV");
   expect(labels).toContain("Freeze rows and columns");
@@ -273,15 +274,15 @@ it("opens block actions from card margins and leaves grid cell menus to the tabl
     clientY: 110,
   });
   await flushPromises();
-  expect(wrapper.find('[role="menu"][aria-label="Actions for Table 1"]').exists()).toBe(true);
+  expect(bodyHas('[role="menu"][aria-label="Actions for Table 1"]')).toBe(true);
 
-  await wrapper.get('[role="menu"]').trigger("keydown", { key: "Escape" });
+  await bodyGet('[role="menu"]').trigger("keydown", { key: "Escape" });
   await flushPromises();
   await wrapper.get('button[aria-label="Block actions for Table 1"]').trigger("click");
   await flushPromises();
-  expect(wrapper.find('[role="menu"][aria-label="Actions for Table 1"]').exists()).toBe(true);
+  expect(bodyHas('[role="menu"][aria-label="Actions for Table 1"]')).toBe(true);
 
-  await wrapper.get('[role="menu"]').trigger("keydown", { key: "Escape" });
+  await bodyGet('[role="menu"]').trigger("keydown", { key: "Escape" });
   await flushPromises();
   await wrapper.get('[data-table="Table 1"] [data-cell="A1"]').trigger("contextmenu", {
     button: 2,
@@ -289,8 +290,62 @@ it("opens block actions from card margins and leaves grid cell menus to the tabl
     clientY: 110,
   });
   await flushPromises();
-  expect(wrapper.find('[role="menu"][aria-label="Actions for Table 1"]').exists()).toBe(false);
-  expect(wrapper.find('[role="menu"][aria-label="Actions for A1"]').exists()).toBe(true);
+  expect(bodyHas('[role="menu"][aria-label="Actions for Table 1"]')).toBe(false);
+  expect(bodyHas('[role="menu"][aria-label="Actions for A1"]')).toBe(true);
+  wrapper.unmount();
+});
+
+it("saves an active formula draft before running a teleported block menu action", async () => {
+  const wrapper = await render();
+  const store = useWorkbookStore();
+  store.views = [
+    {
+      id: "chart",
+      pageId: "p1",
+      name: "Chart",
+      kind: "chart",
+      source: "1",
+      chartType: "bar",
+      position: 1,
+    },
+  ];
+  await wrapper.vm.$nextTick();
+
+  const order: string[] = [];
+  server.updateView.mockImplementationOnce(() => {
+    order.push("save");
+    return Promise.resolve(changeWith());
+  });
+  vi.spyOn(store, "moveBlock").mockImplementation(() => {
+    order.push("menu action");
+    return Promise.resolve(true);
+  });
+
+  const formulas = useFormulaSessionStore();
+  await formulas.start(
+    {
+      target: { kind: "chart", viewId: "chart" },
+      context: { pageId: "p1" },
+      mode: "formula",
+      text: "draft",
+    },
+    store.submitFormulaDraft,
+  );
+
+  await wrapper.get("#block-t1").trigger("contextmenu", {
+    button: 2,
+    clientX: 90,
+    clientY: 110,
+  });
+  await flushPromises();
+  await bodyFindAll('[role="menuitem"]')
+    .find((item) => item.text() === "Move down")!
+    .trigger("click");
+  await flushPromises();
+
+  expect(server.updateView).toHaveBeenCalledExactlyOnceWith("chart", { source: "draft" });
+  expect(order).toEqual(["save", "menu action"]);
+  expect(formulas.active).toBeUndefined();
   wrapper.unmount();
 });
 
@@ -312,10 +367,9 @@ it("collapses a block to its header and restores its body from the block menu", 
     clientY: 110,
   });
   await flushPromises();
-  const menu = wrapper.get('[role="menu"][aria-label="Actions for Table 1"]');
+  const menu = bodyGet('[role="menu"][aria-label="Actions for Table 1"]');
   expect(menu.findAll('[role="menuitem"]').map((item) => item.text())).toContain("Expand");
-  await menu
-    .findAll('[role="menuitem"]')
+  await bodyFindAll('[role="menuitem"]')
     .find((item) => item.text() === "Expand")!
     .trigger("click");
   await flushPromises();

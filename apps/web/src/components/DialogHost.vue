@@ -126,7 +126,7 @@ function updatePrompt(event: Event): void {
 .dialog-host__backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: var(--z-dialog);
   display: grid;
   place-items: center;
   overflow-y: auto;

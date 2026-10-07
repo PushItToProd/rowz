@@ -513,10 +513,13 @@ const OPERATORS = [
           to another page. Formulas that read a moved table are rewritten to name its new page, so
           they keep reading it. A page cannot take a table with the name of one it already has.
         </li>
-        <li>The arrows on the open page's tab move the page left or right among the tabs.</li>
         <li>
-          Right-click a page tab to rename, delete, or move that page. A page deletion offers an
-          <strong>Undo</strong> notice. Right-click a block's header or card padding, or use its
+          The arrows on the open page's tab move it left or right among the tabs. Its trash can
+          button deletes the page; deletion offers an <strong>Undo</strong> notice.
+        </li>
+        <li>
+          Right-click anywhere on a page tab, including its move and delete buttons, to rename,
+          delete, or move that page. Right-click a block's header or card padding, or use its
           <strong>⋮</strong> button, for its rename, delete, move, add-below, and block-specific
           actions. Table cells keep their own context menu; controls and rendered text keep their
           normal right-click behavior. The Context Menu key or Shift+F10 opens a page or block menu;

@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import { api } from "../api/client";
+import { bodyFindAll, bodyGet, bodyHas } from "../testing/teleported";
 import { useWorkbookStore } from "../stores/workbook";
 import { appDialog, mountDialogHost, snapshotWith, type MockedApi } from "../testing";
 import PageTabs from "./PageTabs.vue";
@@ -19,7 +20,7 @@ let router: Router;
 let dialogHost: VueWrapper;
 const mounted: VueWrapper[] = [];
 
-async function render(role = "owner"): Promise<VueWrapper> {
+async function render(role = "owner", activePageId = "p1"): Promise<VueWrapper> {
   server.getSnapshot.mockResolvedValue(
     wireSnapshot({
       ...snapshotWith({}, role),
@@ -42,7 +43,7 @@ async function render(role = "owner"): Promise<VueWrapper> {
     ],
   });
   const wrapper = mount(PageTabs, {
-    props: { spreadsheetId: "s1", activePageId: "p1" },
+    props: { spreadsheetId: "s1", activePageId },
     global: { plugins: [router] },
     attachTo: document.body,
   });
@@ -106,6 +107,40 @@ describe("PageTabs", () => {
     expect(router.currentRoute.value.path).toBe("/");
   });
 
+  it.each([
+    ["Move Page 2 left", "p2"],
+    ["Move Page 1 right", "p1"],
+    ["Delete page Page 1", "p1"],
+  ])("opens the page menu when right-clicking %s", async (label, activePageId) => {
+    const wrapper = await render("owner", activePageId);
+    const button = wrapper.get(`button[aria-label="${label}"]`).element;
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+    });
+
+    button.dispatchEvent(event);
+    await flushPromises();
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(bodyGet('[role="menu"]').attributes("aria-label")).toBe(
+      `Actions for Page ${activePageId === "p1" ? "1" : "2"}`,
+    );
+  });
+
+  it("labels the page delete button and shows a trash icon", async () => {
+    const wrapper = await render();
+    const button = wrapper.get('button[aria-label="Delete page Page 1"]');
+
+    expect(button.attributes("title")).toBe("Delete page");
+    expect(button.get("svg").attributes()).toMatchObject({
+      width: "16",
+      height: "16",
+      stroke: "currentColor",
+    });
+  });
+
   it("opens a page menu on right-click with disabled edge moves", async () => {
     const wrapper = await render();
     await wrapper.get('[data-page-id="p1"]').trigger("contextmenu", {
@@ -115,9 +150,9 @@ describe("PageTabs", () => {
     });
     await flushPromises();
 
-    const menu = wrapper.get('[role="menu"]');
+    const menu = bodyGet('[role="menu"]');
     expect(menu.attributes("aria-label")).toBe("Actions for Page 1");
-    expect(menu.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+    expect(bodyFindAll('[role="menuitem"]').map((item) => item.text())).toEqual([
       "Collapse all",
       "Rename",
       "Delete",
@@ -138,12 +173,12 @@ describe("PageTabs", () => {
     await link.trigger("keydown", { key: "ContextMenu" });
     await flushPromises();
 
-    const menu = wrapper.get('[role="menu"]');
+    const menu = bodyGet('[role="menu"]');
     expect(menu.attributes("aria-label")).toBe("Actions for Page 2");
     expect(menu.get('[role="menuitem"]:nth-child(5)').attributes("disabled")).toBeDefined();
-    await wrapper.get('[role="menu"]').trigger("keydown", { key: "Escape" });
+    await menu.trigger("keydown", { key: "Escape" });
     await flushPromises();
-    expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+    expect(bodyHas('[role="menu"]')).toBe(false);
     expect(document.activeElement).toBe(wrapper.get('[data-page-id="p2"] .editable-name').element);
   });
 
@@ -152,8 +187,7 @@ describe("PageTabs", () => {
     const wrapper = await render();
     await wrapper.get('[data-page-id="p2"]').trigger("contextmenu", { button: 2 });
     await flushPromises();
-    await wrapper
-      .findAll('[role="menuitem"]')
+    await bodyFindAll('[role="menuitem"]')
       .find((item) => item.text() === "Rename")!
       .trigger("click");
     await flushPromises();
@@ -169,15 +203,13 @@ describe("PageTabs", () => {
     const page = wrapper.get('[data-page-id="p1"]');
     await page.trigger("contextmenu", { button: 2, clientX: 40, clientY: 50 });
 
-    await wrapper
-      .findAll('[role="menuitem"]')
+    await bodyFindAll('[role="menuitem"]')
       .find((item) => item.text() === "Collapse all")!
       .trigger("click");
     expect(isBlockCollapsed("s1", "t1")).toBe(true);
 
     await page.trigger("contextmenu", { button: 2, clientX: 40, clientY: 50 });
-    await wrapper
-      .findAll('[role="menuitem"]')
+    await bodyFindAll('[role="menuitem"]')
       .find((item) => item.text() === "Expand all")!
       .trigger("click");
     expect(isBlockCollapsed("s1", "t1")).toBe(false);
@@ -187,8 +219,7 @@ describe("PageTabs", () => {
     const wrapper = await render();
     await wrapper.get('[data-page-id="p1"]').trigger("contextmenu", { button: 2 });
     await flushPromises();
-    await wrapper
-      .findAll('[role="menuitem"]')
+    await bodyFindAll('[role="menuitem"]')
       .find((item) => item.text() === "Delete")!
       .trigger("click");
     await flushPromises();
@@ -211,9 +242,7 @@ describe("PageTabs", () => {
 
     await wrapper.findAll("a")[0]!.trigger("contextmenu", { button: 2 });
     await flushPromises();
-    expect(wrapper.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
-      "Collapse all",
-    ]);
+    expect(bodyFindAll('[role="menuitem"]').map((item) => item.text())).toEqual(["Collapse all"]);
   });
 });
 

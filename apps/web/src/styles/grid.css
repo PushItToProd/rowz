@@ -47,22 +47,22 @@
 .grid thead th {
   position: sticky;
   top: 0;
-  z-index: 4;
+  z-index: var(--z-grid-header);
 }
 
 .grid .grid__corner {
   left: 0;
-  z-index: 7;
+  z-index: var(--z-grid-corner);
 }
 
 .grid tbody th {
   position: sticky;
   left: 0;
-  z-index: 4;
+  z-index: var(--z-grid-header);
 }
 
 .grid tbody th.grid__header--frozen-row {
-  z-index: 6;
+  z-index: var(--z-grid-frozen-header);
 }
 
 .grid td {
@@ -83,20 +83,20 @@
 }
 
 .grid td.grid__cell--frozen-row {
-  z-index: 3;
+  z-index: var(--z-grid-frozen-row);
 }
 
 .grid td.grid__cell--frozen-column {
-  z-index: 2;
+  z-index: var(--z-grid-frozen-column);
 }
 
 .grid td.grid__cell--frozen-row.grid__cell--frozen-column {
-  z-index: 7;
+  z-index: var(--z-grid-corner);
 }
 
 .grid__resize {
   position: absolute;
-  z-index: 2;
+  z-index: var(--z-grid-interactive);
   touch-action: none;
 }
 
@@ -260,7 +260,7 @@
 .cell-control__checkbox {
   /* Keep the native checkbox over the full hit area; the sibling draws its 18px visual. */
   position: absolute;
-  z-index: 1;
+  z-index: var(--z-grid-checkbox);
   inset: 0;
   width: 100%;
   height: 100%;
@@ -275,7 +275,7 @@
 
 .cell-control__checkbox-target {
   position: relative;
-  z-index: 8;
+  z-index: var(--z-grid-control);
   display: flex;
   flex: 0 0 18px;
   align-items: center;

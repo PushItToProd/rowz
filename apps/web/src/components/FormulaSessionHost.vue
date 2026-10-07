@@ -127,7 +127,7 @@ function trap(event: KeyboardEvent): void {
 .formula-recovery-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: var(--z-dialog);
   display: grid;
   place-items: center;
   background: #0006;

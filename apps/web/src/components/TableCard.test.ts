@@ -24,6 +24,7 @@ import { useFormulaSessionStore } from "../formula/session";
 import FormulaBar from "./FormulaBar.vue";
 import FormulaSessionHost from "./FormulaSessionHost.vue";
 import { undo } from "@codemirror/commands";
+import { bodyFindAll, bodyGet, bodyHas } from "../testing/teleported";
 import TableCard from "./TableCard.vue";
 
 vi.mock("../api/client", async () => {
@@ -42,7 +43,10 @@ let dialogHost: VueWrapper;
 async function render(inputs: Record<string, string> = {}, role = "owner"): Promise<void> {
   server.getSnapshot.mockResolvedValue(wireSnapshot(snapshotWith(inputs, role)));
   await useWorkbookStore().load("s1");
-  wrapper = mount(TableCard, { props: { table: TABLE }, attachTo: document.body });
+  wrapper = mount(TableCard, {
+    props: { table: TABLE },
+    attachTo: document.body,
+  });
 }
 
 async function select(address: string): Promise<void> {
@@ -75,15 +79,13 @@ describe("row and column actions", () => {
     server.updateTable.mockResolvedValue(changeWith());
 
     await wrapper.findAll("tbody th")[1]!.trigger("contextmenu");
-    await wrapper
-      .findAll('[role="menuitem"]')
+    await bodyFindAll('[role="menuitem"]')
       .find((item) => item.text() === "Freeze up to this row")!
       .trigger("click");
     expect(server.updateTable).toHaveBeenLastCalledWith("t1", { freezeRows: 2 });
 
     await wrapper.findAll("thead th")[1]!.trigger("contextmenu");
-    await wrapper
-      .findAll('[role="menuitem"]')
+    await bodyFindAll('[role="menuitem"]')
       .find((item) => item.text() === "Freeze up to this column")!
       .trigger("click");
     expect(server.updateTable).toHaveBeenLastCalledWith("t1", { freezeColumns: 1 });
@@ -121,8 +123,7 @@ describe("row and column actions", () => {
       await headers[last]!.trigger("mouseenter");
       window.dispatchEvent(new MouseEvent("mouseup"));
       await headers[last]!.trigger("contextmenu");
-      await wrapper
-        .findAll('[role="menuitem"]')
+      await bodyFindAll('[role="menuitem"]')
         .find((item) => item.text() === `Resize ${noun}`)!
         .trigger("click");
       const form = wrapper.get(`form[aria-label="Resize ${noun}"]`);
@@ -143,8 +144,7 @@ describe("row and column actions", () => {
     server.resizeLines.mockResolvedValue(changeWith());
     async function open() {
       await wrapper.findAll("thead th")[1]!.trigger("contextmenu");
-      await wrapper
-        .findAll('[role="menuitem"]')
+      await bodyFindAll('[role="menuitem"]')
         .find((item) => item.text() === "Resize column")!
         .trigger("click");
       return wrapper.get('form[aria-label="Resize column"]');
@@ -414,13 +414,11 @@ describe("the menu of row, column, and cell actions", () => {
     await wrapper
       .get(`[data-cell="${address}"]`)
       .trigger("contextmenu", { clientX: 10, clientY: 20 });
-    return wrapper.get('[role="menu"]');
+    return bodyGet('[role="menu"]');
   }
 
   function item(name: string) {
-    const found = wrapper
-      .findAll('[role="menuitem"]')
-      .find((candidate) => candidate.text() === name);
+    const found = bodyFindAll('[role="menuitem"]').find((candidate) => candidate.text() === name);
     if (!found) throw new Error(`No menu item named ${name}`);
     return found;
   }
@@ -453,10 +451,10 @@ describe("the menu of row, column, and cell actions", () => {
     await open("B2");
     await item(name).trigger("click");
     expect(server.editTable).toHaveBeenCalledWith("t1", expectedEdit(edit));
-    expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+    expect(bodyHas('[role="menu"]')).toBe(false);
   });
 
-  const labels = (): string[] => wrapper.findAll('[role="menuitem"]').map((entry) => entry.text());
+  const labels = (): string[] => bodyFindAll('[role="menuitem"]').map((entry) => entry.text());
 
   /** Opens the menu on `address` with the cells from `from` to `to` selected. */
   async function openOnRange(from: string, to: string, address = to) {
@@ -464,7 +462,7 @@ describe("the menu of row, column, and cell actions", () => {
     await wrapper.get(`[data-cell="${from}"]`).trigger("mousedown");
     await wrapper.get(`[data-cell="${to}"]`).trigger("mousedown", { shiftKey: true });
     await wrapper.get(`[data-cell="${address}"]`).trigger("contextmenu");
-    return wrapper.get('[role="menu"]');
+    return bodyGet('[role="menu"]');
   }
 
   it("acts on every row and column of a selected range, and says how many", async () => {
@@ -518,7 +516,7 @@ describe("the menu of row, column, and cell actions", () => {
     expect(wrapper.find('[aria-label="Conditional formats of Table 1"]').exists()).toBe(true);
     expect(wrapper.get(".conditional-panel__add p").text()).toBe("Applies to B2:C4.");
     expect(document.activeElement).toBe(wrapper.get('[aria-label="Criterion"]').element);
-    expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+    expect(bodyHas('[role="menu"]')).toBe(false);
   });
 
   it("deletes selected rows and columns with content without asking and offers undo", async () => {
@@ -565,7 +563,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Add conditional format…",
       "Clear cells",
     ]);
-    await wrapper.get('[role="menu"]').trigger("keydown", { key: "Escape" });
+    await bodyGet('[role="menu"]').trigger("keydown", { key: "Escape" });
 
     await wrapper.findAll("tbody th")[2]!.trigger("contextmenu");
     expect(labels()).toEqual([
@@ -587,7 +585,7 @@ describe("the menu of row, column, and cell actions", () => {
     await headers[3]!.trigger("mouseenter");
     window.dispatchEvent(new MouseEvent("mouseup"));
     await headers[3]!.trigger("contextmenu");
-    expect(wrapper.get('[role="menu"]').attributes("aria-label")).toBe("Actions for B1:C4");
+    expect(bodyGet('[role="menu"]').attributes("aria-label")).toBe("Actions for B1:C4");
     expect(labels()).toEqual([
       "Freeze up to this column",
       "Resize column",
@@ -615,7 +613,7 @@ describe("the menu of row, column, and cell actions", () => {
   it("closes on Escape and leaves the table alone", async () => {
     const menu = await open("B2");
     await menu.trigger("keydown", { key: "Escape" });
-    expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+    expect(bodyHas('[role="menu"]')).toBe(false);
     expect(server.editTable).not.toHaveBeenCalled();
   });
 });
@@ -800,9 +798,7 @@ describe("column names", () => {
   }
 
   function item(name: string) {
-    const found = wrapper
-      .findAll('[role="menuitem"]')
-      .find((candidate) => candidate.text() === name);
+    const found = bodyFindAll('[role="menuitem"]').find((candidate) => candidate.text() === name);
     if (!found) throw new Error(`No menu item named ${name}`);
     return found;
   }
@@ -813,7 +809,7 @@ describe("column names", () => {
       changeWith({ table: DATA_TABLE, cells: [], views: [], tables: [] }),
     );
     await button("Name columns").trigger("click");
-    expect(wrapper.get('[role="menu"]').attributes("aria-label")).toBe("Name columns");
+    expect(bodyGet('[role="menu"]').attributes("aria-label")).toBe("Name columns");
     await item("Use the first row as the names").trigger("click");
     expect(server.nameColumns).toHaveBeenCalledExactlyOnceWith("t1", true);
 
@@ -840,7 +836,7 @@ describe("column names", () => {
   it("lists the available column types in the menu, with the current one ticked", async () => {
     await renderData();
     await wrapper.get('[data-cell="A1"]').trigger("contextmenu");
-    const labels = wrapper.findAll('[role="menuitem"]').map((found) => found.text());
+    const labels = bodyFindAll('[role="menuitem"]').map((found) => found.text());
     expect(labels.filter((label) => label.includes("Column holds"))).toEqual([
       "Column holds: Anything",
       "Column holds: Text",
@@ -1025,7 +1021,7 @@ describe("column names", () => {
   it("has no column items in the menu of a plain table", async () => {
     await render();
     await wrapper.get('[data-cell="A1"]').trigger("contextmenu");
-    const labels = wrapper.findAll('[role="menuitem"]').map((found) => found.text());
+    const labels = bodyFindAll('[role="menuitem"]').map((found) => found.text());
     expect(labels.some((label) => label.includes("Column holds"))).toBe(false);
   });
 });
@@ -1074,9 +1070,8 @@ it.each([
       clientY: 30,
     });
 
-    expect(wrapper.get('[role="menu"]').attributes("aria-label")).toBe(`Add ${noun}`);
-    await wrapper
-      .findAll('[role="menuitem"]')
+    expect(bodyGet('[role="menu"]').attributes("aria-label")).toBe(`Add ${noun}`);
+    await bodyFindAll('[role="menuitem"]')
       .find((item) => item.text() === label)!
       .trigger("click");
 
@@ -1084,19 +1079,18 @@ it.each([
       "t1",
       expectedEdit({ axis, kind: "insert", index, count: axis === "row" ? 5 : 10 }),
     );
-    expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+    expect(bodyHas('[role="menu"]')).toBe(false);
   },
 );
 
 it("validates a custom count and clamps it to the table's remaining row limit", async () => {
   await render();
   await wrapper.get('button[aria-label="Add row"]').trigger("contextmenu");
-  await wrapper
-    .findAll('[role="menuitem"]')
+  await bodyFindAll('[role="menuitem"]')
     .find((item) => item.text() === "Add custom number…")!
     .trigger("click");
 
-  const form = wrapper.get(".context-menu__custom");
+  const form = bodyGet(".context-menu__custom");
   const input = form.get('input[aria-label="Number of rows"]');
   await input.setValue("0");
   await form.trigger("submit");
@@ -1118,18 +1112,17 @@ it("validates a custom count and clamps it to the table's remaining row limit", 
       count: 1000 - TABLE.rowCount,
     }),
   );
-  expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+  expect(bodyHas('[role="menu"]')).toBe(false);
 });
 
 it("clamps a custom column count to the table's remaining column limit", async () => {
   await render();
   await wrapper.get('button[aria-label="Add column"]').trigger("contextmenu");
-  await wrapper
-    .findAll('[role="menuitem"]')
+  await bodyFindAll('[role="menuitem"]')
     .find((item) => item.text() === "Add custom number…")!
     .trigger("click");
 
-  const form = wrapper.get(".context-menu__custom");
+  const form = bodyGet(".context-menu__custom");
   await form.get('input[aria-label="Number of columns"]').setValue("1000");
   await form.trigger("submit");
 
@@ -1195,8 +1188,7 @@ describe("sorting and filtering a data table", () => {
     await rows[1]!.trigger("mouseenter");
     window.dispatchEvent(new MouseEvent("mouseup"));
     await rows[1]!.trigger("contextmenu");
-    await wrapper
-      .findAll('[role="menuitem"]')
+    await bodyFindAll('[role="menuitem"]')
       .find((item) => item.text() === "Resize row")!
       .trigger("click");
     const form = wrapper.get('form[aria-label="Resize row"]');
@@ -1315,7 +1307,7 @@ describe("sorting and filtering a data table", () => {
     await renderSorted();
     await wrapper.get('[data-cell="C3"]').trigger("contextmenu");
     const item = (name: string) =>
-      wrapper.findAll('[role="menuitem"]').find((found) => found.text() === name)!;
+      bodyFindAll('[role="menuitem"]').find((found) => found.text() === name)!;
     await item("Sort ascending").trigger("click");
     expect(server.setTableDisplay).toHaveBeenLastCalledWith(
       "t1",
@@ -1336,7 +1328,7 @@ describe("sorting and filtering a data table", () => {
     await select("A3");
     expect(button("Insert row above").element.disabled).toBe(true);
     await wrapper.get('[data-cell="A3"]').trigger("contextmenu");
-    const items = wrapper.findAll('[role="menuitem"]');
+    const items = bodyFindAll('[role="menuitem"]');
     expect(
       items.find((found) => found.text() === "Insert row above")?.attributes("disabled"),
     ).toBeDefined();
@@ -1422,8 +1414,7 @@ describe("dropdown columns", () => {
     wrapper = mount(TableCard, { props: { table: data }, attachTo: document.body });
     server.updateColumn.mockResolvedValue(changeWith());
     await wrapper.get('[data-cell="A1"]').trigger("contextmenu");
-    await wrapper
-      .findAll('[role="menuitem"]')
+    await bodyFindAll('[role="menuitem"]')
       .find((found) => found.text() === "Column holds: A choice…")!
       .trigger("click");
   }

@@ -1,7 +1,7 @@
 /* Suggestions and the function hint under a formula being typed. */
 .formula-assist {
   position: fixed;
-  z-index: 10;
+  z-index: var(--z-popover);
   min-width: 260px;
   max-width: 460px;
   border: 1px solid var(--line);

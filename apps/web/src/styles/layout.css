@@ -102,7 +102,7 @@
 .editor__chrome {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: var(--z-editor-chrome);
 }
 
 .editor__header {
@@ -227,10 +227,30 @@ input.editable-name--editing {
 
 .page-tabs__move,
 .page-tabs__delete {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
   padding: 0 4px;
   border: none;
   background: transparent;
+}
+
+.page-tabs__move {
   color: var(--muted);
+}
+
+.page-tabs__delete {
+  color: color-mix(in srgb, var(--danger) 55%, var(--muted));
+}
+
+.page-tabs__delete:hover:not(:disabled),
+.page-tabs__delete:focus-visible {
+  color: var(--danger);
+}
+
+.page-tabs__delete:focus-visible {
+  outline-color: var(--danger);
 }
 
 .page-tabs__add {
@@ -333,7 +353,7 @@ input.editable-name--editing {
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 20;
+  z-index: var(--z-popover);
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -361,7 +381,7 @@ input.editable-name--editing {
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 20;
+  z-index: var(--z-popover);
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

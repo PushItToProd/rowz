@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { FILE_LIMITS } from "@spreadsheet-app/shared";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, provide, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import EditableName from "../components/EditableName.vue";
 import AddBlockRow from "../components/AddBlockRow.vue";
@@ -11,6 +11,7 @@ import { useReferencePickingStore } from "../formula/picking";
 import PageTabs from "../components/PageTabs.vue";
 import ChartCard from "../components/ChartCard.vue";
 import ContextMenu from "../components/ContextMenu.vue";
+import { contextMenuClickGuardKey } from "../components/contextMenuControl";
 import type { MenuItem } from "../components/menu";
 import FormatBar from "../components/FormatBar.vue";
 import ErrorsPanel from "../components/ErrorsPanel.vue";
@@ -101,6 +102,8 @@ function guardControl(event: MouseEvent): void {
     target.dispatchEvent(click);
   });
 }
+provide(contextMenuClickGuardKey, guardControl);
+
 async function returnToEditor(pageId: string): Promise<void> {
   if (store.pages.some((item) => item.id === pageId)) {
     await router.push({ name: "editor", params: { spreadsheetId: props.spreadsheetId, pageId } });

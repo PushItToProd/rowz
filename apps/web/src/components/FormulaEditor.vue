@@ -488,7 +488,7 @@ function requestPicking(): void {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 20;
+  z-index: var(--z-popover);
   background: #fff7e6;
   color: #7a2e0e;
   padding: 6px;

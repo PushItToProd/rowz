@@ -50,7 +50,6 @@ function showPageMenu(page: PageRecord, x: number, y: number): void {
 }
 
 function onPageContextMenu(event: MouseEvent, page: PageRecord): void {
-  if (event.target instanceof Element && event.target.closest("button, input")) return;
   event.preventDefault();
   event.stopPropagation();
   showPageMenu(page, event.clientX, event.clientY);
@@ -172,10 +171,24 @@ const pageMenuItems = computed((): MenuItem[] => {
         v-if="store.canEdit && store.pages.length > 1"
         type="button"
         class="page-tabs__delete"
-        :aria-label="`Delete ${page.name}`"
+        :aria-label="`Delete page ${page.name}`"
+        title="Delete page"
         @click.stop="remove(page)"
       >
-        ×
+        <svg
+          aria-hidden="true"
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M2.5 4.5h11M6 2.5h4" />
+          <path d="m4 4.5.6 9h6.8l.6-9M6.5 6.5v4.5m3-4.5v4.5" />
+        </svg>
       </button>
     </div>
     <button v-if="store.canEdit" type="button" class="page-tabs__add" @click="add">Add page</button>

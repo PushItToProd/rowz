@@ -203,7 +203,7 @@ test("deleting a page can be undone immediately with its formulas and formats", 
   await page.getByRole("toolbar", { name: "Format" }).getByRole("button", { name: "Bold" }).click();
   await expect(cell(page, "A1").locator(".cell-value")).toHaveCSS("font-weight", "700");
 
-  await pages.getByRole("button", { name: "Delete Page 2" }).click();
+  await pages.getByRole("button", { name: "Delete page Page 2" }).click();
   await expect(pages.locator('[aria-current="page"]')).toHaveText(/Page 1/);
   const deletionNotice = page
     .locator('.notice--floating[role="status"]')

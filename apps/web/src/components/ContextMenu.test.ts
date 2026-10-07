@@ -1,6 +1,7 @@
 import { defineComponent, h, nextTick, ref } from "vue";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { bodyFindAll, bodyGet } from "../testing/teleported";
 import ContextMenu from "./ContextMenu.vue";
 import type { MenuItem } from "./menu";
 
@@ -30,14 +31,26 @@ afterEach(() => {
 });
 
 describe("ContextMenu", () => {
-  it("opens where it was asked to, as a menu of items, with the first one focused", async () => {
-    const menu = render(items().all);
+  it("teleports the menu into the top-level body layer", async () => {
+    wrapper = mount(ContextMenu, {
+      props: { x: 40, y: 60, label: "Actions", items: items().all },
+      attachTo: document.body,
+    });
     await flushPromises();
+
+    const menu = document.body.querySelector<HTMLElement>(".context-menu");
+    expect(menu?.parentElement).toBe(document.body);
+  });
+
+  it("opens where it was asked to, as a menu of items, with the first one focused", async () => {
+    render(items().all);
+    await flushPromises();
+    const menu = bodyGet('[role="menu"]');
     expect(menu.attributes("role")).toBe("menu");
     expect(menu.attributes("aria-label")).toBe("Actions");
     expect(menu.attributes("style")).toContain("left: 40px");
     expect(menu.attributes("style")).toContain("top: 60px");
-    expect(menu.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+    expect(bodyFindAll('[role="menuitem"]').map((item) => item.text())).toEqual([
       "First",
       "Off",
       "Last",
@@ -46,24 +59,26 @@ describe("ContextMenu", () => {
   });
 
   it("focuses the menu when all its items are disabled, so Escape closes it", async () => {
-    const menu = render([{ label: "Unavailable", disabled: true, run: vi.fn() }]);
+    render([{ label: "Unavailable", disabled: true, run: vi.fn() }]);
     await flushPromises();
 
+    const menu = bodyGet('[role="menu"]');
     expect(menu.attributes("tabindex")).toBe("-1");
     expect(document.activeElement).toBe(menu.element);
     await menu.trigger("keydown", { key: "Escape" });
-    expect(menu.emitted("close")).toHaveLength(1);
+    expect(wrapper.emitted("close")).toHaveLength(1);
   });
 
   it("does not close during its initial positioning and focus", async () => {
-    const menu = render(items().all);
+    render(items().all);
+    const menu = bodyGet('[role="menu"]');
     expect(menu.isVisible()).toBe(false);
     window.dispatchEvent(new Event("scroll"));
     window.dispatchEvent(new Event("resize"));
     window.dispatchEvent(new Event("blur"));
     await flushPromises();
 
-    expect(menu.emitted("close")).toBeUndefined();
+    expect(wrapper.emitted("close")).toBeUndefined();
     expect(menu.isVisible()).toBe(true);
   });
 
@@ -119,48 +134,45 @@ describe("ContextMenu", () => {
     wrapper = mount(host, { attachTo: document.body });
     await flushPromises();
 
-    const menu = wrapper.get(".context-menu");
-    expect(Number.parseFloat((menu.element as HTMLElement).style.top)).toBe(
-      window.innerHeight - 40,
-    );
+    const menu = bodyGet(".context-menu");
+    expect(Number.parseFloat(menu.element.style.top)).toBe(window.innerHeight - 40);
 
     showCustom.value = true;
     await nextTick();
     notifyResize?.([], {} as ResizeObserver);
     await nextTick();
 
-    expect(Number.parseFloat((menu.element as HTMLElement).style.top)).toBe(
-      window.innerHeight - 64,
-    );
+    expect(Number.parseFloat(menu.element.style.top)).toBe(window.innerHeight - 40 - 60);
   });
 
   it("runs the chosen item and closes", async () => {
     const { first, all } = items();
-    const menu = render(all);
-    await menu.get("button").trigger("click");
+    render(all);
+    await bodyGet("button[role='menuitem']").trigger("click");
     expect(first.run).toHaveBeenCalledOnce();
-    expect(menu.emitted("close")).toHaveLength(1);
+    expect(wrapper.emitted("close")).toHaveLength(1);
   });
 
   it("keeps the menu open for an item that reveals more menu content", async () => {
     const reveal = { label: "More…", keepOpen: true, run: vi.fn() };
-    const menu = render([reveal]);
-    await menu.get("button").trigger("click");
+    render([reveal]);
+    await bodyGet("button[role='menuitem']").trigger("click");
     expect(reveal.run).toHaveBeenCalledOnce();
-    expect(menu.emitted("close")).toBeUndefined();
+    expect(wrapper.emitted("close")).toBeUndefined();
   });
 
   it("does not run an item that is off", async () => {
     const { off, all } = items();
-    const menu = render(all);
-    expect(menu.findAll("button")[1]!.attributes("disabled")).toBeDefined();
-    await menu.findAll("button")[1]!.trigger("click");
+    render(all);
+    expect(bodyFindAll("button[role='menuitem']")[1]!.attributes("disabled")).toBeDefined();
+    await bodyFindAll("button[role='menuitem']")[1]!.trigger("click");
     expect(off.run).not.toHaveBeenCalled();
   });
 
   it("moves between the items that are on with the arrow keys, wrapping at the ends", async () => {
-    const menu = render(items().all);
+    render(items().all);
     await flushPromises();
+    const menu = bodyGet('[role="menu"]');
     await menu.trigger("keydown", { key: "ArrowDown" });
     expect(focused()).toBe("Last");
     await menu.trigger("keydown", { key: "ArrowDown" });
@@ -175,26 +187,26 @@ describe("ContextMenu", () => {
 
   it.each(["Escape", "Tab"])("closes on %s without running anything", async (key) => {
     const { first, all } = items();
-    const menu = render(all);
+    render(all);
+    const menu = bodyGet('[role="menu"]');
     await menu.trigger("keydown", { key });
-    expect(menu.emitted("close")).toHaveLength(1);
+    expect(wrapper.emitted("close")).toHaveLength(1);
     expect(first.run).not.toHaveBeenCalled();
   });
 
   it("cycles Tab through enabled menu buttons and inputs when custom content is open", async () => {
-    const menu = mount(ContextMenu, {
+    wrapper = mount(ContextMenu, {
       props: { x: 40, y: 60, label: "Actions", items: items().all },
       slots: {
         content: () => h("form", [h("input"), h("button", { type: "submit" }, "Add rows")]),
       },
       attachTo: document.body,
     });
-    wrapper = menu;
     await flushPromises();
 
-    const input = menu.get("input").element;
-    const addButton = menu.findAll("button").at(-1)!.element;
-    const firstButton = menu.findAll("button")[0]!.element;
+    const input = bodyGet("input").element;
+    const addButton = bodyFindAll("button").at(-1)!.element;
+    const firstButton = bodyFindAll("button")[0]!.element;
     input.focus();
     const forward = new KeyboardEvent("keydown", {
       bubbles: true,
@@ -221,34 +233,34 @@ describe("ContextMenu", () => {
     });
     firstButton.dispatchEvent(wrapBackward);
     expect(document.activeElement).toBe(addButton);
-    expect(menu.emitted("close")).toBeUndefined();
+    expect(wrapper.emitted("close")).toBeUndefined();
   });
 
   it("closes when the mouse is pressed outside it, and not when pressed inside", async () => {
-    const menu = render(items().all);
+    render(items().all);
     await flushPromises();
-    (menu.element as HTMLElement).dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-    expect(menu.emitted("close")).toBeUndefined();
+    bodyGet('[role="menu"]').element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    expect(wrapper.emitted("close")).toBeUndefined();
     document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-    expect(menu.emitted("close")).toHaveLength(1);
+    expect(wrapper.emitted("close")).toHaveLength(1);
   });
 
   it("closes when the page scrolls or the window changes size", async () => {
-    const menu = render(items().all);
+    render(items().all);
     await flushPromises();
     window.dispatchEvent(new Event("scroll"));
     window.dispatchEvent(new Event("resize"));
-    expect(menu.emitted("close")).toHaveLength(1);
+    expect(wrapper.emitted("close")).toHaveLength(1);
   });
 
   it("gives focus back to what had it when it closes", async () => {
     const opener = document.createElement("button");
     document.body.append(opener);
     opener.focus();
-    const menu = render(items().all);
+    render(items().all);
     await flushPromises();
     expect(document.activeElement).not.toBe(opener);
-    menu.unmount();
+    wrapper.unmount();
     expect(document.activeElement).toBe(opener);
     opener.remove();
     // The shared afterEach unmounts again, which is harmless.

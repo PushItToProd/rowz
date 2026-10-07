@@ -8,6 +8,7 @@ import { api } from "../api/client";
 import { DOCUMENT_TEMPLATES } from "../files/templates";
 import { queueListNotice, takeQueuedListNotice } from "../notice";
 import { appDialog, mountDialogHost, respondToDialog, type MockedApi } from "../testing";
+import { bodyFindAll, bodyGet, bodyHas } from "../testing/teleported";
 import SpreadsheetListView from "./SpreadsheetListView.vue";
 
 vi.mock("../api/client", async () => {
@@ -349,7 +350,7 @@ it("opens an accessible actions menu and renames an owned document inline", asyn
     clientY: 60,
   });
   await flushPromises();
-  const menu = view.get('[role="menu"][aria-label="Actions for Plan"]');
+  const menu = bodyGet('[role="menu"][aria-label="Actions for Plan"]');
   expect(menu.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
     "Rename",
     "Duplicate",
@@ -360,14 +361,14 @@ it("opens an accessible actions menu and renames an owned document inline", asyn
   expect(globalThis.document.activeElement?.textContent.trim()).toBe("Duplicate");
   await menu.trigger("keydown", { key: "Escape" });
   await flushPromises();
-  expect(view.find('[role="menu"]').exists()).toBe(false);
+  expect(bodyHas('[role="menu"]')).toBe(false);
 
   await view.get('button[aria-label="Actions for Plan"]').trigger("click", {
     clientX: 40,
     clientY: 60,
   });
   await flushPromises();
-  await view.get('[role="menuitem"]:nth-child(1)').trigger("click");
+  await bodyGet('[role="menuitem"]:nth-child(1)').trigger("click");
   await flushPromises();
   const input = view.get('[aria-label="Document name for Plan"]');
   expect(globalThis.document.activeElement).toBe(input.element);
@@ -388,7 +389,7 @@ it("refuses an empty document name and cancels inline rename with Escape", async
     clientY: 60,
   });
   await flushPromises();
-  await view.get('[role="menuitem"]').trigger("click");
+  await bodyGet('[role="menuitem"]').trigger("click");
   await flushPromises();
 
   const input = view.get('[aria-label="Document name for Plan"]');
@@ -413,7 +414,7 @@ it("shows only Duplicate for a shared document", async () => {
     clientY: 60,
   });
   await flushPromises();
-  expect(view.findAll('[role="menuitem"]').map((item) => item.text())).toEqual(["Duplicate"]);
+  expect(bodyFindAll('[role="menuitem"]').map((item) => item.text())).toEqual(["Duplicate"]);
   expect(view.find('button[aria-label="Delete document Plan"]').exists()).toBe(false);
 });
 
@@ -430,7 +431,7 @@ it("confirms before deleting an owned document", async () => {
     clientY: 60,
   });
   await flushPromises();
-  await view.get('[role="menuitem"][class*="danger"]').trigger("click");
+  await bodyGet('[role="menuitem"][class*="danger"]').trigger("click");
   await flushPromises();
 
   expect(appDialog()?.getAttribute("role")).toBe("alertdialog");
@@ -468,7 +469,7 @@ it("duplicates a readable document in the list and shows a success notice", asyn
     clientY: 60,
   });
   await flushPromises();
-  await view.get('[role="menuitem"]').trigger("click");
+  await bodyGet('[role="menuitem"]').trigger("click");
   await flushPromises();
 
   expect(server.copySpreadsheet).toHaveBeenCalledExactlyOnceWith("d1");
@@ -510,9 +511,9 @@ it("creates, renames, and deletes folders, and moves a document between groups",
     clientY: 60,
   });
   await flushPromises();
-  const moveToWork = view
-    .findAll('.context-menu [role="menuitem"]')
-    .find((item) => item.text() === "Move to Work");
+  const moveToWork = bodyFindAll('.context-menu [role="menuitem"]').find(
+    (item) => item.text() === "Move to Work",
+  );
   expect(moveToWork).toBeDefined();
   await moveToWork!.trigger("click");
   await flushPromises();
