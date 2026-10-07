@@ -1101,7 +1101,8 @@ const OPERATORS = [
       <p>
         <strong>Add chart</strong> puts a chart on a page. Type the cells to draw into its
         <strong>Data</strong> box, and choose bar, line, pie, or scatter. The chart redraws when the
-        cells change.
+        cells change. Charts fit the width of their block and show values on hover, including charts
+        embedded in text views.
       </p>
       <ul>
         <li>

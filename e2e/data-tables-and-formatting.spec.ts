@@ -15,7 +15,7 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await chart.getByLabel("Chart data").click();
   await chart.getByLabel("Chart data").fill("'Table 1'!A1:B2");
   await chart.getByLabel("Chart data").press("Enter");
-  await expect(chart.locator(".chart__bar")).toHaveCount(2);
+  await expect(chart.locator("[data-chart-value]")).toHaveCount(2);
   // Rendering the saved source can precede closing the formula session.
   await expect(chart.locator('input[aria-label="Chart data"]')).toHaveValue("'Table 1'!A1:B2");
   await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
@@ -42,7 +42,7 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await expect(page.getByRole("heading", { name: "Documents", exact: true })).toBeVisible();
   await page.getByLabel("Import").setInputFiles(filePath);
   await expect(cell(page, "B2")).toHaveText("6");
-  await expect(page.locator('[data-view="Chart 1"] .chart__bar')).toHaveCount(2);
+  await expect(page.locator('[data-view="Chart 1"] [data-chart-value]')).toHaveCount(2);
   await enter(page, "B1", "5");
   await expect(cell(page, "B2")).toHaveText("10");
   await expect(page.locator(".editor[data-saving]")).toHaveCount(0);

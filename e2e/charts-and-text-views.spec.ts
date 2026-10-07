@@ -1,5 +1,85 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import { newSpreadsheet, cell, enter, reload } from "./helpers";
+
+async function expectRenderedChart(svg: Locator): Promise<void> {
+  await expect(svg).toBeVisible();
+  await expect
+    .poll(() =>
+      svg.evaluate((element) => {
+        const { width, height } = element.getBoundingClientRect();
+        return Math.min(width, height);
+      }),
+    )
+    .toBeGreaterThan(0);
+  await expect
+    .poll(() =>
+      svg.locator(':is(rect, path)[fill]:not([fill="none"]):not([fill="transparent"])').count(),
+    )
+    .toBeGreaterThan(0);
+}
+
+test("ECharts renders every type in blocks and templates and resizes its SVG", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "1");
+  await enter(page, "B1", "3");
+  await enter(page, "A2", "2");
+  await enter(page, "B2", "5");
+  await page.getByRole("button", { name: "Add chart" }).last().click();
+  const card = page.locator('[data-view="Chart 1"]');
+  await card.getByLabel("Chart data").click();
+  await card.getByLabel("Chart data").fill("'Table 1'!A1:B2");
+  await card.getByLabel("Chart data").press("Enter");
+  for (const type of ["bar", "line", "pie", "scatter"]) {
+    await card.getByLabel("Chart type").selectOption(type);
+    await expect(card.locator(".chart")).toHaveAttribute("data-chart", type);
+    await expect(card.getByLabel("Chart data")).toHaveCount(1);
+    await expect(
+      card.getByRole("list", { name: `Values plotted in ${type} chart`, exact: true }),
+    ).toHaveCount(1);
+    await expectRenderedChart(card.locator(".chart__canvas svg"));
+    await expect(card.locator("[data-chart-value]")).toHaveCount(2);
+  }
+  await card.locator(".chart").evaluate((element) => {
+    (element as HTMLElement).style.width = "280px";
+  });
+  await expect
+    .poll(() =>
+      card.locator(".chart__canvas svg").evaluate((svg) => svg.getBoundingClientRect().width),
+    )
+    .toBe(280);
+  await card.locator(".chart").evaluate((element) => {
+    (element as HTMLElement).style.width = "520px";
+  });
+  await expect
+    .poll(() =>
+      card.locator(".chart__canvas svg").evaluate((svg) => svg.getBoundingClientRect().width),
+    )
+    .toBe(520);
+  await expect
+    .poll(() =>
+      card.locator(".chart__canvas svg").evaluate((svg) => svg.getBoundingClientRect().height),
+    )
+    .toBeGreaterThanOrEqual(240);
+
+  await page.getByRole("button", { name: "Add text" }).last().click();
+  const text = page.locator('[data-view="Text 1"]');
+  await text.getByRole("button", { name: "Edit" }).click();
+  await text
+    .getByLabel("Text view source")
+    .fill(
+      ["BAR", "LINE", "PIE", "SCATTER"]
+        .map((type) => `{{ ${type}_CHART('Table 1'!A1:B2, "${type}") }}`)
+        .join("\n\n"),
+    );
+  await text.getByRole("button", { name: "Done" }).click();
+  await expect(text.locator(".chart__canvas svg")).toHaveCount(4);
+  for (const type of ["bar", "line", "pie", "scatter"]) {
+    await expectRenderedChart(text.locator(`[data-chart="${type}"] .chart__canvas svg`));
+  }
+  await enter(page, "B1", "9");
+  await expect(text.locator('[data-chart="bar"] [data-chart-value]').first()).toHaveText("1: 9");
+  await expect(card.locator("[data-chart-value]").first()).toHaveText("1: 9");
+});
 
 test("a page shows a chart and a text view of its tables, and they follow changes", async ({
   page,
@@ -16,10 +96,10 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await chart.getByLabel("Chart data").click();
   await chart.getByLabel("Chart data").fill("'Table 1'!A1:B2");
   await chart.getByLabel("Chart data").press("Enter");
-  await expect(chart.locator(".chart__bar")).toHaveCount(2);
+  await expect(chart.locator("[data-chart-value]")).toHaveCount(2);
 
   await chart.getByLabel("Chart type").selectOption("pie");
-  await expect(chart.locator(".chart__slice")).toHaveCount(2);
+  await expect(chart.locator("[data-chart-value]")).toHaveCount(2);
   await expect(chart).toContainText("pears 63%");
 
   await page
@@ -76,7 +156,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await expect(text.locator(".text-view")).toContainText("We have 20 pieces.");
 
   await reload(page);
-  await expect(chart.locator(".chart__slice")).toHaveCount(2);
+  await expect(chart.locator("[data-chart-value]")).toHaveCount(2);
   await expect(chart.getByLabel("Chart type")).toHaveValue("pie");
   await expect(text.getByRole("listitem")).toHaveText(["apples: 15", "pears: 5"]);
 

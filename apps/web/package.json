@@ -21,6 +21,7 @@
     "@spreadsheet-app/engine": "workspace:*",
     "@spreadsheet-app/shared": "workspace:*",
     "better-auth": "^1.7.6",
+    "echarts": "^6.1.0",
     "hono": "^4.13.11",
     "markdown-it": "^15.0.2",
     "pinia": "^4.0.3",

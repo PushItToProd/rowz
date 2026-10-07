@@ -119,7 +119,7 @@ test("capture the README screenshots", async ({ page }) => {
   const chart = page.locator('[data-view="Chart 1"]');
   await chart.getByLabel("Chart data").fill("HSTACK(Orders[Item], Orders[Total])");
   await chart.getByLabel("Chart data").press("Enter");
-  await expect(chart.locator(".chart__bar")).toHaveCount(5);
+  await expect(chart.locator("[data-chart-value]")).toHaveCount(5);
 
   await page.getByRole("button", { name: "Add text" }).last().click();
   const text = page.locator('[data-view="Text 1"]');

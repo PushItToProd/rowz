@@ -103,6 +103,8 @@ Each table also exports to CSV (the values shown) and imports from CSV.
 
 A chart draws a range as bars, lines, a pie, or a scatter. Its data is a formula such as `Sales!A1:C9`. The first column labels the points and each other column is a series.
 
+Apache ECharts draws charts in blocks and text views with its SVG renderer. Charts fit their container, resize with it, and show values on hover. A text summary exposes the plotted data to screen readers.
+
 ### Text views
 
 A text view is Markdown with tags that put values from tables into it:

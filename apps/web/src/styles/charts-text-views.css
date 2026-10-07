@@ -2,7 +2,6 @@
 
 .chart {
   width: 100%;
-  max-width: 640px;
   margin: 0 auto;
 }
 
@@ -12,29 +11,20 @@
   text-align: center;
 }
 
-.chart svg {
-  display: block;
+.chart__canvas {
   width: 100%;
-  height: auto;
+  height: clamp(240px, 40vw, 360px);
 }
 
-.chart__axis line {
-  stroke: var(--line);
-}
-
-.chart__axis text {
-  fill: var(--muted);
-  font-size: 11px;
-}
-
-.chart__line {
-  fill: none;
-  stroke-width: 2;
-}
-
-.chart__slice {
-  stroke: var(--surface);
-  stroke-width: 1.5;
+.chart__summary {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .chart__legend {

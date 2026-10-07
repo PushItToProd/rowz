@@ -82,7 +82,7 @@ describe("ChartCard", () => {
   it("draws the cells its data names, computing formulas among them", async () => {
     await render();
     expect(wrapper.get(".chart").attributes("data-chart")).toBe("bar");
-    expect(wrapper.findAll(".chart__bar title").map((title) => title.text())).toEqual([
+    expect(wrapper.findAll("[data-chart-value]").map((title) => title.text())).toEqual([
       "apples: 3",
       "pears: 5",
       "plums: 8",
@@ -93,7 +93,7 @@ describe("ChartCard", () => {
     await render();
     await useWorkbookStore().setCell(at("B1"), "10");
     await flushPromises();
-    expect(wrapper.findAll(".chart__bar title").map((title) => title.text())).toEqual([
+    expect(wrapper.findAll("[data-chart-value]").map((title) => title.text())).toEqual([
       "apples: 10",
       "pears: 5",
       "plums: 15",
@@ -102,7 +102,7 @@ describe("ChartCard", () => {
 
   it("draws the kind of chart that is chosen, and saves a new choice", async () => {
     await render({ chartType: "pie" });
-    expect(wrapper.findAll(".chart__slice")).toHaveLength(3);
+    expect(wrapper.findAll("[data-chart-value]")).toHaveLength(3);
 
     await wrapper.get("select").setValue("line");
     await flushPromises();
@@ -110,7 +110,7 @@ describe("ChartCard", () => {
       revision: expect.any(Number),
       chartType: "line",
     });
-    expect(wrapper.findAll(".chart__line")).toHaveLength(1);
+    expect(wrapper.get(".chart").attributes("data-chart")).toBe("line");
   });
 
   it("saves new data on Enter and on leaving the box, but not when nothing changed", async () => {
@@ -125,7 +125,7 @@ describe("ChartCard", () => {
     expect(server.updateView).toHaveBeenCalledWith("v1", {
       source: "'Table 1'!A1:B2",
     });
-    expect(wrapper.findAll(".chart__bar")).toHaveLength(2);
+    expect(wrapper.findAll("[data-chart-value]")).toHaveLength(2);
 
     await wrapper.get('input[aria-label="Chart data"]').trigger("blur");
     expect(server.updateView).toHaveBeenCalledTimes(1);
@@ -133,7 +133,7 @@ describe("ChartCard", () => {
 
   it("accepts a formula that gives a range, with or without the leading =", async () => {
     await render({ source: "=FILTER('Table 1'!A1:B3, 'Table 1'!B1:B3 > 4)" });
-    expect(wrapper.findAll(".chart__bar title").map((title) => title.text())).toEqual([
+    expect(wrapper.findAll("[data-chart-value]").map((title) => title.text())).toEqual([
       "pears: 5",
       "plums: 8",
     ]);
@@ -171,7 +171,7 @@ describe("ChartCard", () => {
     expect(wrapper.get<HTMLInputElement>('input[aria-label="Chart data"]').element.value).toBe(
       "Fruit!A1:B3",
     );
-    expect(wrapper.findAll(".chart__bar")).toHaveLength(3);
+    expect(wrapper.findAll("[data-chart-value]")).toHaveLength(3);
   });
 
   it("keeps the source draft while the input has focus", async () => {
@@ -255,7 +255,7 @@ describe("ChartCard", () => {
 
   it("shows a viewer the chart without the means to change it", async () => {
     await render({}, "viewer");
-    expect(wrapper.findAll(".chart__bar")).toHaveLength(3);
+    expect(wrapper.findAll("[data-chart-value]")).toHaveLength(3);
     expect(wrapper.find("select").exists()).toBe(false);
     expect(wrapper.find("input").exists()).toBe(false);
     expect(wrapper.find("button").exists()).toBe(false);

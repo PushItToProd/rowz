@@ -132,6 +132,9 @@ importers:
       better-auth:
         specifier: ^1.7.6
         version: 1.7.6(drizzle-kit@0.31.11)(drizzle-orm@0.45.3(@electric-sql/pglite@0.5.8)(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(pg@8.23.0)(vitest@5.0.2)(vue@3.5.43(typescript@6.0.3))
+      echarts:
+        specifier: ^6.1.0
+        version: 6.1.0
       hono:
         specifier: ^4.13.11
         version: 4.13.11
@@ -1581,6 +1584,9 @@ packages:
       sqlite3:
         optional: true
 
+  echarts@6.1.0:
+    resolution: {integrity: sha512-q0yaFPggC9FUdsWH4blavRWFmxdrIodbkoKNAjJudAI6CA9gNPxHtV2RcZNEepZVlk4yvBYkOkbk6HIVpIyHZA==}
+
   editorconfig@3.0.2:
     resolution: {integrity: sha512-T0ix8GhtxyKVfUFEcvdNDt3YGqlwkFHbD4/5bgFUDgFmxhI/cSRAeJ87/Sz//Cq8Eam6JX/e23RkoFO71P7aAA==}
     engines: {node: '>=20'}
@@ -2253,6 +2259,9 @@ packages:
     peerDependencies:
       typescript: '>=4.8.4'
 
+  tslib@2.3.0:
+    resolution: {integrity: sha512-N82ooyxVNm6h1riLCoyS9e3fuJ3AMG2zIZs2Gd1ATcSFjSA23Q0fzjjZeh0jbJvWVDZ0cJT8yaNNaaXHzueNjg==}
+
   tsx@4.23.15:
     resolution: {integrity: sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==}
     engines: {node: '>=18.0.0'}
@@ -2518,6 +2527,9 @@ packages:
 
   zod@4.6.5:
     resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
+
+  zrender@6.1.0:
+    resolution: {integrity: sha512-oEGMDB6pOP2S6OwRR4PdVv610zrjnA3Bh+JnSG12fYJlBKjtNAoEb5fSUoCOOINlH96I2fU38/A2UpRKs67xYQ==}
 
 snapshots:
 
@@ -3594,6 +3606,11 @@ snapshots:
       kysely: 0.29.6
       pg: 8.23.0
 
+  echarts@6.1.0:
+    dependencies:
+      tslib: 2.3.0
+      zrender: 6.1.0
+
   editorconfig@3.0.2:
     dependencies:
       '@one-ini/wasm': 0.2.1
@@ -4285,6 +4302,8 @@ snapshots:
     dependencies:
       typescript: 6.0.3
 
+  tslib@2.3.0: {}
+
   tsx@4.23.15:
     dependencies:
       esbuild: 0.28.2
@@ -4484,3 +4503,7 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   zod@4.6.5: {}
+
+  zrender@6.1.0:
+    dependencies:
+      tslib: 2.3.0

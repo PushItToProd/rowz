@@ -130,7 +130,7 @@ describe("TextCard", () => {
   it("draws a chart a formula gives", async () => {
     await render(`{{ PIE_CHART('Table 1'!A1:B2, "Fruit") }}`);
     expect(shown().get(".chart").attributes("data-chart")).toBe("pie");
-    expect(shown().findAll(".chart__slice")).toHaveLength(2);
+    expect(shown().findAll("[data-chart-value]")).toHaveLength(2);
     expect(shown().get("figcaption").text()).toBe("Fruit");
   });
 
