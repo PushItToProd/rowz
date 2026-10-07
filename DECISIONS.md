@@ -2,6 +2,82 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-07: New code adds no native `<select>`
+
+**Decision.** No new `<select>` element is added to the web app. A choice from a list uses an in-app dropdown. The existing `<select>` elements stay until a shared dropdown replaces them. This extends the earlier removal of `alert`, `confirm`, `prompt`, and `title` tooltips.
+
+**Why.** A native dropdown opens a popup the browser and operating system draw, which looks and behaves differently on each and cannot be styled or extended, for example with color swatches.
+
+**What would reopen it.** A control for which the native element is the only workable choice, as the file chooser is.
+
+## 2026-10-07: Controls are shown unless there is a reason to hide them
+
+**Decision.** A control is not hidden to make the page look cleaner. A control may appear only in context, such as a toolbar for the selected cell or block, when showing it everywhere is impractical. When unsure, show it. A menu that opens on right-click also opens from a visible button.
+
+**Why.** A person cannot use a control they do not know is there. An ellipsis on every cell would be worse than a toolbar for the selection, so the rule allows context where there is no other way.
+
+**What would reopen it.** Pages that become too cluttered to read in use.
+
+## 2026-10-07: The interface is compact
+
+**Decision.** rowz favors showing more of the document over whitespace. Its models are Excel and Sheets for the grid, and Jupyter notebooks and dashboard tools such as Grafana for a page of blocks.
+
+**Why.** These are the tools the author works in and has been drawing on.
+
+**What would reopen it.** A redesign of the phone-width layout, where compact controls are too small to touch.
+
+## 2026-10-07: Keyboard access comes from a command palette and parameter forms
+
+**Decision.** Everything should be possible without a mouse. A feature gets there through shared means: a command palette that lists every action, and, for an action that needs parameters, a form in a dialog where Tab moves between fields, Enter submits, and Escape cancels. A feature does not get a shortcut of its own for the sake of keyboard access.
+
+**Why.** The author is a keyboard user and does not want agents to fit every feature into the key bindings. Two shared means cover actions without parameters, such as bold or a cell border, and actions with them, such as a chart or a pivot table.
+
+**Four cases beyond the palette and a form.** A context menu opens from the keyboard for whatever has focus. A spatial action such as resize or reorder has a command that does what the drag does. A key moves focus between the regions of a page, since Tab is taken inside the grid. A control inside a popover can be reached and operated from the keyboard.
+
+**What would reopen it.** A feature the palette and a form serve badly.
+
+## 2026-10-07: Where Excel and Sheets differ, Sheets for keys and functions, Excel for table features
+
+**Decision.** When no other rule applies and the two differ, rowz follows Sheets for keyboard behavior and functions, and Excel for table features such as structured references.
+
+**Why.** This matches what rowz already took from each: array functions and `QUERY` from Sheets, and `Table[Column]` from Excel.
+
+**What would reopen it.** The author accepted this as reasonable for now. A case where the default gives a result the author dislikes reopens it.
+
+## 2026-10-07: A name opens for editing on one click
+
+**Decision.** A block's name and a document's name open for editing on one click, not a double-click.
+
+**Why.** The author asked for it. A name has no other use for a single click.
+
+**Not decided.** Whether a script or text block should also open for editing on one click. The author thinks it might be better.
+
+**What would reopen it.** Accidental renames in use.
+
+## 2026-10-07: Closed messages are kept in a history
+
+**Decision.** A passing message or error closes without being dismissed, and recent ones stay available in a history the person can open.
+
+**Why.** A message that closes by itself can vanish before it is read.
+
+**What would reopen it.** Nothing foreseen.
+
+## 2026-10-07: Excel and Sheets bound effort on problems outside the author's priorities
+
+**Decision.** When neither Excel nor Sheets solves a usability problem and it is not among the author's priorities, rowz does not have to solve it. An agent may raise it and add a todo, and does not build a mechanism for it.
+
+**Why.** Agents proposed elaborate handling for cases such as two people editing one cell. The author checked what Sheets does in each, and it was almost always far simpler than the proposal.
+
+**What would reopen it.** The author making such a problem a priority.
+
+## 2026-10-07: rowz prefers correct results to another spreadsheet's mistakes
+
+**Decision.** rowz aims to be more correct than other spreadsheets in what a function returns. A result a reader would call wrong, such as half an emoji from `LEFT`, is fixed even where Excel and Sheets return it. Tolerances other spreadsheets apply so that results match what people expect, such as treating numbers that differ by a tiny floating-point error as equal, are reasonable and are not removed. This is a preference judged case by case, not an absolute.
+
+**Why.** Splitting a character is a functional error. A comparison tolerance is a deliberate accommodation that makes results match expectation.
+
+**What would reopen it.** A case the distinction does not settle.
+
 ## 2026-10-05: An action that undo reverses asks for no confirmation
 
 **Decision.** Deleting a row, a column, or a page does not ask for confirmation, because undo restores each of them with its formulas and formats. A confirmation is kept for what undo cannot reverse.

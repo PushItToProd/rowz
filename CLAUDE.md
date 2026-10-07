@@ -18,6 +18,23 @@ The author sets priorities. When the author gives a task that is hardening work,
 
 [DECISIONS.md](DECISIONS.md) holds decisions the author made or approved. Add an entry only for a decision the author stated or confirmed. [AGENT_DECISIONS.md](AGENT_DECISIONS.md) holds choices an agent made while working on its own, for the author to review.
 
+## Design guidance
+
+[docs/design/](docs/design/README.md) records how the author wants rowz to behave, look, and read. Read its README before feature work, [ui.md](docs/design/ui.md) before changing `apps/web`, [writing.md](docs/design/writing.md) before writing any text a person sees, and [formula-language.md](docs/design/formula-language.md) before changing a function or syntax. A reviewer checks a change against them.
+
+The rules agents break most often:
+
+- **No interface drawn by the browser.** No `alert`, `confirm`, `prompt`, `title` attribute, new `<select>`, or validation bubble. Use `useDialog()`, `ContextMenu.vue`, `NoticeMessage.vue`, and the popover in `CellError.vue`.
+- **Reuse the shared component for a job.** One formula editor, one dialog host, one context menu, one open side panel.
+- **Anything with actions has a right-click menu and a visible button that opens the same menu.** Items describe the current selection and leave out what cannot apply.
+- **Do not confirm what undo reverses.**
+- **An error says what could not be done and why in one sentence, with the actual names and numbers, then what to do.** It shows an underlying error word for word below the summary, and links to where it arose.
+- **A delete control looks destructive.** A plain "×" means close.
+- **Interface text is plain.** Say "document", "page", and "block". Do not explain what the screen makes obvious.
+- **Excel and Sheets set the ceiling for problems outside the author's priorities.** If neither solves it, mention it and add a todo. Do not build a mechanism for it.
+- **A function evaluates every argument unless choosing among them is its purpose,** as it is for `IF` and `IFS`. When the author describes a function by an equivalent formula, take the result from it and not the laziness or error handling.
+- **A function matches its Excel or Sheets namesake** unless its help entry says otherwise.
+
 ## Commands
 
 - `pnpm check` runs lint, typecheck, and unit tests. Run it before calling work done.

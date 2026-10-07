@@ -61,6 +61,22 @@ A reference document is the acceptance test of a theme: the theme is done when i
   - [ ] I feel like the text preview should be on the right side instead of below the text being edited
 
 
+- [ ] **P4** open a block's name and a document's name for editing on one click, not a double-click (`EditableName.vue`). See [docs/design/ui.md](docs/design/ui.md) #everyday
+  - [ ] consider opening a script or text block for editing on one click as well
+- [ ] **P5** (Claude) give a notice and an error dialog a place for the underlying error, shown word for word in monospace below the summary, and rewrite save and request failures to the form in [docs/design/writing.md](docs/design/writing.md): what could not be done and why, then what to do #everyday
+- [ ] **P7** tabs along the top of a context menu for the menus of the things that contain the clicked one: a right-click on a cell shows Cell, Row, Column, Table, and Page, and choosing one shows that thing's menu. Each menu then holds one thing's actions. Plan before implementing. The author will decide whether to keep it after seeing it in use. See [docs/design/ui.md](docs/design/ui.md) #everyday
+- [ ] **P5** make the `and` and `or` operators stop at the first operand that decides the answer, so `B1 <> 0 and A1 / B1 > 2` works as a guard. They call `AND` and `OR` today, which evaluate every argument (`packages/engine/src/evaluate.ts`) #formula-language
+  - [ ] **P6** make the `AND` and `OR` functions stop early too, and add `ALL` and `ANY`, which evaluate every argument and return an error found in any of them. Say in the help entries that `AND` and `OR` differ from Excel and Sheets here. See [docs/design/formula-language.md](docs/design/formula-language.md)
+- [ ] **P6** keep a history of recent messages and errors, so a notice that closed can be read again #everyday
+- [ ] **P5** a command palette that lists every action, and a form dialog for an action that needs parameters (Tab between fields, Enter submits, Escape cancels). These are how a feature becomes usable from the keyboard without a shortcut of its own. Plan before implementing #everyday
+- [ ] **P5** replace every native `<select>` with a shared in-app dropdown ([audit](docs/native-browser-ui-audit.md), priority 2), then add a lint rule that refuses `<select>` in `apps/web` #everyday
+- [ ] **P6** replace native `title` tooltips with an in-app tooltip ([audit](docs/native-browser-ui-audit.md), priority 3), then add a lint rule that refuses the `title` attribute in `apps/web` #everyday
+- [ ] **P4** (Claude) turn on ESLint's `no-alert` for `apps/web`, so `alert`, `confirm`, and `prompt` cannot come back #codebase
+- [ ] **P8** review more published style guides for interface text (Material Design, Apple's Human Interface Guidelines, the Microsoft Writing Style Guide) and extend [docs/design/writing.md](docs/design/writing.md) from them. The Atlassian error-message guidance and Microsoft's Windows writing style page are already used #everyday
+- [ ] **P7** (Claude) a key that moves focus between the regions of a page: the grid, a block's header, the next block, and an open side panel. Tab is taken inside the grid. See the keyboard section of [docs/design/ui.md](docs/design/ui.md) #everyday
+- [ ] **P7** (Claude) review the existing interface text against [docs/design/writing.md](docs/design/writing.md) and fix what breaks it #everyday
+- [ ] **P6** turn the guidance in [docs/design/](docs/design/README.md) into agent skills (interface work, interface text, formula language), linked into `.agents/skills` for Codex as `create-rowz-document` is #agents
+
 ## Plans
 
 - [x] **P1** implement [persistent row identity](plans/persistent-row-identity.md)
