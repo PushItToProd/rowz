@@ -694,3 +694,6 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] An unfinished quote in one script statement makes later statements look like string content, so bracket pairing stops there; script comment scanning already ends an open quote at the line end (`quoteSpans`, `closeBrackets.ts` near line 23) #formula-editing
 - [ ] Apostrophes can pair inside script comments, and apostrophe wrapping of a selected name depends on the selection direction (`closeBrackets.ts` near lines 168 and 169) #formula-editing
 - [ ] The escaped-quote handler in `closeBrackets.ts` (near line 178) can rewrite a skipped quote closer into doubled quotes while an IME composition is active #formula-editing
+
+- [ ] **P1** merge the changes from the design-principles branch #codebase
+- [ ] **P1** conduct a review of the codebase and find all the places that need updating to align with the design principles #codebase
