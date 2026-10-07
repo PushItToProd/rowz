@@ -123,11 +123,33 @@
   position: absolute;
   inset: 0;
   width: 100%;
-  padding: 0 6px;
+  padding: 0;
   border: none;
   border-radius: 0;
   outline: none;
   background: var(--surface);
+}
+
+.grid__editor > .formula-editor,
+.grid__editor > .formula-editor > div:first-child,
+.grid__editor > .formula-editor .cm-editor,
+.grid__editor > .formula-editor .cm-scroller {
+  height: 100%;
+}
+
+.grid__editor > .formula-editor .cm-scroller {
+  align-items: center;
+}
+
+.grid__editor > .formula-editor .cm-editor .cm-content {
+  min-height: 0;
+  padding: 0;
+}
+
+.grid__editor > .formula-editor .cm-editor .cm-line {
+  width: 100%;
+  padding: 0 6px;
+  line-height: 28px;
 }
 
 .cell-value {

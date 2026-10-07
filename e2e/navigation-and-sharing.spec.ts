@@ -45,6 +45,31 @@ test("editing shows errors, the formula bar, and keyboard navigation", async ({ 
   await expect(cell(page, "B2")).toHaveText("");
 });
 
+test("the in-cell formula editor fills the cell", async ({ page }) => {
+  await newSpreadsheet(page);
+  const target = cell(page, "A1");
+  await target.click();
+  await page.keyboard.type("x");
+
+  const editor = target.locator(".formula-editor");
+  await expect(editor).toBeVisible();
+  await expect
+    .poll(() =>
+      editor.evaluate((element) => {
+        const cell = element.closest("td")?.getBoundingClientRect();
+        if (!cell) return false;
+        const bounds = element.getBoundingClientRect();
+        return (
+          Math.abs(bounds.left - cell.left) <= 1 &&
+          Math.abs(bounds.top - cell.top) <= 1 &&
+          Math.abs(bounds.right - cell.right) <= 1 &&
+          Math.abs(bounds.bottom - cell.bottom) <= 1
+        );
+      }),
+    )
+    .toBe(true);
+});
+
 test("keeps characters typed immediately after Enter or Tab", async ({ page }) => {
   await newSpreadsheet(page);
 

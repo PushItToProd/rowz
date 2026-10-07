@@ -53,7 +53,7 @@ A reference document is the acceptance test of a theme: the theme is done when i
   - okay, I guess when I create rules covering a whole column of a data table it does intelligently set it to e.g. `F1:F` so it covers the whole thing, but that behavior doesn't feel obvious from the way it's presented
 - [ ] **P6** create context menu item to add conditional formatting to the selected cell or range #formatting
 - [ ] **P6** in the codemirror editors, let me hit cmd+D/ctrl+D when I have some text highlighted to select multiple instances of that text
-- [ ] **P4** the formula editor shown in a cell doesn't completely fill the cell - the div with classes `session-formula-field grid__editor` has 6px of padding on left and right (maybe a Firefox quirk?) while the div with class `formula-editor` doesn't fill the full height of the cell either. -- note this is mostly an aesthetic thing. it doesn't necessarily have to fill the cell, it just needs to be less obvious that it doesn't
+- [x] **P4** the formula editor shown in a cell doesn't completely fill the cell - the div with classes `session-formula-field grid__editor` has 6px of padding on left and right (maybe a Firefox quirk?) while the div with class `formula-editor` doesn't fill the full height of the cell either. -- note this is mostly an aesthetic thing. it doesn't necessarily have to fill the cell, it just needs to be less obvious that it doesn't
 
 ## Plans
 
