@@ -54,6 +54,12 @@ A reference document is the acceptance test of a theme: the theme is done when i
 - [x] **P6** create context menu item to add conditional formatting to the selected cell or range #formatting
 - [x] **P6** in the codemirror editors, let me hit cmd+D/ctrl+D when I have some text highlighted to select multiple instances of that text
 - [x] **P4** the formula editor shown in a cell doesn't completely fill the cell - the div with classes `session-formula-field grid__editor` has 6px of padding on left and right (maybe a Firefox quirk?) while the div with class `formula-editor` doesn't fill the full height of the cell either. -- note this is mostly an aesthetic thing. it doesn't necessarily have to fill the cell, it just needs to be less obvious that it doesn't
+- the text editing UX is really janky right now
+  - [ ] there's a "Pick reference" button(?) floating in the upper right but clicking on it unfocuses the editor and immediately closes it, so the button is unusable
+  - [ ] I'm finding the "double click to focus" and "single click to unfocus" actually very annoying. I keep wanting a single click to start editing (but it should also allow me to drag to select text without entering edit mode) and I sort of want to have to explicitly click the save button rather than going back to view mode as soon as I unfocus the text input
+  - [ ] I don't like how the block resizes between edit mode and view mode -- would rather they both stay the same size (ideally full width)
+  - [ ] I feel like the text preview should be on the right side instead of below the text being edited
+
 
 ## Plans
 
@@ -697,3 +703,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [ ] **P1** merge the changes from the design-principles branch #codebase
 - [ ] **P1** conduct a review of the codebase and find all the places that need updating to align with the design principles #codebase
+
+- [ ] **Author** **P1** the Codex sandbox cannot run the project's checks: Vitest fails before collecting tests with `ENOENT` creating `/tmp/<random>/{ssr,client}` (and `site.test.ts` gets `EROFS` creating `/tmp/site-*`), and `pnpm e2e:remote:codex` fails with `EPERM` connecting to `127.0.0.1:3200` or with Docker socket access denied. Give the Codex sandbox a writable temp directory (for example `TMPDIR` inside the workspace, or a writable `/tmp`), loopback access to the Playwright container's port, and write access to `~/Code/ai_workdir/codex_papercuts.md`, so Codex can run `pnpm check` and the e2e suite itself instead of the orchestrator running them #codebase
