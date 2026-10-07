@@ -37,7 +37,12 @@ const caller = computed(() => {
 
 <template>
   <div v-if="frame" class="error-trace">
-    <button type="button" class="error-trace__link" @click.stop="emit('go', trace)">
+    <button
+      type="button"
+      class="error-trace__link"
+      :aria-label="`Go to where it was raised: ${frame.function}, ${frame.location.scriptName}, line ${String(frame.location.line)}`"
+      @click.stop="emit('go', trace)"
+    >
       Raised in {{ frame.function }} ({{ frame.location.scriptName }}, line
       {{ frame.location.line }})
     </button>

@@ -1301,9 +1301,10 @@ const OPERATORS = [
         <code>IFERROR</code> catches it.
       </p>
       <p>
-        When an error is raised inside a script function, its popover and the document errors list
-        identify the function and show how the formula reached it. The link opens the script at the
-        function definition.
+        The main button in the document errors list opens the cell, chart, or text view that shows
+        the error. When an error is raised inside a script function, its popover and the list also
+        identify the function and show how the formula reached it. The separate Raised in link opens
+        the script at the function definition.
       </p>
       <table>
         <tbody>

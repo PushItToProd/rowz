@@ -103,7 +103,7 @@ test("a repeated script name marks its later definition and keeps the first usab
   await expect(errors).toContainText("QtyTotal is already defined on line 1 of this script");
 });
 
-test("a function error links to its script definition and places the editor caret there", async ({
+test("a function error opens its cell and the Raised in link opens its script definition", async ({
   page,
 }) => {
   await newSpreadsheet(page);
@@ -127,8 +127,12 @@ test("a function error links to its script definition and places the editor care
   const script = page.locator('[data-view="Script 1"]');
   await script.getByRole("button", { name: "Edit", exact: true }).click();
   const source = script.getByLabel("Script source");
+  const filler = Array.from(
+    { length: 45 },
+    (_, index) => `Filler${String(index + 1)} = ${String(index + 1)}`,
+  ).join("\n");
   await source.fill(
-    `PayoutByDuration(with_spa) = QUERY(Runs, "select Race, sum('Payout (40 hrs)') " & IF(with_spa, "", "where Race <> 'Spa' ") & "group by Race pivot Duration")`,
+    `PayoutByDuration(with_spa) = QUERY(Runs, "select Race, sum('Payout (40 hrs)') " & IF(with_spa, "", "where Race <> 'Spa' ") & "group by Race pivot Duration")\n${filler}`,
   );
   await source.press("Control+Enter");
   await expect(source).toHaveCount(0);
@@ -145,9 +149,30 @@ test("a function error links to its script definition and places the editor care
     "Raised in PayoutByDuration (Script 1, line 1)",
   );
 
+  await page.mouse.move(0, 0);
+  await page.evaluate(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  });
+  const callerCard = page.locator(`[data-table="${callerTable}"]`);
+  await expect(callerCard).not.toBeInViewport();
+
   await page.getByRole("button", { name: "1 error", exact: true }).click();
   const errors = page.getByRole("dialog", { name: "Document errors" });
-  await errors.getByRole("button", { name: /Raised in PayoutByDuration/ }).click();
+  await errors
+    .getByRole("button", {
+      name: "Go to #VALUE! in 'Table 1'!A1 on page Page 1: The data has no column Spa",
+    })
+    .click();
+  await expect(result).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("grid", { name: callerTable })).toBeFocused();
+  await expect(callerCard).toBeInViewport();
+  await expect(result).toBeInViewport();
+
+  await errors
+    .getByRole("button", {
+      name: "Go to where it was raised: PayoutByDuration, Script 1, line 1",
+    })
+    .click();
   await expect(source).toBeFocused();
   const caret = await source.evaluate((element) => {
     const selection = document.getSelection();

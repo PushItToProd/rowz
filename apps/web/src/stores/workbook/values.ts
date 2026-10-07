@@ -31,7 +31,16 @@ export function createValues(context: WorkbookContext) {
   const assertions = computed(() =>
     context.engine.value.failedAssertions().flatMap((failure) => {
       const where = (():
-        { pageId: string; label: string; cell?: CellId; scriptId?: string } | undefined => {
+        | {
+            pageId: string;
+            blockId: string;
+            label: string;
+            cell?: CellId;
+            line?: number;
+            name?: string;
+            scriptId?: string;
+          }
+        | undefined => {
         if (failure.kind === "cell") {
           const table = context.tables.value.find(
             (candidate) => candidate.id === failure.cell.tableId,
@@ -39,6 +48,7 @@ export function createValues(context: WorkbookContext) {
           return (
             table && {
               pageId: table.pageId,
+              blockId: table.id,
               label: `${table.name}!${formatAddress(failure.cell)}`,
               cell: failure.cell,
             }
@@ -51,9 +61,20 @@ export function createValues(context: WorkbookContext) {
           failure.kind === "name"
             ? `${holder?.name ?? ""}!${failure.name}`
             : `${holder?.name ?? ""} line ${String(failure.line)}`;
-        return (
-          holder && { pageId: holder.pageId, label, ...(script ? { scriptId: script.id } : {}) }
-        );
+        return holder
+          ? {
+              pageId: holder.pageId,
+              blockId: holder.id,
+              label,
+              ...(failure.kind === "name"
+                ? {
+                    name: failure.name,
+                    ...(failure.line === undefined ? {} : { line: failure.line }),
+                  }
+                : { line: failure.line }),
+              ...(script ? { scriptId: script.id } : {}),
+            }
+          : undefined;
       })();
       return where ? [{ ...where, message: failure.message }] : [];
     }),

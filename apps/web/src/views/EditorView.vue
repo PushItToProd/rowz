@@ -17,7 +17,7 @@ import ErrorsPanel from "../components/ErrorsPanel.vue";
 import FindPanel from "../components/FindPanel.vue";
 import type { SearchMatch } from "../stores/workbook/search";
 import ErrorWarning from "../components/ErrorWarning.vue";
-import { formatAddress, type DocumentError, type ErrorTraceFrame } from "@spreadsheet-app/engine";
+import type { ErrorTraceFrame } from "@spreadsheet-app/engine";
 import AssertionsPanel from "../components/AssertionsPanel.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
 import RunsPanel from "../components/RunsPanel.vue";
@@ -34,11 +34,13 @@ import TableCard from "../components/TableCard.vue";
 import ScriptCard from "../components/ScriptCard.vue";
 import TextCard from "../components/TextCard.vue";
 import { useWorkbookStore } from "../stores/workbook";
-import { SIDE_PANES, provideActiveSidePane, tableIdOfSidePane } from "../sidePane";
+import { SIDE_PANES, provideActiveSidePane, tableIdOfSidePane, type SidePaneId } from "../sidePane";
+import { useLocationReveal } from "../locationReveal";
 
 const props = defineProps<{ spreadsheetId: string; pageId?: string }>();
 const store = useWorkbookStore();
 const router = useRouter();
+const { revealLocation } = useLocationReveal(store, router, () => props.spreadsheetId);
 const formulas = useFormulaSessionStore();
 const picking = useReferencePickingStore();
 const activeSidePane = provideActiveSidePane();
@@ -205,7 +207,7 @@ async function goToMatch(match: SearchMatch) {
     formulas.focus();
     return;
   }
-  await goToError({
+  await revealLocation({
     pageId: match.pageId,
     blockId: match.blockId,
     label: match.label,
@@ -213,6 +215,22 @@ async function goToMatch(match: SearchMatch) {
     ...(match.target.kind === "name" ? { name: match.target.name } : {}),
   });
   if (keepFindFocus) findPanel.value?.focus();
+}
+function closeLocationPaneOnNarrow(paneId: SidePaneId): void {
+  if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 640px)").matches)
+    activeSidePane.close(paneId);
+}
+function goToErrorLocation(target: Parameters<typeof revealLocation>[0]) {
+  closeLocationPaneOnNarrow(SIDE_PANES.errors);
+  return revealLocation(target);
+}
+function goToErrorTrace(trace: ErrorTraceFrame[]) {
+  closeLocationPaneOnNarrow(SIDE_PANES.errors);
+  return goToTrace(trace);
+}
+function goToAssertionLocation(target: Parameters<typeof revealLocation>[0]) {
+  closeLocationPaneOnNarrow(SIDE_PANES.assertions);
+  return revealLocation(target);
 }
 watch(
   () => props.spreadsheetId,
@@ -234,55 +252,6 @@ watch(
       activeSidePane.close(paneId);
   },
 );
-async function goToError(
-  target: Pick<
-    DocumentError,
-    "pageId" | "blockId" | "label" | "cell" | "name" | "line" | "column" | "trace"
-  >,
-): Promise<void> {
-  const [origin] = target.trace ?? [];
-  if (origin) {
-    await goToTrace(target.trace ?? []);
-    return;
-  }
-  await router.push({
-    name: "editor",
-    params: { spreadsheetId: props.spreadsheetId, pageId: target.pageId },
-  });
-  await nextTick();
-  const block = document.getElementById(`block-${target.blockId}`);
-  if (target.cell && store.rowView(target.cell.tableId).place(target.cell.row) !== undefined) {
-    store.selection = target.cell;
-    await nextTick();
-    store.focusGrid();
-    await nextTick();
-    block
-      ?.querySelector(`[data-cell="${formatAddress(target.cell)}"]`)
-      ?.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
-  } else {
-    if (target.name && target.line === undefined) {
-      const toggle = block?.querySelector<HTMLButtonElement>("[data-open-names]");
-      if (toggle?.getAttribute("aria-expanded") === "false") toggle.click();
-      await nextTick();
-    }
-    const location =
-      target.line !== undefined
-        ? block?.querySelector(`[data-script-line="${String(target.line)}"]`)
-        : target.name
-          ? block?.querySelector(`[data-name="${CSS.escape(target.name)}"]`)
-          : target.column !== undefined
-            ? block?.querySelector(`thead th:nth-child(${String(target.column + 2)})`)
-            : undefined;
-    block?.focus({ preventScroll: true });
-    (location ?? block)?.scrollIntoView({ block: "center", behavior: "smooth" });
-    if (target.cell)
-      store.notice = {
-        kind: "error",
-        text: `${target.label} is hidden by the table filter. Edit or clear the filter to show it.`,
-      };
-  }
-}
-
 /** Opens the script where a function error arose and puts the caret on its definition. */
 async function goToTrace(trace: ErrorTraceFrame[]): Promise<void> {
   const [frame] = trace;
@@ -291,16 +260,7 @@ async function goToTrace(trace: ErrorTraceFrame[]): Promise<void> {
     (view) => view.id === frame.location.scriptId && view.kind === "script",
   );
   if (!script) return;
-  await router.push({
-    name: "editor",
-    params: { spreadsheetId: props.spreadsheetId, pageId: script.pageId },
-  });
-  await nextTick();
-  const block = document.getElementById(`block-${script.id}`);
-  block?.focus({ preventScroll: true });
-  block
-    ?.querySelector(`[data-script-line="${String(frame.location.line)}"]`)
-    ?.scrollIntoView({ block: "center", behavior: "smooth" });
+  await revealLocation({ pageId: script.pageId, blockId: script.id, line: frame.location.line });
   if (!store.canEdit) return;
 
   const offset = script.source
@@ -327,20 +287,6 @@ async function goToTrace(trace: ErrorTraceFrame[]): Promise<void> {
   formulas.focus();
 }
 
-/** Opens the page of a failing assertion and selects its cell. */
-async function goToAssertion(target: (typeof store.assertions)[number]): Promise<void> {
-  await router.push({
-    name: "editor",
-    params: { spreadsheetId: props.spreadsheetId, pageId: target.pageId },
-  });
-  if (target.cell) store.selection = target.cell;
-  if (target.scriptId) {
-    await nextTick();
-    document
-      .getElementById(`script-${target.scriptId}`)
-      ?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }
-}
 const session = useSessionStore();
 
 /** Reads the spreadsheet again after a version was restored. Its pages are new, so the first one opens. */
@@ -825,7 +771,8 @@ watch(
     <ErrorsPanel
       v-if="errorsOpen && loaded"
       @close="activeSidePane.close(SIDE_PANES.errors)"
-      @go="goToError"
+      @go="goToErrorLocation"
+      @trace="goToErrorTrace"
     />
     <FindPanel
       v-if="findOpen && loaded && page"
@@ -838,7 +785,7 @@ watch(
     <AssertionsPanel
       v-if="assertionsOpen && loaded"
       @close="activeSidePane.close(SIDE_PANES.assertions)"
-      @go="goToAssertion"
+      @go="goToAssertionLocation"
     />
     <HistoryPanel
       v-if="historyOpen && loaded"

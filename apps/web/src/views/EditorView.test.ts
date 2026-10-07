@@ -2,7 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { api } from "../api/client";
+import { api, type ViewRecord } from "../api/client";
 import { takeQueuedListNotice } from "../notice";
 import { changeWith, snapshotWith, wireSnapshot, type MockedApi } from "../testing";
 import EditorView from "./EditorView.vue";
@@ -35,6 +35,7 @@ async function render(
   focusCards = false,
   inputs: Record<string, string> = {},
   realTableCard = false,
+  extraViews: ViewRecord[] = [],
 ) {
   const snapshot = snapshotWith(inputs, role);
   server.getSnapshot.mockResolvedValue(
@@ -53,6 +54,7 @@ async function render(
               source: "",
               chartType: null,
             },
+            ...extraViews,
           ],
     }),
   );
@@ -185,6 +187,54 @@ it("replaces the open side pane when another one opens", async () => {
   expect(wrapper.find('[role="dialog"][aria-label="History"]').exists()).toBe(false);
   wrapper.unmount();
 });
+
+it.each([true, false])(
+  "closes error, trace, and assertion panes on narrow screens (%s)",
+  async (narrow) => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn((query: string) => ({ matches: narrow && query === "(max-width: 640px)" })),
+    });
+    const wrapper = await render(
+      "viewer",
+      false,
+      true,
+      { A1: "=PayoutByDuration()", B1: '=ASSERT(1=2, "broken")' },
+      false,
+      [
+        {
+          id: "script-1",
+          pageId: "p1",
+          kind: "script",
+          name: "Script 1",
+          position: 3,
+          source: "PayoutByDuration() = 1/0",
+          chartType: null,
+        },
+      ],
+    );
+
+    await wrapper.get(".editor__errors").trigger("click");
+    let errors = wrapper.get('[role="dialog"][aria-label="Document errors"]');
+    await errors.get(".errors__location").trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[role="dialog"][aria-label="Document errors"]').exists()).toBe(!narrow);
+
+    if (narrow) await wrapper.get(".editor__errors").trigger("click");
+    errors = wrapper.get('[role="dialog"][aria-label="Document errors"]');
+    await errors.get(".error-trace__link").trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[role="dialog"][aria-label="Document errors"]').exists()).toBe(!narrow);
+
+    await wrapper.get(".editor__assertions").trigger("click");
+    const assertions = wrapper.get('[role="dialog"][aria-label="Failing assertions"]');
+    await assertions.get(".assertions__list button").trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[role="dialog"][aria-label="Failing assertions"]').exists()).toBe(!narrow);
+    expect(window.matchMedia).toHaveBeenCalledWith("(max-width: 640px)");
+    wrapper.unmount();
+  },
+);
 
 it("opens block actions from card margins and leaves grid cell menus to the table", async () => {
   const wrapper = await render("owner", false, false, {}, true);

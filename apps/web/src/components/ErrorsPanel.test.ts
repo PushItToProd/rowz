@@ -91,20 +91,20 @@ it("lists a repeated script definition and links to its line", async () => {
   }
 });
 
-it("shows a function origin link in the document errors list", async () => {
+it("opens a cell error's manifestation and keeps the function trace target separate", async () => {
   const snapshot = snapshotWith({ A1: "Spa" });
-  const formulaTable = { ...TABLE, id: "t2", name: "Formula", position: 1 };
-  snapshot.tables = [
-    {
-      ...TABLE,
-      columns: [
-        { name: "Race", type: "text" },
-        { name: "Duration", type: "text" },
-        { name: "Payout (40 hrs)", type: "any" },
-      ],
-    },
-    formulaTable,
+  snapshot.pages = [
+    { id: "p1", name: "Page 1", position: 0 },
+    { id: "p2", name: "Page 2", position: 1 },
   ];
+  const formulaTable = {
+    ...TABLE,
+    id: "t2",
+    pageId: "p2",
+    name: "Payout by duration",
+    position: 0,
+  };
+  snapshot.tables = [TABLE, formulaTable];
   snapshot.cells.push({ ...identifiedAt("A1", formulaTable.id), input: "=PayoutByDuration()" });
   snapshot.views = [
     {
@@ -121,19 +121,30 @@ it("shows a function origin link in the document errors list", async () => {
   await useWorkbookStore().load("s1");
   const wrapper = mount(ErrorsPanel);
   try {
+    const locationButton = wrapper.get(".errors__location");
+    expect(locationButton.attributes("aria-label")).toBe(
+      "Go to #VALUE! in 'Payout by duration'!A1 on page Page 2: The data has no column Spa",
+    );
+    await locationButton.trigger("click");
+    expect(wrapper.emitted("go")?.[0]?.[0]).toMatchObject({
+      pageId: "p2",
+      blockId: "t2",
+      cell: at("A1", "t2"),
+    });
+    expect(wrapper.emitted("trace")).toBeUndefined();
+
     const traceLink = wrapper.get(".error-trace__link");
     expect(traceLink.text()).toBe("Raised in PayoutByDuration (Script 1, line 1)");
+    expect(traceLink.attributes("aria-label")).toBe(
+      "Go to where it was raised: PayoutByDuration, Script 1, line 1",
+    );
     await traceLink.trigger("click");
-    expect(wrapper.emitted("go")?.[0]?.[0]).toMatchObject({
-      pageId: "p1",
-      blockId: "t2",
-      trace: [
-        {
-          function: "PayoutByDuration",
-          location: { scriptId: "script-1", line: 1 },
-        },
-      ],
-    });
+    expect(wrapper.emitted("trace")?.[0]?.[0]).toMatchObject([
+      {
+        function: "PayoutByDuration",
+        location: { scriptId: "script-1", line: 1 },
+      },
+    ]);
   } finally {
     wrapper.unmount();
   }
