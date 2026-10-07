@@ -1,30 +1,26 @@
 import { columnIndex } from "./address";
-import type { Node, Reference, ReferenceCell } from "./ast";
-import {
-  FormulaSyntaxError,
-  tokenize,
-  type Operator,
-  type Punctuation,
-  type Token,
-} from "./tokenizer";
+import type { BinaryOperator, Node, Reference, ReferenceCell } from "./ast";
+import { FormulaSyntaxError, tokenize, type Punctuation, type Token } from "./tokenizer";
 
-// Excel's ordering: comparison, then concatenation, then arithmetic. All
+// Boolean operators bind below Excel's comparison, concatenation, and arithmetic. All
 // binary operators are left-associative, and unary minus binds tighter than
 // `^`, so `-2^2` is 4.
-const BINARY_PRECEDENCE: Record<Operator, number> = {
-  "=": 1,
-  "<>": 1,
-  "!=": 1,
-  "<": 1,
-  ">": 1,
-  "<=": 1,
-  ">=": 1,
-  "&": 2,
-  "+": 3,
-  "-": 3,
-  "*": 4,
-  "/": 4,
-  "^": 5,
+const BINARY_PRECEDENCE: Record<BinaryOperator, number> = {
+  or: 1,
+  and: 2,
+  "=": 4,
+  "<>": 4,
+  "!=": 4,
+  "<": 4,
+  ">": 4,
+  "<=": 4,
+  ">=": 4,
+  "&": 5,
+  "+": 6,
+  "-": 6,
+  "*": 7,
+  "/": 7,
+  "^": 8,
 };
 
 // A column, a row, or both: `A`, `$7`, `$A$7`.
@@ -178,10 +174,15 @@ class Parser {
   }
 
   private expression(minPrecedence: number): Node {
-    let left = this.unary();
+    const first = this.peek();
+    let left: Node;
+    if (first.type === "operator" && first.value === "not") {
+      this.next();
+      left = { type: "unary", operator: "not", operand: this.expression(3) };
+    } else left = this.unary();
     for (;;) {
       const token = this.peek();
-      if (token.type !== "operator") return left;
+      if (token.type !== "operator" || token.value === "not") return left;
       const precedence = BINARY_PRECEDENCE[token.value];
       if (precedence <= minPrecedence) return left;
       this.next();

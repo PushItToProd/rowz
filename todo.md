@@ -170,8 +170,8 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [x] **P10** `TEXT` writes a number of 1e21 or more as `1e+21` followed by the format's decimals
 - [x] **P10** the web app's fill and chart axis build dates without `dateFromMs`, so they skip the year 0 to 9999 check.
 - [ ] **P99** user-defined formula functions, evaluated client-side in a sandbox (maybe something like QuickJS or Pyodide) #formula-language
-- [ ] **P4** support better operators: #formula-language
-  - [ ] infix `and`/`or`/`not` for boolean operations (`A and (not B or C)`)
+- [x] **P4** support better operators: #formula-language
+  - [x] infix `and`/`or`/`not` for boolean operations (`A and (not B or C)`)
   - [x] `!=` in addition to `<>`
 - [x] make the help page's navigation sticky so it stays visible as the user scrolls. update it to reflect the section they're currently looking at, too (e.g. by making the currently visible section bold)
 - [x] **P7** add `start` and `step` args to `SEQUENCE`

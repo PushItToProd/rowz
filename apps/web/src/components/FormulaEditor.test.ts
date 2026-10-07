@@ -40,6 +40,21 @@ async function complete(view: EditorView) {
 }
 
 describe("shared formula editor", () => {
+  it("highlights boolean keywords as operators while keeping calls and names", () => {
+    const { wrapper } = render("=AND(A1, TRUE) AnD (not B2 oR not[or])");
+    expect(wrapper.findAll(".formula-token--operator").map((token) => token.text())).toEqual([
+      "AnD",
+      "not",
+      "oR",
+    ]);
+    expect(wrapper.findAll(".formula-token--identifier").map((token) => token.text())).toContain(
+      "AND",
+    );
+    expect(wrapper.findAll(".formula-token--identifier").map((token) => token.text())).toContain(
+      "not",
+    );
+  });
+
   it("exposes an accessible label and highlights formulas without highlighting literal cells", async () => {
     const { wrapper } = render("=SUM(A1, 2)");
     expect(wrapper.get(".cm-content").attributes("aria-label")).toBe("Formula in Sales!A1");

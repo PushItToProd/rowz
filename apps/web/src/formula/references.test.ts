@@ -34,6 +34,14 @@ function highlights(source: string, extra: Partial<ReferenceContext> = {}) {
 }
 
 describe("direct reference colors", () => {
+  it("finds references around boolean operators in complete and unfinished drafts", () => {
+    for (const source of ["=A1 and (not B2 or Sales[Amount])", "=A1 and not B2 or "]) {
+      expect(highlights(source).map(({ from, to }) => source.slice(from, to))).toEqual(
+        source.includes("Sales") ? ["A1", "B2", "Sales[Amount]"] : ["A1", "B2"],
+      );
+    }
+  });
+
   it("gives repeated targets one color independent of spelling and absolute markers", () => {
     const result = highlights("=A1 + $A$1 + Sales!A1 + 'Page 1'!sales!A1 + B2");
     expect(new Set(result.slice(0, 4).map((ref) => ref.color)).size).toBe(1);

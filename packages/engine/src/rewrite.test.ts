@@ -8,6 +8,7 @@ import {
   inputsAfterMove,
   inputsAfterRename,
   rewriteReferences,
+  rewriteBareNames,
   translateInput,
   type Move,
   type Rename,
@@ -24,6 +25,18 @@ const renameTables = (reference: Reference): Reference | undefined =>
   reference.table === undefined ? undefined : { ...reference, table: "Renamed" };
 
 describe("rewriteReferences", () => {
+  it("preserves boolean operators while renaming, translating, and deleting references", () => {
+    const source = "=Old!A1 AnD (not Old!B2 oR Old!C3 > 1)";
+    expect(rewriteReferences(source, renameTables)).toBe(
+      "=Renamed!A1 AnD (not Renamed!B2 oR Renamed!C3 > 1)",
+    );
+    expect(translateInput(source, 1, 1)).toBe("=Old!B2 AnD (not Old!C3 oR Old!D4 > 1)");
+    expect(rewriteReferences(source, () => "#REF!")).toBe("=#REF! AnD (not #REF! oR #REF! > 1)");
+    expect(
+      rewriteBareNames("Foo and (not Bar or Baz)", (name) => (name === "Foo" ? "not" : undefined)),
+    ).toBe("'not' and (not Bar or Baz)");
+  });
+
   it("replaces the references it is told to and keeps the rest of the text as typed", () => {
     expect(rewriteReferences('=  sum( a1 ,Old!b2:c3 )  &  "Old!A1"', renameTables)).toBe(
       '=  sum( a1 ,Renamed!B2:C3 )  &  "Old!A1"',
@@ -145,6 +158,19 @@ describe("inputsAfterRename", () => {
   }
 
   const renameOther: Rename = { kind: "table", tableId: "t2", name: "Sales" };
+
+  it("renames pages and tables to keyword names inside boolean expressions", () => {
+    const cells = { t1: { A1: "='Other Table'!A1 and (not 'Other Table'!B2 or FALSE)" } };
+    expect(after(cells, { kind: "table", tableId: "t2", name: "not" })).toEqual([
+      "t1:0:0 ='not'!A1 and (not 'not'!B2 or FALSE)",
+    ]);
+    expect(
+      after(
+        { t3: { A1: "='Page 1'!Table1!A1 or not 'Page 1'!Table1!B2" } },
+        { kind: "page", pageId: "p1", name: "and" },
+      ),
+    ).toEqual(["t3:0:0 ='and'!Table1!A1 or not 'and'!Table1!B2"]);
+  });
 
   it("rewrites references to a renamed table from its own page and from other pages", () => {
     expect(
@@ -462,6 +488,18 @@ describe("structural formula rewrites", () => {
     const result = formulasAfterEdit(data({ t2: { A1: formula } }), edit);
     return result[0]?.input ?? formula;
   }
+
+  it("rewrites every operand after row and column insertion and deletion", () => {
+    const formula = "=Table1!A2 AnD (not Table1!B3 oR Table1!C4 > 1)";
+    expect(rewritten(formula, insertRow(2))).toBe(
+      "=Table1!A2 AnD (not Table1!B4 oR Table1!C5 > 1)",
+    );
+    expect(rewritten(formula, deleteRow(2))).toBe("=Table1!A2 AnD (not #REF! oR Table1!C3 > 1)");
+    expect(rewritten(formula, insertCol(1))).toBe(
+      "=Table1!A2 AnD (not Table1!C3 oR Table1!D4 > 1)",
+    );
+    expect(rewritten(formula, deleteCol(1))).toBe("=Table1!A2 AnD (not #REF! oR Table1!B4 > 1)");
+  });
 
   describe("rewriting references after deleting row 3", () => {
     it.each([

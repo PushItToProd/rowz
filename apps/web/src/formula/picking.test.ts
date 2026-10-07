@@ -23,12 +23,15 @@ const selected = (text: string, from = text.length, to = from) =>
 beforeEach(() => setActivePinia(createPinia()));
 
 describe("picking positions", () => {
-  it.each(["=", "=B3+", "=SUM(", "=SUM(A1, "])("automatically picks an operand in %s", (text) => {
-    expect(pickingSpan(selected(text), "cell", false)).toEqual({
-      from: text.length,
-      to: text.length,
-    });
-  });
+  it.each(["=", "=B3+", "=SUM(", "=SUM(A1, ", "=A1 and ", "=A1 OR ", "=not ", "=A1 and not "])(
+    "automatically picks an operand in %s",
+    (text) => {
+      expect(pickingSpan(selected(text), "cell", false)).toEqual({
+        from: text.length,
+        to: text.length,
+      });
+    },
+  );
   it("automatically replaces a completely selected reference, but does not replace a completed operand without selection", () => {
     expect(pickingSpan(selected("=$A1+B2", 1, 4), "cell", false)).toEqual({ from: 1, to: 4 });
     expect(pickingSpan(selected("=B3", 2), "cell", false)).toBeUndefined();

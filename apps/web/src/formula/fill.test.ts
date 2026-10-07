@@ -67,6 +67,18 @@ describe("fillTarget", () => {
 });
 
 describe("fillWrites", () => {
+  it("moves boolean operands while preserving keyword spelling and absolute references", () => {
+    const writes = fillWrites(
+      range("C1"),
+      range("C1:C3"),
+      sheet({ C1: "=A1 > 1 AnD (not $B$1 oR B1 < 2)" }),
+    );
+    expect(byAddress(writes)).toEqual({
+      C2: "=A2 > 1 AnD (not $B$1 oR B2 < 2)",
+      C3: "=A3 > 1 AnD (not $B$1 oR B3 < 2)",
+    });
+  });
+
   it("copies a formula down and moves its relative references", () => {
     const writes = fillWrites(range("C1"), range("C1:C3"), sheet({ C1: "=A1*$B$1" }));
     expect(byAddress(writes)).toEqual({ C2: "=A2*$B$1", C3: "=A3*$B$1" });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FormulaSyntaxError, tokenize } from "./tokenizer";
+import { FormulaSyntaxError, tokenize, tokenizeForEditing } from "./tokenizer";
 
 /** Token types and values without positions, and without the trailing `end` token. */
 function summarize(text: string): unknown[] {
@@ -9,6 +9,46 @@ function summarize(text: string): unknown[] {
 }
 
 describe("tokenize", () => {
+  it.each(["Not + 1", "Not - 1", "Not = 1"])("keeps Not as a name in %s", (source) => {
+    expect(tokenize(source)[0]).toMatchObject({ type: "identifier", value: "Not" });
+    expect(tokenizeForEditing(source)).toEqual(tokenize(source));
+  });
+
+  it("classifies contextual keywords identically for parsing and editing", () => {
+    const source = "and AnD (not or oR NOT(FALSE))";
+    expect(summarize(source)).toEqual([
+      ["identifier", "and"],
+      ["operator", "and"],
+      ["punctuation", "("],
+      ["operator", "not"],
+      ["identifier", "or"],
+      ["operator", "or"],
+      ["identifier", "NOT"],
+      ["punctuation", "("],
+      ["identifier", "FALSE"],
+      ["punctuation", ")"],
+      ["punctuation", ")"],
+    ]);
+    expect(tokenizeForEditing(source)).toEqual(tokenize(source));
+  });
+
+  it("keeps keyword prefixes, quoted names, calls, qualifiers, and columns intact", () => {
+    for (const source of [
+      "android",
+      "order",
+      "nothing",
+      "'not'",
+      "NOT(FALSE)",
+      "NOT!A1",
+      "Page!and!or",
+      "or[not]",
+      "[and]",
+      "A:NOT",
+    ]) {
+      expect(tokenize(source).some((token) => token.type === "operator")).toBe(false);
+    }
+  });
+
   it.each([
     ["42", 42],
     ["3.14", 3.14],

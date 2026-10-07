@@ -24,7 +24,22 @@ export type Token = Span &
   );
 
 export type Operator =
-  "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "!=" | "<" | ">" | "<=" | ">=";
+  | "+"
+  | "-"
+  | "*"
+  | "/"
+  | "^"
+  | "&"
+  | "="
+  | "<>"
+  | "!="
+  | "<"
+  | ">"
+  | "<="
+  | ">="
+  | "and"
+  | "or"
+  | "not";
 export type Punctuation = "(" | ")" | "," | ":" | "!";
 
 /** Editor tokens retain unfinished literals and invalid characters without changing evaluation. */
@@ -188,5 +203,39 @@ function scanTokens(text: string, tolerant: boolean): EditingToken[] {
   }
 
   tokens.push({ type: "end", position, end: position });
-  return tokens;
+  return booleanOperators(tokens, text, tolerant);
+}
+
+/** Keywords are contextual so calls, qualifiers, range corners, and columns keep their names. */
+function booleanOperators(tokens: EditingToken[], text: string, tolerant: boolean): EditingToken[] {
+  let expectsValue = true;
+  const punctuation = (token: EditingToken | undefined, value: string): boolean =>
+    token?.type === "punctuation" && token.value === value;
+  return tokens.map((token, index) => {
+    const previous = tokens[index - 1];
+    const next = tokens[index + 1];
+    if (token.type === "identifier") {
+      const keyword = token.value.toLowerCase();
+      const qualified =
+        punctuation(previous, "!") ||
+        punctuation(previous, ":") ||
+        punctuation(next, "!") ||
+        punctuation(next, ":") ||
+        (next?.type === "column" && next.position === token.end);
+      const separated = next !== undefined && /\s/.test(text.slice(token.end, next.position));
+      const beginsOperand =
+        next !== undefined &&
+        (["identifier", "number", "string", "quotedName", "column", "error"].includes(next.type) ||
+          punctuation(next, "(") ||
+          (tolerant && next.type === "end"));
+      const prefix = keyword === "not" && expectsValue && separated && beginsOperand;
+      if (!qualified && ((!expectsValue && (keyword === "and" || keyword === "or")) || prefix)) {
+        expectsValue = true;
+        return { ...token, type: "operator", value: keyword as Operator };
+      }
+    }
+    expectsValue =
+      token.type === "operator" || (token.type === "punctuation" && token.value !== ")");
+    return token;
+  });
 }

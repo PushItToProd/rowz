@@ -30,6 +30,81 @@ describe("literals", () => {
 });
 
 describe("operators", () => {
+  it.each(["+", "-", "="] as const)("retains Not as a name before %s", (operator) => {
+    expect(parseFormula(`Not ${operator} 1`)).toEqual(
+      binary(operator, { type: "name", name: "Not" }, number(1)),
+    );
+  });
+
+  it("distinguishes NOT calls from spaced prefix negation", () => {
+    expect(parseFormula("NOT(0) + 1")).toEqual(
+      binary("+", { type: "call", name: "NOT", args: [number(0)] }, number(1)),
+    );
+    expect(parseFormula("NOT (0) + 1")).toEqual({
+      type: "unary",
+      operator: "not",
+      operand: binary("+", number(0), number(1)),
+    });
+  });
+
+  it("orders comparisons, not, and, and or, ignoring keyword case", () => {
+    expect(parseFormula("not 1 > 2 AnD 3 < 4 oR FALSE")).toEqual(
+      binary(
+        "or",
+        binary(
+          "and",
+          { type: "unary", operator: "not", operand: binary(">", number(1), number(2)) },
+          binary("<", number(3), number(4)),
+        ),
+        { type: "boolean", value: false },
+      ),
+    );
+  });
+
+  it.each([
+    "A and (not B or C)",
+    "not not TRUE",
+    "not (1 + 2) > 1",
+    "TRUE or FALSE or TRUE",
+    "TRUE and FALSE and TRUE",
+    "AND(TRUE, OR(FALSE, NOT(FALSE)))",
+    "AND (TRUE, FALSE)",
+    "and",
+    "or",
+    "not",
+    "'not' + 1",
+    "Not + 1",
+    "Not - 1",
+    "Not = 1",
+    "NOT(0) + 1",
+    "NOT (0) + 1",
+    "'and' and 'or'",
+    "and!A1 or not[or]",
+    "not!and!or",
+    "NOT:OR",
+    "[and] and [not]",
+    "LET(and, TRUE, and or FALSE)",
+  ])("round-trips %s through printing", (source) => {
+    const ast = parseFormula(source);
+    expect(parseFormula(printNode(ast))).toEqual(ast);
+  });
+
+  it("retains keyword names in name and reference positions", () => {
+    expect(parseFormula("not")).toEqual({ type: "name", name: "not" });
+    expect(parseFormula("not[or]")).toMatchObject({
+      type: "reference",
+      reference: { table: "not", column: "or" },
+    });
+    expect(parseFormula("not!and!or")).toEqual({
+      type: "qualified",
+      page: "not",
+      holder: "and",
+      name: "or",
+    });
+    expect(parseFormula("NOT(FALSE)")).toMatchObject({ type: "call", name: "NOT" });
+    expect(parseFormula("not (FALSE)")).toMatchObject({ type: "unary", operator: "not" });
+  });
+
   it("gives multiplication precedence over addition", () => {
     expect(parseFormula("1+2*3")).toEqual(
       binary("+", number(1), binary("*", number(2), number(3))),

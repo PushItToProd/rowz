@@ -2,8 +2,8 @@ import { columnLabel } from "./address";
 import type { ErrorCode } from "./values";
 
 export type BinaryOperator =
-  "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "!=" | "<" | ">" | "<=" | ">=";
-export type UnaryOperator = "+" | "-";
+  "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "!=" | "<" | ">" | "<=" | ">=" | "and" | "or";
+export type UnaryOperator = "+" | "-" | "not";
 
 /**
  * One corner of a reference. `$` markers are kept so a formula prints back as
@@ -89,7 +89,9 @@ const BARE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** Writes a page, table, or other name as it is typed in a formula, in single quotes unless it is a plain word. */
 export function quoteName(name: string): string {
-  return BARE_NAME.test(name) ? name : `'${name.replaceAll("'", "''")}'`;
+  return BARE_NAME.test(name) && !/^(and|or|not)$/i.test(name)
+    ? name
+    : `'${name.replaceAll("'", "''")}'`;
 }
 
 /** Writes a reference the way it is typed in a formula. */
@@ -125,9 +127,9 @@ export function printNode(node: Node): string {
     case "reference":
       return formatReference(node.reference);
     case "unary":
-      return `(${node.operator}${printNode(node.operand)})`;
+      return `(${node.operator}${node.operator === "not" ? " " : ""}${printNode(node.operand)})`;
     case "binary":
-      return `(${printNode(node.left)}${node.operator}${printNode(node.right)})`;
+      return `(${printNode(node.left)}${node.operator === "and" || node.operator === "or" ? ` ${node.operator} ` : node.operator}${printNode(node.right)})`;
     case "name":
       return quoteName(node.name);
     case "qualified":

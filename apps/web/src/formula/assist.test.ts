@@ -31,6 +31,13 @@ function labels(marked: string): string[] {
 }
 
 describe("suggestionsAt", () => {
+  it.each(["=A1 and rou", "=A1 OR rou", "=not rou"])(
+    "offers operand completion in %s",
+    (source) => {
+      expect(labels(source)).toEqual(["ROUND", "ROUNDDOWN", "ROUNDUP"]);
+    },
+  );
+
   it("offers functions that start with the typed letters, ignoring case, in alphabetical order", () => {
     expect(labels("=round")).toEqual(["ROUND", "ROUNDDOWN", "ROUNDUP"]);
     expect(labels("=1+ROUNDD")).toEqual(["ROUNDDOWN"]);

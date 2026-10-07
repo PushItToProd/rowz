@@ -6,7 +6,7 @@ This specification describes the strict formula expression parser in [`tokenizer
 
 ## Lexical grammar
 
-The tokenizer discards JavaScript `\s` whitespace between tokens. Whitespace inside a quoted string or quoted name is part of its value. Whitespace around calls, commas, range colons, and `!` qualifiers is accepted. A table name and its structured column token must touch: `Sales[Price]` is valid, while `Sales [Price]` is not.
+The tokenizer discards JavaScript `\s` whitespace between tokens. Whitespace inside a quoted string or quoted name is part of its value. Whitespace around calls, commas, range colons, and `!` qualifiers is accepted, except that whitespace between `NOT` and `(` selects prefix negation instead of a call. A table name and its structured column token must touch: `Sales[Price]` is valid, while `Sales [Price]` is not.
 
 The notation below describes token forms; the prose after it records tokenizer checks that EBNF does not express.
 
@@ -32,7 +32,7 @@ NonApostrophe     = ? any character other than APOSTROPHE ? ;
 ErrorLiteral      = "#DIV/0!" | "#VALUE!" | "#REF!" | "#NAME?" | "#N/A"
                   | "#SPILL!" | "#CYCLE!" | "#ASSERT!" | "#ERROR!" ;
 Operator          = "<>" | "!=" | "<=" | ">=" | "+" | "-" | "*" | "/"
-                  | "^" | "&" | "=" | "<" | ">" ;
+                  | "^" | "&" | "=" | "<" | ">" | "and" | "or" | "not" ;
 Punctuation       = "(" | ")" | "," | ":" | "!" ;
 DQUOTE            = '"' ;
 APOSTROPHE        = "'" ;
@@ -57,7 +57,10 @@ The grammar operates on the tokens above. Productions use parser predicates desc
 
 ```ebnf
 FormulaBody        = Expression ;
-Expression         = Comparison ;
+Expression         = Disjunction ;
+Disjunction        = Conjunction, { "or", Conjunction } ;
+Conjunction        = Negation, { "and", Negation } ;
+Negation           = "not", Negation | Comparison ;
 Comparison         = Concatenation, { ComparisonOperator, Concatenation } ;
 ComparisonOperator = "=" | "<>" | "!=" | "<" | ">" | "<=" | ">=" ;
 Concatenation      = Addition, { "&", Addition } ;
@@ -117,9 +120,16 @@ The operator grammar above gives the following precedence, from highest to lowes
 |            | `*`, `/`                              | Left-associative.                    |
 |            | `+`, `-`                              | Left-associative.                    |
 |            | `&`                                   | Left-associative.                    |
-| Lowest     | `=`, `<>`, `!=`, `<`, `>`, `<=`, `>=` | Left-associative.                    |
+|            | `=`, `<>`, `!=`, `<`, `>`, `<=`, `>=` | Left-associative.                    |
+|            | `not`                                 | Prefix.                              |
+|            | `and`                                 | Left-associative.                    |
+| Lowest     | `or`                                  | Left-associative.                    |
 
-Consequences include `-2^2` parsing as `(-2)^2`, `2^3^2` parsing as `(2^3)^2`, and `1&2=3` parsing as `(1&2)=3`. Parentheses can override these rules. `:` and `!` are reference punctuation, not operators in the expression tree. `=` is equality, not assignment. `AND`, `OR`, and `NOT` are function calls, not operators. There is no `??` operator.
+Consequences include `-2^2` parsing as `(-2)^2`, `2^3^2` parsing as `(2^3)^2`, and `1&2=3` parsing as `(1&2)=3`. Parentheses can override these rules. `:` and `!` are reference punctuation, not operators in the expression tree. `=` is equality, not assignment. `not x > 1 and y < 2` parses as `(not (x > 1)) and (y < 2)`. There is no `??` operator.
+
+Boolean keywords are case-insensitive contextual tokens. `and` and `or` become operators after an operand; in operand positions they remain names. Prefix `not` requires whitespace before a token that begins an operand: an identifier (including another `not`), number, string, quoted name, column, error literal, or `(`. An arithmetic or comparison operator does not begin an operand for this predicate, including unary `+` or `-`, so `Not + 1`, `Not - 1`, and `Not = 1` retain `Not` as a name. A standalone `not` remains a name. Keywords adjacent to a structured column or used as qualifier parts or range corners remain identifiers: `not[or]`, `and!A1`, `Holder!not`, and `NOT:OR`. Quoted names and bracketed columns never become operators. Printing and rewriting quote keyword names to preserve their meaning.
+
+The single exception to accepting whitespace before a function's `(` is `NOT`, regardless of letter case. Write `NOT(x)` without a space to call the function; `NOT (x)` is prefix negation and uses the precedence above. Thus `NOT(0) + 1` returns 2, while `NOT (0) + 1` parses as `not ((0) + 1)` and returns FALSE. This permits `not (A1 or B1)` to negate a grouped expression.
 
 ## Worked examples
 

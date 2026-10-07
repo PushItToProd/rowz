@@ -266,6 +266,9 @@ const OPERATORS = [
   ["+ -", "Add, subtract", "A1 + A2 - 1"],
   ["&", "Join as text", 'A1 & " items"'],
   ["= <> != < > <= >=", "Compare. The result is TRUE or FALSE.", "A1 != A2"],
+  ["not", "Boolean NOT", "not A1 > 1"],
+  ["and", "Boolean AND", "A1 > 1 and A2 < 2"],
+  ["or", "Boolean OR", "A1 or A2"],
 ] as const;
 </script>
 
@@ -560,6 +563,22 @@ const OPERATORS = [
       <p>
         Operators higher in this table are applied first. Operators in the same row are applied left
         to right. Parentheses override the order: <code>(1 + 2) * 3</code>.
+      </p>
+      <p>
+        Boolean keywords ignore case and use the coercion, range handling, and errors of
+        <code>AND</code>, <code>OR</code>, and <code>NOT</code>. Both operands of
+        <code>and</code> and <code>or</code> are evaluated. Comparisons bind tighter than
+        <code>not</code>, then <code>and</code>, then <code>or</code>:
+        <code>=A1 > 1 and (not B1 or C1 &lt; 2)</code>.
+      </p>
+      <p>
+        <code>and</code> and <code>or</code> are names where an operand is expected. Prefix
+        <code>not</code> needs whitespace: <code>not A1</code> or <code>not (A1 or B1)</code>. A
+        standalone <code>not</code> or one before an arithmetic or comparison operator is a name:
+        <code>LET(Not, 2, Not + 1)</code> returns 3. Keep the parenthesis touching the keyword for
+        function calls: <code>NOT(A1)</code>; <code>NOT (A1)</code> is prefix negation. Qualifiers
+        and columns remain names: <code>and!A1</code>, <code>not[or]</code>, <code>[and]</code>.
+        Single quotes always force a name: <code>'not' + 1</code>.
       </p>
       <table>
         <thead>

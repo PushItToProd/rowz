@@ -10,6 +10,7 @@ import {
 import { DAY_MS, dateFromMs, isDate } from "./dates";
 import { error, fail, Failure, finite } from "./errors";
 import { array, element, limitCells, number, scalar } from "./functions/arguments";
+import { logicFunctions } from "./functions/logic";
 import type { FunctionRegistry } from "./functions/registry";
 import {
   compare,
@@ -105,7 +106,11 @@ function arithmetic(operator: "+" | "-" | "*" | "/" | "^", left: Scalar, right: 
   return finite(result);
 }
 
-function binary(operator: BinaryOperator, left: Scalar, right: Scalar): Scalar {
+function binary(
+  operator: Exclude<BinaryOperator, "and" | "or">,
+  left: Scalar,
+  right: Scalar,
+): Scalar {
   switch (operator) {
     case "&":
       return toText(left) + toText(right);
@@ -349,6 +354,22 @@ function call(name: string, args: readonly Node[], context: EvaluationContext): 
   }
 }
 
+/** Local bindings cannot change the built-in meaning of a boolean operator. */
+function booleanOperation(
+  name: string,
+  args: readonly Node[],
+  context: EvaluationContext,
+): Evaluated {
+  const definition = logicFunctions[name];
+  if (definition?.kind !== "pure") throw new Error(`Missing boolean function ${name}`);
+  return returned(
+    definition.call(
+      args.map((arg) => () => evaluate(arg, context)),
+      context,
+    ),
+  );
+}
+
 /** Evaluates a node. Throws `Failure` where `evaluate` would return an error. */
 function compute(node: Node, context: EvaluationContext): Evaluated {
   switch (node.type) {
@@ -388,14 +409,19 @@ function compute(node: Node, context: EvaluationContext): Evaluated {
     case "apply":
       return applyValue(compute(node.target, context), node.args, context);
     case "unary": {
+      if (node.operator === "not") return booleanOperation("NOT", [node.operand], context);
       const sign = node.operator === "-" ? -1 : 1;
       return elementwise([operand(node.operand, context)], (value) => sign * number(value));
     }
-    case "binary":
+    case "binary": {
+      if (node.operator === "and" || node.operator === "or")
+        return booleanOperation(node.operator.toUpperCase(), [node.left, node.right], context);
+      const operator = node.operator;
       return elementwise(
         [operand(node.left, context), operand(node.right, context)],
-        (left = null, right = null) => binary(node.operator, left, right),
+        (left = null, right = null) => binary(operator, left, right),
       );
+    }
   }
 }
 
@@ -445,9 +471,11 @@ export function referencesOf(node: Node, functions: FunctionRegistry): Read[] {
     case "reference":
       return [{ reference: node.reference }];
     case "unary":
-      return operands([node.operand]);
+      return node.operator === "not" ? all([node.operand]) : operands([node.operand]);
     case "binary":
-      return operands([node.left, node.right]);
+      return node.operator === "and" || node.operator === "or"
+        ? all([node.left, node.right])
+        : operands([node.left, node.right]);
     case "call":
       return functions.get(node.name)?.kind === "action" ? [] : all(node.args);
     case "apply":
