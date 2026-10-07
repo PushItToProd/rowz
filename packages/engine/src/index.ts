@@ -188,6 +188,7 @@ export { parseScript, rewriteScript, scriptNames, type ScriptStatement } from ".
 export {
   createWorkbook,
   Workbook,
+  inputFitsColumnType,
   type ActionPlan,
   type AssertionFailure,
   type WorkbookOptions,

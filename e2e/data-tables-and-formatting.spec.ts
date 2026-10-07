@@ -193,6 +193,37 @@ test("a table with named columns has typed columns, a formula column, and column
   await expect(cell(page, "A1", "Table 2")).toHaveText("46");
 });
 
+test("warns before changing a column type when stored values do not fit", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "Done");
+  await enter(page, "A2", "TRUE");
+  await enter(page, "A3", "not done");
+  await enter(page, "A4", "FALSE");
+  await page.getByRole("button", { name: "Name columns" }).click();
+  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+
+  const header = page.locator('[data-table="Table 1"] thead th[data-column="Done"]');
+  await header.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Column holds: Checkbox" }).click();
+  const dialog = page.getByRole("dialog", { name: "Change column type" });
+  await expect(dialog).toContainText(
+    "1 of 3 cells in 'Done' are not TRUE or FALSE and will show #VALUE! as Checkbox. Change the type anyway?",
+  );
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+
+  await header.click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "✓ Column holds: Anything" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "Column holds: Checkbox" }).click();
+  await page
+    .getByRole("dialog", { name: "Change column type" })
+    .getByRole("button", { name: "Change type" })
+    .click();
+
+  await expect(cell(page, "A1").getByRole("checkbox")).toBeChecked();
+  await expect(cell(page, "A2")).toContainText("#VALUE!");
+  await expect(cell(page, "A3").getByRole("checkbox")).not.toBeChecked();
+});
+
 test("a data table is sorted and filtered in place, and edits and fills act on the rows shown", async ({
   page,
 }) => {

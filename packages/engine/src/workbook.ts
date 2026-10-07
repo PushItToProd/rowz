@@ -144,6 +144,11 @@ function parseTyped(input: string, type: ColumnDefinition["type"]): CellContent 
   }
 }
 
+/** Whether a stored input avoids an input-parsing error in a column of this type. */
+export function inputFitsColumnType(input: string, type: ColumnDefinition["type"]): boolean {
+  return input === "" || type === "formula" || parseTyped(input, type).type !== "invalid";
+}
+
 function parseContent(input: string): CellContent {
   if (!isFormulaInput(input)) return { type: "literal", value: parseLiteralInput(input) };
   try {

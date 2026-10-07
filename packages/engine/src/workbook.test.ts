@@ -3,11 +3,24 @@ import { defaultFunctions } from "./functions";
 import type { FunctionRegistry, PureFunction } from "./functions/registry";
 import { at, evaluateFormula, STRUCTURE, workbookWith } from "./testing";
 import type { CellValue } from "./values";
-import { createWorkbook, Workbook } from "./workbook";
+import { createWorkbook, inputFitsColumnType, Workbook } from "./workbook";
 
 function expectError(value: CellValue, code: string): void {
   expect(value).toMatchObject({ kind: "error", code });
 }
+
+describe("column input acceptance", () => {
+  it.each([
+    ["", "number", true],
+    [" TRUE ", "checkbox", true],
+    ["yes", "checkbox", false],
+    ["=[", "any", false],
+    ["=[", "text", true],
+    ["arbitrary input", "formula", true],
+  ] as const)("matches engine coercion for %j in %s columns", (input, type, expected) => {
+    expect(inputFitsColumnType(input, type)).toBe(expected);
+  });
+});
 
 describe("volatile recalculation", () => {
   it("refreshes clock formulas and dependents while retaining unrelated cached values", () => {

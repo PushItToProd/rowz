@@ -6,7 +6,7 @@ import {
   type ErrorTraceFrame,
 } from "@spreadsheet-app/engine";
 import { GRID_SIZE, LIMITS } from "@spreadsheet-app/shared";
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import { parseCsv, toCsv } from "../files/csv";
 import { download, fileName } from "../files/download";
 import type { TableRecord } from "../api/client";
@@ -14,6 +14,7 @@ import { useFormulaSessionStore } from "../formula/session";
 import { undoNotice } from "../notice";
 import { useDialog } from "../useDialog";
 import { useWorkbookStore } from "../stores/workbook";
+import { countMisfits, type ChoiceSettings } from "../columnTypes";
 import ContextMenu from "./ContextMenu.vue";
 import ChoicesPanel from "./ChoicesPanel.vue";
 import ConditionalFormatsPanel from "./ConditionalFormatsPanel.vue";
@@ -38,6 +39,10 @@ const store = useWorkbookStore();
 const sessions = useFormulaSessionStore();
 const dialog = useDialog();
 const activeSidePane = useActiveSidePane();
+let mounted = true;
+onBeforeUnmount(() => {
+  mounted = false;
+});
 const namesPaneId: `names:${string}` = `names:${props.table.id}`;
 const conditionalFormatsPaneId: `conditional-formats:${string}` = `conditional-formats:${props.table.id}`;
 
@@ -278,6 +283,88 @@ const COLUMN_TYPES: readonly { type: ColumnType; label: string }[] = [
 /** The column whose choices are being edited, while the panel for them is open. */
 const choosingFor = ref<number | null>(null);
 
+interface ColumnChanges {
+  type: ColumnType;
+  choices?: string[];
+  choicesFrom?: { tableId: string; colId: string };
+}
+
+/** Explains which inputs the engine will reject when a type change is applied. */
+function typeMisfitMessage(
+  count: number,
+  total: number,
+  name: string,
+  type: ColumnType,
+): string | null {
+  const column = `'${name.replaceAll("'", "''")}'`;
+  let detail: string;
+  switch (type) {
+    case "number":
+      detail = "are not numbers and will show #VALUE! as Number";
+      break;
+    case "date":
+      detail = "are not dates and will show #VALUE! as Date";
+      break;
+    case "checkbox":
+      detail = "are not TRUE or FALSE and will show #VALUE! as Checkbox";
+      break;
+    case "any":
+      detail = "are malformed formulas and will show #ERROR! as Anything";
+      break;
+    case "choice":
+      detail = "are malformed formulas and will show #ERROR! as a dropdown";
+      break;
+    default:
+      return null;
+  }
+  return `${String(count)} of ${String(total)} cells in ${column} ${detail}. Change the type anyway?`;
+}
+
+/** Saves a column type after confirming when the engine will reject stored inputs. */
+async function changeColumnType(colId: string, changes: ColumnChanges): Promise<boolean> {
+  const tableId = props.table.id;
+  const current = store.tables.find((table) => table.id === tableId);
+  const col = current?.colIds.indexOf(colId) ?? -1;
+  const column = current?.columns?.[col];
+  if (!current || col < 0 || !column) return false;
+
+  if (column.type !== changes.type && changes.type !== "formula") {
+    const inputs = current.rows.map((_row, row) => store.inputOf({ tableId, row, col }));
+    const misfits = countMisfits(changes.type, inputs);
+    if (misfits > 0) {
+      const message = typeMisfitMessage(misfits, inputs.length, column.name, changes.type);
+      if (message) {
+        const confirmed = await dialog.confirm({
+          title: "Change column type",
+          message,
+          confirmLabel: "Change type",
+        });
+        if (!confirmed || !mounted) return false;
+        const latest = store.tables.find((table) => table.id === tableId);
+        const latestCol = latest?.colIds.indexOf(colId) ?? -1;
+        if (!latest || latestCol < 0 || latest.columns?.[latestCol]?.type !== column.type) {
+          return false;
+        }
+        return store.updateColumn(tableId, latestCol, changes);
+      }
+    }
+  }
+
+  if (!mounted) return false;
+  const latest = store.tables.find((table) => table.id === tableId);
+  const latestCol = latest?.colIds.indexOf(colId) ?? -1;
+  if (!latest || latestCol < 0) return false;
+  return store.updateColumn(tableId, latestCol, changes);
+}
+
+/** Saves choice settings through the same type-change confirmation path. */
+async function saveChoices(settings: ChoiceSettings): Promise<boolean> {
+  const col = choosingFor.value;
+  const colId = col === null ? undefined : props.table.colIds[col];
+  if (!colId) return false;
+  return changeColumnType(colId, { type: "choice", ...settings });
+}
+
 /** The menu items that set what a named column holds. */
 function columnItems(col: number): MenuItem[] {
   const column = props.table.columns?.[col];
@@ -322,7 +409,7 @@ function columnItems(col: number): MenuItem[] {
     ...COLUMN_TYPES.map(({ type, label }) => ({
       label: `${column.type === type ? "✓ " : ""}Column holds: ${label}`,
       run: () => {
-        void store.updateColumn(id, col, { type });
+        if (colId) void changeColumnType(colId, { type });
       },
     })),
     {
@@ -355,6 +442,7 @@ function columnItems(col: number): MenuItem[] {
           ) {
             return;
           }
+          if (!mounted) return;
           sessions.columnPopover = { tableId: id, colId };
         })();
       },
@@ -800,6 +888,7 @@ const menuLabel = computed(() => {
       :key="choosingFor"
       :table="table"
       :col="choosingFor"
+      :save-choices="saveChoices"
       @close="choosingFor = null"
     />
 

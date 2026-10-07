@@ -3,8 +3,13 @@ import { LIMITS } from "@spreadsheet-app/shared";
 import { computed, ref } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
+import type { ChoiceSettings } from "../columnTypes";
 
-const props = defineProps<{ table: TableRecord; col: number }>();
+const props = defineProps<{
+  table: TableRecord;
+  col: number;
+  saveChoices: (settings: ChoiceSettings) => Promise<boolean>;
+}>();
 const emit = defineEmits<{ close: [] }>();
 const store = useWorkbookStore();
 
@@ -43,14 +48,11 @@ const valid = computed(() =>
 
 async function save(): Promise<void> {
   if (!valid.value) return;
-  const changes =
+  const settings: ChoiceSettings =
     source.value === "list"
-      ? { type: "choice" as const, choices: choices.value }
-      : {
-          type: "choice" as const,
-          choicesFrom: { tableId: sourceTableId.value, colId: sourceColId.value },
-        };
-  if (await store.updateColumn(props.table.id, props.col, changes)) emit("close");
+      ? { choices: choices.value }
+      : { choicesFrom: { tableId: sourceTableId.value, colId: sourceColId.value } };
+  if (await props.saveChoices(settings)) emit("close");
 }
 </script>
 

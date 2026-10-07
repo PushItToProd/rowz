@@ -5,7 +5,7 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { LIMITS } from "@spreadsheet-app/shared";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../api/client";
+import { api, type TableRecord } from "../api/client";
 import { download } from "../files/download";
 import { useWorkbookStore } from "../stores/workbook";
 import {
@@ -696,8 +696,10 @@ describe("column names", () => {
   ];
   const DATA_TABLE = { ...TABLE, columns: COLUMNS };
 
-  async function renderData(): Promise<void> {
-    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(), tables: [DATA_TABLE] }));
+  async function renderData(inputs: Record<string, string> = {}): Promise<void> {
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({ ...snapshotWith(inputs), tables: [DATA_TABLE] }),
+    );
     await useWorkbookStore().load("s1");
     const store = useWorkbookStore();
     wrapper = mount(
@@ -765,10 +767,29 @@ describe("column names", () => {
       "Column holds: A formula…",
     ]);
     await item("Column holds: Date").trigger("click");
+    await flushPromises();
+    expect(appDialog()).toBeNull();
     expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", {
       revision: expect.any(Number),
       type: "date",
     });
+  });
+
+  it("asks how many cells will fail and keeps the old type when canceled", async () => {
+    await renderData({ A1: "TRUE", A2: "yes", A3: "FALSE" });
+    await wrapper.get('[data-cell="A1"]').trigger("contextmenu");
+    await item("Column holds: Checkbox").trigger("click");
+    await flushPromises();
+
+    expect(appDialog()?.textContent).toContain(
+      "1 of 4 cells in 'Price' are not TRUE or FALSE and will show #VALUE! as Checkbox. Change the type anyway?",
+    );
+    expect(appDialog()?.textContent).toContain("Change type");
+    await respondToDialog("cancel");
+    await flushPromises();
+
+    expect(server.updateColumn).not.toHaveBeenCalled();
+    expect(useWorkbookStore().tables[0]?.columns?.[0]?.type).toBe("number");
   });
 
   function columnEditor(): EditorView {
@@ -1306,12 +1327,15 @@ describe("dropdown columns", () => {
     ],
   };
 
-  async function renderChoices(): Promise<void> {
+  async function renderChoices(
+    inputs: Record<string, string> = {},
+    data: TableRecord = DATA,
+  ): Promise<void> {
     server.getSnapshot.mockResolvedValue(
-      wireSnapshot({ ...snapshotWith(), tables: [DATA, SOURCE] }),
+      wireSnapshot({ ...snapshotWith(inputs), tables: [data, SOURCE] }),
     );
     await useWorkbookStore().load("s1");
-    wrapper = mount(TableCard, { props: { table: DATA }, attachTo: document.body });
+    wrapper = mount(TableCard, { props: { table: data }, attachTo: document.body });
     server.updateColumn.mockResolvedValue(changeWith());
     await wrapper.get('[data-cell="A1"]').trigger("contextmenu");
     await wrapper
@@ -1321,17 +1345,40 @@ describe("dropdown columns", () => {
   }
 
   it("opens a panel from the column menu and saves a list, one choice on each line", async () => {
-    await renderChoices();
+    await renderChoices({ A1: "outside" });
     const panel = wrapper.get('form[aria-label="Choices for Race"]');
     await panel.get("textarea").setValue(" Trial \n\nSprint\n");
     await panel.trigger("submit");
     await flushPromises();
+    expect(appDialog()).toBeNull();
     expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", {
       type: "choice",
       choices: ["Trial", "Sprint"],
       revision: expect.any(Number),
     });
     expect(wrapper.find("form.choices-panel").exists()).toBe(false);
+  });
+
+  it("asks before choices turn malformed formulas into errors", async () => {
+    const textData = {
+      ...DATA,
+      columns: DATA.columns.map((column, index) =>
+        index === 0 ? { ...column, type: "text" as const } : column,
+      ),
+    };
+    await renderChoices({ A1: "=[" }, textData);
+    const panel = wrapper.get('form[aria-label="Choices for Race"]');
+    await panel.get("textarea").setValue("Trial\nSprint");
+    await panel.trigger("submit");
+    await flushPromises();
+
+    expect(appDialog()?.textContent).toContain(
+      "1 of 4 cells in 'Race' are malformed formulas and will show #ERROR! as a dropdown. Change the type anyway?",
+    );
+    await respondToDialog("cancel");
+    await flushPromises();
+    expect(server.updateColumn).not.toHaveBeenCalled();
+    expect(useWorkbookStore().tables[0]?.columns?.[0]?.type).toBe("text");
   });
 
   it("saves a column of a data table as the source", async () => {
