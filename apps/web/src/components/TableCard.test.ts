@@ -622,8 +622,10 @@ describe("the menu of row, column, and cell actions", () => {
 
 describe("files", () => {
   /** Chooses a file in the table's file input, as picking one in the browser's dialog does. */
-  async function choose(name: string, content: string): Promise<void> {
-    const input = wrapper.get<HTMLInputElement>('input[type="file"]');
+  async function choose(name: string, content: string, action = "Import CSV"): Promise<void> {
+    const input = wrapper.get<HTMLInputElement>(
+      `label[data-block-action="${action}"] input[type="file"]`,
+    );
     Object.defineProperty(input.element, "files", {
       configurable: true,
       value: [new File([content], name, { type: "text/csv" })],
@@ -701,6 +703,72 @@ describe("files", () => {
       expect.any(Array),
     );
     expect(useWorkbookStore().inputOf(at("C3"))).toBe("kept");
+  });
+
+  it("confirms named-column mapping before appending parsed CSV rows", async () => {
+    const named: TableRecord = {
+      ...TABLE,
+      name: "Sales",
+      columns: [
+        { name: "Item", type: "text" },
+        { name: "Qty", type: "number" },
+        { name: "Notes", type: "any" },
+      ],
+    };
+    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(), tables: [named] }));
+    await useWorkbookStore().load("s1");
+    const store = useWorkbookStore();
+    wrapper = mount(TableCard, { props: { table: named }, attachTo: document.body });
+
+    await choose("sales.csv", "item,QTY,Notes\nPen,2,first\nPencil,3,second", "Append CSV rows");
+    expect(appDialog()?.textContent).toContain(
+      "Append 2 rows to Sales? Matched columns: Item, Qty, Notes.",
+    );
+    expect(server.appendCsvRows).not.toHaveBeenCalled();
+    await respondToDialog("cancel");
+    expect(server.appendCsvRows).not.toHaveBeenCalled();
+
+    await choose("sales.csv", "QTY,qTy,item,Unknown\n007,999,Pen,ignored", "Append CSV rows");
+    expect(appDialog()?.textContent).toContain(
+      "Append 1 row to Sales? Matched columns: Qty, Item. Ignored: Unknown. Duplicate columns ignored: qTy.",
+    );
+    await respondToDialog("confirm");
+    await flushPromises();
+    expect(server.appendCsvRows).toHaveBeenCalledExactlyOnceWith("t1", [
+      ["QTY", "qTy", "item", "Unknown"],
+      ["007", "999", "Pen", "ignored"],
+    ]);
+    expect(store.notice).toBeNull();
+  });
+
+  it("shows the matching-header refusal without calling the server", async () => {
+    const named: TableRecord = {
+      ...TABLE,
+      columns: [{ name: "Item", type: "text" }],
+    };
+    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(), tables: [named] }));
+    await useWorkbookStore().load("s1");
+    wrapper = mount(TableCard, { props: { table: named }, attachTo: document.body });
+
+    await choose("bad.csv", "Unknown\nvalue", "Append CSV rows");
+    expect(appDialog()?.textContent).toContain(
+      "The first row of the file has no column names that match this table.",
+    );
+    expect(server.appendCsvRows).not.toHaveBeenCalled();
+  });
+
+  it("confirms plain-grid append without dropping its first row", async () => {
+    await render();
+    await choose("grid.csv", "header,value\nfirst,1", "Append CSV rows");
+    expect(appDialog()?.textContent).toContain(
+      "Append 2 rows to Table 1? Columns are matched by position.",
+    );
+    await respondToDialog("confirm");
+    await flushPromises();
+    expect(server.appendCsvRows).toHaveBeenCalledExactlyOnceWith("t1", [
+      ["header", "value"],
+      ["first", "1"],
+    ]);
   });
 });
 

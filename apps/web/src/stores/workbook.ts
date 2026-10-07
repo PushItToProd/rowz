@@ -298,8 +298,15 @@ export const useWorkbookStore = defineStore("workbook", () => {
     load,
     refresh,
   } = createSync(context);
-  const { setIdentifiedCell, submitFormulaDraft, setCell, setCells, writeCells, appendCell } =
-    createWrites(context);
+  const {
+    setIdentifiedCell,
+    submitFormulaDraft,
+    setCell,
+    setCells,
+    writeCells,
+    appendCsvRows,
+    appendCell,
+  } = createWrites(context);
   const {
     setTableDisplay,
     setTableNames,
@@ -478,6 +485,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     tables,
     views,
     importRows,
+    appendCsvRows,
     shownRows,
     toFile,
     evaluateOnPage,

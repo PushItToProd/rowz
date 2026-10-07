@@ -162,6 +162,21 @@ export function createWrites(context: WorkbookContext) {
     return writeCells({ tableId, row: 0, col: 0 }, writes);
   }
 
+  /** Appends parsed CSV rows in one server change and one undo step. */
+  async function appendCsvRows(
+    tableId: string,
+    rows: readonly (readonly string[])[],
+  ): Promise<void> {
+    if (!context.canEdit.value || rows.length === 0) return;
+    await context.attempt(async () => {
+      const change = await api.appendCsvRows(
+        tableId,
+        rows.map((row) => [...row]),
+      );
+      await context.receiveChange(change);
+    }, "The rows could not be appended");
+  }
+
   async function saveCellChanges(
     pending: { tableId: string; changes: CellChange[] },
     stepId: string,
@@ -302,5 +317,13 @@ export function createWrites(context: WorkbookContext) {
     if (input === "") return Promise.resolve();
     return setCell({ tableId, row: table.rowCount, col }, input, writtenAt);
   }
-  return { setIdentifiedCell, submitFormulaDraft, setCell, setCells, writeCells, appendCell };
+  return {
+    setIdentifiedCell,
+    submitFormulaDraft,
+    setCell,
+    setCells,
+    writeCells,
+    appendCsvRows,
+    appendCell,
+  };
 }

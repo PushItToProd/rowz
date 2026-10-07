@@ -347,6 +347,7 @@ export function mockApi(): MockedApi {
         Promise.resolve(changeWith({ tables: [{ id, table: null }] })),
       ),
     setCells: vi.fn().mockImplementation(savedCells),
+    appendCsvRows: vi.fn().mockResolvedValue(changeWith()),
     undo: vi.fn().mockResolvedValue({
       outcome: "nothing",
       label: null,

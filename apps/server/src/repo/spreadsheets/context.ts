@@ -433,6 +433,8 @@ export class RepositoryContext {
 
   readonly deleteTable = tablesOperations.deleteTable.bind(null, this);
 
+  readonly appendCsvRows = tablesOperations.appendCsvRows.bind(null, this);
+
   readonly setCells = cellsOperations.setCells.bind(null, this);
 
   readonly checkNewRows = cellsOperations.checkNewRows.bind(null, this);

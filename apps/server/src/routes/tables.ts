@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import {
   cellParam,
   columnParam,
+  appendCsvRowsBody,
   controlInputBody,
   formatCellsBody,
   makeColumnsBody,
@@ -163,6 +164,18 @@ export function tableRoutes(dependencies: ActionDependencies) {
         async (c) =>
           c.json(
             await c.var.repository.setCells(c.req.valid("param").tableId, c.req.valid("json")),
+          ),
+      )
+      .post(
+        "/:tableId/rows/import",
+        zValidator("param", tableParam, onInvalid),
+        zValidator("json", appendCsvRowsBody, onInvalid),
+        async (c) =>
+          c.json(
+            await c.var.repository.appendCsvRows(
+              c.req.valid("param").tableId,
+              c.req.valid("json").rows,
+            ),
           ),
       )
       .post(

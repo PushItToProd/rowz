@@ -1202,10 +1202,17 @@ const OPERATORS = [
           open. The file contains the values the cells show, not their formulas.
         </li>
         <li>
-          <strong>Import CSV</strong> reads a CSV file into a table, starting at A1. The table grows
+          <strong>Import CSV</strong> replaces the table contents, starting at A1. The table grows
           to fit, up to {{ LIMITS.tableRows }} rows and {{ LIMITS.tableCols }} columns. A cell in
           the file that starts with <code>=</code> becomes a formula. Files with semicolons or tabs
           between cells are read too.
+        </li>
+        <li>
+          <strong>Append CSV rows</strong> adds rows after the last row of a data table or the last
+          used row of a plain table. In a data table, the first row is a header; names match without
+          regard to case, unmatched CSV columns are ignored, and table columns missing from the file
+          stay blank. In a plain table, every row is appended, including the first, and columns
+          match by position. Appending is one undoable change.
         </li>
       </ul>
     </section>

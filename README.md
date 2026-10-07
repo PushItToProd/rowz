@@ -105,7 +105,12 @@ With focus in a table grid, the arrow keys move one cell, and Shift+Arrow extend
 
 Conditional formats give cells a fill, a text color, bold, or wrapped text when their own value meets a `COUNTIF`-style criterion such as `>100`, or shade a range of numbers with a two-color scale. A quoted text criterion such as `="foobar"` compares the cell's value to a string using the formula language's text equality. Rules are stored per table, follow rows and columns as they are inserted and deleted, and are laid over the plain formats.
 
-Each table also exports to CSV (the values shown) and imports from CSV.
+Each table exports to CSV (the values shown). **Import CSV** replaces the table contents from A1.
+**Append CSV rows** adds rows after the last row of a data table or the last used row of a plain
+table. For a data table, the first CSV row is a header: column names match without regard to case,
+unmatched CSV columns are ignored, and columns missing from the file stay blank. For a plain table,
+every CSV row is appended, including the first, and columns match by position. Appending is one
+undoable change.
 
 ### Charts
 

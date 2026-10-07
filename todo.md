@@ -468,7 +468,8 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] **P7** CSV export - two modes: rowz-compatible and data export (selected from a dropdown on the "Export CSV" button) #documents
   - [ ] rowz-compatible: keep verbatim formulas (so the user can reupload it and have their rowz behavior stay the same).
   - [ ] data export: the output is an export that has all calculations materialized so it can be used with any tool that supports reading CSVs
-- [ ] **P6** CSV import - support appending to a data table instead of replacing it #documents
+- [x] **P6** CSV import - support appending to a data table instead of replacing it #documents
+  - (Codex) completed on 2026-10-07: data-table CSV headers map case-insensitively, plain grids append by position, and one undo reverses the append.
 
 ## Undo and collaboration
 
@@ -678,3 +679,10 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [ ] With several cursors from Ctrl+D in the formula editor, accepting an autocomplete suggestion updates only the primary cursor's token (`FormulaEditor.vue` near line 173) #formula-editing
 - [ ] With several cursors from Ctrl+D, picking a reference changes only the primary match and drops the other cursors (`apps/web/src/formula/picking.ts` near lines 24 and 286) #formula-editing
+
+- [ ] **P2** right-clicking the lower part of a page tab shows the page tab context menu with its bottom part hidden behind a table on the page (other element types may do the same). Keep the menu above every block: stack it above blocks, or render it in a top-level layer, and keep it inside the viewport #everyday
+- [ ] **P2** right-clicking the buttons that move a page left or right, or delete it, shows the browser's native context menu and not the page tab context menu. Show the tab menu from anywhere on the tab, including its buttons #everyday
+- [ ] **P2** the page tab's delete button is a gray "x", which looks like "close this tab", a non-destructive action, and not "delete this tab", which it is. Make it a trash can icon, or at least a red "x", with a label and tooltip that say it deletes. Undo can bring a deleted page back, but if the person makes other changes before they notice, they must undo all of those changes first #everyday
+
+- [ ] **P10** The CSV append confirmation previews the mapping from the table as it was when the dialog opened, and the server maps the rows against the current columns; a rename or a plain/named switch in another session can change the mapping after confirmation, and a table deleted while the request waits for the lock gets 404 and not 409 (`TableCard.vue` near line 128, `repo/spreadsheets/tables.ts` near line 148, `context.ts` near line 289) #documents
+- [ ] The CSV append confirmation does not say that cells starting with `=` are stored as formulas (as in replace import), so a file can add a button; actions still run only when the button is clicked (`TableCard.vue` near line 151) #documents

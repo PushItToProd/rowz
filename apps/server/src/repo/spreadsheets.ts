@@ -11,6 +11,7 @@ import {
   type IdentityConditionalRule,
   type IdentityFormatRange,
   type IdentifiedStructuralEditBody,
+  type AppendCsvRowsBody,
   type ResizeLinesBody,
   type SpreadsheetFile,
   type UpdateTableBody,
@@ -392,6 +393,11 @@ export class SpreadsheetRepository {
 
   async deleteTable(tableId: string): Promise<Change> {
     return this.context.deleteTable(tableId);
+  }
+
+  /** Appends parsed CSV rows in one journaled change. */
+  async appendCsvRows(tableId: string, rows: AppendCsvRowsBody["rows"]): Promise<Change> {
+    return this.context.appendCsvRows(tableId, rows);
   }
 
   /**

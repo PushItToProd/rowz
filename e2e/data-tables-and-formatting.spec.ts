@@ -55,6 +55,18 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await page.getByLabel("Import CSV").setInputFiles(csvPath);
   await expect(cell(page, "A2")).toHaveText("pears, ripe");
   await expect(cell(page, "B2")).toHaveText("6");
+  await page.getByLabel("Append CSV rows").setInputFiles(csvPath);
+  const appendConfirm = page.getByRole("dialog", { name: "Append CSV rows" });
+  await expect(appendConfirm).toContainText(
+    "Append 2 rows to Table 1? Columns are matched by position.",
+  );
+  await appendConfirm.getByRole("button", { name: "Append" }).click();
+  await expect(cell(page, "A3")).toHaveText("apples");
+  await expect(cell(page, "B4")).toHaveText("6");
+  await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(cell(page, "A3")).toHaveText("");
+  await expect(cell(page, "B4")).toHaveText("");
   // CSV values appear optimistically; verify the save before leaving the document.
   await reload(page);
   await expect(cell(page, "A1")).toHaveText("apples");

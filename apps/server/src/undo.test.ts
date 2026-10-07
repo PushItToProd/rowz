@@ -441,6 +441,23 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "append CSV rows to a data table",
+    async prepare({ tableId }) {
+      await owner.json("POST", `/tables/${tableId}/columns`, { headerRow: false });
+      return {
+        method: "POST",
+        path: `/tables/${tableId}/rows/import`,
+        body: {
+          rows: [
+            ["column 1", "column 2"],
+            ["appended", "2"],
+          ],
+        },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "run an action that overwrites a data table and deletes the rows it empties",
     async prepare({ pageId, tableId }) {
       await owner.json(

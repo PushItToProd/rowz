@@ -18,6 +18,7 @@ import type {
 } from "@spreadsheet-app/server";
 import { CLIENT_ID_HEADER, STEP_ID_HEADER, UNDOABLE_HEADER } from "@spreadsheet-app/shared";
 import type {
+  AppendCsvRowsBody,
   ApiError,
   ReplaceBody,
   ReplaceReport,
@@ -405,6 +406,14 @@ export const api = {
         param: { tableId },
         json: { cells, revision, appendRows },
         ...(stepId === undefined ? {} : { headers: { [STEP_ID_HEADER]: stepId } }),
+      }),
+    ),
+
+  appendCsvRows: (tableId: string, rows: AppendCsvRowsBody["rows"]): Promise<Change> =>
+    body(
+      routes.tables[":tableId"].rows.import.$post({
+        param: { tableId },
+        json: { rows },
       }),
     ),
 

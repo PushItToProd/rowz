@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export { keyBetween, keysAfter, rebalanceKeys, MAX_ORDER_KEY_LENGTH } from "./order-keys.ts";
+export { mapCsvRowsForAppend, type CsvAppendMapping } from "./csv.ts";
 export {
   layoutsOf,
   TableLayout,
@@ -362,6 +363,16 @@ export const setCellsBody = z
   .refine((body) => body.cells.length + (body.appendRows?.length ?? 0) > 0, {
     message: "Give at least one cell or row",
   });
+
+const csvImportRow = z.array(z.string().max(LIMITS.inputLength)).max(LIMITS.tableCols);
+
+/** Parsed rows from a CSV file. A named table's first row holds its headers. */
+export const appendCsvRowsBody = z.object({
+  rows: z.array(csvImportRow).max(LIMITS.tableRows + 1, {
+    message: `A CSV file can have at most ${String(LIMITS.tableRows)} data rows`,
+  }),
+});
+export type AppendCsvRowsBody = z.infer<typeof appendCsvRowsBody>;
 
 /** A value sent by an input control in a cell. */
 export const controlInputBody = z.object({

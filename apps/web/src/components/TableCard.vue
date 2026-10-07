@@ -8,6 +8,7 @@ import {
 import { GRID_SIZE, LIMITS } from "@spreadsheet-app/shared";
 import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import { parseCsv, toCsv } from "../files/csv";
+import { prepareCsvAppend } from "../files/csv-append";
 import { download, fileName } from "../files/download";
 import type { TableRecord } from "../api/client";
 import { useFormulaSessionStore } from "../formula/session";
@@ -115,6 +116,54 @@ async function importCsv(event: Event): Promise<void> {
     return;
   }
   await store.importRows(props.table.id, rows);
+}
+
+/** Appends parsed CSV rows, using a header to map a data table's named columns. */
+async function appendCsv(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const [file] = input.files ?? [];
+  input.value = "";
+  if (!file) return;
+
+  const prepared = prepareCsvAppend(await file.text(), props.table);
+  if ("noMatchingColumns" in prepared) {
+    await dialog.alert({
+      title: "Cannot append CSV rows",
+      message: "The first row of the file has no column names that match this table.",
+    });
+    return;
+  }
+  if (prepared.dataRows > LIMITS.tableRows) {
+    await dialog.alert({
+      title: "Cannot append CSV rows",
+      message: `A table can have at most ${String(LIMITS.tableRows)} rows`,
+    });
+    return;
+  }
+
+  const details = props.table.columns
+    ? [
+        `Matched columns: ${prepared.matchedColumns.join(", ")}.`,
+        ...(prepared.ignoredColumns.length > 0
+          ? [`Ignored: ${prepared.ignoredColumns.join(", ")}.`]
+          : []),
+        ...(prepared.duplicateColumnsIgnored.length > 0
+          ? [`Duplicate columns ignored: ${prepared.duplicateColumnsIgnored.join(", ")}.`]
+          : []),
+      ].join(" ")
+    : "Columns are matched by position.";
+  const rowNoun = prepared.dataRows === 1 ? "row" : "rows";
+  if (
+    !(await dialog.confirm({
+      title: "Append CSV rows",
+      message: `Append ${String(prepared.dataRows)} ${rowNoun} to ${props.table.name}? ${details}`,
+      confirmLabel: "Append",
+    }))
+  ) {
+    return;
+  }
+  if (prepared.dataRows === 0) return;
+  await store.appendCsvRows(props.table.id, prepared.sourceRows);
 }
 
 type Axis = "row" | "col";
@@ -804,6 +853,10 @@ const menuLabel = computed(() => {
           <label class="file-button" data-block-action="Import CSV">
             Import CSV
             <input type="file" accept=".csv,.tsv,.txt,text/csv" @change="importCsv" />
+          </label>
+          <label class="file-button" data-block-action="Append CSV rows">
+            Append CSV rows
+            <input type="file" accept=".csv,.tsv,.txt,text/csv" @change="appendCsv" />
           </label>
           <button type="button" data-block-action="Export CSV" @click="exportCsv">
             Export CSV

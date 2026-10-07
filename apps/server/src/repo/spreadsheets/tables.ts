@@ -6,12 +6,20 @@ import {
   type SortKey,
   type TableName,
 } from "@spreadsheet-app/engine";
-import { type UpdateTableBody } from "@spreadsheet-app/shared";
+import { eq } from "drizzle-orm";
+import {
+  LIMITS,
+  mapCsvRowsForAppend,
+  type AppendCsvRowsBody,
+  type StoredCell,
+  type UpdateTableBody,
+} from "@spreadsheet-app/shared";
 import { randomUUID } from "node:crypto";
 
 import { orderedRows, type Change } from "../journal";
 
-import { columnDeleted, conflict, notFound, unprocessable } from "../../errors";
+import { ApiFailure, columnDeleted, conflict, notFound, unprocessable } from "../../errors";
+import { cells as storedCells } from "../../db/schema";
 import { type TableRecord, type Created } from "./records";
 import { filterFormula, resized, columnNameFrom, rethrowDuplicate } from "./helpers";
 import type { RepositoryContext } from "./context";
@@ -125,6 +133,92 @@ export async function updateTable(
           : { display }),
       })
       .catch(rethrowDuplicate("table", changes.name ?? ""));
+  });
+  return change;
+}
+
+/** Appends parsed CSV rows in one journaled change, mapping named-table headers under the lock. */
+export async function appendCsvRows(
+  ctx: RepositoryContext,
+  tableId: string,
+  sourceRows: AppendCsvRowsBody["rows"],
+): Promise<Change> {
+  const { change } = await ctx.changeTable(tableId, async (table, tx, writer) => {
+    writer.setLabel(`Append rows to ${table.name}`);
+    const mapped = mapCsvRowsForAppend(sourceRows, table.columns, table.colIds.length);
+    if ("noMatchingColumns" in mapped) {
+      throw unprocessable(
+        "no_matching_columns",
+        "The first row of the file has no column names that match this table.",
+      );
+    }
+
+    const rows = await orderedRows(tx, tableId);
+    let startRow = rows.length;
+    if (!table.columns) {
+      const indexes = new Map(rows.map((row, index) => [row.id, index]));
+      const occupied = await tx
+        .select({ rowId: storedCells.rowId })
+        .from(storedCells)
+        .where(eq(storedCells.tableId, tableId));
+      startRow = Math.max(-1, ...occupied.map(({ rowId }) => indexes.get(rowId) ?? -1)) + 1;
+    }
+    const endRow = startRow + mapped.rows.length;
+    if (mapped.rows.length > LIMITS.tableRows || endRow > LIMITS.tableRows) {
+      throw unprocessable(
+        "table_full",
+        `A table can have at most ${String(LIMITS.tableRows)} rows`,
+      );
+    }
+    const width = Math.max(table.colIds.length, ...mapped.rows.map((row) => row.length));
+    if (width > LIMITS.tableCols) {
+      throw unprocessable(
+        "too_many_columns",
+        `A table can have at most ${String(LIMITS.tableCols)} columns`,
+      );
+    }
+    if (table.columns && mapped.rows.some((row) => row.length > table.colIds.length)) {
+      throw unprocessable("too_many_columns", "A data table cannot import unnamed columns");
+    }
+    const writeCount = mapped.rows.reduce(
+      (total, row) =>
+        total +
+        row.filter((input, col) => input !== "" && table.columns?.[col]?.type !== "formula").length,
+      0,
+    );
+    if (writeCount >= 20) {
+      await ctx.keepVersion(tx, table.spreadsheetId, `Before appending to ${table.name}`);
+    }
+
+    let colIds = [...table.colIds];
+    if (!table.columns && width > colIds.length) {
+      colIds = [...colIds, ...Array.from({ length: width - colIds.length }, () => randomUUID())];
+      await writer.updateTable(tableId, { colIds });
+    }
+    const added =
+      endRow > rows.length
+        ? await writer.insertRows(tableId, rows.length, endRow - rows.length)
+        : [];
+    const targetRows = [...rows, ...added];
+    const written: StoredCell[] = [];
+    mapped.rows.forEach((row, rowOffset) => {
+      row.forEach((input, col) => {
+        if (input === "" || table.columns?.[col]?.type === "formula") return;
+        const target = targetRows[startRow + rowOffset];
+        const colId = colIds[col];
+        if (!target || !colId) return;
+        written.push({ tableId, rowId: target.id, colId, input });
+      });
+    });
+    await writer.setCells(written);
+    if (writer.recorded()?.data === null) {
+      throw new ApiFailure(
+        400,
+        "replacement_too_large",
+        "This replacement is too large to undo. Choose a smaller scope",
+      );
+    }
+    if (written.length > 0) await ctx.checkCellCount(tx, table.spreadsheetId);
   });
   return change;
 }
