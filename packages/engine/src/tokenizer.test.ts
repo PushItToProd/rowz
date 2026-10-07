@@ -120,7 +120,7 @@ describe("tokenize", () => {
     ]);
   });
 
-  it.each(["#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#CYCLE!", "#ERROR!"])(
+  it.each(["#DIV/0!", "#VALUE!", "#NUM!", "#REF!", "#NAME?", "#CYCLE!", "#ERROR!"])(
     "reads the error literal %s",
     (code) => {
       expect(summarize(`1+${code}`)).toEqual([

@@ -345,6 +345,15 @@ describe("CellView", () => {
     wrapper.unmount();
   });
 
+  it("explains a numeric error without a custom message", async () => {
+    const wrapper = render({ kind: "error", code: "#NUM!" });
+    await wrapper.get("span").trigger("mouseenter");
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
+      "A number is outside the range accepted by a function.",
+    );
+    wrapper.unmount();
+  });
+
   it("links an error popover to the script function that raised it", async () => {
     const trace = [
       {

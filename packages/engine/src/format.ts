@@ -1,4 +1,5 @@
 import { dateParts, type DateValue } from "./dates";
+import { roundDecimalToFixed } from "./functions/rounding";
 
 /**
  * Formats for `TEXT`, in the notation other spreadsheets use.
@@ -45,19 +46,6 @@ function group(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+$)/g, ",");
 }
 
-/** Writes a number in fixed decimal notation without exponent notation. */
-function fixed(value: number, decimals: number): string {
-  if (!Number.isInteger(value)) return value.toFixed(decimals);
-
-  // Large integers may be unsafe to represent exactly, so preserve JavaScript's
-  // shortest round-tripping decimal form instead of exposing binary digits.
-  const shown = value.toString();
-  const match = /^(\d+)(?:\.(\d+))?e\+(\d+)$/.exec(shown);
-  const [, whole = "", fraction = "", exponent = "0"] = match ?? [];
-  const digits = match ? (whole + fraction).padEnd(whole.length + Number(exponent), "0") : shown;
-  return decimals === 0 ? digits : `${digits}.${"0".repeat(decimals)}`;
-}
-
 export function formatNumber(value: number, format: string): string {
   // Quoted text is set aside first, so a digit or `%` inside it is not read as
   // part of the format. Each piece is held by one private-use character.
@@ -80,23 +68,17 @@ export function formatNumber(value: number, format: string): string {
   const minDecimals = fraction.lastIndexOf("0") + 1;
   const minWhole = whole.replaceAll(/[#,]/g, "").length;
 
-  const scaled = (before + after).includes("%") ? value * 100 : value;
+  const percent = (before + after).includes("%");
+  const scaled = percent ? value * 100 : value;
   if (!Number.isFinite(scaled))
     throw new FormatError("The number is too large to show as a percentage");
-  const magnitude = Math.abs(scaled);
-  const shifted = magnitude * 10 ** maxDecimals;
-  // Half away from zero, as ROUND does. A number too large to shift has no decimals to round.
-  const rounded = Number.isInteger(magnitude)
-    ? magnitude
-    : Number.isFinite(shifted)
-      ? Math.round(shifted) / 10 ** maxDecimals
-      : magnitude;
-  const [digits = "0", decimals = ""] = fixed(rounded, maxDecimals).split(".");
+  const rounded = roundDecimalToFixed(value, maxDecimals, "halfAwayFromZero", percent ? 2 : 0);
+  const [digits = "0", decimals = ""] = rounded.replace(/^-/, "").split(".");
 
   const trimmed = decimals.replace(/0+$/, "").padEnd(minDecimals, "0");
   const padded = (digits === "0" ? "" : digits).padStart(minWhole, "0");
   const shownWhole = whole.includes(",") ? group(padded) : padded;
-  const sign = value < 0 && rounded !== 0 ? "-" : "";
+  const sign = value < 0 && /[1-9]/.test(digits + decimals) ? "-" : "";
   const point = trimmed === "" ? "" : ".";
   return `${sign}${restore(before)}${shownWhole}${point}${trimmed}${restore(after)}`;
 }

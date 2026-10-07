@@ -15,6 +15,7 @@ const explanation = computed(
     {
       "#DIV/0!": "The formula divides by zero.",
       "#VALUE!": "A value has the wrong type or is outside the allowed range.",
+      "#NUM!": "A number is outside the range accepted by a function.",
       "#REF!": "The formula refers to a cell, column, or block that cannot be found.",
       "#NAME?": "The formula uses an unknown or ambiguous name.",
       "#N/A": "No matching value was found.",

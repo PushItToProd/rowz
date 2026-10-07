@@ -14,6 +14,7 @@ import {
   scalar,
 } from "./arguments";
 import type { FunctionDefinition } from "./registry";
+import { roundDecimal, roundToMultiple, roundToNearestMultiple } from "./rounding";
 import { compensatedSum } from "./sum";
 
 function aggregate(compute: (values: readonly number[]) => Evaluated): FunctionDefinition {
@@ -46,25 +47,18 @@ function median(values: readonly number[]): number {
   return sorted.length % 2 === 1 ? above : (below + above) / 2;
 }
 
-type Rounding = (value: number) => number;
-
-/** Rounds half away from zero, as spreadsheets do. `Math.round` rounds half toward positive infinity. */
-const halfAwayFromZero: Rounding = (value) => Math.sign(value) * Math.round(Math.abs(value));
-const awayFromZero: Rounding = (value) => Math.sign(value) * Math.ceil(Math.abs(value));
-
 /** Applies a rounding at a number of decimal places. Negative places round to tens, hundreds, and so on. */
-function atPlaces(rounding: Rounding): FunctionDefinition {
+function atPlaces(mode: "halfAwayFromZero" | "awayFromZero" | "towardZero"): FunctionDefinition {
   return eager(1, 2, (value, places = 0) => {
-    const factor = 10 ** integer(places);
-    return rounding(number(value) * factor) / factor;
+    return roundDecimal(number(value), integer(places), mode);
   });
 }
 
 /** Rounds to a multiple of `significance`, which defaults to 1. */
-function toMultiple(rounding: Rounding): FunctionDefinition {
+function toMultiple(direction: "floor" | "ceil"): FunctionDefinition {
   return eager(1, 2, (value, significance = 1) => {
     const step = number(significance);
-    return step === 0 ? 0 : rounding(number(value) / step) * step;
+    return step === 0 ? 0 : roundToMultiple(number(value), step, direction);
   });
 }
 
@@ -180,12 +174,17 @@ export const mathFunctions: Record<string, FunctionDefinition> = {
       ),
     );
   }),
-  TRUNC: atPlaces(Math.trunc),
+  TRUNC: atPlaces("towardZero"),
   SIGN: eager(1, 1, (value) => Math.sign(number(value))),
   /** Rounds to the nearest multiple. */
   MROUND: eager(2, 2, (value, multiple) => {
     const step = number(multiple);
-    return step === 0 ? 0 : halfAwayFromZero(number(value) / step) * step;
+    if (step === 0) return 0;
+    const given = number(value);
+    if (given !== 0 && Math.sign(given) !== Math.sign(step)) {
+      fail("#NUM!", "MROUND needs the number and multiple to have the same sign");
+    }
+    return roundToNearestMultiple(given, step);
   }),
   /** The whole-number part of a division. */
   QUOTIENT: eager(2, 2, (dividend, divisor) => {
@@ -263,12 +262,12 @@ export const mathFunctions: Record<string, FunctionDefinition> = {
     (...values) => items(values).filter(({ value }) => value !== null && value !== "").length,
   ),
 
-  ROUND: atPlaces(halfAwayFromZero),
+  ROUND: atPlaces("halfAwayFromZero"),
   CLAMP: eager(3, 3, clamp),
-  ROUNDUP: atPlaces(awayFromZero),
-  ROUNDDOWN: atPlaces(Math.trunc),
-  FLOOR: toMultiple(Math.floor),
-  CEILING: toMultiple(Math.ceil),
+  ROUNDUP: atPlaces("awayFromZero"),
+  ROUNDDOWN: atPlaces("towardZero"),
+  FLOOR: toMultiple("floor"),
+  CEILING: toMultiple("ceil"),
   INT: eager(1, 1, (value) => Math.floor(number(value))),
   ABS: eager(1, 1, (value) => Math.abs(number(value))),
   SQRT: eager(1, 1, (value) => Math.sqrt(number(value))),

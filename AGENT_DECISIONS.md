@@ -787,3 +787,5 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 **Choice.** Wrapped text is clipped to the cell's configured row height with a line-clamp ellipsis. Hovering the cell shows the full value. Wrapping does not change the windowed grid's row offsets.
 
 **Cost.** A row shows only as many lines as its height permits; resize it to show more.
+
+- `MROUND` with a nonzero value and multiple of opposite signs returns a new `#NUM!` error, as Excel and Sheets do. The engine had no `#NUM!` code, so the change adds it to the error codes, the help page's error list, and the cell error label. `FLOOR` and `CEILING` keep their previous behavior for opposite signs.

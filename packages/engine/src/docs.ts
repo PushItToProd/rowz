@@ -953,7 +953,8 @@ const ENTRIES: readonly FunctionDoc[] = [
     name: "MROUND",
     category: "Math",
     syntax: "MROUND(number, multiple)",
-    summary: "Rounds to the nearest multiple.",
+    summary:
+      "Rounds to the nearest multiple. Returns `#NUM!` when the number and multiple are nonzero and have different signs.",
     example: "MROUND(17, 5)",
   },
   {
@@ -1574,6 +1575,8 @@ export const errorDocs: Record<ErrorCode, string> = {
   "#DIV/0!": "A number was divided by zero, or AVERAGE was given no numbers.",
   "#VALUE!":
     "A value is the wrong kind: text where a number is needed, or a range where a single value is needed.",
+  "#NUM!":
+    "A number is outside a function's range, or MROUND arguments have different nonzero signs.",
   "#REF!": "The formula names a page or table that does not exist.",
   "#NAME?": "The formula uses a function or a word that is not known.",
   "#N/A":

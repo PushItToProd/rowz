@@ -4,6 +4,7 @@ import type { CellId } from "./address";
 export const ERROR_CODES = [
   "#DIV/0!",
   "#VALUE!",
+  "#NUM!",
   "#REF!",
   "#NAME?",
   "#N/A",
