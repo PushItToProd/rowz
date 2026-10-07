@@ -145,6 +145,18 @@
   justify-content: space-between;
 }
 
+.side-panel__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.copy-status {
+  min-width: 3.5em;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
 .side-panel__header h2 {
   margin: 0;
   font-size: 1.1rem;
@@ -338,14 +350,51 @@
   list-style: none;
 }
 
-.assertions__list button {
+.assertions__list > li > button {
   display: block;
   width: 100%;
   text-align: left;
 }
 
-.assertions__list span {
+.assertions__list > li > button span {
   display: block;
+}
+
+.errors__content,
+.assertions__content {
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.errors__content > span,
+.assertions__content > span {
+  display: block;
+}
+
+.errors__page {
+  color: var(--muted);
+  font-size: 0.875em;
+}
+
+.errors__actions,
+.assertions__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 0.4rem;
+}
+
+.errors__actions button,
+.assertions__actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: auto;
+}
+
+.errors .assertions__list li + li,
+.assertions:not(.errors) .assertions__list li + li {
+  margin-top: 0.75rem;
 }
 
 .names-panel {
@@ -409,7 +458,7 @@
 
 .errors__location {
   margin: 0;
-  padding: 0.5rem;
+  padding: 0.3rem 0.55rem;
   border-color: #fda29b;
   background: #fff;
 }
@@ -421,6 +470,18 @@
 
 .errors__trace {
   margin: 0.5rem 0 0 0.5rem;
+}
+
+.error-trace__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.6rem;
+}
+
+.error-trace__text,
+.error-trace__callers {
+  user-select: text;
 }
 
 .grid .grid__cell--location-flash {
@@ -475,7 +536,7 @@
 }
 
 .error-trace__link {
-  padding: 0;
+  padding: 0.15rem 0.35rem;
   border: 0;
   color: #175cd3;
   background: transparent;
@@ -486,6 +547,7 @@
 }
 
 .error-trace__callers {
+  margin: 0.35rem 0 0;
   color: var(--muted);
   font-size: 0.875em;
 }

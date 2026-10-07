@@ -228,7 +228,7 @@ it.each([true, false])(
 
     await wrapper.get(".editor__assertions").trigger("click");
     const assertions = wrapper.get('[role="dialog"][aria-label="Failing assertions"]');
-    await assertions.get(".assertions__list button").trigger("click");
+    await assertions.get(".assertions__go").trigger("click");
     await flushPromises();
     expect(wrapper.find('[role="dialog"][aria-label="Failing assertions"]').exists()).toBe(!narrow);
     expect(window.matchMedia).toHaveBeenCalledWith("(max-width: 640px)");

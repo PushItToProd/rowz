@@ -23,7 +23,7 @@ test("errors stay visible across pages and in the document list", async ({ page 
   const errors = page.getByRole("dialog", { name: "Document errors" });
   await expect(history).toHaveCount(0);
   await expect(errors).toContainText("Page 1");
-  await errors.getByRole("button", { name: /'Table 1'!A1/ }).click();
+  await errors.getByRole("button", { name: /^Go to .*'Table 1'!A1/ }).click();
   await expect(errors).toBeVisible();
   await expect(cell(page, "A1")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
@@ -72,7 +72,7 @@ test("invalid button plans appear in document errors before clicking the button"
   await page.getByRole("button", { name: "1 error", exact: true }).click();
   const errors = page.getByRole("dialog", { name: "Document errors" });
   await expect(errors).toContainText('"bad" is not an email address');
-  await errors.getByRole("button", { name: /'Table 1'!A1/ }).click();
+  await errors.getByRole("button", { name: /^Go to .*'Table 1'!A1/ }).click();
   await expect(errors).toBeVisible();
   await expect(cell(page, "A1")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("grid", { name: "Table 1" })).toBeFocused();
@@ -167,6 +167,21 @@ test("a function error opens its cell and the Raised in link opens its script de
   await expect(page.getByRole("grid", { name: callerTable })).toBeFocused();
   await expect(callerCard).toBeInViewport();
   await expect(result).toBeInViewport();
+
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const message = errors.getByText("The data has no column Spa", { exact: true });
+  await message.click({ clickCount: 3 });
+  const selectedText = await page.evaluate(() => window.getSelection()?.toString() ?? "");
+  expect(selectedText).toContain("The data has no column Spa");
+  await errors
+    .getByRole("button", { name: "Copy #VALUE! in 'Table 1'!A1 on page Page 1", exact: true })
+    .click();
+  await expect(errors.getByRole("status")).toHaveText("Copied");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    "#VALUE! in 'Table 1'!A1 (page Page 1): The data has no column Spa\n" +
+      "Raised in PayoutByDuration (Script 1, line 1)\n" +
+      "Called from 'Table 1'!A1",
+  );
 
   await errors
     .getByRole("button", {
