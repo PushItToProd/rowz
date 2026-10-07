@@ -51,9 +51,11 @@ describe("FormatBar", () => {
     const store = await render();
     expect(control("Bold").attributes("disabled")).toBeDefined();
     expect(control("Number format").attributes("disabled")).toBeDefined();
+    expect(control("Wrap text").attributes("disabled")).toBeDefined();
     store.selection = at("A1");
     await wrapper.vm.$nextTick();
     expect(control("Bold").attributes("disabled")).toBeUndefined();
+    expect(control("Wrap text").attributes("disabled")).toBeUndefined();
   });
 
   it("makes the selected cells bold, and then not bold", async () => {
@@ -72,6 +74,25 @@ describe("FormatBar", () => {
     expect(server.formatCells).toHaveBeenLastCalledWith("t1", range, { bold: false }, false);
   });
 
+  it("toggles wrapped text across the selected range", async () => {
+    const store = await render();
+    store.selection = at("B2");
+    store.extendSelection({ row: 2, col: 2 });
+    await wrapper.vm.$nextTick();
+
+    const wrap = control("Wrap text");
+    expect(wrap.attributes("aria-pressed")).toBe("false");
+    await wrap.trigger("click");
+    const range = { startRowId: "r1", endRowId: "r2", startColId: "c2", endColId: "c3" };
+    expect(server.formatCells).toHaveBeenCalledExactlyOnceWith("t1", range, { wrap: true }, false);
+    await vi.waitFor(() => {
+      expect(control("Wrap text").attributes("aria-pressed")).toBe("true");
+    });
+
+    await control("Wrap text").trigger("click");
+    expect(server.formatCells).toHaveBeenLastCalledWith("t1", range, { wrap: false }, false);
+  });
+
   it("shows the format of the selected cell", async () => {
     const store = await render([
       {
@@ -79,13 +100,21 @@ describe("FormatBar", () => {
         endRow: 0,
         startCol: 0,
         endCol: 0,
-        format: { italic: true, align: "center", numberFormat: "0.00", color: "red", fill: "blue" },
+        format: {
+          italic: true,
+          wrap: true,
+          align: "center",
+          numberFormat: "0.00",
+          color: "red",
+          fill: "blue",
+        },
       },
     ]);
     store.selection = at("A1");
     await wrapper.vm.$nextTick();
     expect(control("Italic").attributes("aria-pressed")).toBe("true");
     expect(control("Bold").attributes("aria-pressed")).toBe("false");
+    expect(control("Wrap text").attributes("aria-pressed")).toBe("true");
     const value = (label: string): string => (control(label).element as HTMLSelectElement).value;
     expect(["Align", "Number format", "Text color", "Fill color"].map(value)).toEqual([
       "center",
@@ -98,6 +127,7 @@ describe("FormatBar", () => {
     await wrapper.vm.$nextTick();
     expect(value("Align")).toBe("");
     expect(control("Italic").attributes("aria-pressed")).toBe("false");
+    expect(control("Wrap text").attributes("aria-pressed")).toBe("false");
   });
 
   it.each([

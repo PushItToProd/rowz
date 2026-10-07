@@ -142,6 +142,7 @@ export const FORMAT_COLORS = [
 export const formatPatch = z.strictObject({
   bold: z.boolean().nullable().optional(),
   italic: z.boolean().nullable().optional(),
+  wrap: z.boolean().nullable().optional(),
   align: z.enum(["left", "center", "right"]).nullable().optional(),
   color: z.enum(FORMAT_COLORS).nullable().optional(),
   fill: z.enum(FORMAT_COLORS).nullable().optional(),

@@ -487,7 +487,7 @@ const routeCases: Route[] = [
       return {
         method: "POST",
         path: `/tables/${tableId}/formats`,
-        body: { range: { startRow: 0, endRow: 0, startCol: 0, endCol: 0 }, format: { bold: true } },
+        body: { range: { startRow: 0, endRow: 0, startCol: 0, endCol: 0 }, format: { wrap: true } },
         status: 200,
       };
     },

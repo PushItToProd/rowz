@@ -108,6 +108,53 @@ test("Markdown line breaks do not change windowed row geometry", async ({ page }
   await expect(cell(page, "A2")).toBeVisible();
 });
 
+test("wrapped text is clamped to the fixed row height", async ({ page }) => {
+  await newSpreadsheet(page);
+  const text =
+    "Wrap this long text across multiple visible lines before the row clips what remains and show the whole original through its title.";
+  await enter(page, "A1", text);
+
+  const handle = page.getByLabel("Resize row 1", { exact: true });
+  const box = await handle.boundingBox();
+  if (!box) throw new Error("The first row resize handle is not visible");
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + 40);
+  await page.mouse.up();
+  await expectCellSize(page, "A1", "height", 70);
+  const heightBeforeWrap = await cell(page, "A1").evaluate(
+    (element) => element.getBoundingClientRect().height,
+  );
+
+  await cell(page, "A1").click();
+  const wrap = page.getByRole("toolbar", { name: "Format" }).getByRole("button", {
+    name: "Wrap text",
+  });
+  await wrap.click();
+  await expect(wrap).toHaveAttribute("aria-pressed", "true");
+
+  const value = cell(page, "A1").locator(".cell-value");
+  await expect(value).toHaveClass(/cell-value--wrap/);
+  await expect(value).toHaveAttribute("title", text);
+  const display = await value.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      height: element.getBoundingClientRect().height,
+      lineClamp: style.getPropertyValue("-webkit-line-clamp"),
+      whiteSpace: style.whiteSpace,
+      overflowWrap: style.overflowWrap,
+    };
+  });
+  expect(display.lineClamp).toBe("2");
+  expect(display.height).toBeGreaterThan(28);
+  expect(display.height).toBeLessThanOrEqual(56);
+  expect(display.whiteSpace).toBe("pre-wrap");
+  expect(display.overflowWrap).toBe("anywhere");
+  await expectCellSize(page, "A1", "height", heightBeforeWrap);
+});
+
 test("frozen first row and column stay in place while a windowed grid scrolls", async ({
   page,
 }) => {

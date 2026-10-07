@@ -379,7 +379,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
       - [ ] mix colors applied by multiple rules
       - [ ] split a cell background into segments colored by each applicable rule
   - [ ] **P8** carrying formats through copy, fill, and paste #formatting
-  - [ ] **P5** (Claude) wrap long text within a cell #formatting
+  - [x] **P5** (Claude) wrap long text within a cell #formatting
 
 ## Actions and automation
 
@@ -650,3 +650,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] A right-click on a `<label>` inside a block (Import CSV, a chart's Data label) opens the block menu; `EditorView.vue` near line 512 should exclude labels #everyday
 
 - [ ] On a narrow screen, frozen columns can cover every non-frozen column (three default-width columns are 360px, wider than a 320px viewport); cap the frozen width at part of the grid's width or ignore the freeze below a width (`GridView.vue` near line 367, `grid.css` near line 79) #small-apps
+
+- [ ] The Wrap text format does nothing for a choice-column value or a `TEXTBOX` cell, which render as native controls (`CellView.vue` near lines 213 and 346), so the toolbar shows it pressed while the value stays clipped #formatting

@@ -23,6 +23,7 @@ function render(
     canRun?: boolean;
     spillResizeTo?: { rowCount: number; colCount: number };
     format?: CellFormat;
+    wrapLines?: number;
   } = {},
 ): VueWrapper {
   return mount(CellView, { props: { value, running: false, canRun: true, ...props } });
@@ -44,6 +45,33 @@ function renderInGrid(
 }
 
 describe("CellView", () => {
+  it("wraps text within the configured line count and shows the full value on hover", () => {
+    const value = "A long value\nwith another line";
+    const span = render(value, { format: { wrap: true }, wrapLines: 2 }).get("span");
+    expect(span.classes()).toContain("cell-value--wrap");
+    expect(span.attributes("style")).toContain("--cell-wrap-lines: 2");
+    expect(span.attributes("title")).toBe(value);
+  });
+
+  it("caps a wrapped cell's hover title at 1000 characters", () => {
+    const value = "x".repeat(1001);
+    const title = render(value, { format: { wrap: true } })
+      .get("span")
+      .attributes("title");
+
+    expect(title).toHaveLength(1000);
+    expect(title).toBe(`${"x".repeat(999)}…`);
+  });
+
+  it("shows the source of a wrapped Markdown value on hover", () => {
+    const source = "**bold**\nline two";
+    const span = render({ kind: "markdown", text: source }, { format: { wrap: true } }).get(
+      ".cell-value--markdown",
+    );
+    expect(span.classes()).toContain("cell-value--wrap");
+    expect(span.attributes("title")).toBe(source);
+  });
+
   it.each<[CellValue, string, string]>([
     [42, "42", "cell-value--number"],
     [0.1 + 0.2, "0.3", "cell-value--number"],

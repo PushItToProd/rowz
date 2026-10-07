@@ -2389,7 +2389,7 @@ describe("formats", () => {
         endRow: 0,
         startCol: 0,
         endCol: null,
-        format: { bold: true, fill: "yellow" as const },
+        format: { bold: true, fill: "yellow" as const, wrap: true },
       },
       {
         startRow: 0,
@@ -2410,6 +2410,8 @@ describe("formats", () => {
 
     expect(cellAt("A1").attributes("style")).toContain("background");
     expect(cellAt("A1").get(".cell-value").attributes("style")).toContain("font-weight: 700");
+    expect(cellAt("A1").get(".cell-value").classes()).toContain("cell-value--wrap");
+    expect(cellAt("A1").get(".cell-value").attributes("title")).toBe("x");
     expect(cellAt("A2").attributes("style")).toBeUndefined();
     expect(cellAt("B1").text()).toBe("2.00");
     expect(cellAt("B3").text()).toBe("3.14");

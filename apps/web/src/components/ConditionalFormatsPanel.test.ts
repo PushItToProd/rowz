@@ -124,6 +124,63 @@ describe("ConditionalFormatsPanel", () => {
     ]);
   });
 
+  it("adds wrap text to a criterion rule", async () => {
+    const store = await render();
+    store.selection = at("B2");
+    await flushPromises();
+    await wrapper
+      .findAll("label")
+      .find((label) => label.text().trim() === "Wrap text")!
+      .get("input")
+      .setValue(true);
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(server.setConditionalFormats.mock.calls[0]?.[1]).toMatchObject([
+      {
+        kind: "criterion",
+        criterion: ">0",
+        format: { fill: "green", wrap: true },
+      },
+    ]);
+  });
+
+  it.each([null, false] as const)(
+    "shows and preserves an explicit wrap value of %s when editing a rule",
+    async (wrap) => {
+      const rules: ConditionalRule[] = [
+        {
+          startRow: 0,
+          endRow: null,
+          startCol: 1,
+          endCol: 1,
+          kind: "criterion",
+          criterion: ">100",
+          format: { fill: "red", wrap },
+        },
+        RULES[1]!,
+      ];
+      await render(rules);
+
+      const criterionRule = wrapper.findAll(".conditional-panel__rules li")[1]!;
+      expect(criterionRule.text()).toContain(wrap === null ? "clears wrap" : "no wrap");
+
+      await wrapper.get('button[aria-label="Edit the rule for B1:B"]').trigger("click");
+      await wrapper.get('[aria-label="Criterion"]').setValue(">200");
+      await wrapper.get("form").trigger("submit");
+      await flushPromises();
+
+      expect(server.setConditionalFormats.mock.calls[0]?.[1]).toMatchObject([
+        {
+          range: { startRowId: "r0", endRowId: null, startColId: "c2", endColId: "c2" },
+          kind: "criterion",
+          criterion: ">200",
+          format: { fill: "red", wrap },
+        },
+        { kind: "scale", low: null, high: "green" },
+      ]);
+    },
+  );
+
   it("adds a color scale with no low color", async () => {
     const store = await render();
     store.selection = at("A1");

@@ -18,6 +18,7 @@ export const FORMAT_ALIGNMENTS = ["left", "center", "right"] as const;
 export interface CellFormat {
   bold?: boolean;
   italic?: boolean;
+  wrap?: boolean;
   align?: (typeof FORMAT_ALIGNMENTS)[number];
   /** The color of the text. */
   color?: FormatColor;

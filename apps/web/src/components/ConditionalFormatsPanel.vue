@@ -42,6 +42,13 @@ function describeFormat(format: FormatPatch): string {
     ),
     ...(format.bold ? ["bold"] : []),
     ...(format.italic ? ["italic"] : []),
+    ...(format.wrap === true
+      ? ["wrap text"]
+      : format.wrap === false
+        ? ["no wrap"]
+        : format.wrap === null
+          ? ["clears wrap"]
+          : []),
     ...(format.align ? [`align ${format.align}`] : []),
     ...(format.numberFormat ? [`number format ${format.numberFormat}`] : []),
   ];
@@ -77,6 +84,7 @@ const criterion = ref(">0");
 const fill = ref<FormatColor | "">("green");
 const color = ref<FormatColor | "">("");
 const bold = ref(false);
+const wrap = ref(false);
 const low = ref<FormatColor | "">("");
 const high = ref<FormatColor>("green");
 
@@ -94,9 +102,11 @@ function edit(index: number): void {
     fill.value = rule.format.fill ?? "";
     color.value = rule.format.color ?? "";
     bold.value = rule.format.bold === true;
+    wrap.value = rule.format.wrap === true;
   } else {
     low.value = rule.low ?? "";
     high.value = rule.high;
+    wrap.value = false;
   }
 }
 
@@ -125,14 +135,18 @@ async function remove(index: number, rule: ConditionalRule): Promise<void> {
 const format = computed<FormatPatch>(() => {
   // The form sets a fill, a text color, and bold. What else a rule being changed sets stays as it was.
   const kept: FormatPatch = edited.value?.kind === "criterion" ? { ...edited.value.format } : {};
+  const originalWrap = edited.value?.kind === "criterion" ? edited.value.format.wrap : undefined;
+  const wrapPatch = wrap.value === (originalWrap === true) ? originalWrap : wrap.value;
   delete kept.fill;
   delete kept.color;
   delete kept.bold;
+  delete kept.wrap;
   return {
     ...kept,
     ...(fill.value ? { fill: fill.value } : {}),
     ...(color.value ? { color: color.value } : {}),
     ...(bold.value ? { bold: true } : {}),
+    ...(wrapPatch !== undefined ? { wrap: wrapPatch } : {}),
   };
 });
 const action = computed<ConditionalAction>(() =>
@@ -247,6 +261,7 @@ async function save(): Promise<void> {
           </select>
         </label>
         <label><input v-model="bold" type="checkbox" /> Bold</label>
+        <label><input v-model="wrap" type="checkbox" /> Wrap text</label>
       </template>
       <template v-else>
         <label>

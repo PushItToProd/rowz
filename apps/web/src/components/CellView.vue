@@ -33,6 +33,8 @@ const props = defineProps<{
   checkbox?: boolean;
   /** How the cell is shown: bold, color, a number format, and so on. */
   format?: CellFormat;
+  /** How many lines fit in this cell's fixed-height row. */
+  wrapLines?: number;
   /** The choices of a dropdown column. A cell in one shows a dropdown. */
   choices?: readonly string[];
 }>();
@@ -65,12 +67,21 @@ const outside = computed(() => held.value !== "" && !props.choices?.includes(hel
 const text = computed(
   () => formattedText(props.value, props.format ?? {}) ?? formatValue(props.value),
 );
+const MAX_WRAPPED_TITLE_LENGTH = 1000;
+const wrappedTitle = computed(() => {
+  if (props.format?.wrap !== true) return undefined;
+  const title = isMarkdown(props.value) ? props.value.text : text.value;
+  return title.length > MAX_WRAPPED_TITLE_LENGTH
+    ? `${title.slice(0, MAX_WRAPPED_TITLE_LENGTH - 1)}…`
+    : title;
+});
 const buttonConfirmation = computed(() =>
   isButton(props.value) ? props.value.action.confirm : undefined,
 );
 const style = computed(() => {
   if (!props.format) return undefined;
   const styles = textStyle(props.format);
+  if (props.format.wrap) styles["--cell-wrap-lines"] = String(Math.max(1, props.wrapLines ?? 1));
   // An error stays in the color of errors, whatever color the cell's text is given.
   if (isError(props.value)) Reflect.deleteProperty(styles, "color");
   return styles;
@@ -317,7 +328,9 @@ function commitInputOnEnter(event: KeyboardEvent): void {
   <span
     v-else-if="kind === 'markdown'"
     class="cell-value cell-value--markdown"
+    :class="{ 'cell-value--wrap': format?.wrap === true }"
     :style="style"
+    :title="wrappedTitle"
     v-html="formatted"
   ></span>
   <!-- eslint-enable vue/no-v-html -->
@@ -329,7 +342,17 @@ function commitInputOnEnter(event: KeyboardEvent): void {
     @resize="resizeTable"
     @trace="emit('trace', $event)"
   />
-  <span v-else class="cell-value" :class="`cell-value--${kind}`" :style="style">{{ text }}</span>
+  <span
+    v-else
+    class="cell-value"
+    :class="[
+      `cell-value--${kind}`,
+      { 'cell-value--wrap': kind === 'text' && format?.wrap === true },
+    ]"
+    :style="style"
+    :title="kind === 'text' ? wrappedTitle : undefined"
+    >{{ text }}</span
+  >
   <ConfirmDialog
     v-if="confirmation !== null"
     :message="confirmation"

@@ -32,7 +32,7 @@ The aim is to do what a traditional spreadsheet does, and do it better. I build 
 
 ### Features of other spreadsheets
 
-- **Layout:** merged cells, borders, wrapping text in a cell, and hiding rows and columns.
+- **Layout:** merged cells, borders, and hiding rows and columns.
 - **Working with data:** a dedicated pivot-table editor and validation of what a cell accepts. Tables already support sorting, filtering, conditional formats, find and replace, and `QUERY` pivot clauses.
 - **Functions:** coverage follows what I use. Less common financial, statistical, and scientific functions are missing or lightly tested. There are no random numbers, and no `INDIRECT` or `OFFSET`.
 - **Charts:** four kinds, with no axis titles, colors, or stacking.
@@ -97,11 +97,11 @@ A data table can be sorted by several columns and filtered by one formula such a
 
 A unique table name by itself refers to all of its rows. `QUERY(Sales, "select Category, sum(Amount) group by Category")` uses a data table's column names as query headers. It also reads those names from ranges such as `Sales!A:C`. A plain table can also hold named values, functions, and ranges.
 
-The toolbar under the formula bar gives the selected cells bold, italic, an alignment, a number format, a text color, or a fill color. Formats are stored per table as rules over ranges, so a whole column is one rule.
+The toolbar under the formula bar gives the selected cells bold, italic, wrapped text, an alignment, a number format, a text color, or a fill color. Formats are stored per table as rules over ranges, so a whole column is one rule. Wrap text breaks long values within the column width and clips them to the row's configured height with an ellipsis. Hover over the cell to see its full text. Wrapping keeps row heights fixed; resize a row to show more lines.
 
 With focus in a table grid, the arrow keys move one cell, and Shift+Arrow extends the selection. Ctrl/Cmd+Arrow jumps to the edge of a contiguous non-empty region in that direction: from a non-empty cell with a non-empty neighbor it moves to the end of that run; otherwise it moves to the next non-empty cell, or to the table edge. Vertical movement follows displayed row order. Home and End move to the first or last column of the row. Ctrl/Cmd+Home and Ctrl/Cmd+End move to A1 or the bottom-right cell of the used range (A1 when empty). PageUp and PageDown move by the number of rows visible in the viewport. Shift extends the selection for these moves. Ctrl/Cmd+B and Ctrl/Cmd+I toggle bold and italic across the selected cells, clearing the format only when every selected cell already has it.
 
-Conditional formats give cells a fill, a text color, or bold when their own value meets a `COUNTIF`-style criterion such as `>100`, or shade a range of numbers with a two-color scale. A quoted text criterion such as `="foobar"` compares the cell's value to a string using the formula language's text equality. Rules are stored per table, follow rows and columns as they are inserted and deleted, and are laid over the plain formats.
+Conditional formats give cells a fill, a text color, bold, or wrapped text when their own value meets a `COUNTIF`-style criterion such as `>100`, or shade a range of numbers with a two-color scale. A quoted text criterion such as `="foobar"` compares the cell's value to a string using the formula language's text equality. Rules are stored per table, follow rows and columns as they are inserted and deleted, and are laid over the plain formats.
 
 Each table also exports to CSV (the values shown) and imports from CSV.
 

@@ -36,6 +36,13 @@ describe("formatAt", () => {
     expect(formatAt([...rules, rule([0, 0, 0, 0], { color: null })], 0, 0)).toEqual({ bold: true });
   });
 
+  it("sets and clears text wrapping", () => {
+    expect(formatAt([rule([0, 0, 0, 0], { wrap: true })], 0, 0)).toEqual({ wrap: true });
+    expect(
+      formatAt([rule([0, 0, 0, 0], { wrap: true }), rule([0, 0, 0, 0], { wrap: false })], 0, 0),
+    ).toEqual({});
+  });
+
   it("starts over at a rule that resets", () => {
     const cleared = [
       ...rules,

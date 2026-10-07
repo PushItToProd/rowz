@@ -202,6 +202,15 @@
   white-space: nowrap;
 }
 
+.cell-value--wrap {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--cell-wrap-lines, 1);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
+
 /* Table-cell height is a minimum. Bound content so Markdown line breaks do
    not enlarge a row or change its height when a column is windowed out. */
 .grid td > .cell-value {

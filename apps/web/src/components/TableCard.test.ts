@@ -435,6 +435,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert column left",
       "Insert column right",
       "Delete column B",
+      "Wrap text",
       "Name this range…",
       "Clear cells",
     ]);
@@ -475,6 +476,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert 2 columns left",
       "Insert 2 columns right",
       "Delete columns B-C",
+      "Wrap text",
       "Name this range…",
       "Clear cells",
     ]);
@@ -491,6 +493,19 @@ describe("the menu of row, column, and cell actions", () => {
     await openOnRange("C4", "B2", "B3");
     await item(name).trigger("click");
     expect(server.editTable).toHaveBeenCalledExactlyOnceWith("t1", expectedEdit(edit));
+  });
+
+  it("applies wrap text to the selected range from its context menu", async () => {
+    await openOnRange("B2", "C4");
+    server.formatCells.mockResolvedValue(changeWith());
+    await item("Wrap text").trigger("click");
+    await flushPromises();
+    expect(server.formatCells).toHaveBeenCalledExactlyOnceWith(
+      "t1",
+      { startRowId: "r1", endRowId: "r3", startColId: "c2", endColId: "c3" },
+      { wrap: true },
+      false,
+    );
   });
 
   it("deletes selected rows and columns with content without asking and offers undo", async () => {
@@ -533,6 +548,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert column left",
       "Insert column right",
       "Delete column B",
+      "Wrap text",
       "Clear cells",
     ]);
     await wrapper.get('[role="menu"]').trigger("keydown", { key: "Escape" });
@@ -544,6 +560,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert row above",
       "Insert row below",
       "Delete row 3",
+      "Wrap text",
       "Clear cells",
     ]);
   });
@@ -562,6 +579,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert 2 columns left",
       "Insert 2 columns right",
       "Delete columns B-C",
+      "Wrap text",
       "Clear cells",
     ]);
   });

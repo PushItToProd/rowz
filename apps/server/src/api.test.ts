@@ -269,6 +269,35 @@ describe("pages", () => {
 });
 
 describe("tables", () => {
+  it("stores wrap formatting and rejects a nonboolean wrap value", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const { table } = first(snapshot);
+    const path = `/tables/${table.id}/formats`;
+
+    await user.json("POST", path, {
+      range: { startRow: 0, endRow: 0, startCol: 0, endCol: 0 },
+      format: { wrap: true },
+    });
+    expect((await readSnapshot(user, snapshot.id)).tables[0]?.formats).toEqual([
+      { startRow: 0, endRow: 0, startCol: 0, endCol: 0, format: { wrap: true } },
+    ]);
+
+    expect(
+      await user.json(
+        "POST",
+        path,
+        {
+          range: { startRow: 0, endRow: 0, startCol: 0, endCol: 0 },
+          format: { wrap: "yes" },
+        },
+        400,
+      ),
+    ).toMatchObject({ error: { code: "invalid_request" } });
+    expect((await readSnapshot(user, snapshot.id)).tables[0]?.formats).toEqual([
+      { startRow: 0, endRow: 0, startCol: 0, endCol: 0, format: { wrap: true } },
+    ]);
+  });
+
   it("creates a table with the next free name", async () => {
     const snapshot = await createSpreadsheet(user);
     const table = await addTable(user, first(snapshot).page.id);

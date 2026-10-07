@@ -1035,11 +1035,16 @@ const OPERATORS = [
     <section id="formats">
       <h2>Formats</h2>
       <p>
-        The row of controls under the bar changes how the selected cells look: bold, italic,
-        alignment, a number format, the color of the text, and the color of the cell. A format
+        The row of controls under the bar changes how the selected cells look: bold, italic, wrap
+        text, alignment, a number format, the color of the text, and the color of the cell. A format
         changes only how a cell is shown. Its value, and what formulas read from it, stay the same.
       </p>
       <ul>
+        <li>
+          <strong>Wrap text</strong> breaks long values within the column width and clips them to
+          the row's configured height with an ellipsis. Hover over the cell to see its full text.
+          Wrapping keeps row heights fixed; resize a row to show more lines.
+        </li>
         <li>
           A number format applies to numbers and dates. <code>1,234.50</code> groups thousands and
           shows two decimals, <code>50%</code> shows a fraction as a percentage, and
@@ -1072,7 +1077,7 @@ const OPERATORS = [
           <strong>Format cells that match</strong> takes a criterion as <code>COUNTIF</code> does:
           <code>&gt;100</code>, <code>Done</code>, <code>&lt;&gt;</code> for any non-empty cell,
           <code>*late*</code> with wildcards. The rule tests each cell's own value, and gives
-          matching cells a fill, a text color, or bold.
+          matching cells a fill, a text color, bold, or wrapped text.
         </li>
         <li>
           <strong>Color scale</strong> shades each number from the color of the smallest number in

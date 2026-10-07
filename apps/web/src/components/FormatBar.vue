@@ -94,6 +94,17 @@ function choose(property: "align" | "numberFormat" | "color" | "fill", event: Ev
     >
       I
     </button>
+    <button
+      type="button"
+      class="format-bar__toggle format-bar__wrap"
+      title="Wrap text"
+      aria-label="Wrap text"
+      :aria-pressed="current.wrap === true"
+      :disabled="!store.selection"
+      @click="apply({ wrap: current.wrap !== true })"
+    >
+      Wrap
+    </button>
     <select
       aria-label="Align"
       :value="current.align ?? ''"

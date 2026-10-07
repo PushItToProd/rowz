@@ -48,6 +48,25 @@ const selected = computed(() =>
 /** The rows the table shows, which are what a selection of rows names. */
 const view = computed(() => store.rowView(props.table.id));
 const colsFull = computed(() => props.table.colCount >= LIMITS.tableCols);
+const allSelectedCellsWrap = computed(() => {
+  const range = selected.value ? store.selectedRange : null;
+  if (!range) return false;
+  const firstRow = range.entireColumn ? 0 : range.startRow;
+  const lastRow = range.entireColumn ? props.table.rowCount - 1 : range.endRow;
+  for (let row = firstRow; row <= lastRow; row += 1) {
+    const storedRow = range.entireColumn ? row : view.value.storedRow(row);
+    for (let col = range.startCol; col <= range.endCol; col += 1) {
+      if (store.formatOf({ tableId: props.table.id, row: storedRow, col }).wrap !== true) {
+        return false;
+      }
+    }
+  }
+  return true;
+});
+
+function toggleWrap(): void {
+  void store.formatSelection({ wrap: !allSelectedCellsWrap.value });
+}
 
 async function remove(): Promise<void> {
   if (
@@ -570,6 +589,12 @@ const menuItems = computed((): MenuItem[] => {
         ],
     scope === "col" ? [] : lineItems(rows),
     scope === "row" ? [] : lineItems(cols),
+    [
+      {
+        label: allSelectedCellsWrap.value ? "Unwrap text" : "Wrap text",
+        run: toggleWrap,
+      },
+    ],
     // What a column holds is set one column at a time.
     scope === "row" || cols.count > 1 ? [] : columnItems(cols.first),
     scope !== "cells" || props.table.columns ? [] : [{ label: "Name this range…", run: nameRange }],

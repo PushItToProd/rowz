@@ -768,9 +768,9 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 
 ## Windowed grid row heights
 
-**Choice.** Clip cell values to the configured row height, including Markdown with hard line breaks. The grid already clips overflow and presents cell values as single lines. Fixed row geometry keeps spacer heights and keyboard scrolling independent of which columns are mounted. Users can resize a row to reveal more content.
+**Choice.** Clip cell values to the configured row height, including Markdown with hard line breaks. Fixed row geometry keeps spacer heights and keyboard scrolling independent of which columns are mounted. Users can resize a row to reveal more content.
 
-**Cost.** Content no longer expands a row automatically. A future text-wrapping feature must define row geometry for columns outside the rendered window.
+**Cost.** Content no longer expands a row automatically. Resize a row to reveal more content.
 
 ## Work order of the autonomous run
 
@@ -781,3 +781,9 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 - `IFS` takes a trailing default argument (odd argument count), like `SWITCH`. The `default=` named-argument form was not implemented because the parser has no named arguments; the item's example also had a missing comma.
 
 - Skipped the adversarial review for the `TEXTBOX`/`NUMBERBOX` label fix: it is a two-rule CSS change with an e2e assertion.
+
+## 2026-10-07: Wrapped cell text keeps fixed row geometry
+
+**Choice.** Wrapped text is clipped to the cell's configured row height with a line-clamp ellipsis. Hovering the cell shows the full value. Wrapping does not change the windowed grid's row offsets.
+
+**Cost.** A row shows only as many lines as its height permits; resize it to show more.

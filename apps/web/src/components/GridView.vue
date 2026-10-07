@@ -239,6 +239,7 @@ function columnAt(col: number): ColumnDefinition | undefined {
 }
 
 type Axis = "row" | "col";
+const CELL_VALUE_LINE_HEIGHT = 28;
 
 const resizeDrag = ref<{
   axis: Axis;
@@ -259,6 +260,11 @@ function lineSize(axis: Axis, index: number): number {
   if (resizeDrag.value?.axis === axis && resizeDrag.value.id === id) return resizeDrag.value.size;
   const sizes = axis === "row" ? props.table.gridSizes.rows : props.table.gridSizes.columns;
   return (id === undefined ? undefined : sizes[id]) ?? GRID_SIZE[axis].default;
+}
+
+/** The number of cell text lines that fit inside a row at the existing line height. */
+function wrappedLinesForRow(index: number): number {
+  return Math.max(1, Math.floor((lineSize("row", index) - 1) / CELL_VALUE_LINE_HEIGHT));
 }
 
 const tableWidth = computed(
@@ -1356,6 +1362,7 @@ function onGridKeydown(event: KeyboardEvent): void {
                   :checkbox="columnAt(col - 1)?.type === 'checkbox'"
                   :choices="store.choicesOf(props.table.id, col - 1)"
                   :format="store.formatOf(cellAt(row - 1, col - 1))"
+                  :wrap-lines="wrappedLinesForRow(row - 1)"
                   @toggle="store.setCell(cellAt(row - 1, col - 1), $event ? 'TRUE' : 'FALSE')"
                   @pick="store.setCell(cellAt(row - 1, col - 1), literalInput($event))"
                   @run="run(row - 1, col - 1)"

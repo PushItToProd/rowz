@@ -103,6 +103,13 @@ describe("toSpreadsheetFile", () => {
     });
     expect(readSpreadsheetFile(JSON.stringify(written))).toEqual(written);
   });
+
+  it("exports and imports wrap format rules", () => {
+    const formats = [{ startRow: 0, endRow: 0, startCol: 0, endCol: 0, format: { wrap: true } }];
+    const written = toSpreadsheetFile("Budget", PAGES, [{ ...TABLES[0]!, formats }], [], () => []);
+    expect(written.pages[0]?.blocks[0]).toMatchObject({ type: "table", formats });
+    expect(readSpreadsheetFile(JSON.stringify(written))).toEqual(written);
+  });
 });
 
 describe("toSpreadsheetFile for sort, filter, and dropdown columns", () => {
