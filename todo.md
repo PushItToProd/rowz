@@ -62,11 +62,20 @@ A reference document is the acceptance test of a theme: the theme is done when i
 
 
 - [ ] **P4** open a block's name and a document's name for editing on one click, not a double-click (`EditableName.vue`). See [docs/design/ui.md](docs/design/ui.md) #everyday
-  - [ ] consider opening a script or text block for editing on one click as well
 - [ ] **P5** (Claude) give a notice and an error dialog a place for the underlying error, shown word for word in monospace below the summary, and rewrite save and request failures to the form in [docs/design/writing.md](docs/design/writing.md): what could not be done and why, then what to do #everyday
 - [ ] **P7** tabs along the top of a context menu for the menus of the things that contain the clicked one: a right-click on a cell shows Cell, Row, Column, Table, and Page, and choosing one shows that thing's menu. Each menu then holds one thing's actions. Plan before implementing. The author will decide whether to keep it after seeing it in use. See [docs/design/ui.md](docs/design/ui.md) #everyday
 - [ ] **P5** make the `and` and `or` operators stop at the first operand that decides the answer, so `B1 <> 0 and A1 / B1 > 2` works as a guard. They call `AND` and `OR` today, which evaluate every argument (`packages/engine/src/evaluate.ts`) #formula-language
   - [ ] **P6** make the `AND` and `OR` functions stop early too, and add `ALL` and `ANY`, which evaluate every argument and return an error found in any of them. Say in the help entries that `AND` and `OR` differ from Excel and Sheets here. See [docs/design/formula-language.md](docs/design/formula-language.md)
+- [ ] **P4** remove the row of action buttons from each block's header. The ellipsis menu and the right-click menu already list the same actions, so a table shows each of its nine three times. Keep the name and the ellipsis. See [DECISIONS.md](DECISIONS.md), "A menu's actions are not repeated as buttons" #small-apps
+- [ ] **P4** show a delete item in a context menu in the danger color #everyday
+- [ ] **P5** confirm a delete chosen from a menu in or beside the menu, not in a dialog in the middle of the screen: the item changes to "Confirm deletion?", or a small confirmation opens next to it. A second click counts only after a short delay, so an accidental double click does not confirm. Build both forms far enough for the author to choose. Keep the dialog where the confirmation explains what will be lost. See [DECISIONS.md](DECISIONS.md), "Removing a whole container is confirmed, beside the menu" #everyday
+  - [ ] confirm deleting a page, which is not confirmed today
+  - [ ] show a notice with Undo after a delete that is not confirmed, such as a row or a column
+- [ ] **P4** the text view's editor, as the author saw it on the `overnight-work` branch. See "Editing in place" in [docs/design/ui.md](docs/design/ui.md) #small-apps
+  - [ ] clicking "Pick references" takes focus from the editor, which ends the edit, so the button cannot be used. Treat the editor's own controls and popovers as part of the editor when deciding that focus has left
+  - [ ] the block changes size between showing and editing. Keep its place and size
+  - [ ] the editing state looks unstyled beside the rest of the block
+- [ ] **P8** investigate opening a script or text block for editing on one click without catching clicks meant for something else. Some apps wait briefly after the click and start editing only if the pointer stays put, so a click followed by scrolling or moving away does nothing. Find what the technique is called and how other apps tune it, then try it out. Double-click stays until then #small-apps
 - [ ] **P6** keep a history of recent messages and errors, so a notice that closed can be read again #everyday
 - [ ] **P5** a command palette that lists every action, and a form dialog for an action that needs parameters (Tab between fields, Enter submits, Escape cancels). These are how a feature becomes usable from the keyboard without a shortcut of its own. Plan before implementing #everyday
 - [ ] **P5** replace every native `<select>` with a shared in-app dropdown ([audit](docs/native-browser-ui-audit.md), priority 2), then add a lint rule that refuses `<select>` in `apps/web` #everyday

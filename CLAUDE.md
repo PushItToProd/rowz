@@ -27,7 +27,8 @@ The rules agents break most often:
 - **No interface drawn by the browser.** No `alert`, `confirm`, `prompt`, `title` attribute, new `<select>`, or validation bubble. Use `useDialog()`, `ContextMenu.vue`, `NoticeMessage.vue`, and the popover in `CellError.vue`.
 - **Reuse the shared component for a job.** One formula editor, one dialog host, one context menu, one open side panel.
 - **Anything with actions has a right-click menu and a visible button that opens the same menu.** Items describe the current selection and leave out what cannot apply.
-- **Do not confirm what undo reverses.**
+- **Confirm what undo cannot reverse and the removal of a whole page, block, or document.** Do not confirm a small edit in view that undo reverses. Confirm a delete beside the menu it was chosen from, not in a dialog across the screen.
+- **Do not repeat a menu's actions as buttons beside the thing.**
 - **An error says what could not be done and why in one sentence, with the actual names and numbers, then what to do.** It shows an underlying error word for word below the summary, and links to where it arose.
 - **A delete control looks destructive.** A plain "×" means close.
 - **Interface text is plain.** Say "document", "page", and "block". Do not explain what the screen makes obvious.

@@ -2,6 +2,26 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-07: Removing a whole container is confirmed, beside the menu
+
+**Decision.** An action is confirmed when undo cannot reverse it, or when it removes a whole container (a page, a block, a document) whose loss the person may not notice at once. Deleting a page is therefore confirmed, which changes the entry of 2026-10-05 below. A row or column delete is still not confirmed.
+
+A delete chosen from a menu is confirmed in or beside that menu: the item changes to ask for confirmation, or a small confirmation opens next to it. A second click on the same spot counts only after a short delay. A delete that is not confirmed shows a notice with Undo.
+
+**Why.** Undo is linear, so a mistaken delete costs more with every edit made before it is noticed. Deleting a page swaps the whole screen, which change blindness can hide, and Sheets confirms a tab delete while leaving row, column, and chart deletes unconfirmed. A dialog in the middle of the screen makes the pointer travel for every delete, which is tiresome when deleting several things. A trackpad can register one press as two clicks, which the delay guards against.
+
+**Not decided.** Which of the two forms the confirmation takes: the item changing in place, or a small confirmation beside the menu.
+
+**What would reopen it.** Confirmations that prove to interrupt more than they protect, or an undo that can restore one deleted thing without undoing later work.
+
+## 2026-10-07: A menu's actions are not repeated as buttons
+
+**Decision.** An action listed in a thing's menu is not also shown as a button beside it. A block's header holds its name and the ellipsis that opens the menu.
+
+**Why.** A table showed its nine actions as a row of buttons, in the ellipsis menu, and in the right-click menu. The author found the page crowded with them.
+
+**What would reopen it.** An action used often enough that opening a menu for it is a nuisance.
+
 ## 2026-10-07: New code adds no native `<select>`
 
 **Decision.** No new `<select>` element is added to the web app. A choice from a list uses an in-app dropdown. The existing `<select>` elements stay until a shared dropdown replaces them. This extends the earlier removal of `alert`, `confirm`, `prompt`, and `title` tooltips.
@@ -50,7 +70,7 @@ Decisions the author made or approved. Each entry says what was decided, why, an
 
 **Why.** The author asked for it. A name has no other use for a single click.
 
-**Not decided.** Whether a script or text block should also open for editing on one click. The author thinks it might be better.
+**Script and text blocks keep double-click.** One click there would swap rendered text for its source on a click that may only be meant to select or scroll. A way to tell the two apart, such as starting the edit only if the pointer stays put for a moment after the click, is to be investigated and is in `todo.md`.
 
 **What would reopen it.** Accidental renames in use.
 
@@ -80,7 +100,7 @@ Decisions the author made or approved. Each entry says what was decided, why, an
 
 ## 2026-10-05: An action that undo reverses asks for no confirmation
 
-**Decision.** Deleting a row, a column, or a page does not ask for confirmation, because undo restores each of them with its formulas and formats. A confirmation is kept for what undo cannot reverse.
+**Decision.** Deleting a row or a column does not ask for confirmation, because undo restores each of them with its formulas and formats. A confirmation is kept for what undo cannot reverse.
 
 **Why.** A confirmation that guards a reversible action interrupts every use of it to prevent a mistake the app can already put right.
 
