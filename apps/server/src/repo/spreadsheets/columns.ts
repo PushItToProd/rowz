@@ -21,7 +21,14 @@ export async function dropColumns(ctx: RepositoryContext, tableId: string): Prom
       table.spreadsheetId,
       `Before removing the column names of ${table.name}`,
     );
-    await writer.updateTable(tableId, { columns: null, display: { sort: [] } });
+    await writer.updateTable(tableId, {
+      columns: null,
+      display: {
+        ...table.display,
+        sort: [],
+        filter: undefined,
+      },
+    });
     if ((await orderedRows(tx, tableId)).length === 0) await writer.insertRows(tableId, 0, 1);
   });
   return change;

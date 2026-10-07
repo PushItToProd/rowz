@@ -29,8 +29,18 @@ onMounted(async () => {
   await nextTick();
   editor.value?.focus();
 });
+async function submitDraft(): Promise<boolean> {
+  const before = { left: window.scrollX, top: window.scrollY };
+  const saved = await sessions.submit(store.submitFormulaDraft);
+  if (saved) {
+    await nextTick();
+    if (window.scrollX !== before.left || window.scrollY !== before.top)
+      window.scrollTo(before.left, before.top);
+  }
+  return saved;
+}
 async function done(): Promise<void> {
-  if (!(await sessions.submit(store.submitFormulaDraft))) {
+  if (!(await submitDraft())) {
     await nextTick();
     sessions.focus();
   }
@@ -53,7 +63,7 @@ async function commit(key: "Enter" | "Tab", backwards: boolean): Promise<void> {
   ];
   const index = controls.indexOf(document.activeElement as HTMLElement);
   const following = backwards ? controls.slice(0, index).reverse() : controls.slice(index + 1);
-  if (!(await sessions.submit(store.submitFormulaDraft))) {
+  if (!(await submitDraft())) {
     await nextTick();
     sessions.focus();
     return;

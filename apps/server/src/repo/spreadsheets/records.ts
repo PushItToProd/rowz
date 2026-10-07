@@ -74,7 +74,7 @@ export interface TableRecord {
   columns: ColumnDefinition[] | null;
   /** How cells are shown: rules applied in order, later ones over earlier ones. */
   formats: FormatRule[];
-  /** How a data table's rows are shown: a sort and a filter. The stored row order does not change. */
+  /** How the table is shown, including its sort, filter, and frozen rows and columns. */
   display: TableDisplay;
   /** Formats a cell gets when its value meets a condition, laid over `formats`. */
   conditionalFormats: ConditionalRule[];

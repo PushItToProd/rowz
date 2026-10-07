@@ -108,7 +108,10 @@ export function checkFile(file: SpreadsheetFile): void {
         if (empty) invalid(`The formula column ${empty.name} of ${name} has no formula`);
       }
       if (display) {
-        if (!columns) invalid(`The table ${name} has a sort or filter and no named columns`);
+        const freezeOnly = display.freezeRows !== undefined || display.freezeColumns !== undefined;
+        if (!columns && (display.sort.length > 0 || display.filter !== undefined || !freezeOnly)) {
+          invalid(`The table ${name} has a sort or filter and no named columns`);
+        }
         const keys = display.sort.map(({ column }) => column);
         if (keys.some((column) => column >= colCount)) {
           invalid(`The sort of ${name} names a column outside the table`);
@@ -168,7 +171,12 @@ export function displayFromFile(
     return colId === undefined ? [] : [{ colId, descending }];
   });
   const filter = display.filter?.trim() ?? "";
-  return { sort, ...(filter === "" ? {} : { filter: filterFormula(filter) }) };
+  return {
+    sort,
+    ...(filter === "" ? {} : { filter: filterFormula(filter) }),
+    ...(display.freezeRows === undefined ? {} : { freezeRows: display.freezeRows }),
+    ...(display.freezeColumns === undefined ? {} : { freezeColumns: display.freezeColumns }),
+  };
 }
 
 /** Creates a spreadsheet with one page holding one empty table. */

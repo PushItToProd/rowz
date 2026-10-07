@@ -75,6 +75,7 @@ describe("importing a spreadsheet file", () => {
     const contents = file();
     const table = contents.pages[0]!.blocks[0]!;
     if (table.type !== "table") throw new Error("Expected table fixture");
+    table.display = { sort: [], freezeRows: 2, freezeColumns: 1 };
     table.gridSizes = { rows: [{ index: 0, size: 60 }], columns: [{ index: 1, size: 180 }] };
     table.formats = [{ startRow: 0, endRow: null, startCol: 0, endCol: 1, format: { bold: true } }];
     table.conditionalFormats = [
@@ -208,6 +209,29 @@ describe("importing a spreadsheet file", () => {
       [sales, 1, 0, "=A1*2"],
       [sales, 4, 2, "corner"],
     ]);
+  });
+
+  it("imports and copies freeze settings with the table display", async () => {
+    const contents = file();
+    const table = contents.pages[0]!.blocks[0]!;
+    if (table.type !== "table") throw new Error("Expected table fixture");
+    table.display = { sort: [], freezeRows: 2, freezeColumns: 1 };
+    const original = await imported(contents);
+    expect(original.tables[0]?.display).toEqual({
+      sort: [],
+      freezeRows: 2,
+      freezeColumns: 1,
+    });
+
+    const copy = await user.json<SpreadsheetSummary>(
+      "POST",
+      `/spreadsheets/${original.id}/copy`,
+      undefined,
+      201,
+    );
+    expect(
+      (await user.json<Snapshot>("GET", `/spreadsheets/${copy.id}`)).tables[0]?.display,
+    ).toEqual(original.tables[0]?.display);
   });
 
   it("keeps a version of the file as it arrived, which the first edit does not replace", async () => {

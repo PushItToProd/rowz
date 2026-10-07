@@ -79,11 +79,19 @@ export const updateTableBody = z
     colCount: z.int().min(1).max(LIMITS.tableCols).optional(),
     /** Never reduce either dimension below its current size. */
     grow: z.boolean().optional(),
+    /** Number of leading rows or columns to keep in view while the grid scrolls. */
+    freezeRows: z.int().min(0).max(LIMITS.tableRows).optional(),
+    freezeColumns: z.int().min(0).max(LIMITS.tableCols).optional(),
   })
   .refine(
-    (body) => body.name !== undefined || body.rowCount !== undefined || body.colCount !== undefined,
+    (body) =>
+      body.name !== undefined ||
+      body.rowCount !== undefined ||
+      body.colCount !== undefined ||
+      body.freezeRows !== undefined ||
+      body.freezeColumns !== undefined,
     {
-      message: "Give at least one of name, rowCount, colCount",
+      message: "Give at least one table property to change",
     },
   );
 export type UpdateTableBody = z.infer<typeof updateTableBody>;
@@ -269,8 +277,8 @@ export const MAX_SORT_KEYS = 5;
 const sortKey = z.object({ colId: z.uuid(), descending: z.boolean() });
 
 /**
- * How a data table's rows are shown, all of it: the sort and filter replace
- * the table's. Filters are submitted literally against the current document.
+ * Display settings that replace a table's current sort and filter, plus
+ * leading display rows and columns to keep in view while scrolling.
  */
 export const setTableDisplayBody = z.object({
   sort: z
@@ -462,6 +470,8 @@ const fileGridSizes = z.object({
 const fileDisplay = z.object({
   sort: z.array(z.object({ column: cellIndex, descending: z.boolean() })).max(MAX_SORT_KEYS),
   filter: z.string().max(LIMITS.inputLength).optional(),
+  freezeRows: z.int().min(0).max(LIMITS.tableRows).optional(),
+  freezeColumns: z.int().min(0).max(LIMITS.tableCols).optional(),
 });
 
 const fileTable = z
@@ -478,7 +488,7 @@ const fileTable = z
     formats: z.array(formatRule).max(MAX_FORMAT_RULES).optional(),
     /** The names a plain table holds. Left out when it holds none. */
     names: z.array(tableName).max(LIMITS.tableNames).optional(),
-    /** The sort and filter of a data table. Left out when it has neither. */
+    /** Sort, filter, and frozen row or column counts. Left out at their defaults. */
     display: fileDisplay.optional(),
     /** Formats cells get when their value meets a condition. Left out when there are none. */
     conditionalFormats: z.array(conditionalRule).max(MAX_CONDITIONAL_RULES).optional(),
@@ -495,6 +505,12 @@ const fileTable = z
         new Set(table.gridSizes.columns.map(({ index }) => index)).size ===
           table.gridSizes.columns.length),
     "Grid sizes must name distinct rows and columns in the table",
+  )
+  .refine(
+    (table) =>
+      (table.display?.freezeRows ?? 0) <= (table.columns ? 1 : table.rowCount) &&
+      (table.display?.freezeColumns ?? 0) <= table.colCount,
+    "Freeze counts must fit the table",
   );
 
 const fileChart = z.object({
@@ -565,7 +581,12 @@ interface PlacedTable extends Placed {
   colIds: readonly string[];
   rows: readonly { id: string }[];
   gridSizes: GridSizes;
-  display: { sort: readonly { colId: string; descending: boolean }[]; filter?: string | undefined };
+  display: {
+    sort: readonly { colId: string; descending: boolean }[];
+    filter?: string | undefined;
+    freezeRows?: number | undefined;
+    freezeColumns?: number | undefined;
+  };
   columns: readonly StoredColumn[] | null;
   formats: NonNullable<FileTable["formats"]>;
   conditionalFormats: NonNullable<FileTable["conditionalFormats"]>;
@@ -590,15 +611,30 @@ function fileGridSizesOf(table: PlacedTable): { gridSizes?: z.infer<typeof fileG
   return rows.length || columns.length ? { gridSizes: { rows, columns } } : {};
 }
 
-/** The file's form of a table's sort and filter: nothing when the table shows every row in stored order. */
+/** The file form of a table's sort, filter, and frozen row or column counts. */
 function fileDisplayOf(table: PlacedTable): { display?: z.infer<typeof fileDisplay> } {
   const sort = table.display.sort.flatMap(({ colId, descending }) => {
     const column = table.colIds.indexOf(colId);
     return column < 0 ? [] : [{ column, descending }];
   });
   const filter = table.display.filter;
-  if (sort.length === 0 && (filter === undefined || filter === "")) return {};
-  return { display: { sort, ...(filter === undefined || filter === "" ? {} : { filter }) } };
+  const freezeRows = table.display.freezeRows ?? 0;
+  const freezeColumns = table.display.freezeColumns ?? 0;
+  if (
+    sort.length === 0 &&
+    (filter === undefined || filter === "") &&
+    freezeRows === 0 &&
+    freezeColumns === 0
+  )
+    return {};
+  return {
+    display: {
+      sort,
+      ...(filter === undefined || filter === "" ? {} : { filter }),
+      ...(freezeRows === 0 ? {} : { freezeRows }),
+      ...(freezeColumns === 0 ? {} : { freezeColumns }),
+    },
+  };
 }
 
 /**

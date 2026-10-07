@@ -8,6 +8,7 @@ import {
   LIMITS,
   type IdentifiedStructuralEditBody,
   type StructuralEditBody,
+  type UpdateTableBody,
 } from "@spreadsheet-app/shared";
 import { api, type PageRecord, type ViewRecord } from "../../api/client";
 import type { WorkbookContext } from "./context";
@@ -228,10 +229,7 @@ export function createStructure(context: WorkbookContext) {
     }, "The table could not be added");
   }
 
-  function updateTable(
-    tableId: string,
-    changes: { name?: string; rowCount?: number; colCount?: number },
-  ): Promise<boolean> {
+  function updateTable(tableId: string, changes: UpdateTableBody): Promise<boolean> {
     const queuedSaves = context.saves;
     return context.attempt(async () => {
       // A smaller table loses cells, so pending edits must be stored first.

@@ -47,13 +47,81 @@ describe("windowed grids", () => {
     expect(wrapper.findAll('[role="gridcell"]').length).toBeLessThan(1000);
     expect(wrapper.find('[data-cell="CV1000"]').exists()).toBe(false);
     const grid = wrapper.element as HTMLElement;
-    vi.spyOn(grid, "getBoundingClientRect").mockReturnValue({ top: -15000 } as DOMRect);
+    grid.scrollTop = 15000;
     grid.scrollLeft = 6000;
-    window.dispatchEvent(new Event("scroll"));
+    grid.dispatchEvent(new Event("scroll"));
     await flushPromises();
     expect(wrapper.find('[data-cell="A1"]').exists()).toBe(false);
     expect(wrapper.findAll('[role="gridcell"]').length).toBeLessThan(1000);
     expect(wrapper.find('[data-pick-row="500"]').exists()).toBe(true);
+  });
+
+  it("preserves both grid scroll offsets when table props update", async () => {
+    await largeGrid();
+    const grid = wrapper.element as HTMLElement;
+    grid.scrollTop = 15000;
+    grid.scrollLeft = 6000;
+    grid.dispatchEvent(new Event("scroll"));
+    await flushPromises();
+
+    const table = (wrapper.props() as unknown as { table: TableRecord }).table;
+    await wrapper.setProps({
+      table: {
+        ...table,
+        display: { ...table.display, freezeRows: 1, freezeColumns: 1 },
+      },
+    });
+
+    expect(wrapper.element).toBe(grid);
+    expect(grid.scrollTop).toBe(15000);
+    expect(grid.scrollLeft).toBe(6000);
+  });
+
+  it("keeps frozen rows and columns mounted with accumulated pixel offsets", async () => {
+    const table = sizedTable({
+      rowCount: 1000,
+      colCount: 100,
+      gridSizes: { rows: { r0: 40, r1: 50 }, columns: { c1: 80, c2: 160 } },
+      display: { sort: [], freezeRows: 2, freezeColumns: 2 },
+    });
+    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith({}), tables: [table] }));
+    await useWorkbookStore().load("s1");
+    wrapper = mount(GridView, { props: { table }, attachTo: document.body });
+
+    const grid = wrapper.element as HTMLElement;
+    grid.scrollTop = 15000;
+    grid.scrollLeft = 3000;
+    grid.dispatchEvent(new Event("scroll"));
+    await flushPromises();
+
+    expect(wrapper.get('[data-cell="A1"]').classes()).toContain("grid__cell--frozen-row");
+    expect(wrapper.get('[data-cell="B2"]').attributes("style")).toContain("top: 71px");
+    expect(wrapper.get('[data-cell="B2"]').attributes("style")).toContain("left: 132px");
+    expect(wrapper.find('[data-cell="A501"]').exists()).toBe(true);
+    expect(wrapper.find('[data-cell="A501"]').classes()).toContain("grid__cell--frozen-column");
+  });
+
+  it("keeps a data table header and frozen columns visible without freezing displayed rows", async () => {
+    const table = sizedTable({
+      rowCount: 4,
+      colCount: 2,
+      columns: [
+        { name: "Name", type: "text" },
+        { name: "Amount", type: "number" },
+      ],
+      display: {
+        sort: [{ colId: "c1", descending: true }],
+        freezeRows: 1,
+        freezeColumns: 1,
+      },
+    });
+    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith({}), tables: [table] }));
+    await useWorkbookStore().load("s1");
+    wrapper = mount(GridView, { props: { table }, attachTo: document.body });
+
+    expect(wrapper.find("thead th.grid__column--frozen").exists()).toBe(true);
+    expect(wrapper.find('[data-cell="A1"]').classes()).toContain("grid__cell--frozen-column");
+    expect(wrapper.find('[data-cell="A1"]').classes()).not.toContain("grid__cell--frozen-row");
   });
 
   it("keeps a pending confirmation mounted when its row leaves the window", async () => {
@@ -71,8 +139,8 @@ describe("windowed grids", () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Run this button?");
 
     const grid = wrapper.element as HTMLElement;
-    vi.spyOn(grid, "getBoundingClientRect").mockReturnValue({ top: -15000 } as DOMRect);
-    window.dispatchEvent(new Event("scroll"));
+    grid.scrollTop = 15000;
+    grid.dispatchEvent(new Event("scroll"));
     await flushPromises();
 
     expect(wrapper.find('[data-cell="A1"]').exists()).toBe(true);
@@ -88,11 +156,10 @@ describe("windowed grids", () => {
   it("scrolls to an unmounted selection during keyboard navigation", async () => {
     await largeGrid();
     const grid = wrapper.element as HTMLElement;
-    let top = 0;
-    vi.spyOn(grid, "getBoundingClientRect").mockImplementation(() => ({ top }) as DOMRect);
+    vi.spyOn(grid, "getBoundingClientRect").mockReturnValue({ top: 0 } as DOMRect);
     vi.mocked(Element.prototype.scrollIntoView).mockImplementation(function (this: Element) {
       if (this instanceof HTMLElement && this.style.position === "absolute") {
-        top = -Number.parseFloat(this.style.top);
+        grid.scrollTop = Number.parseFloat(this.style.top) - 400;
         grid.scrollLeft = Number.parseFloat(this.style.left);
       }
     });
@@ -109,11 +176,10 @@ describe("windowed grids", () => {
   it("scrolls an already-selected cell into view on Ctrl/Cmd+Home", async () => {
     await largeGrid();
     const grid = wrapper.element as HTMLElement;
-    let top = 0;
-    vi.spyOn(grid, "getBoundingClientRect").mockImplementation(() => ({ top }) as DOMRect);
+    vi.spyOn(grid, "getBoundingClientRect").mockReturnValue({ top: 0 } as DOMRect);
     vi.mocked(Element.prototype.scrollIntoView).mockImplementation(function (this: Element) {
       if (this instanceof HTMLElement && this.style.position === "absolute") {
-        top = -Number.parseFloat(this.style.top);
+        grid.scrollTop = Number.parseFloat(this.style.top) - 400;
         grid.scrollLeft = Number.parseFloat(this.style.left);
       }
     });
@@ -121,8 +187,8 @@ describe("windowed grids", () => {
     store.selection = { tableId: TABLE.id, row: 0, col: 0 };
     await flushPromises();
     grid.focus();
-    top = -15000;
-    window.dispatchEvent(new Event("scroll"));
+    grid.scrollTop = 15000;
+    grid.dispatchEvent(new Event("scroll"));
     await flushPromises();
     expect(wrapper.find('[data-cell="A1"]').exists()).toBe(false);
 
@@ -180,7 +246,7 @@ describe("windowed grids", () => {
     await input.setValue("Uncommitted name");
     const grid = wrapper.element as HTMLElement;
     grid.scrollLeft = 4000;
-    window.dispatchEvent(new Event("scroll"));
+    grid.dispatchEvent(new Event("scroll"));
     await flushPromises();
     expect(wrapper.find('[data-pick-kind="col"][data-pick-index="1"]').exists()).toBe(false);
     expect(wrapper.get('input[aria-label="Column name"]').element).toBe(input.element);
@@ -188,7 +254,7 @@ describe("windowed grids", () => {
     expect(document.activeElement).toBe(input.element);
     expect(server.updateColumn).not.toHaveBeenCalled();
     grid.scrollLeft = 0;
-    window.dispatchEvent(new Event("scroll"));
+    grid.dispatchEvent(new Event("scroll"));
     await flushPromises();
     await input.trigger("keydown", { key: "Escape" });
     await flushPromises();

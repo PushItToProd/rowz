@@ -10,7 +10,16 @@ import {
   type ColumnDefinition,
 } from "@spreadsheet-app/engine";
 import { GRID_SIZE, LIMITS } from "@spreadsheet-app/shared";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onBeforeUpdate,
+  onMounted,
+  onUpdated,
+  ref,
+  watch,
+} from "vue";
 import type { ComponentPublicInstance } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
@@ -41,6 +50,34 @@ const emit = defineEmits<{
 const store = useWorkbookStore();
 
 const grid = ref<HTMLElement>();
+let scrollBeforeUpdate:
+  { gridTop: number; gridLeft: number; pageTop: number; pageLeft: number } | undefined;
+onBeforeUpdate(() => {
+  const element = grid.value;
+  if (!element) return;
+  scrollBeforeUpdate = {
+    gridTop: element.scrollTop,
+    gridLeft: element.scrollLeft,
+    pageTop: window.scrollY,
+    pageLeft: window.scrollX,
+  };
+});
+onUpdated(() => {
+  const previous = scrollBeforeUpdate;
+  scrollBeforeUpdate = undefined;
+  const element = grid.value;
+  if (!previous || !element) return;
+
+  const pageMoved = window.scrollY !== previous.pageTop || window.scrollX !== previous.pageLeft;
+  const gridMoved =
+    element.scrollTop !== previous.gridTop || element.scrollLeft !== previous.gridLeft;
+  if (pageMoved) window.scrollTo(previous.pageLeft, previous.pageTop);
+  if (gridMoved) {
+    element.scrollTop = previous.gridTop;
+    element.scrollLeft = previous.gridLeft;
+  }
+  if (pageMoved || gridMoved) updateViewport();
+});
 const sessions = useFormulaSessionStore();
 const referencePicking = useReferencePickingStore();
 const active = computed(() =>
@@ -230,12 +267,19 @@ const tableWidth = computed(
 
 // Coordinates remain display places; only the DOM is windowed.
 const virtual = computed(() => displayedRows.value > 200 || props.table.colCount > 30);
-const viewport = ref({ top: 0, bottom: 800, left: 0, right: 1200 });
+const viewport = ref({ top: 0, bottom: 800, left: 0, right: 1200, visible: true });
+const headerHeight = ref(31);
 const focused = ref<Partial<CellAddress> | null>(null);
 const pendingConfirmation = ref<CellId | null>(null);
 const printing = ref(false);
 const rowOffsets = computed(() => offsets(displayedRows.value, "row"));
 const colOffsets = computed(() => offsets(props.table.colCount, "col"));
+const frozenRows = computed(() =>
+  props.table.columns ? 0 : Math.min(props.table.display.freezeRows ?? 0, props.table.rowCount),
+);
+const frozenColumns = computed(() =>
+  Math.min(props.table.display.freezeColumns ?? 0, props.table.colCount),
+);
 function offsets(count: number, axis: Axis): number[] {
   const result = [0];
   for (let index = 0; index < count; index++)
@@ -244,19 +288,43 @@ function offsets(count: number, axis: Axis): number[] {
 }
 function updateViewport(): void {
   if (!grid.value) return;
+  const measuredHeaderHeight = grid.value.querySelector("thead")?.getBoundingClientRect().height;
+  if (measuredHeaderHeight && measuredHeaderHeight !== headerHeight.value)
+    headerHeight.value = measuredHeaderHeight;
   const box = grid.value.getBoundingClientRect();
+  const height = grid.value.clientHeight || grid.value.scrollHeight || window.innerHeight;
+  const width = grid.value.clientWidth || grid.value.scrollWidth || window.innerWidth;
+  const boxTop = Number.isFinite(box.top) ? box.top : 0;
+  const boxLeft = Number.isFinite(box.left) ? box.left : 0;
+  const boxBottom = Number.isFinite(box.bottom) ? box.bottom : boxTop + (box.height || height);
+  const boxRight = Number.isFinite(box.right) ? box.right : boxLeft + (box.width || width);
+  const verticalVisible =
+    box.height > 0 || grid.value.clientHeight > 0
+      ? boxBottom > 0 && boxTop < window.innerHeight
+      : boxTop === 0;
+  const horizontalVisible =
+    box.width > 0 || grid.value.clientWidth > 0
+      ? boxRight > 0 && boxLeft < window.innerWidth
+      : boxLeft === 0;
+  const visible = verticalVisible && horizontalVisible;
+  const top = Math.max(0, Math.min(height, -boxTop));
+  const bottom = Math.max(0, Math.min(height, window.innerHeight - boxTop));
+  const left = Math.max(0, Math.min(width, -boxLeft));
+  const right = Math.max(0, Math.min(width, window.innerWidth - boxLeft));
   const next = {
-    top: -box.top - 31,
-    bottom: window.innerHeight - box.top - 31,
-    left: grid.value.scrollLeft - 52,
-    right: grid.value.scrollLeft + (grid.value.clientWidth || window.innerWidth) - 52,
+    top: grid.value.scrollTop + top - headerHeight.value,
+    bottom: grid.value.scrollTop + bottom - headerHeight.value,
+    left: grid.value.scrollLeft + left - 52,
+    right: grid.value.scrollLeft + right - 52,
+    visible,
   };
   const previous = viewport.value;
   if (
     next.top !== previous.top ||
     next.bottom !== previous.bottom ||
     next.left !== previous.left ||
-    next.right !== previous.right
+    next.right !== previous.right ||
+    next.visible !== previous.visible
   )
     viewport.value = next;
 }
@@ -270,7 +338,11 @@ function visibleLines(axis: Axis): number[] {
   const margin = axis === "row" ? 180 : 300;
   const result = new Set<number>();
   // A table outside the page viewport needs no cells.
-  if (bottom >= -margin && top <= (rowOffsets.value[displayedRows.value] ?? 0) + margin) {
+  if (
+    viewport.value.visible &&
+    bottom >= -margin &&
+    top <= (rowOffsets.value[displayedRows.value] ?? 0) + margin
+  ) {
     for (let i = 0; i < count; i++)
       if ((positions[i + 1] ?? 0) >= start - margin && (positions[i] ?? 0) <= end + margin)
         result.add(i + 1);
@@ -282,6 +354,8 @@ function visibleLines(axis: Axis): number[] {
     result.add((axis === "row" ? placeOf(confirming.row) : confirming.col) + 1);
   const focusedIndex = focused.value?.[axis];
   if (focusedIndex !== undefined) result.add(focusedIndex + 1);
+  const frozen = axis === "row" ? frozenRows.value : frozenColumns.value;
+  for (let index = 0; index < frozen; index += 1) result.add(index + 1);
   if (resizeDrag.value?.axis === axis) {
     for (let i = 0; i < count; i++) if (lineId(axis, i) === resizeDrag.value.id) result.add(i + 1);
   }
@@ -289,6 +363,28 @@ function visibleLines(axis: Axis): number[] {
 }
 const renderedRows = computed(() => visibleLines("row"));
 const renderedCols = computed(() => visibleLines("col"));
+
+function frozenColumnStyle(col: number): Record<string, string | number> {
+  return col < frozenColumns.value
+    ? { left: `${String(52 + (colOffsets.value[col] ?? 0))}px`, zIndex: 5 }
+    : {};
+}
+
+function frozenRowStyle(place: number): Record<string, string | number> {
+  return place < frozenRows.value
+    ? { top: `${String(headerHeight.value + (rowOffsets.value[place] ?? 0))}px`, zIndex: 6 }
+    : {};
+}
+
+function frozenCellStyle(place: number, col: number): Record<string, string | number> {
+  const rowFrozen = place < frozenRows.value;
+  const colFrozen = col < frozenColumns.value;
+  return {
+    ...(rowFrozen ? frozenRowStyle(place) : {}),
+    ...(colFrozen ? { left: `${String(52 + (colOffsets.value[col] ?? 0))}px` } : {}),
+    ...(rowFrozen && colFrozen ? { zIndex: 7 } : colFrozen ? { zIndex: 3 } : {}),
+  };
+}
 function gap(lines: number[], index: number, positions: number[]): number {
   return (
     (positions[(lines[index] ?? 1) - 1] ?? 0) -
@@ -941,7 +1037,7 @@ function scrollSelection(target: CellAddress | null = selected.value): void {
       position: "absolute",
       pointerEvents: "none",
       scrollMarginTop: "195px",
-      top: `${String(31 + (rowOffsets.value[row] ?? 0))}px`,
+      top: `${String(headerHeight.value + (rowOffsets.value[row] ?? 0))}px`,
       left: `${String(52 + (colOffsets.value[col] ?? 0))}px`,
       width: `${String(lineSize("col", col))}px`,
       height: `${String(lineSize("row", row))}px`,
@@ -1098,6 +1194,7 @@ function onGridKeydown(event: KeyboardEvent): void {
     @click.capture="picking.click"
     @dblclick.capture="picking.click"
     @keydown="onGridKeydown"
+    @scroll.passive="updateViewport"
     @focusin="trackFocus"
     @focusout="focused = null"
   >
@@ -1124,7 +1221,9 @@ function onGridKeydown(event: KeyboardEvent): void {
               :class="{
                 'grid__column--named': columnAt(col - 1),
                 'grid__header--selected': isLineSelected('col', col - 1),
+                'grid__column--frozen': col - 1 < frozenColumns,
               }"
+              :style="frozenColumnStyle(col - 1)"
               :data-column="columnAt(col - 1)?.name"
               data-pick-kind="col"
               :data-pick-index="col - 1"
@@ -1178,7 +1277,11 @@ function onGridKeydown(event: KeyboardEvent): void {
               scope="row"
               data-pick-kind="row"
               :data-pick-index="row - 1"
-              :class="{ 'grid__header--selected': isLineSelected('row', row - 1) }"
+              :class="{
+                'grid__header--selected': isLineSelected('row', row - 1),
+                'grid__header--frozen-row': row - 1 < frozenRows,
+              }"
+              :style="frozenRowStyle(row - 1)"
               @mousedown.left.prevent="onHeaderMousedown($event, 'row', row - 1)"
               @mouseenter="onHeaderMouseenter('row', row - 1)"
               @contextmenu="onHeaderContextMenu($event, 'row', row - 1)"
@@ -1211,10 +1314,13 @@ function onGridKeydown(event: KeyboardEvent): void {
                   'grid__cell--fill-preview': inFillPreview(row - 1, col - 1),
                   'grid__cell--filled': store.filledBy(cellAt(row - 1, col - 1)) !== undefined,
                   'grid__cell--computed': columnAt(col - 1)?.type === 'formula',
+                  'grid__cell--frozen-row': row - 1 < frozenRows,
+                  'grid__cell--frozen-column': col - 1 < frozenColumns,
                 }"
                 :style="[
                   cellStyle(store.formatOf(cellAt(row - 1, col - 1))),
                   { boxShadow: outlines.get(`${row - 1}:${col - 1}`)?.boxShadow },
+                  frozenCellStyle(row - 1, col - 1),
                 ]"
                 :data-reference-color="outlines.get(`${row - 1}:${col - 1}`)?.color"
                 @pointerdown="onCellPointerdown($event, row - 1, col - 1)"

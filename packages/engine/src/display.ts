@@ -7,14 +7,16 @@ export interface SortKey {
 }
 
 /**
- * How a table is shown. Sorting and filtering are display settings: the
- * stored row order does not change, so `A2` and `SUM(Sales[Amount])` read the
- * same cells under any sort or filter.
+ * How a table is shown. Sorting and filtering affect its display order, while
+ * frozen row and column counts keep leading display positions in view.
  */
 export interface TableDisplay {
   sort: SortKey[];
   /** A formula that is true for the rows to show, such as `=[Payout] > 60000`. */
   filter?: string;
+  /** The leading rows or columns that stay in view while the grid scrolls. */
+  freezeRows?: number;
+  freezeColumns?: number;
 }
 
 /** What a sort key reads: the column's position in the table, and its direction. */

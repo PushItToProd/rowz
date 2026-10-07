@@ -478,6 +478,13 @@ const OPERATORS = [
           something.
         </li>
         <li>
+          <strong>Freeze</strong> in the table's <strong>⋮</strong> menu chooses how many leading
+          rows and columns stay in view while its grid scrolls. A row or column header's context
+          menu can freeze through that line or unfreeze it. Data tables keep their named-column
+          header in view; their row freeze count is limited to that header, and leading columns can
+          also be frozen. Tall grids scroll inside the table card.
+        </li>
+        <li>
           Right-click a cell to insert a row or column next to it, or to delete its row or column.
           With several cells selected, the menu inserts as many rows or columns as the selection
           spans, and deletes the ones it spans. Right-click a row number or a column letter for the
@@ -559,7 +566,11 @@ const OPERATORS = [
           <code>SUM(Sales[Amount])</code> read the same cells. A row for which the filter gives an
           error stays shown. The row numbers are the stored ones. While a table is sorted or
           filtered, a selection covers the rows shown, you cannot insert a row above or below, and
-          formatting needs one row or whole columns.
+          formatting needs one row or whole columns. Use <strong>Freeze</strong> in the table menu
+          to keep leading columns in view; a data table's named-column header stays visible, and its
+          row freeze setting is limited to that header. Plain tables can freeze leading rows and
+          columns. A row or column header menu can freeze through that position or unfreeze the
+          grid.
         </li>
         <li>
           <strong>Remove column names</strong> makes the table a plain table again. Its formula

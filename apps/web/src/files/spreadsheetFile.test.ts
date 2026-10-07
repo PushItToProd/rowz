@@ -93,6 +93,16 @@ describe("toSpreadsheetFile", () => {
       ],
     });
   });
+
+  it("exports freeze counts in the table display so a file round trip keeps them", () => {
+    const tables = [{ ...TABLES[0]!, display: { sort: [], freezeRows: 1, freezeColumns: 2 } }];
+    const written = toSpreadsheetFile("Budget", PAGES, tables, [], () => []);
+    expect(written.pages[0]?.blocks[0]).toMatchObject({
+      type: "table",
+      display: { sort: [], freezeRows: 1, freezeColumns: 2 },
+    });
+    expect(readSpreadsheetFile(JSON.stringify(written))).toEqual(written);
+  });
 });
 
 describe("toSpreadsheetFile for sort, filter, and dropdown columns", () => {

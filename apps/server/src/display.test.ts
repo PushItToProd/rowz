@@ -94,6 +94,36 @@ describe("a table's display", () => {
     await put({ sort: [], filter: "=[Qty] > 3" });
   });
 
+  it("updates freeze counts through the table patch route and preserves them with sorting", async () => {
+    const snapshot = await createSpreadsheet(user);
+    const tableId = snapshot.tables[0]!.id;
+    await user.json("PATCH", `/tables/${tableId}`, { freezeRows: 3, freezeColumns: 2 });
+    expect((await readSnapshot(user, snapshot.id)).tables[0]?.display).toMatchObject({
+      sort: [],
+      freezeRows: 3,
+      freezeColumns: 2,
+    });
+
+    await user.json("POST", `/tables/${tableId}/columns`, { headerRow: false });
+    await user.json("PUT", `/tables/${tableId}/display`, { sort: [] });
+    expect((await readSnapshot(user, snapshot.id)).tables[0]?.display).toMatchObject({
+      freezeRows: 1,
+      freezeColumns: 2,
+    });
+  });
+
+  it("limits a data table to its named header row and existing columns", async () => {
+    const { id, tableId, table } = await sales();
+    await user.json("PATCH", `/tables/${tableId}`, { freezeRows: 1, freezeColumns: 2 });
+    await user.json("PUT", `/tables/${tableId}/display`, { sort: [] });
+    expect((await table()).display).toMatchObject({ freezeRows: 1, freezeColumns: 2 });
+    await user.json("PATCH", `/tables/${tableId}`, { freezeRows: 2 }, 422);
+    await user.json("PATCH", `/tables/${tableId}`, { freezeColumns: 9 }, 422);
+    expect(
+      (await readSnapshot(user, id)).tables.find(({ id: table }) => table === tableId)?.display,
+    ).toMatchObject({ freezeRows: 1, freezeColumns: 2 });
+  });
+
   it("accepts a filter written before the last rewrite literally", async () => {
     const { id, tableId, put, revision } = await sales();
     const written = await revision();

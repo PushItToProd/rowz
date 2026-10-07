@@ -53,7 +53,11 @@ export async function updateTable(
   const { change } = await ctx.changeTable(tableId, async (table, tx, writer) => {
     const { spreadsheetId } = table;
     writer.setLabel(
-      changes.name !== undefined ? `Rename table ${table.name}` : `Resize table ${table.name}`,
+      changes.name !== undefined
+        ? `Rename table ${table.name}`
+        : changes.rowCount !== undefined || changes.colCount !== undefined
+          ? `Resize table ${table.name}`
+          : `Change settings of ${table.name}`,
     );
     const rows = await orderedRows(tx, tableId);
     const requestedRows = changes.rowCount ?? rows.length;
@@ -74,6 +78,19 @@ export async function updateTable(
     if (height.to === 0 && !table.columns) {
       throw unprocessable("last_one", "A table needs at least one row");
     }
+    const maxFrozenRows = table.columns ? 1 : height.to;
+    if (changes.freezeRows !== undefined && changes.freezeRows > maxFrozenRows) {
+      throw unprocessable(
+        "invalid_freeze_rows",
+        `Freeze rows must be between 0 and ${String(maxFrozenRows)}`,
+      );
+    }
+    if (changes.freezeColumns !== undefined && changes.freezeColumns > width.to) {
+      throw unprocessable(
+        "invalid_freeze_columns",
+        `Freeze columns must be between 0 and ${String(width.to)}`,
+      );
+    }
     if (sizes.some(({ from, to }) => to < from)) {
       await ctx.keepVersion(tx, spreadsheetId, `Before making ${table.name} smaller`);
     }
@@ -93,11 +110,19 @@ export async function updateTable(
     // The steps above may have rewritten this table's own formula columns.
     const current = await ctx.within(tx).repository.findTable(tableId, "write");
     const added = Array.from({ length: Math.max(0, width.to - width.from) }, () => randomUUID());
+    const display = {
+      ...current.display,
+      ...(changes.freezeRows === undefined ? {} : { freezeRows: changes.freezeRows }),
+      ...(changes.freezeColumns === undefined ? {} : { freezeColumns: changes.freezeColumns }),
+    };
     await writer
       .updateTable(tableId, {
         ...(changes.name === undefined ? {} : { name: changes.name }),
         colIds: [...current.colIds, ...added],
         columns: current.columns && resized(current.columns, current.colIds.length + added.length),
+        ...(changes.freezeRows === undefined && changes.freezeColumns === undefined
+          ? {}
+          : { display }),
       })
       .catch(rethrowDuplicate("table", changes.name ?? ""));
   });
@@ -151,6 +176,9 @@ export async function nameColumns(
     }
     await writer.updateTable(tableId, {
       columns: names.map((name) => ({ name, type: "any" as const })),
+      ...(table.display.freezeRows === undefined
+        ? {}
+        : { display: { ...table.display, freezeRows: Math.min(table.display.freezeRows, 1) } }),
     });
   });
   return change;
@@ -238,7 +266,11 @@ export async function setTableDisplay(
     const filter = written === "" || written === "=" ? "" : filterFormula(written);
     writer.setLabel(`Sort and filter ${table.name}`);
     await writer.updateTable(tableId, {
-      display: { sort: display.sort, ...(filter === "" ? {} : { filter }) },
+      display: {
+        ...table.display,
+        sort: display.sort,
+        ...(filter === "" ? { filter: undefined } : { filter }),
+      },
     });
   });
   return change;

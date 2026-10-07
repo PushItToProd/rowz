@@ -285,6 +285,34 @@ input.editable-name--editing {
   width: 72px;
 }
 
+.freeze-settings {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  max-width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 14%);
+}
+
+.freeze-settings label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+}
+
+.freeze-settings input {
+  width: 72px;
+}
+
 /* The grid, with a strip along its right edge and one along its bottom edge that add a column or a row. */
 .table-card__grid {
   display: grid;

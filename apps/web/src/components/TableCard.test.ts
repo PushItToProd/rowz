@@ -70,6 +70,44 @@ afterEach(() => {
 });
 
 describe("row and column actions", () => {
+  it("freezes up to a row or column from its header menu", async () => {
+    await render();
+    server.updateTable.mockResolvedValue(changeWith());
+
+    await wrapper.findAll("tbody th")[1]!.trigger("contextmenu");
+    await wrapper
+      .findAll('[role="menuitem"]')
+      .find((item) => item.text() === "Freeze up to this row")!
+      .trigger("click");
+    expect(server.updateTable).toHaveBeenLastCalledWith("t1", { freezeRows: 2 });
+
+    await wrapper.findAll("thead th")[1]!.trigger("contextmenu");
+    await wrapper
+      .findAll('[role="menuitem"]')
+      .find((item) => item.text() === "Freeze up to this column")!
+      .trigger("click");
+    expect(server.updateTable).toHaveBeenLastCalledWith("t1", { freezeColumns: 1 });
+  });
+
+  it("sets freeze counts from the table action menu", async () => {
+    await render();
+    server.updateTable.mockResolvedValue(changeWith());
+    await button("Freeze").trigger("click");
+
+    const settings = wrapper.get('form[aria-label="Freeze Table 1"]');
+    const fields = settings.findAll("input");
+    await fields[0]!.setValue("2");
+    await fields[1]!.setValue("1");
+    await settings.trigger("submit");
+    await flushPromises();
+
+    expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
+      freezeRows: 2,
+      freezeColumns: 1,
+    });
+    expect(wrapper.find('form[aria-label="Freeze Table 1"]').exists()).toBe(false);
+  });
+
   it.each([
     ["col", "column", "thead th", 2, 3, ["c2", "c3"]],
     ["row", "row", "tbody th", 1, 2, ["r1", "r2"]],
@@ -490,6 +528,7 @@ describe("the menu of row, column, and cell actions", () => {
     await render();
     await wrapper.findAll("thead th")[2]!.trigger("contextmenu");
     expect(labels()).toEqual([
+      "Freeze up to this column",
       "Resize column",
       "Insert column left",
       "Insert column right",
@@ -500,6 +539,7 @@ describe("the menu of row, column, and cell actions", () => {
 
     await wrapper.findAll("tbody th")[2]!.trigger("contextmenu");
     expect(labels()).toEqual([
+      "Freeze up to this row",
       "Resize row",
       "Insert row above",
       "Insert row below",
@@ -517,6 +557,7 @@ describe("the menu of row, column, and cell actions", () => {
     await headers[3]!.trigger("contextmenu");
     expect(wrapper.get('[role="menu"]').attributes("aria-label")).toBe("Actions for B1:C4");
     expect(labels()).toEqual([
+      "Freeze up to this column",
       "Resize column",
       "Insert 2 columns left",
       "Insert 2 columns right",

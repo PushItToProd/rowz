@@ -114,7 +114,7 @@ function writeRoutes(): Route[] {
     ["PUT", `/tables/${table}/page`, { pageId: page }],
     ["PUT", `/views/${view}/page`, { pageId: page }],
     ["POST", `/pages/${page}/tables`, { position: 0 }],
-    ["PATCH", `/tables/${table}`, { name: "Taken over" }],
+    ["PATCH", `/tables/${table}`, { name: "Taken over", freezeRows: 1, freezeColumns: 1 }],
     ["PUT", `/tables/${table}/cells`, cellsBody({ C3: "written" })],
     // Below the button in A1, so the click that follows still finds it.
     ["POST", `/tables/${table}/edits`, { axis: "row", kind: "insert", index: 5 }],

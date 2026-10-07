@@ -14,10 +14,9 @@ test("a large grid windows cells and keeps an offscreen edit alive", async ({ pa
   await expect.poll(() => grid.locator('[role="gridcell"]').count()).toBeLessThan(1000);
   await cell(page, "A1").click();
   await page.keyboard.type("draft");
-  await page.evaluate(() => {
-    const grid = document.querySelector<HTMLElement>('[role="grid"]');
-    if (!grid) throw new Error("Grid not mounted");
-    window.scrollTo(0, window.scrollY + grid.getBoundingClientRect().top + 15000);
+  await grid.evaluate((element) => {
+    element.scrollTop = 15000;
+    element.dispatchEvent(new Event("scroll"));
   });
   await expect.poll(() => grid.locator('[data-pick-row="500"]').count()).toBeGreaterThan(0);
   await expect(page.getByLabel("Cell content")).toHaveText("draft");
@@ -25,6 +24,10 @@ test("a large grid windows cells and keeps an offscreen edit alive", async ({ pa
   await expect(page.getByLabel("Cell content")).toHaveText("draft kept");
   await page.keyboard.press("Escape");
   await expect(grid).toBeFocused();
+  await grid.evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll"));
+  });
   await expect(cell(page, "A1")).toBeVisible();
   await expect(cell(page, "A1")).toHaveText("0");
   await expect.poll(() => grid.locator('[role="gridcell"]').count()).toBeLessThan(1000);
@@ -84,7 +87,8 @@ test("Markdown line breaks do not change windowed row geometry", async ({ page }
 
   await grid.evaluate((element) => {
     element.scrollLeft = 0;
-    window.scrollTo(0, window.scrollY + element.getBoundingClientRect().top + 3000);
+    element.scrollTop = 3000;
+    element.dispatchEvent(new Event("scroll"));
   });
   await expect(cell(page, "A101")).toHaveCount(1);
   await expect(cell(page, "A1")).toHaveCount(0);
@@ -93,7 +97,8 @@ test("Markdown line breaks do not change windowed row geometry", async ({ page }
     .toBeCloseTo(height, 0);
 
   await grid.evaluate((element) => {
-    window.scrollTo(0, window.scrollY + element.getBoundingClientRect().top - 250);
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll"));
   });
   await expect(cell(page, "A1")).toHaveCount(1);
   await expectCellSize(page, "A1", "height", 30);
@@ -101,4 +106,63 @@ test("Markdown line breaks do not change windowed row geometry", async ({ page }
   await page.keyboard.press("ArrowDown");
   await expect(cell(page, "A2")).toHaveAttribute("aria-selected", "true");
   await expect(cell(page, "A2")).toBeVisible();
+});
+
+test("frozen first row and column stay in place while a windowed grid scrolls", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  const csv = Array.from({ length: 250 }, (_, row) =>
+    Array.from({ length: 40 }, (_, col) => `${String(row)}-${String(col)}`).join(","),
+  ).join("\n");
+  await page.getByLabel("Import CSV").setInputFiles({
+    name: "wide.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(csv),
+  });
+
+  const grid = page.getByRole("grid", { name: "Table 1", exact: true });
+  await expect(cell(page, "A1")).toHaveText("0-0");
+  await grid.locator("tbody th").first().click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Freeze up to this row" }).click();
+  await grid.locator("thead th").nth(1).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Freeze up to this column" }).click();
+
+  const before = await page.evaluate(() => {
+    const grid = document.querySelector<HTMLElement>('[role="grid"]');
+    const firstRow = grid?.querySelector<HTMLElement>('[data-cell="B1"]');
+    const firstColumn = grid?.querySelector<HTMLElement>('[data-cell="A15"]');
+    if (!grid || !firstRow || !firstColumn) throw new Error("Frozen cells are not mounted");
+    return {
+      rowTop: firstRow.getBoundingClientRect().top,
+      columnLeft: firstColumn.getBoundingClientRect().left,
+    };
+  });
+
+  await grid.evaluate((element) => {
+    element.scrollTop = 350;
+    element.scrollLeft = 600;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expect(cell(page, "A15")).toBeVisible();
+  await expect
+    .poll(async () => {
+      const after = await page.evaluate(() => {
+        const grid = document.querySelector<HTMLElement>('[role="grid"]');
+        const firstRow = grid?.querySelector<HTMLElement>('[data-cell="B1"]');
+        const firstColumn = grid?.querySelector<HTMLElement>('[data-cell="A15"]');
+        if (!grid || !firstRow || !firstColumn) return null;
+        return {
+          rowTop: firstRow.getBoundingClientRect().top,
+          columnLeft: firstColumn.getBoundingClientRect().left,
+        };
+      });
+      return after
+        ? Math.max(
+            Math.abs(after.rowTop - before.rowTop),
+            Math.abs(after.columnLeft - before.columnLeft),
+          )
+        : Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThanOrEqual(1);
 });

@@ -158,6 +158,7 @@ it("opens block actions from card margins and leaves grid cell menus to the tabl
   const menu = wrapper.get('[role="menu"][aria-label="Actions for Table 1"]');
   const labels = menu.findAll('[role="menuitem"]').map((item) => item.text());
   expect(labels).toContain("Export CSV");
+  expect(labels).toContain("Freeze rows and columns");
   expect(labels).toContain("Delete table");
   expect(labels).toContain("Move up");
   expect(labels).toContain("Add table below");

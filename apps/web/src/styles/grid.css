@@ -3,7 +3,9 @@
 .grid {
   position: relative;
   max-width: 100%;
+  max-height: 70vh;
   overflow: auto;
+  overflow-anchor: none;
 }
 
 .grid .grid__spacer {
@@ -42,6 +44,27 @@
   white-space: nowrap;
 }
 
+.grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.grid .grid__corner {
+  left: 0;
+  z-index: 7;
+}
+
+.grid tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+}
+
+.grid tbody th.grid__header--frozen-row {
+  z-index: 6;
+}
+
 .grid td {
   /* Dragging across cells selects a range of them, not their text. */
   user-select: none;
@@ -51,6 +74,24 @@
   padding: 0;
   overflow: hidden;
   cursor: cell;
+}
+
+.grid td.grid__cell--frozen-row,
+.grid td.grid__cell--frozen-column {
+  position: sticky;
+  background: var(--surface);
+}
+
+.grid td.grid__cell--frozen-row {
+  z-index: 3;
+}
+
+.grid td.grid__cell--frozen-column {
+  z-index: 2;
+}
+
+.grid td.grid__cell--frozen-row.grid__cell--frozen-column {
+  z-index: 7;
 }
 
 .grid__resize {
@@ -225,6 +266,7 @@
 
 .cell-control__checkbox-target {
   position: relative;
+  z-index: 8;
   display: flex;
   flex: 0 0 18px;
   align-items: center;

@@ -198,6 +198,30 @@ it("saving on blur preserves the selected cell without scrolling to it", async (
   }
 });
 
+it("saving on blur restores page scroll after the source editor closes", async () => {
+  const previousScrollY = Object.getOwnPropertyDescriptor(window, "scrollY");
+  const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+  Object.defineProperty(window, "scrollY", { configurable: true, value: 100 });
+  server.updateView.mockImplementationOnce((_id, changes) => {
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+    return Promise.resolve(changeWith({ ...SCRIPT, ...changes }));
+  });
+  try {
+    await render("Total = 1");
+    await wrapper.get("table").trigger("dblclick");
+    await replaceDraft("Total = 2");
+    (await editorView()).contentDOM.blur();
+    await flushPromises();
+
+    expect(wrapper.find(".cm-editor").exists()).toBe(false);
+    expect(scrollTo).toHaveBeenCalledWith(0, 100);
+  } finally {
+    scrollTo.mockRestore();
+    if (previousScrollY) Object.defineProperty(window, "scrollY", previousScrollY);
+    else Reflect.deleteProperty(window, "scrollY");
+  }
+});
+
 it("retains a failed source save and Cancel discards without retrying", async () => {
   await render("Total = 1");
   await wrapper.get("table").trigger("dblclick");

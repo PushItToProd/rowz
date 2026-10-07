@@ -172,6 +172,12 @@ export async function applyEdit(
   await ctx.storeNameFormulas(writer, data.tables, nameFormulas);
   const filtered = await ctx.storeFilterFormulas(writer, data.tables, filters);
   const display = filtered.find((candidate) => candidate.id === table.id)?.display ?? table.display;
+  const rowCount = layout.rowIds.length + (edit.kind === "insert" ? edit.count : -edit.count);
+  const rowLimit = table.columns ? 1 : rowCount;
+  const displayAfterRowEdit =
+    display.freezeRows === undefined
+      ? display
+      : { ...display, freezeRows: Math.min(display.freezeRows, rowLimit) };
   // The formulas were rewritten at the positions the columns had before the edit.
   const current = changed.find((candidate) => candidate.id === table.id)?.columns ?? table.columns;
   // Formats follow the cells they were given to.
@@ -186,6 +192,7 @@ export async function applyEdit(
       formats,
       conditionalFormats,
       gridSizes: { ...table.gridSizes, rows: heights },
+      ...(display.freezeRows === undefined ? {} : { display: displayAfterRowEdit }),
     });
   } else if (edit.kind === "insert") {
     const added = edit.ids ?? Array.from({ length: edit.count }, () => randomUUID());
@@ -206,7 +213,13 @@ export async function applyEdit(
       columns: current?.toSpliced(edit.index, edit.count) ?? null,
       formats,
       conditionalFormats,
-      display: { ...display, sort: display.sort.filter(({ colId }) => !removed.includes(colId)) },
+      display: {
+        ...display,
+        sort: display.sort.filter(({ colId }) => !removed.includes(colId)),
+        ...(display.freezeColumns === undefined
+          ? {}
+          : { freezeColumns: Math.min(display.freezeColumns, table.colIds.length - edit.count) }),
+      },
     });
   }
 }

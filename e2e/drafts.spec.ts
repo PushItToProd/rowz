@@ -59,12 +59,20 @@ test("saving a script does not scroll to the selected cell", async ({ page }) =>
   const source = script.getByLabel("Script source");
   await source.fill("Total = 42");
   await source.scrollIntoViewIfNeeded();
+  const grid = page.getByRole("grid", { name: "Table 1" });
+  await grid.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expect.poll(() => grid.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await expect(cell(page, "A1")).not.toBeInViewport();
+  const beforeGridTop = await grid.evaluate((element) => element.scrollTop);
   await source.evaluate((element) => {
     element.blur();
   });
   await expect(script.locator(".script")).toContainText("42");
   await expect(cell(page, "A1")).not.toBeInViewport();
+  await expect.poll(() => grid.evaluate((element) => element.scrollTop)).toBe(beforeGridTop);
 });
 
 test("cell drafts keep history across pages and save literal text before navigation", async ({

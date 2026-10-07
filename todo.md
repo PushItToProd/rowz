@@ -271,7 +271,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - don't implement cross-document find and replace -- too risky
 - [ ] **P7** support hiding rows and columns #everyday
 - [ ] **P8** support hiding pages #everyday
-- [ ] **P5** freeze header rows and columns so they stay in view while a table scrolls #everyday
+- [x] **P5** freeze header rows and columns so they stay in view while a table scrolls #everyday
 
 ## Tables, pages, charts, and text views
 
@@ -648,3 +648,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [ ] After deleting a page from its context menu, keyboard focus falls to the body because the page tab that held it is removed; move focus to the neighboring tab (`PageTabs.vue`, `ContextMenu.vue`) #everyday
 - [ ] A right-click on a `<label>` inside a block (Import CSV, a chart's Data label) opens the block menu; `EditorView.vue` near line 512 should exclude labels #everyday
+
+- [ ] On a narrow screen, frozen columns can cover every non-frozen column (three default-width columns are 360px, wider than a 320px viewport); cap the frozen width at part of the grid's width or ignore the freeze below a width (`GridView.vue` near line 367, `grid.css` near line 79) #small-apps

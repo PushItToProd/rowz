@@ -252,6 +252,17 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "freeze table rows and columns",
+    prepare({ tableId }) {
+      return {
+        method: "PATCH",
+        path: `/tables/${tableId}`,
+        body: { freezeRows: 2, freezeColumns: 1 },
+        status: 200,
+      };
+    },
+  },
+  {
     name: "grow a table without shrinking it",
     prepare({ tableId }) {
       return {

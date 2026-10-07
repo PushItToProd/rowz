@@ -186,8 +186,8 @@ export const tables = pgTable(
     /** How cells are shown: rules applied in order, later ones over earlier ones. */
     formats: jsonb("formats").$type<FormatRule[]>().notNull().default([]),
     /**
-     * How a data table's rows are shown: a sort and a filter. They leave the
-     * stored row order alone, so `A2` keeps its meaning under any sort.
+     * How the table is shown: sorting and filtering leave stored row order
+     * alone, while frozen row and column counts pin leading display places.
      */
     display: jsonb("display").$type<TableDisplay>().notNull().default({ sort: [] }),
     /** Formats a cell gets when its value meets a condition, laid over `formats`. */

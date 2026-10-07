@@ -19,6 +19,7 @@ import ChoicesPanel from "./ChoicesPanel.vue";
 import ConditionalFormatsPanel from "./ConditionalFormatsPanel.vue";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
+import FreezeSettings from "./FreezeSettings.vue";
 import GridView from "./GridView.vue";
 import ColumnFormulaPopover from "./ColumnFormulaPopover.vue";
 import NamesPanel from "./NamesPanel.vue";
@@ -138,6 +139,19 @@ async function removeLines(lines: Lines): Promise<void> {
 
 /** Whether the form that sets the table's size is open. */
 const resizing = ref(false);
+const freezeSettingsOpen = ref(false);
+
+function openFreezeSettings(): void {
+  resizing.value = false;
+  freezeSettingsOpen.value = !freezeSettingsOpen.value;
+}
+
+async function saveFreezeSettings(settings: {
+  freezeRows: number;
+  freezeColumns: number;
+}): Promise<void> {
+  if (await store.updateTable(props.table.id, settings)) freezeSettingsOpen.value = false;
+}
 
 /** Whether the rows and columns past a size hold anything. */
 function holdsContentPast(rowCount: number, colCount: number): boolean {
@@ -510,6 +524,40 @@ const menuItems = computed((): MenuItem[] => {
     count: range.endCol - range.startCol + 1,
   };
   const groups: MenuItem[][] = [
+    scope === "row" && !props.table.columns
+      ? [
+          {
+            label: "Freeze up to this row",
+            disabled: props.table.display.freezeRows === range.endRow + 1,
+            run: () => void store.updateTable(props.table.id, { freezeRows: range.endRow + 1 }),
+          },
+          ...(props.table.display.freezeRows
+            ? [
+                {
+                  label: "Unfreeze",
+                  run: () => void store.updateTable(props.table.id, { freezeRows: 0 }),
+                },
+              ]
+            : []),
+        ]
+      : [],
+    scope === "col"
+      ? [
+          {
+            label: "Freeze up to this column",
+            disabled: props.table.display.freezeColumns === range.endCol + 1,
+            run: () => void store.updateTable(props.table.id, { freezeColumns: range.endCol + 1 }),
+          },
+          ...(props.table.display.freezeColumns
+            ? [
+                {
+                  label: "Unfreeze",
+                  run: () => void store.updateTable(props.table.id, { freezeColumns: 0 }),
+                },
+              ]
+            : []),
+        ]
+      : [],
     scope === "cells"
       ? []
       : [
@@ -568,6 +616,14 @@ const menuLabel = computed(() => {
           @click="resizing = !resizing"
         >
           Resize
+        </button>
+        <button
+          type="button"
+          data-block-action="Freeze rows and columns"
+          aria-haspopup="dialog"
+          @click="openFreezeSettings"
+        >
+          Freeze
         </button>
         <button
           v-if="!table.columns"
@@ -647,6 +703,12 @@ const menuLabel = computed(() => {
         </button>
       </div>
       <ResizeTable v-if="resizing" :table="table" @close="resizing = false" @resize="resize" />
+      <FreezeSettings
+        v-if="freezeSettingsOpen"
+        :table="table"
+        @close="freezeSettingsOpen = false"
+        @save="saveFreezeSettings"
+      />
     </header>
 
     <ColumnFormulaPopover
