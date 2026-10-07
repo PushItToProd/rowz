@@ -775,3 +775,5 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 ## Work order of the autonomous run
 
 **Choice.** After the grapheme item, the run takes `_scratch/AFK_TODOS.md` in priority order from P0, because the author said so, which overrides the agent instructions to take the highest numbers first.
+
+- The flaky e2e test (`data-tables-and-formatting.spec.ts:5`) could not be reproduced: five full `pnpm e2e:remote` runs passed. The fix adds waits for the save to finish and a reload check; the root cause is unconfirmed. Skipped the adversarial review for this test-only change.

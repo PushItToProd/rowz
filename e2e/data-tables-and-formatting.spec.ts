@@ -16,6 +16,9 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await chart.getByLabel("Chart data").fill("'Table 1'!A1:B2");
   await chart.getByLabel("Chart data").press("Enter");
   await expect(chart.locator(".chart__bar")).toHaveCount(2);
+  // Rendering the saved source can precede closing the formula session.
+  await expect(chart.locator('input[aria-label="Chart data"]')).toHaveValue("'Table 1'!A1:B2");
+  await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
 
   // The CSV holds the values the table shows.
   const csvDownload = page.waitForEvent("download");
@@ -36,11 +39,13 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await file.saveAs(filePath);
 
   await page.getByRole("link", { name: "← Documents" }).click();
+  await expect(page.getByRole("heading", { name: "Documents", exact: true })).toBeVisible();
   await page.getByLabel("Import").setInputFiles(filePath);
   await expect(cell(page, "B2")).toHaveText("6");
   await expect(page.locator('[data-view="Chart 1"] .chart__bar')).toHaveCount(2);
   await enter(page, "B1", "5");
   await expect(cell(page, "B2")).toHaveText("10");
+  await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
   await page.getByRole("link", { name: "← Documents" }).click();
   await expect(page.getByRole("link", { name: "Untitled document" })).toHaveCount(2);
 
@@ -50,9 +55,16 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await page.getByLabel("Import CSV").setInputFiles(csvPath);
   await expect(cell(page, "A2")).toHaveText("pears, ripe");
   await expect(cell(page, "B2")).toHaveText("6");
+  // CSV values appear optimistically; verify the save before leaving the document.
+  await reload(page);
+  await expect(cell(page, "A1")).toHaveText("apples");
+  await expect(cell(page, "B1")).toHaveText("3");
+  await expect(cell(page, "A2")).toHaveText("pears, ripe");
+  await expect(cell(page, "B2")).toHaveText("6");
 
   // A file that is not a spreadsheet is refused with a message.
   await page.getByRole("link", { name: "← Documents" }).click();
+  await expect(page.getByRole("heading", { name: "Documents", exact: true })).toBeVisible();
   await page.getByLabel("Import").setInputFiles(csvPath);
   await expect(page.getByRole("alert")).toContainText("not a document exported from this app");
 });
