@@ -115,6 +115,11 @@ function onOutside(event: Event): void {
   close();
 }
 
+function onScrollIntent(event: Event): void {
+  if (event.target instanceof Node && menu.value?.contains(event.target)) return;
+  close();
+}
+
 onMounted(async () => {
   unregister = registerContextMenu(close);
   const mounting = ++lifecycle;
@@ -135,10 +140,10 @@ onMounted(async () => {
     resizeObserver = new ResizeObserver(reposition);
     resizeObserver.observe(element);
   }
-  // Start listening after positioning and focus, so setup cannot dismiss a menu
-  // that a scroll, resize, or focus change triggered while it was opening.
+  // Listen after positioning and focus, so setup events do not dismiss the menu.
   document.addEventListener("mousedown", onOutside, true);
-  window.addEventListener("scroll", close, true);
+  window.addEventListener("wheel", onScrollIntent, { capture: true, passive: true });
+  window.addEventListener("touchmove", onScrollIntent, { capture: true, passive: true });
   window.addEventListener("resize", close);
   window.addEventListener("blur", close);
   window.visualViewport?.addEventListener("scroll", reposition);
@@ -150,7 +155,8 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   unregister?.();
   document.removeEventListener("mousedown", onOutside, true);
-  window.removeEventListener("scroll", close, true);
+  window.removeEventListener("wheel", onScrollIntent, true);
+  window.removeEventListener("touchmove", onScrollIntent, true);
   window.removeEventListener("resize", close);
   window.removeEventListener("blur", close);
   window.visualViewport?.removeEventListener("scroll", reposition);

@@ -245,10 +245,17 @@ describe("ContextMenu", () => {
     expect(wrapper.emitted("close")).toHaveLength(1);
   });
 
-  it("closes when the page scrolls or the window changes size", async () => {
+  it("closes for user scrolling and resize, but not programmatic scroll", async () => {
     render(items().all);
     await flushPromises();
     window.dispatchEvent(new Event("scroll"));
+    expect(wrapper.emitted("close")).toBeUndefined();
+
+    bodyGet('[role="menu"]').element.dispatchEvent(new Event("wheel", { bubbles: true }));
+    expect(wrapper.emitted("close")).toBeUndefined();
+
+    document.body.dispatchEvent(new Event("wheel", { bubbles: true }));
+    expect(wrapper.emitted("close")).toHaveLength(1);
     window.dispatchEvent(new Event("resize"));
     expect(wrapper.emitted("close")).toHaveLength(1);
   });

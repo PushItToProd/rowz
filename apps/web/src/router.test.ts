@@ -43,6 +43,20 @@ it("routes the requested spreadsheet URL to the editor", () => {
   expect(router.resolve("/spreadsheets/document-id").name).toBe("editor-document");
 });
 
+it("routes page and target fragments through the canonical editor route", () => {
+  const router = createAppRouter(createMemoryHistory());
+  const page = router.resolve("/s/document-id/p/page-id");
+  const cell = router.resolve("/s/document-id/p/page-id#cell=table-id.row-id.col-id");
+  const block = router.resolve("/s/document-id/p/page-id#block=block-id");
+
+  expect(page.name).toBe("editor");
+  expect(page.params).toEqual({ spreadsheetId: "document-id", pageId: "page-id" });
+  expect(cell.name).toBe("editor");
+  expect(cell.hash).toBe("#cell=table-id.row-id.col-id");
+  expect(block.name).toBe("editor");
+  expect(block.hash).toBe("#block=block-id");
+});
+
 describe("departure with a formula draft", () => {
   it("retains drafts on internal page navigation and asks before leaving without saving", async () => {
     const router = createAppRouter(createMemoryHistory());

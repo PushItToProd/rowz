@@ -64,7 +64,10 @@ export function useLocationReveal(
     );
   }
 
-  async function revealLocation(target: RevealLocationTarget): Promise<void> {
+  async function revealLocation(
+    target: RevealLocationTarget,
+    options: { navigate?: boolean } = {},
+  ): Promise<void> {
     const blockId = target.blockId ?? target.cell?.tableId ?? target.scriptId;
     if (blockId) setBlockCollapsed(spreadsheetId(), blockId, false);
     const cellIsVisible =
@@ -72,10 +75,12 @@ export function useLocationReveal(
       store.rowView(target.cell.tableId).place(target.cell.row) !== undefined;
     if (target.cell && cellIsVisible) store.selection = target.cell;
 
-    await router.push({
-      name: "editor",
-      params: { spreadsheetId: spreadsheetId(), pageId: target.pageId },
-    });
+    if (options.navigate !== false) {
+      await router.push({
+        name: "editor",
+        params: { spreadsheetId: spreadsheetId(), pageId: target.pageId },
+      });
+    }
     await nextTick();
 
     const block = blockId ? document.getElementById(`block-${blockId}`) : null;

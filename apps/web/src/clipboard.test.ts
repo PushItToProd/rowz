@@ -1,5 +1,23 @@
 import { expect, it, vi } from "vitest";
-import { writeClipboardText } from "./clipboard";
+import { copyLinkToClipboard, writeClipboardText } from "./clipboard";
+
+it("copies an app-relative link as an absolute URL", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  const writeText = vi.fn(() => Promise.resolve());
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+  try {
+    expect(await copyLinkToClipboard("/s/s1/p/p1#block=b1")).toBe(true);
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(
+      new URL("/s/s1/p/p1#block=b1", window.location.href).href,
+    );
+  } finally {
+    if (descriptor) Object.defineProperty(navigator, "clipboard", descriptor);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  }
+});
 
 it("restores the document selection and focus after fallback copying", async () => {
   const content = document.createElement("span");

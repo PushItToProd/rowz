@@ -3,6 +3,8 @@ import { computed, nextTick, ref } from "vue";
 import { useRouter } from "vue-router";
 import type { PageRecord } from "../api/client";
 import { undoNotice } from "../notice";
+import { copyLinkToClipboard } from "../clipboard";
+import { buildPageLink } from "../deepLinks";
 import { useWorkbookStore } from "../stores/workbook";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
@@ -76,6 +78,11 @@ function renamePage(pageId: string): void {
   });
 }
 
+async function copyPageLink(pageId: string): Promise<void> {
+  if (await copyLinkToClipboard(buildPageLink(props.spreadsheetId, pageId)))
+    store.notice = { kind: "success", text: "Copied" };
+}
+
 const pageMenuItems = computed((): MenuItem[] => {
   const page = pageAt(pageMenu.value?.pageId ?? "");
   if (!page) return [];
@@ -91,9 +98,14 @@ const pageMenuItems = computed((): MenuItem[] => {
       setBlocksCollapsed(props.spreadsheetId, blockIds, !allCollapsed);
     },
   };
-  if (!store.canEdit) return [collapseItem];
+  const copyItem: MenuItem = {
+    label: "Copy link to this page",
+    run: () => void copyPageLink(page.id),
+  };
+  if (!store.canEdit) return [copyItem, collapseItem];
   const index = store.pages.findIndex((candidate) => candidate.id === page.id);
   return [
+    copyItem,
     collapseItem,
     {
       label: "Rename",

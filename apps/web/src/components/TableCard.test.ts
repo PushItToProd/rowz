@@ -427,6 +427,7 @@ describe("the menu of row, column, and cell actions", () => {
     const menu = await open("B2");
     expect(menu.attributes("aria-label")).toBe("Actions for B2");
     expect(menu.findAll('[role="menuitem"]').map((entry) => entry.text())).toEqual([
+      "Copy link to this cell",
       "Insert row above",
       "Insert row below",
       "Delete row 2",
@@ -437,6 +438,41 @@ describe("the menu of row, column, and cell actions", () => {
       "Add conditional format…",
       "Name this range…",
       "Clear cells",
+    ]);
+  });
+
+  it("copies a link using the selected cell's stable row and column IDs", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    try {
+      await open("B2");
+      await item("Copy link to this cell").trigger("click");
+      await flushPromises();
+
+      expect(writeText).toHaveBeenCalledExactlyOnceWith(
+        new URL("/s/s1/p/p1#cell=t1.r1.c2", window.location.href).href,
+      );
+      expect(useWorkbookStore().notice).toEqual({ kind: "success", text: "Copied" });
+    } finally {
+      if (descriptor) Object.defineProperty(navigator, "clipboard", descriptor);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("offers the cell link action to a viewer", async () => {
+    await render({}, "viewer");
+    const cell = wrapper.get('[data-cell="A1"]');
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    cell.element.dispatchEvent(event);
+    await flushPromises();
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(bodyFindAll('[role="menuitem"]').map((entry) => entry.text())).toEqual([
+      "Copy link to this cell",
     ]);
   });
 
@@ -469,6 +505,7 @@ describe("the menu of row, column, and cell actions", () => {
     const menu = await openOnRange("B2", "C4");
     expect(menu.attributes("aria-label")).toBe("Actions for B2:C4");
     expect(labels()).toEqual([
+      "Copy link to this cell",
       "Insert 3 rows above",
       "Insert 3 rows below",
       "Delete rows 2-4",

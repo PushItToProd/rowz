@@ -347,7 +347,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - [x] block actions: whatever each block supports
     - block context menu should appear when right-clicking on the card around it but not the controls within it. keep a button in the upper right with a vertical ellipsis that I can click to show the same menu as well
 - [ ] **P7** data tables - allow choices to be drawn from a formula's result (when the formula value changes, keep the raw underlying value in the cell but flag it visibly as invalid) #data-tables
-- [ ] **P6** allow creating links to navigate directly to a page, table cell, block, etc. #small-apps
+- [x] **P6** allow creating links to navigate directly to a page, table cell, block, etc. #small-apps
 - [ ] **P7** (Claude) the editor for a formula column's formula looks unfinished beside the other panels: its heading is small, "Pick reference" is smaller than the other buttons, and Apply and Cancel touch. See `_scratch/qa/15-formula-col.png` #formula-editing
 - [x] **P4** (Claude) a block added below the visible part of the page is not scrolled into view, so nothing seems to happen after "Add chart". Scroll to a new block and put the keyboard focus in it #small-apps
 - [ ] **P7** (Claude) the row of "Add table", "Add chart", "Add text", and "Add script" buttons between every two blocks takes a line of each gap on a page of five blocks. Consider showing the rows between blocks only when the pointer or the focus is in the gap, and keeping the first and last #small-apps
@@ -686,3 +686,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [ ] **P10** The CSV append confirmation previews the mapping from the table as it was when the dialog opened, and the server maps the rows against the current columns; a rename or a plain/named switch in another session can change the mapping after confirmation, and a table deleted while the request waits for the lock gets 404 and not 409 (`TableCard.vue` near line 128, `repo/spreadsheets/tables.ts` near line 148, `context.ts` near line 289) #documents
 - [ ] The CSV append confirmation does not say that cells starting with `=` are stored as formulas (as in replace import), so a file can add a button; actions still run only when the button is clicked (`TableCard.vue` near line 151) #documents
+
+- [ ] **P10** Copied deep links drop a reverse-proxy path prefix: `deepLinks.ts` builds root-relative `/s/...` paths and `clipboard.ts` resolves them from the origin root #small-apps

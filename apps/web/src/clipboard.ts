@@ -49,3 +49,8 @@ export async function writeClipboardText(text: string): Promise<boolean> {
   }
   return copied;
 }
+
+/** Copies an app-relative link as the absolute URL the receiver can open. */
+export async function copyLinkToClipboard(path: string): Promise<boolean> {
+  return writeClipboardText(new URL(path, window.location.href).href);
+}

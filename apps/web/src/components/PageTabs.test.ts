@@ -127,6 +127,9 @@ describe("PageTabs", () => {
     expect(bodyGet('[role="menu"]').attributes("aria-label")).toBe(
       `Actions for Page ${activePageId === "p1" ? "1" : "2"}`,
     );
+    expect(bodyFindAll('[role="menuitem"]').map((item) => item.text())).toContain(
+      "Copy link to this page",
+    );
   });
 
   it("labels the page delete button and shows a trash icon", async () => {
@@ -153,16 +156,21 @@ describe("PageTabs", () => {
     const menu = bodyGet('[role="menu"]');
     expect(menu.attributes("aria-label")).toBe("Actions for Page 1");
     expect(bodyFindAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+      "Copy link to this page",
       "Collapse all",
       "Rename",
       "Delete",
       "Move left",
       "Move right",
     ]);
-    expect(menu.get('[role="menuitem"]:nth-child(4)').attributes("disabled")).toBeDefined();
-    expect(menu.get('[role="menuitem"]:nth-child(5)').attributes("disabled")).toBeUndefined();
+    const moveLeft = bodyFindAll('[role="menuitem"]').find((item) => item.text() === "Move left")!;
+    const moveRight = bodyFindAll('[role="menuitem"]').find(
+      (item) => item.text() === "Move right",
+    )!;
+    expect(moveLeft.attributes("disabled")).toBeDefined();
+    expect(moveRight.attributes("disabled")).toBeUndefined();
 
-    await menu.get('[role="menuitem"]:nth-child(5)').trigger("click");
+    await moveRight.trigger("click");
     await flushPromises();
     expect(server.reorderPages).toHaveBeenCalledExactlyOnceWith("s1", ["p2", "p1"]);
   });
@@ -175,7 +183,10 @@ describe("PageTabs", () => {
 
     const menu = bodyGet('[role="menu"]');
     expect(menu.attributes("aria-label")).toBe("Actions for Page 2");
-    expect(menu.get('[role="menuitem"]:nth-child(5)').attributes("disabled")).toBeDefined();
+    const moveRight = bodyFindAll('[role="menuitem"]').find(
+      (item) => item.text() === "Move right",
+    )!;
+    expect(moveRight.attributes("disabled")).toBeDefined();
     await menu.trigger("keydown", { key: "Escape" });
     await flushPromises();
     expect(bodyHas('[role="menu"]')).toBe(false);
@@ -242,7 +253,10 @@ describe("PageTabs", () => {
 
     await wrapper.findAll("a")[0]!.trigger("contextmenu", { button: 2 });
     await flushPromises();
-    expect(bodyFindAll('[role="menuitem"]').map((item) => item.text())).toEqual(["Collapse all"]);
+    expect(bodyFindAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+      "Copy link to this page",
+      "Collapse all",
+    ]);
   });
 });
 

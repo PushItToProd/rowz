@@ -44,7 +44,7 @@ const props = defineProps<{ table: TableRecord }>();
  * rows or columns when it was asked for from one of their headers.
  */
 const emit = defineEmits<{
-  menu: [at: { x: number; y: number; scope: MenuScope }];
+  menu: [at: { x: number; y: number; scope: MenuScope; cell?: CellId }];
   trace: [trace: ErrorTraceFrame[]];
 }>();
 const store = useWorkbookStore();
@@ -604,11 +604,17 @@ function selectAll(): void {
 
 /**
  * Opens the menu for a right-clicked cell. A cell outside the selection is
- * selected first, so the menu acts on what was clicked. A viewer gets the
- * browser's own menu.
+ * selected first, so the menu acts on what was clicked. Viewers get the link
+ * action; editors also get the table actions.
  */
 async function onCellContextMenu(event: MouseEvent, row: number, col: number): Promise<void> {
-  if (!store.canEdit) return;
+  if (!store.canEdit) {
+    event.preventDefault();
+    if (!inRange(row, col)) select(row, col);
+    focusGrid();
+    emit("menu", { x: event.clientX, y: event.clientY, scope: "cells", cell: cellAt(row, col) });
+    return;
+  }
   event.preventDefault();
   const sessions = useFormulaSessionStore();
   if (
@@ -616,7 +622,7 @@ async function onCellContextMenu(event: MouseEvent, row: number, col: number): P
     sessions.active.target.tableId === props.table.id &&
     sessions.active.target.colId === props.table.colIds[col]
   ) {
-    emit("menu", { x: event.clientX, y: event.clientY, scope: "cells" });
+    emit("menu", { x: event.clientX, y: event.clientY, scope: "cells", cell: cellAt(row, col) });
     return;
   }
   if (sessions.active) {
@@ -633,7 +639,7 @@ async function onCellContextMenu(event: MouseEvent, row: number, col: number): P
   }
   if (!inRange(row, col)) select(row, col);
   focusGrid();
-  emit("menu", { x: event.clientX, y: event.clientY, scope: "cells" });
+  emit("menu", { x: event.clientX, y: event.clientY, scope: "cells", cell: cellAt(row, col) });
 }
 
 /**
@@ -673,11 +679,17 @@ async function onHeaderContextMenu(event: MouseEvent, axis: Axis, index: number)
 
 /** Opens the menu from the keyboard, under the selected cell. */
 function openMenuAtSelection(): void {
-  if (!store.canEdit || !selected.value) return;
+  if (!selected.value) return;
   const box = grid.value
     ?.querySelector(`[data-cell="${formatAddress(selected.value)}"]`)
     ?.getBoundingClientRect();
-  if (box) emit("menu", { x: box.left, y: box.bottom, scope: "cells" });
+  if (box)
+    emit("menu", {
+      x: box.left,
+      y: box.bottom,
+      scope: "cells",
+      cell: selected.value,
+    });
 }
 
 /** Keeps a position inside the table. */

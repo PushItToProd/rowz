@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { FILE_LIMITS } from "@spreadsheet-app/shared";
 import { computed, nextTick, provide, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import EditableName from "../components/EditableName.vue";
 import AddBlockRow from "../components/AddBlockRow.vue";
 import FormulaBar from "../components/FormulaBar.vue";
@@ -37,6 +37,8 @@ import TextCard from "../components/TextCard.vue";
 import { useWorkbookStore } from "../stores/workbook";
 import { SIDE_PANES, provideActiveSidePane, tableIdOfSidePane, type SidePaneId } from "../sidePane";
 import { useLocationReveal } from "../locationReveal";
+import { copyLinkToClipboard } from "../clipboard";
+import { buildBlockLink, parseDeepLinkFragment, parseDeepLinkHref } from "../deepLinks";
 import {
   isBlockCollapsed,
   loadCollapsedBlocks,
@@ -47,11 +49,42 @@ import {
 const props = defineProps<{ spreadsheetId: string; pageId?: string }>();
 const store = useWorkbookStore();
 const router = useRouter();
+const route = useRoute();
 const { revealLocation } = useLocationReveal(store, router, () => props.spreadsheetId);
 const formulas = useFormulaSessionStore();
 const picking = useReferencePickingStore();
 const activeSidePane = provideActiveSidePane();
 const replayed = new WeakSet<Event>();
+
+async function copyBlockLink(pageId: string, blockId: string): Promise<void> {
+  if (await copyLinkToClipboard(buildBlockLink(props.spreadsheetId, pageId, blockId)))
+    store.notice = { kind: "success", text: "Copied" };
+}
+
+function navigateInDocumentLink(event: MouseEvent): void {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey ||
+    !(event.target instanceof Element)
+  )
+    return;
+  const anchor = event.target.closest<HTMLAnchorElement>("a[href]");
+  const href = anchor?.getAttribute("href");
+  if (!href) return;
+  const currentPageId =
+    typeof route.params.pageId === "string" ? route.params.pageId : page.value?.id;
+  const location = parseDeepLinkHref(
+    href,
+    currentPageId ? { spreadsheetId: props.spreadsheetId, pageId: currentPageId } : undefined,
+  );
+  if (!location) return;
+  event.preventDefault();
+  void router.push(href);
+}
 
 function pageNavigation(target: Element): boolean {
   return target.closest(".page-tabs") !== null && target.closest("button") === null;
@@ -346,6 +379,48 @@ const blocks = computed(() =>
     .sort((a, b) => a.record.position - b.record.position),
 );
 
+const handledDeepLink = ref<string>();
+watch(
+  [loaded, () => route.fullPath, page],
+  async ([isLoaded, fullPath, currentPage]) => {
+    if (!isLoaded || !currentPage) return;
+    const fragment = parseDeepLinkFragment(route.hash);
+    if (!fragment) {
+      handledDeepLink.value = undefined;
+      return;
+    }
+    if (handledDeepLink.value === fullPath) return;
+    handledDeepLink.value = fullPath;
+
+    let target: Parameters<typeof revealLocation>[0] | null = null;
+    if (fragment.kind === "block") {
+      const blockExists = [...store.tables, ...store.views].some(
+        (block) => block.id === fragment.blockId && block.pageId === currentPage.id,
+      );
+      if (blockExists) target = { pageId: currentPage.id, blockId: fragment.blockId };
+    } else {
+      const table = store.tables.find(
+        (candidate) => candidate.id === fragment.tableId && candidate.pageId === currentPage.id,
+      );
+      const row = table?.rows.findIndex((candidate) => candidate.id === fragment.rowId) ?? -1;
+      const col = table?.colIds.indexOf(fragment.colId) ?? -1;
+      if (table && row >= 0 && col >= 0)
+        target = { pageId: currentPage.id, cell: { tableId: table.id, row, col } };
+    }
+
+    if (route.fullPath !== fullPath) return;
+    if (target) {
+      await revealLocation(target, { navigate: false });
+    } else {
+      store.notice = {
+        kind: "error",
+        text: "That link points to something that no longer exists.",
+      };
+    }
+  },
+  { flush: "post" },
+);
+
 /** The block whose menu of pages to move it to is open, and where the menu is. */
 const pageMenu = ref<{ x: number; y: number; block: { id: string; name: string } } | null>(null);
 
@@ -429,6 +504,10 @@ const blockMenuItems = computed((): MenuItem[] => {
         run: () => {
           toggleBlockCollapsed(props.spreadsheetId, block.record.id);
         },
+      },
+      {
+        label: "Copy link",
+        run: () => void copyBlockLink(block.record.pageId, block.record.id),
       },
     ],
   ];
@@ -627,6 +706,7 @@ watch(
     class="editor"
     :data-saving="store.saving ? '' : undefined"
     @click.capture="guardControl"
+    @click="navigateInDocumentLink"
     @mousedown.capture="preserveNavigationFocus"
     @keydown.capture="findKey"
     @focusin="rememberBlock"

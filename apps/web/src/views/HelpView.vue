@@ -527,6 +527,13 @@ const OPERATORS = [
           focus.
         </li>
         <li>
+          Choose <strong>Copy link to this page</strong> in a page tab menu,
+          <strong>Copy link</strong> in a block menu, or <strong>Copy link to this cell</strong> in
+          a cell menu. A cell link uses the table, row, and column IDs, so it keeps pointing to the
+          same stored cell when the table is sorted or filtered. Opening a block link expands and
+          highlights the block.
+        </li>
+        <li>
           Use the chevron at the left of a block header to collapse it to its name, error indicator,
           and actions menu. The block menu also has <strong>Collapse</strong> or
           <strong>Expand</strong>; the page tab menu collapses or expands every block on that page.
@@ -1287,6 +1294,14 @@ const OPERATORS = [
       <pre><code>{{ TEMPLATE_EXAMPLE }}</code></pre>
       <ul>
         <li>As in a chart, a formula in a text view names the table of every cell it reads.</li>
+        <li>
+          Markdown links can navigate to a location in this document. Use
+          <code>[Open block](#block=&lt;block-id&gt;)</code>,
+          <code>[Open cell](#cell=&lt;table-id&gt;.&lt;row-id&gt;.&lt;column-id&gt;)</code>, or a
+          page path such as <code>[/open page](/s/&lt;spreadsheet-id&gt;/p/&lt;page-id&gt;)</code>.
+          Cell links name stored row and column IDs, not the displayed A1 address. Raw HTML and
+          unsupported relative or unsafe URL schemes do not render as links.
+        </li>
         <li>
           A formula that gives one value puts it into the sentence. A formula that gives a range
           shows it as a table, and a chart function such as <code>BAR_CHART</code> shows the chart.

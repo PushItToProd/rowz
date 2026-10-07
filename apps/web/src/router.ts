@@ -4,6 +4,7 @@ import { useSessionStore } from "./stores/session";
 import { useFormulaSessionStore } from "./formula/session";
 import { useDialog } from "./useDialog";
 import { queueListNotice } from "./notice";
+import { parseDeepLinkFragment } from "./deepLinks";
 import AuthView from "./views/AuthView.vue";
 import EditorView from "./views/EditorView.vue";
 import HelpView from "./views/HelpView.vue";
@@ -26,8 +27,13 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
       { path: "/help", name: "help", component: HelpView },
       { path: "/:unknown(.*)*", name: "not-found", component: SpreadsheetListView },
     ],
-    // Links within the help page point at its sections.
-    scrollBehavior: (to) => (to.hash ? { el: to.hash } : { top: 0 }),
+    // Help links point at headings; editor location links use the shared reveal helper.
+    scrollBehavior: (to) =>
+      to.name === "editor" && to.hash && parseDeepLinkFragment(to.hash)
+        ? false
+        : to.hash
+          ? { el: to.hash }
+          : { top: 0 },
   });
 
   /** Pages for people who are signed out. A signed-in user is sent to their spreadsheets. */

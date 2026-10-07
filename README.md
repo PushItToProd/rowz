@@ -85,6 +85,8 @@ A document holds pages, and a page holds blocks: tables, charts, text views, and
 
 Use the chevron at the left of a block header to collapse it to its name, error indicator, and actions menu. **Collapse** or **Expand** is also in the block menu. The page tab menu collapses or expands all blocks on that page. These per-viewer preferences stay in browser local storage under the document and block IDs; opening a document drops preferences for blocks that were deleted. Right-click a block's header or the padding around its card, or click the card's **⋮** button, to open its actions. The menu includes the actions already available for that block, such as rename, delete, move, add a block below, and export a table as CSV. Right-clicking table cells still opens the cell menu. Choose **Add conditional format…** there to open the Conditional formats panel for the selected cells or range. Within a block, inputs, buttons, links, grids, rendered text, and source editors keep their own behavior. Press the Context Menu key or Shift+F10 on a page tab or block to open its menu; use the arrow keys, Home, or End to move through it, and Escape to close it and restore focus.
 
+Choose **Copy link to this page** in a page tab menu, **Copy link** in a block menu, or **Copy link to this cell** in a cell menu. Opening a block link expands and highlights that block. A cell link uses the table, row, and column IDs, so it selects the same stored cell after the table is sorted or filtered. Selecting cells does not change the URL.
+
 ### Tables
 
 A table is a grid of cells with its own column letters and row numbers.
@@ -144,6 +146,8 @@ We sold **{{ total }}** in all.
 A lone table-qualified positional reference to one cell, such as `{{Sales!D1}}`, writes the value with that cell's number or date format. Only the number format carries over, including from a conditional format; text color, fill, bold, and other cell styles do not. A named-column reference such as `Sales[Amount]`, a range (even one cell written as `Sales!D1:D1`), and an expression such as `{{Sales!D1 * 2}}` have no single source cell to format. Use `TEXT` when a computed value needs a format, as in `{{TEXT(Sales!D1 * 2, "$#,##0.00")}}`.
 
 A `BUTTON` result is clickable in a text view, including when a loop renders it more than once. For example, `{{ BUTTON("Approve", EXECUTE(TRUE, Sales!D2)) }}` shows an **Approve** button. The server re-evaluates the saved view when clicked and runs the action at that occurrence.
+
+Markdown links can navigate within the current document: use `[#block](#block=<block-id>)`, `[#cell](#cell=<table-id>.<row-id>.<column-id>)`, or a page URL such as `[/open page](/s/<spreadsheet-id>/p/<page-id>)`. A copied cell link uses stable IDs for the table, row, and column; it does not use the displayed A1 address. Raw HTML and unsupported relative or unsafe URL schemes do not render as links.
 
 Formula inputs share completion and local undo history. Scripts and Markdown templates use multiline editors: Enter inserts a newline, Done or Ctrl/Cmd+Enter saves, and Cancel discards the draft. Escape dismisses completion without discarding multiline edits. Tab accepts a suggestion when one is open; otherwise it saves and moves focus. Formula drafts retain their history while browsing pages and appear in a labeled draft editor when their original field is unavailable.
 

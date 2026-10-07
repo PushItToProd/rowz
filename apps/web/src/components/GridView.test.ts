@@ -2077,7 +2077,9 @@ describe("row and column headers, and the menu", () => {
     await select("A1");
     await cellAt("B3").trigger("contextmenu", { clientX: 120, clientY: 80 });
     expect(selectedAddress()).toBe("B3");
-    expect(wrapper.emitted("menu")).toEqual([[{ x: 120, y: 80, scope: "cells" }]]);
+    expect(wrapper.emitted("menu")).toEqual([
+      [{ x: 120, y: 80, scope: "cells", cell: { tableId: "t1", row: 2, col: 1 } }],
+    ]);
   });
 
   it("keeps a selected range when the right-click is inside it", async () => {
@@ -2087,6 +2089,9 @@ describe("row and column headers, and the menu", () => {
     await cellAt("B1").trigger("contextmenu");
     expect(range()).toEqual({ startRow: 0, endRow: 1, startCol: 0, endCol: 1 });
     expect(wrapper.emitted("menu")).toHaveLength(1);
+    expect(wrapper.emitted("menu")?.[0]).toEqual([
+      { x: 0, y: 0, scope: "cells", cell: { tableId: "t1", row: 0, col: 1 } },
+    ]);
   });
 
   it("asks for the menu from a header after selecting its row or column", async () => {
@@ -2166,12 +2171,14 @@ describe("row and column headers, and the menu", () => {
     expect(wrapper.emitted("menu")).toHaveLength(1);
   });
 
-  it("leaves a viewer the browser's own menu", async () => {
+  it("opens the cell menu for a viewer", async () => {
     await mountGrid({}, "viewer");
     const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
     cellAt("A1").element.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(false);
-    expect(wrapper.emitted("menu")).toBeUndefined();
+    expect(event.defaultPrevented).toBe(true);
+    expect(wrapper.emitted("menu")).toEqual([
+      [{ x: 0, y: 0, scope: "cells", cell: { tableId: "t1", row: 0, col: 0 } }],
+    ]);
   });
 });
 

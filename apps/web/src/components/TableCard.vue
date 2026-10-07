@@ -2,6 +2,7 @@
 import {
   columnLabel,
   formatAddress,
+  type CellId,
   type ColumnType,
   type ErrorTraceFrame,
 } from "@spreadsheet-app/engine";
@@ -11,6 +12,8 @@ import { parseCsv, toCsv } from "../files/csv";
 import { prepareCsvAppend } from "../files/csv-append";
 import { download, fileName } from "../files/download";
 import type { TableRecord } from "../api/client";
+import { copyLinkToClipboard } from "../clipboard";
+import { buildCellLink } from "../deepLinks";
 import { useFormulaSessionStore } from "../formula/session";
 import { undoNotice } from "../notice";
 import { useDialog } from "../useDialog";
@@ -93,6 +96,19 @@ async function remove(): Promise<void> {
 
 function exportCsv(): void {
   download(fileName(props.table.name, "csv"), toCsv(store.shownRows(props.table)), "text/csv");
+}
+
+async function copyCellLink(current: CellId | null = selected.value): Promise<void> {
+  const rowId = current && props.table.rows[current.row]?.id;
+  const colId = current && props.table.colIds[current.col];
+  const spreadsheetId = store.spreadsheet?.id;
+  if (!current || !rowId || !colId || !spreadsheetId) return;
+  if (
+    await copyLinkToClipboard(
+      buildCellLink(spreadsheetId, props.table.pageId, props.table.id, rowId, colId),
+    )
+  )
+    store.notice = { kind: "success", text: "Copied" };
 }
 
 /** Reads a chosen CSV file into the table, starting at its first cell. */
@@ -511,7 +527,7 @@ function columnItems(col: number): MenuItem[] {
 }
 
 /** Where the menu of row, column, and cell actions is open, if it is, and what it acts on. */
-const menuAt = ref<{ x: number; y: number; scope: MenuScope } | null>(null);
+const menuAt = ref<{ x: number; y: number; scope: MenuScope; cell?: CellId } | null>(null);
 
 /** Where a growth menu is open, and whether it adds rows or columns. */
 const growMenu = ref<{ x: number; y: number; axis: Axis } | null>(null);
@@ -690,7 +706,18 @@ const menuItems = computed((): MenuItem[] => {
     first: range.startCol,
     count: range.endCol - range.startCol + 1,
   };
+  const linkCell = menuAt.value?.cell ?? selected.value;
+  const copyItem: MenuItem = {
+    label: "Copy link to this cell",
+    disabled:
+      linkCell === null ||
+      props.table.rows[linkCell.row] === undefined ||
+      props.table.colIds[linkCell.col] === undefined,
+    run: () => void copyCellLink(linkCell),
+  };
+  if (!store.canEdit) return scope === "cells" ? [copyItem] : [];
   const groups: MenuItem[][] = [
+    scope === "cells" ? [copyItem] : [],
     scope === "row" && !props.table.columns
       ? [
           {
@@ -743,9 +770,7 @@ const menuItems = computed((): MenuItem[] => {
         run: toggleWrap,
       },
     ],
-    store.canEdit
-      ? [{ label: "Add conditional format…", run: () => void addConditionalFormat() }]
-      : [],
+    [{ label: "Add conditional format…", run: () => void addConditionalFormat() }],
     // What a column holds is set one column at a time.
     scope === "row" || cols.count > 1 ? [] : columnItems(cols.first),
     scope !== "cells" || props.table.columns ? [] : [{ label: "Name this range…", run: nameRange }],

@@ -37,6 +37,7 @@ async function render(
   inputs: Record<string, string> = {},
   realTableCard = false,
   extraViews: ViewRecord[] = [],
+  initialPath = "/s/s1/p/p1",
 ) {
   const snapshot = snapshotWith(inputs, role);
   server.getSnapshot.mockResolvedValue(
@@ -80,7 +81,7 @@ async function render(
       { path: "/help", name: "help", component: { template: "<div />" } },
     ],
   });
-  await router.push({ name: "editor", params: { spreadsheetId: "s1" } });
+  await router.push(initialPath);
   const wrapper = mount(EditorView, {
     props: { spreadsheetId: "s1", pageId: "p1" },
     attachTo: focusCards || realTableCard ? document.body : undefined,
@@ -119,6 +120,69 @@ async function render(
   await flushPromises();
   return wrapper;
 }
+
+it("opens a stored-identity cell deep link without changing its history URL", async () => {
+  const wrapper = await render("owner", false, false, {}, false, [], "/s/s1/p/p1#cell=t1.r2.c2");
+
+  expect(useWorkbookStore().selection).toEqual({ tableId: "t1", row: 2, col: 1 });
+  expect(wrapper.vm.$route.fullPath).toBe("/s/s1/p/p1#cell=t1.r2.c2");
+
+  wrapper.unmount();
+});
+
+it("routes an in-document app link once and leaves focus changes out of the URL", async () => {
+  const wrapper = await render();
+  const anchor = document.createElement("a");
+  anchor.href = "/s/s1/p/p1#block=v1";
+  const editor = wrapper.get(".editor").element as HTMLDivElement;
+  editor.append(anchor);
+  const click = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+
+  anchor.dispatchEvent(click);
+  await flushPromises();
+  expect(click.defaultPrevented).toBe(true);
+  expect(wrapper.vm.$route.fullPath).toBe("/s/s1/p/p1#block=v1");
+
+  useWorkbookStore().selection = { tableId: "t1", row: 1, col: 0 };
+  await flushPromises();
+  expect(wrapper.vm.$route.fullPath).toBe("/s/s1/p/p1#block=v1");
+
+  wrapper.vm.$router.back();
+  await flushPromises();
+  expect(wrapper.vm.$route.fullPath).toBe("/s/s1/p/p1");
+  wrapper.unmount();
+});
+
+it("reveals a deep link again after navigating away and returning with Back", async () => {
+  const wrapper = await render();
+  const deepLink = "/s/s1/p/p1#cell=t1.r2.c2";
+
+  await wrapper.vm.$router.push(deepLink);
+  await flushPromises();
+  expect(useWorkbookStore().selection).toEqual({ tableId: "t1", row: 2, col: 1 });
+
+  await wrapper.vm.$router.push("/s/s1/p/p1");
+  await flushPromises();
+  useWorkbookStore().selection = { tableId: "t1", row: 0, col: 0 };
+
+  wrapper.vm.$router.back();
+  await flushPromises();
+  expect(wrapper.vm.$route.fullPath).toBe(deepLink);
+  expect(useWorkbookStore().selection).toEqual({ tableId: "t1", row: 2, col: 1 });
+  wrapper.unmount();
+});
+
+it("shows a notice for a deleted deep-link target and leaves its page open", async () => {
+  const wrapper = await render("owner", false, false, {}, false, [], "/s/s1/p/p1#block=deleted");
+
+  expect(wrapper.vm.$route.fullPath).toBe("/s/s1/p/p1#block=deleted");
+  expect(useWorkbookStore().notice).toEqual({
+    kind: "error",
+    text: "That link points to something that no longer exists.",
+  });
+
+  wrapper.unmount();
+});
 
 it.each([403, 404])("returns to the document list after a %i load response", async (status) => {
   const wrapper = await render();
