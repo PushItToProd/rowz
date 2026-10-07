@@ -126,6 +126,8 @@ We sold **{{ total }}** in all.
 
 `{{ }}` shows one value in the sentence, a range as a table, and the result of `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, or `SCATTER_CHART` as a chart. A failed formula appears as an error chip with its code and message. A formula in a chart or text view is written on a page and not in a table, so it names the table of every cell it reads.
 
+A lone table-qualified positional reference to one cell, such as `{{Sales!D1}}`, writes the value with that cell's number or date format. Only the number format carries over, including from a conditional format; text color, fill, bold, and other cell styles do not. A named-column reference such as `Sales[Amount]`, a range (even one cell written as `Sales!D1:D1`), and an expression such as `{{Sales!D1 * 2}}` have no single source cell to format. Use `TEXT` when a computed value needs a format, as in `{{TEXT(Sales!D1 * 2, "$#,##0.00")}}`.
+
 A `BUTTON` result is clickable in a text view, including when a loop renders it more than once. For example, `{{ BUTTON("Approve", EXECUTE(TRUE, Sales!D2)) }}` shows an **Approve** button. The server re-evaluates the saved view when clicked and runs the action at that occurrence.
 
 Formula inputs share completion and local undo history. Scripts and Markdown templates use multiline editors: Enter inserts a newline, Done or Ctrl/Cmd+Enter saves, and Cancel discards the draft. Escape dismisses completion without discarding multiline edits. Tab accepts a suggestion when one is open; otherwise it saves and moves focus. Formula drafts retain their history while browsing pages and appear in a labeled draft editor when their original field is unavailable.

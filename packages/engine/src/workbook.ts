@@ -555,6 +555,30 @@ export class Workbook {
     return evaluate(ast, { ...this.pageContext(pageId), ...(names ? { names } : {}) });
   }
 
+  /** The stored cell named by a lone positional cell reference written on a page. */
+  cellReferenceOnPage(pageId: string, formula: string): CellId | undefined {
+    let ast: Node;
+    try {
+      ast = parseFormula(formula.startsWith("=") ? formula.slice(1) : formula);
+    } catch (cause) {
+      if (!(cause instanceof FormulaSyntaxError)) throw cause;
+      return undefined;
+    }
+    if (ast.type !== "reference") return undefined;
+    const { reference } = ast;
+    if (
+      isColumnReference(reference) ||
+      reference.end !== undefined ||
+      reference.start.row === null ||
+      reference.start.col === null
+    ) {
+      return undefined;
+    }
+    const range = this.rangeOf(reference, this.tables.findFromPage(reference, pageId));
+    if (!range) return undefined;
+    return { tableId: range.tableId, row: range.startRow, col: range.startCol };
+  }
+
   /**
    * The value of a name that a table or script holds, or `undefined` when it
    * holds none of that spelling.

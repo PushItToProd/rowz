@@ -10,6 +10,7 @@ import { LIMITS } from "@spreadsheet-app/shared";
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import type { ViewRecord } from "../api/client";
 import { markdown } from "../markdown";
+import { formattedText } from "../formatStyle";
 import { useWorkbookStore } from "../stores/workbook";
 import ChartView from "./ChartView.vue";
 import ViewSourceEditor from "./ViewSourceEditor.vue";
@@ -286,8 +287,14 @@ function renderMarkdown(parts: TemplateInline[], viewId: string, isEditing: bool
 
 /** What the view shows. While editing, it follows what is being typed. */
 const parts = computed(() => {
-  return renderTemplate(editing.value ? draft.value : props.view.source, (expression, names) =>
-    store.evaluateOnPage(props.view.pageId, expression, names),
+  return renderTemplate(
+    editing.value ? draft.value : props.view.source,
+    (expression, names) => store.evaluateOnPage(props.view.pageId, expression, names),
+    undefined,
+    (expression, value) => {
+      const cell = store.cellReferenceOnPage(props.view.pageId, expression);
+      return cell ? formattedText(value, store.formatOf(cell)) : undefined;
+    },
   ).map((part) =>
     part.type === "markdown"
       ? { ...part, html: renderMarkdown(part.parts, props.view.id, editing.value) }

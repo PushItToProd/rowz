@@ -49,6 +49,30 @@ function inlineErrors(source: string) {
 }
 
 describe("output", () => {
+  it("finds only a lone, positional single-cell reference on a page", () => {
+    expect(workbook.cellReferenceOnPage(PAGE, "Table1!B2")).toEqual({
+      tableId: "t1",
+      row: 1,
+      col: 1,
+    });
+    expect(workbook.cellReferenceOnPage(PAGE, "Table1!B2:B2")).toBeUndefined();
+    expect(workbook.cellReferenceOnPage(PAGE, "Table1!B:B")).toBeUndefined();
+    expect(workbook.cellReferenceOnPage(PAGE, "Table1!B2 * 2")).toBeUndefined();
+    expect(workbook.cellReferenceOnPage(PAGE, "Table1[Name]")).toBeUndefined();
+    expect(workbook.cellReferenceOnPage(PAGE, "B2")).toBeUndefined();
+  });
+
+  it("escapes Markdown punctuation in text returned by a cell formatter", () => {
+    expect(
+      renderTemplate(
+        "{{ Table1!B1 }}",
+        (expression, names) => workbook.evaluateOnPage(PAGE, expression, names),
+        undefined,
+        () => "$7.50",
+      ),
+    ).toEqual([{ type: "markdown", parts: [{ type: "text", text: "\\$7\\.50" }] }]);
+  });
+
   it("captures each loop occurrence before later let bindings change its scope", () => {
     const buttons = inlineParts(
       '{% let suffix = "!" %}{% for name in Table1!A1:A2 %}{{ BUTTON(name, DO(EXECUTE(name & suffix, Table1!C1))) }}{% let name = "changed" %}{% end %}{% let suffix = "changed" %}',

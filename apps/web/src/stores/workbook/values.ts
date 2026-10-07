@@ -107,6 +107,11 @@ export function createValues(context: WorkbookContext) {
     return context.engine.value.evaluateOnPage(pageId, formula, names);
   }
 
+  /** The stored cell named by a lone positional cell reference in a page formula. */
+  function cellReferenceOnPage(pageId: string, formula: string): CellId | undefined {
+    return context.engine.value.cellReferenceOnPage(pageId, formula);
+  }
+
   /**
    * The value of a name a table or script holds, or `undefined` when it holds
    * none of that spelling.
@@ -207,6 +212,7 @@ export function createValues(context: WorkbookContext) {
   }
   return {
     evaluateOnPage,
+    cellReferenceOnPage,
     nameValue,
     statementValue,
     valueOf,

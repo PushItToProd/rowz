@@ -259,6 +259,8 @@ We sold **{{ total }}** in all.
 {{ BAR_CHART(Sales!A2:B4, "Sales by person") }}`;
 
 const TEMPLATE_BUTTON_EXAMPLE = '{{ BUTTON("Approve", EXECUTE(TRUE, Sales!D2)) }}';
+const TEMPLATE_CELL_REFERENCE = "{{Sales!D1}}";
+const TEMPLATE_COMPUTED_REFERENCE = "{{Sales!D1 * 2}}";
 
 const OPERATORS = [
   ["-x", "Negation", "-A1"],
@@ -1197,6 +1199,16 @@ const OPERATORS = [
         <li>
           A formula that gives one value puts it into the sentence. A formula that gives a range
           shows it as a table, and a chart function such as <code>BAR_CHART</code> shows the chart.
+        </li>
+        <li>
+          A lone table-qualified positional reference to one cell, such as
+          <code v-text="TEMPLATE_CELL_REFERENCE"></code>, writes the number or date using that
+          cell's number format, including a conditional number format. A named-column reference such
+          as <code>Sales[Amount]</code>, a range (even one cell written as
+          <code>Sales!D1:D1</code>), and a computed expression such as
+          <code v-text="TEMPLATE_COMPUTED_REFERENCE"></code> do not inherit a cell format. Use
+          <code>TEXT</code> to format a computed value. Text color, fill, bold, and other cell
+          styles do not carry into the view.
         </li>
         <li>
           A formula that gives <code>BUTTON</code> shows a clickable button. For example,

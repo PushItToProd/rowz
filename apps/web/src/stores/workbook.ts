@@ -330,6 +330,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
   const { undo, redo } = createUndo(context);
   const {
     evaluateOnPage,
+    cellReferenceOnPage,
     nameValue,
     statementValue,
     valueOf,
@@ -465,6 +466,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     shownRows,
     toFile,
     evaluateOnPage,
+    cellReferenceOnPage,
     nameValue,
     setTableNames,
     submitFormulaDraft,

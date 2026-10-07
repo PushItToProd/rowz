@@ -459,7 +459,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Text",
     syntax: "TEXT(value, format)",
     summary:
-      'Writes a number or a date as text in a format. In a number format `0` always shows a digit, `#` shows one when needed, a comma groups thousands, and `%` shows a percentage: `"#,##0.00"`, `"0.0%"`, `"$0.00"`. A date format is built from `yyyy`, `mm`, `mmm`, `mmmm`, `dd`, `ddd`, `dddd`, `hh`, `mm`, `ss`, and `AM/PM`: `"mmm d, yyyy"`.',
+      'Writes a number or a date as text in a format. Use it for a computed value in a text view; a lone cell reference there uses the cell\'s number format. In a number format `0` always shows a digit, `#` shows one when needed, a comma groups thousands, and `%` shows a percentage: `"#,##0.00"`, `"0.0%"`, `"$0.00"`. A date format is built from `yyyy`, `mm`, `mmm`, `mmmm`, `dd`, `ddd`, `dddd`, `hh`, `mm`, `ss`, and `AM/PM`: `"mmm d, yyyy"`.',
     example: 'TEXT(1234.5, "$#,##0.00")',
   },
   {

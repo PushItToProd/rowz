@@ -291,3 +291,19 @@ test("adding a chart below the viewport scrolls to it and focuses its name", asy
   await expect(added).toBeInViewport();
   await expect(added.locator(".editable-name")).toBeFocused();
 });
+
+test("a direct cell reference in a text view uses its number format", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "D1", "7.5");
+  await cell(page, "D1").click();
+  await page.getByLabel("Number format").selectOption("$#,##0.00");
+  await expect(cell(page, "D1")).toHaveText("$7.50");
+
+  await page.getByRole("button", { name: "Add text" }).last().click();
+  const text = page.locator('[data-view="Text 1"]');
+  await text.getByRole("button", { name: "Edit" }).click();
+  await text.getByLabel("Text view source").fill("{{ 'Table 1'!D1 }} / {{ 'Table 1'!D1 * 2 }}");
+  await expect(text.locator(".text-view")).toContainText("$7.50 / 15");
+  await text.getByRole("button", { name: "Done" }).click();
+  await expect(text.locator(".text-view")).toContainText("$7.50 / 15");
+});

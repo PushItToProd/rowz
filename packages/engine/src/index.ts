@@ -172,6 +172,7 @@ export {
   type TemplateBlock,
   type TemplateInline,
   type TemplateNode,
+  type TemplateReferenceFormatter,
 } from "./template";
 export {
   viewsAfterEdit,

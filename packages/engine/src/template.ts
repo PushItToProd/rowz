@@ -61,6 +61,12 @@ export type TemplateBlock =
   | { type: "chart"; chart: ChartValue }
   | { type: "error"; message: string };
 
+/** Formats a directly referenced cell for inline Markdown, when its number format applies. */
+export type TemplateReferenceFormatter = (
+  expression: string,
+  value: CellValue,
+) => string | undefined;
+
 interface Span {
   from: number;
   to: number;
@@ -397,6 +403,7 @@ export function renderNodes(
   nodes: readonly TemplateNode[],
   evaluate: (expression: string, names: ReadonlyMap<string, Evaluated>) => Evaluated,
   onError?: (error: ErrorValue) => void,
+  formatReference?: TemplateReferenceFormatter,
 ): TemplateBlock[] {
   const blocks: TemplateBlock[] = [];
   let markdown: TemplateInline[] = [];
@@ -416,7 +423,7 @@ export function renderNodes(
     markdown = [];
   };
 
-  const output = (value: Evaluated): void => {
+  const output = (value: Evaluated, expression?: string): void => {
     const rows = rowsOf(value);
     const [[single = null] = []] = rows;
     if (rows.length <= 1 && (rows[0]?.length ?? 0) <= 1) {
@@ -434,8 +441,11 @@ export function renderNodes(
         inputOccurrence += 1;
       } else if (isMarkdown(single)) appendMarkdown(single.text);
       else if (isError(single)) markdown.push({ type: "error", error: single });
-      else if (!isChart(single)) appendMarkdown(escapeMarkdown(formatValue(single)));
-      else {
+      else if (!isChart(single)) {
+        const formatted =
+          expression === undefined ? undefined : formatReference?.(expression, single);
+        appendMarkdown(escapeMarkdown(formatted ?? formatValue(single)));
+      } else {
         flush();
         blocks.push({ type: "chart", chart: single });
       }
@@ -452,7 +462,7 @@ export function renderNodes(
           appendMarkdown(node.text);
           break;
         case "output":
-          output(evaluate(node.expression, names));
+          output(evaluate(node.expression, names), node.expression);
           break;
         case "let":
           names.set(node.name.toLowerCase(), evaluate(node.expression, names));
@@ -516,9 +526,10 @@ export function renderTemplate(
   source: string,
   evaluate: (expression: string, names: ReadonlyMap<string, Evaluated>) => Evaluated,
   onError?: (error: ErrorValue) => void,
+  formatReference?: TemplateReferenceFormatter,
 ): TemplateBlock[] {
   try {
-    return renderNodes(parseTemplate(source), evaluate, onError);
+    return renderNodes(parseTemplate(source), evaluate, onError, formatReference);
   } catch (cause) {
     if (!(cause instanceof TemplateSyntaxError)) throw cause;
     return [{ type: "error", message: `Line ${String(cause.line)}: ${cause.message}` }];

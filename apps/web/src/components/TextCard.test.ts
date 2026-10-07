@@ -13,6 +13,7 @@ import {
   mountDialogHost,
   respondToDialog,
   snapshotWith,
+  TABLE,
   type MockedApi,
 } from "../testing";
 import TextCard from "./TextCard.vue";
@@ -51,10 +52,15 @@ async function replaceDraft(text: string): Promise<void> {
 
 let dialogHost: VueWrapper;
 
-async function render(source: string, role = "owner"): Promise<void> {
+async function render(
+  source: string,
+  role = "owner",
+  options: { cells?: Record<string, string>; table?: Partial<typeof TABLE> } = {},
+): Promise<void> {
   server.getSnapshot.mockResolvedValue(
     wireSnapshot({
-      ...snapshotWith(CELLS, role),
+      ...snapshotWith(options.cells ?? CELLS, role),
+      tables: [{ ...TABLE, ...options.table }],
       views: [{ ...TEXT, source }],
     }),
   );
@@ -92,6 +98,88 @@ afterEach(() => {
 });
 
 describe("TextCard", () => {
+  it("uses a direct cell's number or date format, and leaves other values alone", async () => {
+    await render(
+      "{{ 'Table 1'!A1 }} | {{ 'Table 1'!B1 }} | {{ 'Table 1'!A2 }} | {{ 'Table 1'!B2 }} | {{ 'Table 1'!A1 * 2 }}",
+      "owner",
+      {
+        cells: { A1: "7.5", B1: "0.256", A2: "2026-09-30", B2: "6.2" },
+        table: {
+          formats: [
+            {
+              startRow: 0,
+              endRow: 0,
+              startCol: 0,
+              endCol: 0,
+              format: { numberFormat: "$#,##0.00" },
+            },
+            { startRow: 0, endRow: 0, startCol: 1, endCol: 1, format: { numberFormat: "0.0%" } },
+            {
+              startRow: 1,
+              endRow: 1,
+              startCol: 0,
+              endCol: 0,
+              format: { numberFormat: "mmm d, yyyy" },
+            },
+          ],
+        },
+      },
+    );
+    expect(shown().text()).toBe("$7.50 | 25.6% | Sep 30, 2026 | 6.2 | 15");
+  });
+
+  it("uses the positional number format of a computed formula-column cell", async () => {
+    await render("{{ 'Table 1'!C1 }}", "owner", {
+      cells: { B1: "7.5" },
+      table: {
+        columns: [
+          { name: "Name", type: "any" },
+          { name: "Amount", type: "number" },
+          { name: "Double", type: "formula", formula: "=[Amount]*2" },
+        ],
+        formats: [
+          { startRow: 0, endRow: 0, startCol: 2, endCol: 2, format: { numberFormat: "$#,##0.00" } },
+        ],
+      },
+    });
+    expect(shown().text()).toBe("$15.00");
+  });
+
+  it("uses a conditional number format without carrying its visual styles", async () => {
+    await render("{{ 'Table 1'!A1 }}", "owner", {
+      cells: { A1: "7.5" },
+      table: {
+        conditionalFormats: [
+          {
+            kind: "criterion",
+            startRow: 0,
+            endRow: 0,
+            startCol: 0,
+            endCol: 0,
+            criterion: ">0",
+            format: { numberFormat: "$#,##0.00", bold: true, color: "red", fill: "yellow" },
+          },
+        ],
+      },
+    });
+    expect(shown().text()).toBe("$7.50");
+    expect(shown().find("strong").exists()).toBe(false);
+  });
+
+  it("uses stored cell formats when a data table is sorted", async () => {
+    await render("{{ 'Table 1'!B1 }} | {{ 'Table 1'!B2 }}", "owner", {
+      cells: { A1: "apples", B1: "7.5", A2: "pears", B2: "0.256" },
+      table: {
+        display: { sort: [{ colId: "c1", descending: true }] },
+        formats: [
+          { startRow: 0, endRow: 0, startCol: 1, endCol: 1, format: { numberFormat: "$#,##0.00" } },
+          { startRow: 1, endRow: 1, startCol: 1, endCol: 1, format: { numberFormat: "0.0%" } },
+        ],
+      },
+    });
+    expect(shown().text()).toBe("$7.50 | 25.6%");
+  });
+
   it("shows Markdown with the values of its formulas written in", async () => {
     await render("## Fruit\n\nWe have **{{ SUM('Table 1'!B1:B2) }}** pieces.");
     expect(shown().get("h2").text()).toBe("Fruit");
