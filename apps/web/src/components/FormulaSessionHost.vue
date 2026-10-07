@@ -6,6 +6,7 @@ import { namingContext } from "../formula/context";
 import { useFormulaSessionStore } from "../formula/session";
 import { useWorkbookStore } from "../stores/workbook";
 import FormulaEditor from "./FormulaEditor.vue";
+import { closeContextMenu } from "./contextMenuState";
 
 const sessions = useFormulaSessionStore();
 const emit = defineEmits<{ return: [pageId: string] }>();
@@ -27,6 +28,7 @@ watch(
   () => sessions.active?.deleted,
   async (deleted) => {
     if (deleted) {
+      closeContextMenu();
       await nextTick();
       close.value?.focus();
     }

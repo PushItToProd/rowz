@@ -16,6 +16,7 @@ const server = api as unknown as MockedApi;
 
 let router: Router;
 let dialogHost: VueWrapper;
+const mounted: VueWrapper[] = [];
 
 async function render(role = "owner"): Promise<VueWrapper> {
   server.getSnapshot.mockResolvedValue(
@@ -39,11 +40,13 @@ async function render(role = "owner"): Promise<VueWrapper> {
       },
     ],
   });
-  return mount(PageTabs, {
+  const wrapper = mount(PageTabs, {
     props: { spreadsheetId: "s1", activePageId: "p1" },
     global: { plugins: [router] },
     attachTo: document.body,
   });
+  mounted.push(wrapper);
+  return wrapper;
 }
 
 beforeEach(() => {
@@ -53,6 +56,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const wrapper of mounted.splice(0)) wrapper.unmount();
   dialogHost.unmount();
 });
 
@@ -101,9 +105,65 @@ describe("PageTabs", () => {
     expect(router.currentRoute.value.path).toBe("/");
   });
 
+  it("opens a page menu on right-click with disabled edge moves", async () => {
+    const wrapper = await render();
+    await wrapper.get('[data-page-id="p1"]').trigger("contextmenu", {
+      button: 2,
+      clientX: 30,
+      clientY: 50,
+    });
+    await flushPromises();
+
+    const menu = wrapper.get('[role="menu"]');
+    expect(menu.attributes("aria-label")).toBe("Actions for Page 1");
+    expect(menu.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+      "Rename",
+      "Delete",
+      "Move left",
+      "Move right",
+    ]);
+    expect(menu.get('[role="menuitem"]:nth-child(3)').attributes("disabled")).toBeDefined();
+    expect(menu.get('[role="menuitem"]:nth-child(4)').attributes("disabled")).toBeUndefined();
+
+    await menu.get('[role="menuitem"]:nth-child(4)').trigger("click");
+    await flushPromises();
+    expect(server.reorderPages).toHaveBeenCalledExactlyOnceWith("s1", ["p2", "p1"]);
+  });
+
+  it("opens the page menu from the keyboard and Escape restores focus", async () => {
+    const wrapper = await render();
+    const link = wrapper.findAll("a")[1]!;
+    await link.trigger("keydown", { key: "ContextMenu" });
+    await flushPromises();
+
+    const menu = wrapper.get('[role="menu"]');
+    expect(menu.attributes("aria-label")).toBe("Actions for Page 2");
+    expect(menu.get('[role="menuitem"]:nth-child(4)').attributes("disabled")).toBeDefined();
+    await wrapper.get('[role="menu"]').trigger("keydown", { key: "Escape" });
+    await flushPromises();
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(wrapper.get('[data-page-id="p2"] .editable-name').element);
+  });
+
+  it("renames a page from its context menu through the existing name editor", async () => {
+    server.renamePage.mockResolvedValue(changeWith({ cells: [], views: [], tables: [] }));
+    const wrapper = await render();
+    await wrapper.get('[data-page-id="p2"]').trigger("contextmenu", { button: 2 });
+    await flushPromises();
+    await wrapper.get('[role="menuitem"]:first-child').trigger("click");
+    await flushPromises();
+
+    const input = wrapper.get<HTMLInputElement>('input[aria-label="Page name"]');
+    await input.setValue("Summary");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(server.renamePage).toHaveBeenCalledExactlyOnceWith("p2", "Summary");
+  });
+
   it("deletes the open page without asking and offers undo", async () => {
     const wrapper = await render();
-    await wrapper.get('button[aria-label="Delete Page 1"]').trigger("click");
+    await wrapper.get('[data-page-id="p1"]').trigger("contextmenu", { button: 2 });
+    await flushPromises();
+    await wrapper.get('[role="menuitem"]:nth-child(2)').trigger("click");
     await flushPromises();
 
     expect(appDialog()).toBeNull();
@@ -114,7 +174,6 @@ describe("PageTabs", () => {
       text: "Deleted page Page 1",
       action: { label: "Undo" },
     });
-    wrapper.unmount();
   });
 
   it("gives a viewer links, and no way to rename or delete", async () => {

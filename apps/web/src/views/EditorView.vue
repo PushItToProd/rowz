@@ -387,6 +387,159 @@ const pageMenuItems = computed((): MenuItem[] => {
     }));
 });
 
+/** The actions for a block, opened from its card or its action button. */
+const blockMenu = ref<{ x: number; y: number; blockId: string } | null>(null);
+
+function actionControls(blockId: string): HTMLElement[] {
+  return [
+    ...(document
+      .getElementById(`block-${blockId}`)
+      ?.querySelectorAll<HTMLElement>("[data-block-action]") ?? []),
+  ];
+}
+
+function runBlockAction(blockId: string, action: string): void {
+  void nextTick(() => {
+    actionControls(blockId)
+      .find((control) => control.dataset.blockAction === action)
+      ?.click();
+  });
+}
+
+function renameBlock(blockId: string): void {
+  void nextTick(() => {
+    const name = document
+      .getElementById(`block-${blockId}`)
+      ?.querySelector<HTMLElement>(".editable-name:not(input)");
+    if (!name) return;
+    name.focus({ preventScroll: true });
+    name.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+}
+
+function addBlockBelow(blockId: string, kind: string): void {
+  void nextTick(() => {
+    const trigger = document
+      .getElementById(`block-${blockId}`)
+      ?.nextElementSibling?.querySelector<HTMLButtonElement>(`[data-add-block-type="${kind}"]`);
+    trigger?.focus({ preventScroll: true });
+    trigger?.click();
+  });
+}
+
+const blockMenuItems = computed((): MenuItem[] => {
+  const menu = blockMenu.value;
+  const block = menu && blocks.value.find((candidate) => candidate.record.id === menu.blockId);
+  if (!menu || !block) return [];
+  const availableActions = actionControls(block.record.id).map((control) => {
+    const action = control.dataset.blockAction ?? "";
+    return {
+      label: action,
+      run: () => {
+        runBlockAction(block.record.id, action);
+      },
+    };
+  });
+  const groups: MenuItem[][] = [];
+  if (store.canEdit) {
+    groups.push([
+      {
+        label: "Rename",
+        run: () => {
+          renameBlock(block.record.id);
+        },
+      },
+      ...availableActions,
+    ]);
+    if (blocks.value.length > 1) {
+      const index = blocks.value.findIndex((candidate) => candidate.record.id === block.record.id);
+      groups.push([
+        {
+          label: "Move up",
+          disabled: index === 0,
+          run: () => void store.moveBlock(props.pageId ?? "", block.record.id, -1),
+        },
+        {
+          label: "Move down",
+          disabled: index === blocks.value.length - 1,
+          run: () => void store.moveBlock(props.pageId ?? "", block.record.id, 1),
+        },
+        ...store.pages
+          .filter((candidate) => candidate.id !== props.pageId)
+          .map((target) => ({
+            label: `Move to ${target.name}`,
+            run: () => void store.moveBlockToPage(block.record.id, target.id),
+          })),
+      ]);
+    } else if (store.pages.some((candidate) => candidate.id !== props.pageId)) {
+      groups.push(
+        store.pages
+          .filter((candidate) => candidate.id !== props.pageId)
+          .map((target) => ({
+            label: `Move to ${target.name}`,
+            run: () => void store.moveBlockToPage(block.record.id, target.id),
+          })),
+      );
+    }
+    groups.push(
+      (["table", "chart", "text", "script"] as const).map((kind) => ({
+        label: `Add ${kind} below`,
+        run: () => {
+          addBlockBelow(block.record.id, kind);
+        },
+      })),
+    );
+  } else if (availableActions.length > 0) {
+    groups.push(availableActions);
+  }
+  return groups
+    .filter((group) => group.length > 0)
+    .flatMap((group, index) =>
+      group.map((item, position) => ({ ...item, separated: index > 0 && position === 0 })),
+    );
+});
+const blockMenuLabel = computed(() => {
+  const id = blockMenu.value?.blockId;
+  const block = blocks.value.find((candidate) => candidate.record.id === id);
+  return `Actions for ${block?.record.name ?? "block"}`;
+});
+
+function openBlockMenu(event: MouseEvent, block: { id: string; name: string }): void {
+  const target = event.target;
+  if (
+    target instanceof Element &&
+    target.closest(
+      'button, a[href], input, select, textarea, [contenteditable="true"], [role="button"]:not(.editable-name), [role="link"], .grid, .text-view, .cm-editor, .formula-editor',
+    )
+  )
+    return;
+  if (!store.canEdit && !store.tables.some((table) => table.id === block.id)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const container = event.currentTarget as HTMLElement;
+  container.focus({ preventScroll: true });
+  blockMenu.value = { x: event.clientX, y: event.clientY, blockId: block.id };
+}
+
+function openBlockActionMenu(event: MouseEvent, block: { id: string; name: string }): void {
+  const trigger = event.currentTarget as HTMLElement;
+  const box = trigger.getBoundingClientRect();
+  blockMenu.value = { x: box.right, y: box.bottom, blockId: block.id };
+}
+
+function onBlockKeydown(event: KeyboardEvent, block: { id: string; name: string }): void {
+  if (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey)) return;
+  if (
+    event.target !== event.currentTarget ||
+    (!store.canEdit && !store.tables.some((table) => table.id === block.id))
+  )
+    return;
+  event.preventDefault();
+  event.stopPropagation();
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  blockMenu.value = { x: box.left, y: box.bottom, blockId: block.id };
+}
+
 // Changes made elsewhere arrive here. Several at once are read as one.
 const REFRESH_DELAY_MS = 250;
 let refreshTimer: number | undefined;
@@ -560,15 +713,34 @@ watch(
         <AddBlockRow :page-id="page.id" :position="index" />
         <div
           :id="`block-${block.record.id}`"
-          tabindex="-1"
+          tabindex="0"
           role="region"
           :aria-label="block.record.name"
           class="editor__block"
+          @contextmenu="openBlockMenu($event, block.record)"
+          @keydown="onBlockKeydown($event, block.record)"
         >
-          <TableCard v-if="block.table" :table="block.table" @trace="goToTrace" />
-          <ChartCard v-else-if="block.view.kind === 'chart'" :view="block.view" />
-          <ScriptCard v-else-if="block.view.kind === 'script'" :view="block.view" />
-          <TextCard v-else :view="block.view" />
+          <TableCard
+            v-if="block.table"
+            :table="block.table"
+            @trace="goToTrace"
+            @actions="openBlockActionMenu($event, block.record)"
+          />
+          <ChartCard
+            v-else-if="block.view.kind === 'chart'"
+            :view="block.view"
+            @actions="openBlockActionMenu($event, block.record)"
+          />
+          <ScriptCard
+            v-else-if="block.view.kind === 'script'"
+            :view="block.view"
+            @actions="openBlockActionMenu($event, block.record)"
+          />
+          <TextCard
+            v-else
+            :view="block.view"
+            @actions="openBlockActionMenu($event, block.record)"
+          />
           <div
             v-if="store.canEdit && (blocks.length > 1 || store.pages.length > 1)"
             class="editor__move"
@@ -617,6 +789,15 @@ watch(
       :label="`Move ${pageMenu.block.name} to another page`"
       :items="pageMenuItems"
       @close="pageMenu = null"
+    />
+    <ContextMenu
+      v-if="blockMenu"
+      :key="blockMenu.blockId"
+      :x="blockMenu.x"
+      :y="blockMenu.y"
+      :label="blockMenuLabel"
+      :items="blockMenuItems"
+      @close="blockMenu = null"
     />
     <SharePanel
       v-if="shareOpen && loaded"

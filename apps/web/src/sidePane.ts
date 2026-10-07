@@ -8,6 +8,7 @@ import {
   type InjectionKey,
   type Ref,
 } from "vue";
+import { closeContextMenu } from "./components/contextMenuState";
 
 export const SIDE_PANES = {
   errors: "errors",
@@ -46,9 +47,11 @@ export function createActiveSidePane(): ActiveSidePane {
     active: readonly(active),
     isOpen: (id) => computed(() => active.value === id),
     open: (id) => {
+      closeContextMenu();
       active.value = id;
     },
     toggle: (id) => {
+      closeContextMenu();
       active.value = active.value === id ? null : id;
     },
     close: (id) => {

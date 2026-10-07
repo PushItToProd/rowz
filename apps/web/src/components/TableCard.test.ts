@@ -217,7 +217,9 @@ describe("row and column actions", () => {
     expect(wrapper.find(".table-card__lines").exists()).toBe(false);
     expect(wrapper.findAll(".table-card__actions button").map((found) => found.text())).toEqual([
       "Export CSV",
+      "⋮",
     ]);
+    expect(wrapper.find('button[aria-label="Block actions for Table 1"]').exists()).toBe(true);
     expect(wrapper.find('input[type="file"]').exists()).toBe(false);
   });
 });

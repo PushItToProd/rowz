@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, useId } from "vue";
+import { closeContextMenu } from "./contextMenuState";
 
 const props = defineProps<{
   message: string;
@@ -15,6 +16,7 @@ const messageId = `${id}-message`;
 let originalFocus: HTMLElement | undefined;
 
 onMounted(() => {
+  closeContextMenu();
   originalFocus =
     props.returnFocus ??
     (document.activeElement instanceof HTMLElement ? document.activeElement : undefined);

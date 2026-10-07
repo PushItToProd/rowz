@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import type { MenuItem } from "./menu";
+import { registerContextMenu } from "./contextMenuState";
 
 const props = defineProps<{
   /** Where the menu opens, in viewport coordinates. */
@@ -18,6 +19,8 @@ const positioned = ref(false);
 let opener: Element | null = null;
 let lifecycle = 0;
 let resizeObserver: ResizeObserver | undefined;
+let unregister: (() => void) | undefined;
+let closed = false;
 
 function buttons(): HTMLButtonElement[] {
   return [...(menu.value?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
@@ -62,6 +65,8 @@ function reposition(): void {
 }
 
 function close(): void {
+  if (closed) return;
+  closed = true;
   emit("close");
 }
 
@@ -95,6 +100,7 @@ function onOutside(event: Event): void {
 }
 
 onMounted(async () => {
+  unregister = registerContextMenu(close);
   const mounting = ++lifecycle;
   opener = document.activeElement;
   const element = menu.value;
@@ -124,6 +130,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   lifecycle += 1;
   resizeObserver?.disconnect();
+  unregister?.();
   document.removeEventListener("mousedown", onOutside, true);
   window.removeEventListener("scroll", close, true);
   window.removeEventListener("resize", close);
@@ -152,6 +159,7 @@ onBeforeUnmount(() => {
       :key="item.label"
       type="button"
       role="menuitem"
+      tabindex="-1"
       :data-formula-field="item.keepDraft ? '' : undefined"
       :class="{ danger: item.danger, 'context-menu__item--separated': item.separated }"
       :disabled="item.disabled"

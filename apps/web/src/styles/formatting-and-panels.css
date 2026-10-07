@@ -57,6 +57,11 @@
   min-width: 0;
 }
 
+.editor__block:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .editor__block > :first-child {
   min-width: 0;
 }
@@ -70,6 +75,15 @@
 .editor__move button {
   padding: 2px 8px;
   color: var(--muted);
+}
+
+.table-card__menu-trigger,
+.view-card__menu-trigger {
+  min-width: 30px;
+  padding: 2px 8px;
+  color: var(--muted);
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
 @media (max-width: 640px) {

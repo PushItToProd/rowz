@@ -498,6 +498,15 @@ const OPERATORS = [
         </li>
         <li>The arrows on the open page's tab move the page left or right among the tabs.</li>
         <li>
+          Right-click a page tab to rename, delete, or move that page. A page deletion offers an
+          <strong>Undo</strong> notice. Right-click a block's header or card padding, or use its
+          <strong>⋮</strong> button, for its rename, delete, move, add-below, and block-specific
+          actions. Table cells keep their own context menu; controls and rendered text keep their
+          normal right-click behavior. The Context Menu key or Shift+F10 opens a page or block menu;
+          use the arrow keys, Home, or End to move through it, and Escape to close it and restore
+          focus.
+        </li>
+        <li>
           Two pages in a document cannot share a name, and neither can two tables on a page. Names
           are compared without regard to letter case.
         </li>

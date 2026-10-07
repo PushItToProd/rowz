@@ -47,17 +47,30 @@ async function addBlock(event: MouseEvent, add: () => Promise<boolean>): Promise
     :aria-label="`Insert block at position ${position + 1}`"
     :data-insert-position="position"
   >
-    <button type="button" @click="addBlock($event, () => store.addTable(pageId, position))">
+    <button
+      type="button"
+      data-add-block-type="table"
+      @click="addBlock($event, () => store.addTable(pageId, position))"
+    >
       Add table
     </button>
-    <button type="button" @click="addBlock($event, () => store.addView(pageId, 'chart', position))">
+    <button
+      type="button"
+      data-add-block-type="chart"
+      @click="addBlock($event, () => store.addView(pageId, 'chart', position))"
+    >
       Add chart
     </button>
-    <button type="button" @click="addBlock($event, () => store.addView(pageId, 'text', position))">
+    <button
+      type="button"
+      data-add-block-type="text"
+      @click="addBlock($event, () => store.addView(pageId, 'text', position))"
+    >
       Add text
     </button>
     <button
       type="button"
+      data-add-block-type="script"
       @click="addBlock($event, () => store.addView(pageId, 'script', position))"
     >
       Add script

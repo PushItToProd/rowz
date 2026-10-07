@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { isChart, isError, isRange, type CellValue, type ChartType } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import ChartView from "./ChartView.vue";
@@ -12,6 +12,7 @@ import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
 
 const props = defineProps<{ view: ViewRecord }>();
+const emit = defineEmits<{ actions: [event: MouseEvent] }>();
 const store = useWorkbookStore();
 const dialog = useDialog();
 
@@ -54,6 +55,11 @@ async function remove(): Promise<void> {
   }
 }
 
+const sourceField = ref<InstanceType<typeof SessionFormulaField>>();
+function editSource(): void {
+  void sourceField.value?.begin();
+}
+
 /** The data to draw, or why there is none. */
 const data = computed((): { rows: CellValue[][] } | { problem: string } => {
   if (props.view.source.trim() === "") {
@@ -86,18 +92,36 @@ const data = computed((): { rows: CellValue[][] } | { problem: string } => {
         />
       </h2>
       <div v-if="store.canEdit" class="view-card__actions">
-        <select aria-label="Chart type" :value="view.chartType ?? 'bar'" @change="setType">
+        <button type="button" data-block-action="Edit" @click="editSource">Edit</button>
+        <select
+          data-block-action="Chart type"
+          aria-label="Chart type"
+          :value="view.chartType ?? 'bar'"
+          @change="setType"
+        >
           <option v-for="type in TYPES" :key="type.value" :value="type.value">
             {{ type.label }}
           </option>
         </select>
-        <button type="button" class="danger" @click="remove">Delete chart</button>
+        <button type="button" data-block-action="Delete chart" class="danger" @click="remove">
+          Delete chart
+        </button>
+        <button
+          type="button"
+          class="view-card__menu-trigger"
+          aria-haspopup="menu"
+          :aria-label="`Block actions for ${view.name}`"
+          @click.stop="emit('actions', $event)"
+        >
+          ⋮
+        </button>
       </div>
     </header>
 
     <label v-if="store.canEdit" class="view-card__source">
       Data
       <SessionFormulaField
+        ref="sourceField"
         :target="{ kind: 'chart', viewId: view.id }"
         :context="{ pageId: view.pageId }"
         :value="view.source"

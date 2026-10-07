@@ -149,6 +149,48 @@ it("replaces the open side pane when another one opens", async () => {
   wrapper.unmount();
 });
 
+it("opens block actions from card margins and leaves grid cell menus to the table", async () => {
+  const wrapper = await render("owner", false, false, {}, true);
+  const block = wrapper.get(".editor__block");
+  await block.trigger("contextmenu", { button: 2, clientX: 90, clientY: 110 });
+  await flushPromises();
+
+  const menu = wrapper.get('[role="menu"][aria-label="Actions for Table 1"]');
+  const labels = menu.findAll('[role="menuitem"]').map((item) => item.text());
+  expect(labels).toContain("Export CSV");
+  expect(labels).toContain("Delete table");
+  expect(labels).toContain("Move up");
+  expect(labels).toContain("Add table below");
+
+  await menu.trigger("keydown", { key: "Escape" });
+  await flushPromises();
+  await wrapper.get('[data-table="Table 1"] .editable-name').trigger("contextmenu", {
+    button: 2,
+    clientX: 90,
+    clientY: 110,
+  });
+  await flushPromises();
+  expect(wrapper.find('[role="menu"][aria-label="Actions for Table 1"]').exists()).toBe(true);
+
+  await wrapper.get('[role="menu"]').trigger("keydown", { key: "Escape" });
+  await flushPromises();
+  await wrapper.get('button[aria-label="Block actions for Table 1"]').trigger("click");
+  await flushPromises();
+  expect(wrapper.find('[role="menu"][aria-label="Actions for Table 1"]').exists()).toBe(true);
+
+  await wrapper.get('[role="menu"]').trigger("keydown", { key: "Escape" });
+  await flushPromises();
+  await wrapper.get('[data-table="Table 1"] [data-cell="A1"]').trigger("contextmenu", {
+    button: 2,
+    clientX: 90,
+    clientY: 110,
+  });
+  await flushPromises();
+  expect(wrapper.find('[role="menu"][aria-label="Actions for Table 1"]').exists()).toBe(false);
+  expect(wrapper.find('[role="menu"][aria-label="Actions for A1"]').exists()).toBe(true);
+  wrapper.unmount();
+});
+
 it.each([
   ["Names", '[aria-label="Names in Table 1"]'],
   ["Conditional formats", '[aria-label="Conditional formats of Table 1"]'],

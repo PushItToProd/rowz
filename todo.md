@@ -342,10 +342,10 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - [ ] **P7** pages #small-apps
   - [ ] **P6** rows and cols by dragging and dropping their headers (including when a range of them is selected) (but no need to handle dragging and dropping a selected range of cells - only do it if the user has specifically selected full rows or columns) #everyday
   - [ ] **P7** blocks #small-apps
-- [ ] **P5** add context menus when right clicking on pages tab and block headers/margins #small-apps
-  - [ ] page actions: delete, move left/right
-  - [ ] block actions: whatever each block supports
-    - block context menu should appear when right clocking on the card around it but not the controls within it. keep a button in the upper right with a vertical ellipsis that I can click to show the same menu as well
+- [x] **P5** add context menus when right clicking on pages tab and block headers/margins #small-apps
+  - [x] page actions: delete, move left/right
+  - [x] block actions: whatever each block supports
+    - block context menu should appear when right-clicking on the card around it but not the controls within it. keep a button in the upper right with a vertical ellipsis that I can click to show the same menu as well
 - [ ] **P7** data tables - allow choices to be drawn from a formula's result (when the formula value changes, keep the raw underlying value in the cell but flag it visibly as invalid) #data-tables
 - [ ] **P6** allow creating links to navigate directly to a page, table cell, block, etc. #small-apps
 - [ ] **P7** (Claude) the editor for a formula column's formula looks unfinished beside the other panels: its heading is small, "Pick reference" is smaller than the other buttons, and Apply and Cancel touch. See `_scratch/qa/15-formula-col.png` #formula-editing
@@ -645,3 +645,6 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [ ] Inline rename in the document list: a whitespace-only name does nothing and says nothing; a list refresh leaves a stale draft that can revert a newer rename made elsewhere (`SpreadsheetListView.vue` near lines 50 and 119) #documents
 - [ ] The flaky export/import e2e test (`data-tables-and-formatting.spec.ts:5`) failed once more in a full run (20.2s) after the hardening commit and passed in 11 later full runs; capture its trace on the next failure (`pnpm e2e:remote` with Playwright trace retained) #codebase
+
+- [ ] After deleting a page from its context menu, keyboard focus falls to the body because the page tab that held it is removed; move focus to the neighboring tab (`PageTabs.vue`, `ContextMenu.vue`) #everyday
+- [ ] A right-click on a `<label>` inside a block (Import CSV, a chart's Data label) opens the block menu; `EditorView.vue` near line 512 should exclude labels #everyday

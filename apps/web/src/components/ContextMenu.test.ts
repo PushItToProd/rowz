@@ -238,7 +238,7 @@ describe("ContextMenu", () => {
     await flushPromises();
     window.dispatchEvent(new Event("scroll"));
     window.dispatchEvent(new Event("resize"));
-    expect(menu.emitted("close")).toHaveLength(2);
+    expect(menu.emitted("close")).toHaveLength(1);
   });
 
   it("gives focus back to what had it when it closes", async () => {

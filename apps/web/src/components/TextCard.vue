@@ -21,6 +21,7 @@ import ConfirmDialog from "./ConfirmDialog.vue";
 import { useDialog } from "../useDialog";
 
 const props = defineProps<{ view: ViewRecord }>();
+const emit = defineEmits<{ actions: [event: MouseEvent] }>();
 const store = useWorkbookStore();
 const dialog = useDialog();
 
@@ -439,8 +440,19 @@ function editFromText(event: MouseEvent): void {
         />
       </h2>
       <div v-if="store.canEdit" class="view-card__actions">
-        <button v-if="!editing" type="button" @click="edit">Edit</button>
-        <button type="button" class="danger" @click="remove">Delete text</button>
+        <button v-if="!editing" type="button" data-block-action="Edit" @click="edit">Edit</button>
+        <button type="button" data-block-action="Delete text" class="danger" @click="remove">
+          Delete text
+        </button>
+        <button
+          type="button"
+          class="view-card__menu-trigger"
+          aria-haspopup="menu"
+          :aria-label="`Block actions for ${view.name}`"
+          @click.stop="emit('actions', $event)"
+        >
+          ⋮
+        </button>
       </div>
     </header>
 

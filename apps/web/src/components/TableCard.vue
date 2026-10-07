@@ -29,7 +29,10 @@ import type { MenuItem, MenuScope } from "./menu";
 import { useActiveSidePane } from "../sidePane";
 
 const props = defineProps<{ table: TableRecord }>();
-const emit = defineEmits<{ trace: [trace: ErrorTraceFrame[]] }>();
+const emit = defineEmits<{
+  trace: [trace: ErrorTraceFrame[]];
+  actions: [event: MouseEvent];
+}>();
 const store = useWorkbookStore();
 const sessions = useFormulaSessionStore();
 const dialog = useDialog();
@@ -558,10 +561,18 @@ const menuLabel = computed(() => {
         />
       </h2>
       <div v-if="store.canEdit" class="table-card__actions">
-        <button type="button" aria-haspopup="dialog" @click="resizing = !resizing">Resize</button>
+        <button
+          type="button"
+          data-block-action="Resize"
+          aria-haspopup="dialog"
+          @click="resizing = !resizing"
+        >
+          Resize
+        </button>
         <button
           v-if="!table.columns"
           type="button"
+          data-block-action="Names"
           data-open-names
           :aria-expanded="namesOpen"
           @click="activeSidePane.toggle(namesPaneId)"
@@ -570,6 +581,7 @@ const menuLabel = computed(() => {
         </button>
         <button
           type="button"
+          data-block-action="Conditional formats"
           :aria-expanded="conditionalOpen"
           @click="activeSidePane.toggle(conditionalFormatsPaneId)"
         >
@@ -577,26 +589,62 @@ const menuLabel = computed(() => {
             table.conditionalFormats.length > 0 ? ` (${table.conditionalFormats.length})` : ""
           }}
         </button>
-        <button v-if="table.columns" type="button" @click="dropColumns">Remove column names</button>
-        <button v-else type="button" aria-haspopup="menu" @click="openNaming">Name columns</button>
-        <label class="file-button">
+        <button
+          v-if="table.columns"
+          type="button"
+          data-block-action="Remove column names"
+          @click="dropColumns"
+        >
+          Remove column names
+        </button>
+        <button
+          v-else
+          type="button"
+          data-block-action="Name columns"
+          aria-haspopup="menu"
+          @click="openNaming"
+        >
+          Name columns
+        </button>
+        <label class="file-button" data-block-action="Import CSV">
           Import CSV
           <input type="file" accept=".csv,.tsv,.txt,text/csv" @change="importCsv" />
         </label>
-        <button type="button" @click="exportCsv">Export CSV</button>
-        <button type="button" class="danger" @click="remove">Delete table</button>
+        <button type="button" data-block-action="Export CSV" @click="exportCsv">Export CSV</button>
+        <button type="button" data-block-action="Delete table" class="danger" @click="remove">
+          Delete table
+        </button>
+        <button
+          type="button"
+          class="table-card__menu-trigger"
+          aria-haspopup="menu"
+          :aria-label="`Block actions for ${table.name}`"
+          @click.stop="emit('actions', $event)"
+        >
+          ⋮
+        </button>
       </div>
       <div v-else class="table-card__actions">
         <button
           v-if="!table.columns && table.names.length > 0"
           type="button"
+          data-block-action="Names"
           data-open-names
           :aria-expanded="namesOpen"
           @click="activeSidePane.toggle(namesPaneId)"
         >
           Names ({{ table.names.length }})
         </button>
-        <button type="button" @click="exportCsv">Export CSV</button>
+        <button type="button" data-block-action="Export CSV" @click="exportCsv">Export CSV</button>
+        <button
+          type="button"
+          class="table-card__menu-trigger"
+          aria-haspopup="menu"
+          :aria-label="`Block actions for ${table.name}`"
+          @click.stop="emit('actions', $event)"
+        >
+          ⋮
+        </button>
       </div>
       <ResizeTable v-if="resizing" :table="table" @close="resizing = false" @resize="resize" />
     </header>

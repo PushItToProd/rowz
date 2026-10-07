@@ -1,4 +1,5 @@
 import { nextTick, readonly, shallowRef } from "vue";
+import { closeContextMenu } from "./components/contextMenuState";
 
 export interface ConfirmDialogOptions {
   title: string;
@@ -65,6 +66,7 @@ function resolveActive(value: DialogResult): void {
 function enqueue(
   request: Omit<DialogRequest, "id" | "returnFocus" | "resolve">,
 ): Promise<DialogResult> {
+  closeContextMenu();
   return new Promise((resolve) => {
     const returnFocus =
       active.value?.returnFocus ??

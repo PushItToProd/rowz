@@ -79,7 +79,9 @@ Use an `https` URL. The app calls `crypto.randomUUID`, which browsers provide ov
 
 ## Pages and blocks
 
-A document holds pages, and a page holds blocks: tables, charts, and text views. The arrows beside a block move it up or down the page.
+A document holds pages, and a page holds blocks: tables, charts, text views, and scripts. Right-click a page tab to rename or delete it, or move it left or right among the tabs. Deleting a page offers an Undo notice.
+
+Right-click a block's header or the padding around its card, or click the card's **⋮** button, to open its actions. The menu includes the actions already available for that block, such as rename, delete, move, add a block below, and export a table as CSV. Right-clicking table cells still opens the cell menu. Inputs, buttons, links, grids, rendered text, and source editors keep their own behavior. Press the Context Menu key or Shift+F10 on a page tab or block to open its menu; use the arrow keys, Home, or End to move through it, and Escape to close it and restore focus.
 
 ### Tables
 
