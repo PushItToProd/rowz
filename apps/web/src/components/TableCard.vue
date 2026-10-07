@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { columnLabel, formatAddress, type ColumnType } from "@spreadsheet-app/engine";
+import {
+  columnLabel,
+  formatAddress,
+  type ColumnType,
+  type ErrorTraceFrame,
+} from "@spreadsheet-app/engine";
 import { GRID_SIZE, LIMITS } from "@spreadsheet-app/shared";
 import { computed, nextTick, ref } from "vue";
 import { parseCsv, toCsv } from "../files/csv";
@@ -24,6 +29,7 @@ import type { MenuItem, MenuScope } from "./menu";
 import { useActiveSidePane } from "../sidePane";
 
 const props = defineProps<{ table: TableRecord }>();
+const emit = defineEmits<{ trace: [trace: ErrorTraceFrame[]] }>();
 const store = useWorkbookStore();
 const sessions = useFormulaSessionStore();
 const dialog = useDialog();
@@ -666,7 +672,7 @@ const menuLabel = computed(() => {
 
     <!-- A strip along the right edge adds a column, and one along the bottom edge adds a row. -->
     <div class="table-card__grid">
-      <GridView :table="table" @menu="menuAt = $event" />
+      <GridView :table="table" @menu="menuAt = $event" @trace="emit('trace', $event)" />
       <template v-if="store.canEdit">
         <button
           type="button"

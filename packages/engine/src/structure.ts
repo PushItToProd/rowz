@@ -96,6 +96,10 @@ export interface NameDefinition {
   name: string;
   /** With or without the leading `=`. */
   formula: string;
+  /** The line of a script definition, when this name came from a script. */
+  scriptLine?: number;
+  /** Set when the script definition is a function, such as `Double(value) = value * 2`. */
+  scriptFunction?: boolean;
 }
 
 /**

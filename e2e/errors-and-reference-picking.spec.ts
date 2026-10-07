@@ -81,6 +81,65 @@ test("invalid button plans appear in document errors before clicking the button"
   await expect(page.getByRole("button", { name: "1 error", exact: true })).toHaveCount(0);
 });
 
+test("a function error links to its script definition and places the editor caret there", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  const rows = [
+    ["Race", "Payout (40 hrs)", "Duration"],
+    ["Spa", "100", "40 hrs"],
+    ["Monaco", "200", "20 hrs"],
+  ];
+  for (const [row, values] of rows.entries()) {
+    for (const [col, value] of values.entries()) {
+      await enter(page, `${"ABC"[col] ?? ""}${String(row + 1)}`, value);
+    }
+  }
+  await page.getByRole("button", { name: "Name columns", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+  await page.locator('[data-table="Table 1"]').getByText("Table 1").dblclick();
+  await page.getByLabel("Table name").fill("Runs");
+  await page.getByLabel("Table name").press("Enter");
+
+  await page.getByRole("button", { name: "Add script", exact: true }).last().click();
+  const script = page.locator('[data-view="Script 1"]');
+  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  const source = script.getByLabel("Script source");
+  await source.fill(
+    `PayoutByDuration(with_spa) = QUERY(Runs, "select Race, sum('Payout (40 hrs)') " & IF(with_spa, "", "where Race <> 'Spa' ") & "group by Race pivot Duration")`,
+  );
+  await source.press("Control+Enter");
+  await expect(source).toHaveCount(0);
+  await page.getByRole("button", { name: "Add table", exact: true }).last().click();
+  // Renaming the original Table 1 to Runs freed this name for the new table.
+  const callerTable = "Table 1";
+  await expect(cell(page, "A1", callerTable)).toBeVisible();
+  await enter(page, "A1", "=PayoutByDuration(FALSE)", callerTable);
+  const result = cell(page, "A1", callerTable);
+  await expect(result).toHaveText("#VALUE!");
+  await result.locator(".cell-value--error").hover();
+  await expect(page.getByRole("dialog")).toContainText("The data has no column Spa");
+  await expect(page.getByRole("dialog")).toContainText(
+    "Raised in PayoutByDuration (Script 1, line 1)",
+  );
+
+  await page.getByRole("button", { name: "1 error", exact: true }).click();
+  const errors = page.getByRole("dialog", { name: "Document errors" });
+  await errors.getByRole("button", { name: /Raised in PayoutByDuration/ }).click();
+  await expect(source).toBeFocused();
+  const caret = await source.evaluate((element) => {
+    const selection = document.getSelection();
+    return {
+      active: document.activeElement === element,
+      offset: selection?.anchorOffset,
+      text: selection?.anchorNode?.textContent,
+    };
+  });
+  expect(caret.active).toBe(true);
+  expect(caret.offset).toBe(0);
+  expect(caret.text).toContain("PayoutByDuration");
+});
+
 test("script drafts complete parameters, keep history across pages, and retain failed saves", async ({
   page,
 }) => {

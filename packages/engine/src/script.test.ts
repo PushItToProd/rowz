@@ -58,8 +58,20 @@ describe("parseScript", () => {
 describe("scriptNames", () => {
   it("defines a function as a LAMBDA of its parameters", () => {
     expect(scriptNames("s1", "Double(x) = x * 2\nZero() = 0")).toEqual([
-      { holderId: "s1", name: "Double", formula: "LAMBDA(x, (x * 2))" },
-      { holderId: "s1", name: "Zero", formula: "LAMBDA((0))" },
+      {
+        holderId: "s1",
+        name: "Double",
+        formula: "LAMBDA(x, (x * 2))",
+        scriptLine: 1,
+        scriptFunction: true,
+      },
+      {
+        holderId: "s1",
+        name: "Zero",
+        formula: "LAMBDA((0))",
+        scriptLine: 2,
+        scriptFunction: true,
+      },
     ]);
   });
 });

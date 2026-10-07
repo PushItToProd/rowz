@@ -41,6 +41,36 @@ function messageOf(value: Evaluated | undefined): string | undefined {
   return isError(value) ? value.message : undefined;
 }
 
+function scriptWorkbook(
+  source: string,
+  cells: Record<string, Record<string, string>> = {},
+): Workbook {
+  const workbook = new Workbook();
+  workbook.setStructure({
+    ...WITH_SCRIPTS,
+    tables: STRUCTURE.tables.map((table) =>
+      table.id === "t1"
+        ? {
+            ...table,
+            rowCount: 1,
+            colCount: 1,
+            columns: [{ name: "Race", type: "text" }],
+          }
+        : table,
+    ),
+    scripts: [
+      { id: "s1", pageId: "p1", name: "Script 1", source },
+      { id: "s2", pageId: "p2", name: "Rates", source: "" },
+    ],
+  });
+  for (const [tableId, inputs] of Object.entries(cells)) {
+    for (const [address, input] of Object.entries(inputs)) {
+      workbook.setCell(at(address, tableId), input);
+    }
+  }
+  return workbook;
+}
+
 describe("parsing names", () => {
   it("reads a word after ! that is not a cell as a qualified name", () => {
     expect(parseFormula("Summary!Total")).toEqual({
@@ -120,6 +150,144 @@ describe("refusedName", () => {
 });
 
 describe("names in a workbook", () => {
+  it("traces a built-in failure to its script function and calling cell", () => {
+    const workbook = scriptWorkbook('Broken() = QUERY(Table1, "select Spa")', {
+      t1: { A1: "Spa", B1: "=Broken()" },
+    });
+
+    expect(workbook.getValue(at("B1"))).toMatchObject({
+      kind: "error",
+      trace: [
+        {
+          function: "Broken",
+          location: { scriptId: "s1", scriptName: "Script 1", line: 1, name: "Broken" },
+          callSite: { kind: "cell", cell: at("B1") },
+        },
+      ],
+    });
+  });
+
+  it("traces an error value returned by a lazy built-in inside a script function", () => {
+    const workbook = scriptWorkbook("Broken() = IF(TRUE, 1 / 0, 1)", {
+      t1: { B1: "=Broken()" },
+    });
+
+    expect(workbook.getValue(at("B1"))).toMatchObject({
+      kind: "error",
+      code: "#DIV/0!",
+      trace: [
+        {
+          function: "Broken",
+          location: { scriptId: "s1", scriptName: "Script 1", line: 1, name: "Broken" },
+        },
+      ],
+    });
+  });
+
+  it("does not reattribute an unchanged cell error read by a script function", () => {
+    const workbook = scriptWorkbook("Forward() = 'Other Table'!A1", {
+      t2: { A1: "=1/0", B1: "=Forward()" },
+    });
+
+    expect(workbook.getValue(at("B1", "t2"))).toMatchObject({
+      kind: "error",
+      code: "#DIV/0!",
+    });
+    expect(workbook.getValue(at("B1", "t2"))).not.toHaveProperty("trace");
+  });
+
+  it("traces the innermost failing function and keeps its nested call chain", () => {
+    const workbook = scriptWorkbook(
+      'Broken() = QUERY(Table1, "select Spa")\nPayoutByDuration() = Broken()',
+      { t1: { A1: "Spa", B1: "=PayoutByDuration()" } },
+    );
+
+    expect(workbook.getValue(at("B1"))).toMatchObject({
+      kind: "error",
+      trace: [
+        {
+          function: "Broken",
+          location: { scriptId: "s1", line: 1, name: "Broken" },
+          callSite: {
+            kind: "script",
+            scriptId: "s1",
+            scriptName: "Script 1",
+            line: 2,
+            name: "PayoutByDuration",
+            parent: { kind: "cell", cell: at("B1") },
+          },
+        },
+      ],
+    });
+  });
+
+  it("bounds recursive traces to five callers and counts the omitted calls", () => {
+    const workbook = scriptWorkbook(
+      "Recurse(n) = IF(n > 0, Recurse(n - 1), QUERY('Page 1'!Table1, \"select Spa\"))",
+      { t2: { A1: "=Recurse(190)" } },
+    );
+
+    const value = workbook.getValue(at("A1", "t2"));
+    expect(value).toMatchObject({
+      kind: "error",
+      code: "#VALUE!",
+      trace: [
+        {
+          function: "Recurse",
+          location: { scriptId: "s1", line: 1, name: "Recurse" },
+        },
+      ],
+    });
+    if (!isError(value)) throw new Error("Expected a traced error");
+    const callers = [];
+    let site = value.trace?.[0]?.callSite;
+    while (site && site.kind !== "more") {
+      callers.push(site);
+      site = site.parent;
+    }
+    expect(callers).toHaveLength(5);
+    expect(callers.every((caller) => caller.kind === "script")).toBe(true);
+    expect(site).toEqual({ kind: "more", count: 186 });
+  });
+
+  it("preserves an existing trace when two functions pass the error through", () => {
+    const workbook = scriptWorkbook(
+      [
+        'Broken() = QUERY(Table1, "select Spa")',
+        "Pass(value) = value",
+        "Relay(value) = Pass(value)",
+      ].join("\n"),
+      { t1: { A1: "Spa", B1: "=Broken()", C1: "=Relay(B1)" } },
+    );
+
+    expect(workbook.getValue(at("C1"))).toMatchObject({
+      kind: "error",
+      trace: [
+        {
+          function: "Broken",
+          location: { scriptId: "s1", scriptName: "Script 1", line: 1, name: "Broken" },
+          callSite: { kind: "cell", cell: at("B1") },
+        },
+      ],
+    });
+    expect(workbook.getValue(at("C1"))).not.toMatchObject({
+      trace: expect.arrayContaining([
+        expect.objectContaining({ function: "Pass" }),
+        expect.objectContaining({ function: "Relay" }),
+      ]),
+    });
+  });
+
+  it("does not trace an error from a plain cell formula", () => {
+    const workbook = scriptWorkbook("Broken() = 1 / 0", { t2: { A1: "=1/0" } });
+
+    expect(workbook.getValue(at("A1", "t2"))).toMatchObject({
+      kind: "error",
+      code: "#DIV/0!",
+    });
+    expect(workbook.getValue(at("A1", "t2"))).not.toHaveProperty("trace");
+  });
+
   it("reads a name a script holds, bare and qualified, from any page", () => {
     const workbook = workbookWith([name("s1", "Total", "=SUM(Table1!A1:A2)")], {
       t1: { A1: "1", A2: "2", B1: "=Total", B2: "=Summary!Total", B3: "=total * 2" },

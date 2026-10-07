@@ -8,7 +8,15 @@ import {
   type Reference,
 } from "./ast";
 import { DAY_MS, dateFromMs, isDate } from "./dates";
-import { error, fail, Failure, finite } from "./errors";
+import {
+  error,
+  fail,
+  Failure,
+  finite,
+  type ErrorTraceCallSite,
+  type ErrorValue,
+  type ScriptFunctionLocation,
+} from "./errors";
 import { array, element, limitCells, number, scalar } from "./functions/arguments";
 import { logicFunctions } from "./functions/logic";
 import type { FunctionRegistry } from "./functions/registry";
@@ -60,12 +68,17 @@ export interface EvaluationContext {
   document?: NameScope;
   /** How many function calls deep the evaluation is. */
   depth?: number;
+  /** The source in which the current expression is written, for error traces. */
+  traceSource?: ErrorTraceCallSite;
+  /** How the current user function was called, nearest caller first. */
+  traceCallSite?: ErrorTraceCallSite;
   /** The current date and time on the user's clock, in the milliseconds a `DateValue` holds. */
   now?: () => number;
 }
 
 // Deep enough for real formulas, and far short of overflowing the call stack.
 const MAX_CALL_DEPTH = 200;
+const MAX_TRACE_CALLERS = 5;
 
 function arity(name: string, min: number, max: number): string {
   const count = (n: number): string => `${String(n)} argument${n === 1 ? "" : "s"}`;
@@ -76,6 +89,92 @@ function arity(name: string, min: number, max: number): string {
 
 function checkArity(name: string, count: number, min: number, max: number): void {
   if (count < min || count > max) fail("#ERROR!", arity(name, min, max));
+}
+
+function withParent(
+  source: ErrorTraceCallSite | undefined,
+  parent: ErrorTraceCallSite | undefined,
+): ErrorTraceCallSite | undefined {
+  const callers: Exclude<ErrorTraceCallSite, { kind: "more" }>[] = [];
+  let moreCalls = 0;
+  const append = (site: ErrorTraceCallSite | undefined): void => {
+    while (site) {
+      if (site.kind === "more") {
+        moreCalls += site.count;
+        return;
+      }
+      if (callers.length < MAX_TRACE_CALLERS) callers.push(site);
+      else moreCalls += 1;
+      site = site.parent;
+    }
+  };
+  append(source);
+  append(parent);
+
+  let result: ErrorTraceCallSite | undefined =
+    moreCalls > 0 ? { kind: "more", count: moreCalls } : undefined;
+  for (let index = callers.length - 1; index >= 0; index -= 1) {
+    const site = callers[index];
+    if (!site) continue;
+    switch (site.kind) {
+      case "cell":
+        result = {
+          kind: "cell",
+          cell: site.cell,
+          ...(site.tableName === undefined ? {} : { tableName: site.tableName }),
+          ...(result === undefined ? {} : { parent: result }),
+        };
+        break;
+      case "script":
+        result = {
+          kind: "script",
+          scriptId: site.scriptId,
+          scriptName: site.scriptName,
+          line: site.line,
+          ...(site.name === undefined ? {} : { name: site.name }),
+          ...(result === undefined ? {} : { parent: result }),
+        };
+        break;
+      case "page":
+        result = {
+          kind: "page",
+          pageId: site.pageId,
+          ...(site.pageName === undefined ? {} : { pageName: site.pageName }),
+          ...(result === undefined ? {} : { parent: result }),
+        };
+        break;
+    }
+  }
+  return result;
+}
+
+function collectErrors(value: Evaluated, errors: Set<ErrorValue>): void {
+  if (isError(value)) errors.add(value);
+  else if (isRange(value))
+    for (const row of value.rows) for (const cell of row) if (isError(cell)) errors.add(cell);
+}
+
+function traceResult(
+  value: Evaluated,
+  frame: NonNullable<ErrorValue["trace"]>[number],
+  unchanged: ReadonlySet<ErrorValue>,
+): Evaluated {
+  const trace = (cell: CellValue): CellValue =>
+    isError(cell) && cell.trace === undefined && !unchanged.has(cell)
+      ? { ...cell, trace: [frame] }
+      : cell;
+  if (isError(value)) return trace(value);
+  return isRange(value) ? { ...value, rows: value.rows.map((row) => row.map(trace)) } : value;
+}
+
+function scriptCallSite(location: ScriptFunctionLocation): ErrorTraceCallSite {
+  return {
+    kind: "script",
+    scriptId: location.scriptId,
+    scriptName: location.scriptName,
+    line: location.line,
+    name: location.name,
+  };
 }
 
 /**
@@ -276,7 +375,62 @@ export function callFunction(
     }
     const names = new Map(fn.context.names);
     fn.params.forEach((param, index) => names.set(param.toLowerCase(), values[index] ?? null));
-    return compute(fn.body, { ...fn.context, names, depth });
+    const callSite = withParent(caller.traceSource, caller.traceCallSite);
+    const unchanged = new Set<ErrorValue>();
+    values.forEach((value) => {
+      collectErrors(value, unchanged);
+    });
+    const frame = fn.userFunction
+      ? {
+          function: fn.userFunction.function,
+          location: fn.userFunction.location,
+          ...(callSite === undefined ? {} : { callSite }),
+        }
+      : undefined;
+    const document = fn.context.document;
+    const context: EvaluationContext = fn.userFunction
+      ? {
+          ...fn.context,
+          names,
+          depth,
+          read: (cell) => {
+            const value = fn.context.read(cell);
+            collectErrors(value, unchanged);
+            return value;
+          },
+          ...(document === undefined
+            ? {}
+            : {
+                document: {
+                  bare: (name: string) => {
+                    const value = document.bare(name);
+                    if (value !== undefined) collectErrors(value, unchanged);
+                    return value;
+                  },
+                  qualified: (node: Node & { type: "qualified" }) => {
+                    const value = document.qualified(node);
+                    collectErrors(value, unchanged);
+                    return value;
+                  },
+                },
+              }),
+          traceSource: scriptCallSite(fn.userFunction.location),
+          traceCallSite: callSite,
+        }
+      : { ...fn.context, names, depth };
+    try {
+      const result = compute(fn.body, context);
+      return frame === undefined ? result : traceResult(result, frame, unchanged);
+    } catch (cause) {
+      if (
+        !(cause instanceof Failure) ||
+        frame === undefined ||
+        cause.error.trace !== undefined ||
+        unchanged.has(cause.error)
+      )
+        throw cause;
+      throw new Failure({ ...cause.error, trace: [frame] });
+    }
   }
 
   const definition = fn.context.functions.get(fn.name);

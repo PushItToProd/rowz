@@ -317,6 +317,75 @@ describe("CellView", () => {
     wrapper.unmount();
   });
 
+  it("links an error popover to the script function that raised it", async () => {
+    const trace = [
+      {
+        function: "PayoutByDuration",
+        location: {
+          scriptId: "script-1",
+          scriptName: "Script 1",
+          line: 3,
+          name: "PayoutByDuration",
+        },
+        callSite: {
+          kind: "cell" as const,
+          cell: { tableId: "t1", row: 0, col: 1 },
+          tableName: "Table 1",
+        },
+      },
+    ];
+    const wrapper = render({
+      kind: "error",
+      code: "#VALUE!",
+      message: "The data has no column Spa",
+      trace,
+    });
+    try {
+      await wrapper.get(".cell-value--error").trigger("mouseenter");
+      const dialog = document.querySelector('[role="dialog"]');
+      expect(dialog?.textContent).toContain("Raised in PayoutByDuration (Script 1, line 3)");
+      expect(dialog?.textContent).toContain("Called from 'Table 1'!B1");
+      const link = document.querySelector<HTMLButtonElement>(".error-trace__link");
+      expect(link).not.toBeNull();
+      link?.click();
+      expect(wrapper.emitted("trace")).toEqual([[trace]]);
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
+  it("shows how many calls were omitted from a compact error trace", async () => {
+    const wrapper = render({
+      kind: "error",
+      code: "#VALUE!",
+      trace: [
+        {
+          function: "Recurse",
+          location: {
+            scriptId: "script-1",
+            scriptName: "Script 1",
+            line: 1,
+            name: "Recurse",
+          },
+          callSite: {
+            kind: "script",
+            scriptId: "script-1",
+            scriptName: "Script 1",
+            line: 1,
+            name: "Recurse",
+            parent: { kind: "more", count: 194 },
+          },
+        },
+      ],
+    });
+    try {
+      await wrapper.get(".cell-value--error").trigger("mouseenter");
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain("… 194 more calls");
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
   it("shows and emits the requested table size for a table-dimension spill", async () => {
     const size = { rowCount: 12, colCount: 26 };
     const wrapper = render(

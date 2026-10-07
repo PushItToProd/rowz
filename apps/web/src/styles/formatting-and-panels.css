@@ -395,6 +395,26 @@
   margin: 0.35rem 0 0;
 }
 
+.error-trace {
+  margin-top: 0.65rem;
+}
+
+.error-trace__link {
+  padding: 0;
+  border: 0;
+  color: #175cd3;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.error-trace__callers {
+  color: var(--muted);
+  font-size: 0.875em;
+}
+
 .cell-error-popover__action {
   margin-top: 0.65rem;
   padding: 0.35rem 0.55rem;

@@ -77,6 +77,45 @@ describe("document errors", () => {
     ]);
   });
 
+  it("keeps chart errors with distinct script function origins", () => {
+    const functionSource = [
+      'FirstFailure() = QUERY(Data, "select Spa")',
+      'SecondFailure() = QUERY(Data, "select Spa")',
+    ].join("\n");
+    const functionScript = { ...data.scripts![0]!, source: functionSource };
+    const table = {
+      ...data.tables[0]!,
+      pageId: "p1",
+      name: "Data",
+      rowCount: 1,
+      colCount: 1,
+      columns: [{ name: "Race", type: "text" as const }],
+      filter: "=TRUE",
+    };
+    const chart = view(
+      "Chart",
+      "chart",
+      "MAP(VSTACK(1, 2), LAMBDA(n, IF(n = 1, FirstFailure(), SecondFailure())))",
+    );
+    const workbook = createWorkbook({
+      ...data,
+      tables: [table],
+      scripts: [functionScript],
+      cells: [],
+    });
+
+    const errors = documentErrors(workbook, [table], [chart]);
+    expect(errors).toHaveLength(2);
+    expect(errors.map((failure) => failure.message)).toEqual([
+      "The data has no column Spa",
+      "The data has no column Spa",
+    ]);
+    expect(errors.map((failure) => failure.trace?.[0]?.function)).toEqual([
+      "FirstFailure",
+      "SecondFailure",
+    ]);
+  });
+
   it("finds filter syntax errors even in an empty table", () => {
     const tables = [{ ...data.tables[0]!, rowCount: 0, filter: "=1+" }];
     const errors = documentErrors(createWorkbook({ ...data, tables, cells: [] }), tables, []);

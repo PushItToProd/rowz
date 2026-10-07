@@ -25,6 +25,7 @@ import { useGridPicking } from "../formula/useGridPicking";
 import SessionFormulaField from "./SessionFormulaField.vue";
 import CellView from "./CellView.vue";
 import EditableName from "./EditableName.vue";
+import type { ErrorTraceFrame } from "@spreadsheet-app/engine";
 
 const props = defineProps<{ table: TableRecord }>();
 /**
@@ -32,7 +33,10 @@ const props = defineProps<{ table: TableRecord }>();
  * `scope` is what the menu was asked for: the selected cells, or the selected
  * rows or columns when it was asked for from one of their headers.
  */
-const emit = defineEmits<{ menu: [at: { x: number; y: number; scope: MenuScope }] }>();
+const emit = defineEmits<{
+  menu: [at: { x: number; y: number; scope: MenuScope }];
+  trace: [trace: ErrorTraceFrame[]];
+}>();
 const store = useWorkbookStore();
 
 const grid = ref<HTMLElement>();
@@ -1134,6 +1138,7 @@ function onGridKeydown(event: KeyboardEvent): void {
                   @edit="store.input(cellAt(row - 1, col - 1), $event)"
                   @resize-table="resizeForSpill"
                   @confirmation="setPendingConfirmation(cellAt(row - 1, col - 1), $event)"
+                  @trace="emit('trace', $event)"
                 />
                 <span
                   v-if="store.canEdit && draft === null && isHandleCell(row - 1, col - 1)"

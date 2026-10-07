@@ -624,7 +624,7 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] In `router.ts`, a navigation guard that awaits the leave-document dialog can discard a formula draft after a newer navigation (browser Back) superseded it; check the navigation is still current after the dialog #formula-editing
 - [ ] In `TableCard.vue` (column type conversion), the handler sets `sessions.columnPopover` after the confirmation dialog without checking the card is still mounted #data-tables
 
-- [ ] **P2** errors that come from a function are hard to trace. With a script function `PayoutByDuration(with_spa) = QUERY(Runs, "select Race, sum('Payout (40 hrs)') " & IF(with_spa, "", "where Race <> 'Spa' ") & "group by Race pivot Duration")` and a cell `=PayoutByDuration(FALSE)`, the cell shows `#VALUE!` with "The data has no column Spa", and the person has to hunt for the source. Let them go from the error back to where it arose (the function, the line, the call chain) #formula-language
+- [x] **P2** errors that come from a function are hard to trace. With a script function `PayoutByDuration(with_spa) = QUERY(Runs, "select Race, sum('Payout (40 hrs)') " & IF(with_spa, "", "where Race <> 'Spa' ") & "group by Race pivot Duration")` and a cell `=PayoutByDuration(FALSE)`, the cell shows `#VALUE!` with "The data has no column Spa", and the person has to hunt for the source. Let them go from the error back to where it arose (the function, the line, the call chain) #formula-language
 - [x] **P3** opening a side pane should close the one already open. With History open, the Errors button opens the errors pane behind it, and it shows only after History closes #everyday
 - [ ] **P6** allow collapsing a block to just its header, so a long table is easy to scroll past #small-apps
 - [ ] **P6** limit a block taller than a set height to that height and scroll its contents on their own #small-apps
@@ -633,3 +633,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [ ] The Choices panel (`choosingFor` in `TableCard.vue`) is outside the one-open-side-pane state, so it can stay open beside Names or Conditional formats #everyday
 - [ ] Escape does not close the Names and Conditional formats panels #everyday
+
+- [ ] The origin-trace link in the cell error popover is not reachable by keyboard: the popover is teleported to the end of `<body>` and closes on focusout, so Tab leaves before reaching it (`CellError.vue`, `ErrorTrace.vue`). The errors list has the same link #everyday

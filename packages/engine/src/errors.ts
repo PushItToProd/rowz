@@ -1,3 +1,5 @@
+import type { CellId } from "./address";
+
 /** `#ASSERT!` is the failure of an `ASSERT` the user wrote. `#ERROR!` means the formula text could not be parsed, or a function got the wrong number of arguments. */
 export const ERROR_CODES = [
   "#DIV/0!",
@@ -22,12 +24,44 @@ export interface SpillErrorDetails {
   requiredColumnCount: number;
 }
 
+/** A function definition in a script. */
+export interface ScriptFunctionLocation {
+  scriptId: string;
+  scriptName: string;
+  line: number;
+  name: string;
+}
+
+/** A caller location, or a count of caller locations omitted from the bounded trace. */
+export type ErrorTraceCallSite =
+  | { kind: "cell"; cell: CellId; tableName?: string; parent?: ErrorTraceCallSite }
+  | {
+      kind: "script";
+      scriptId: string;
+      scriptName: string;
+      line: number;
+      name?: string;
+      parent?: ErrorTraceCallSite;
+    }
+  | { kind: "page"; pageId: string; pageName?: string; parent?: ErrorTraceCallSite }
+  | { kind: "more"; count: number };
+
+/** Where an error first arose in a script function and how evaluation reached it. */
+export interface ErrorTraceFrame {
+  function: string;
+  location: ScriptFunctionLocation;
+  /** The nearest callers, followed by a count when older caller locations are omitted. */
+  callSite?: ErrorTraceCallSite;
+}
+
 export interface ErrorValue {
   kind: "error";
   code: ErrorCode;
   message?: string;
   /** Present only when a spill cannot fit within the current table dimensions. */
   spill?: SpillErrorDetails;
+  /** The script function where an error first arose, with its call site chain. */
+  trace?: ErrorTraceFrame[];
 }
 
 export function error(code: ErrorCode, message?: string): ErrorValue {

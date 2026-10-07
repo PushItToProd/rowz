@@ -2,13 +2,16 @@ import type { CellId } from "./address";
 import type { Node } from "./ast";
 import { DAY_MS, formatDate, isDate, parseDate, type DateValue } from "./dates";
 import type { EvaluationContext } from "./evaluate";
-import { error, type ErrorValue } from "./errors";
+import { error, type ErrorValue, type ScriptFunctionLocation } from "./errors";
 
 export {
   ERROR_CODES,
   error,
   type ErrorCode,
   type ErrorValue,
+  type ErrorTraceCallSite,
+  type ErrorTraceFrame,
+  type ScriptFunctionLocation,
   type SpillErrorDetails,
 } from "./errors";
 
@@ -49,6 +52,8 @@ export interface LambdaValue {
   params: string[];
   body: Node;
   context: EvaluationContext;
+  /** Present when a script definition names this lambda as a user function. */
+  userFunction?: { function: string; location: ScriptFunctionLocation };
 }
 
 /** A pure built-in function used as a value, such as the `UPPER` in `MAP(A:A, UPPER)`. */

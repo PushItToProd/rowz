@@ -17,7 +17,7 @@ import ErrorsPanel from "../components/ErrorsPanel.vue";
 import FindPanel from "../components/FindPanel.vue";
 import type { SearchMatch } from "../stores/workbook/search";
 import ErrorWarning from "../components/ErrorWarning.vue";
-import { formatAddress, type DocumentError } from "@spreadsheet-app/engine";
+import { formatAddress, type DocumentError, type ErrorTraceFrame } from "@spreadsheet-app/engine";
 import AssertionsPanel from "../components/AssertionsPanel.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
 import RunsPanel from "../components/RunsPanel.vue";
@@ -229,8 +229,16 @@ watch(
   },
 );
 async function goToError(
-  target: Pick<DocumentError, "pageId" | "blockId" | "label" | "cell" | "name" | "line" | "column">,
+  target: Pick<
+    DocumentError,
+    "pageId" | "blockId" | "label" | "cell" | "name" | "line" | "column" | "trace"
+  >,
 ): Promise<void> {
+  const [origin] = target.trace ?? [];
+  if (origin) {
+    await goToTrace(target.trace ?? []);
+    return;
+  }
   await router.push({
     name: "editor",
     params: { spreadsheetId: props.spreadsheetId, pageId: target.pageId },
@@ -267,6 +275,50 @@ async function goToError(
         text: `${target.label} is hidden by the table filter. Edit or clear the filter to show it.`,
       };
   }
+}
+
+/** Opens the script where a function error arose and puts the caret on its definition. */
+async function goToTrace(trace: ErrorTraceFrame[]): Promise<void> {
+  const [frame] = trace;
+  if (!frame) return;
+  const script = store.views.find(
+    (view) => view.id === frame.location.scriptId && view.kind === "script",
+  );
+  if (!script) return;
+  await router.push({
+    name: "editor",
+    params: { spreadsheetId: props.spreadsheetId, pageId: script.pageId },
+  });
+  await nextTick();
+  const block = document.getElementById(`block-${script.id}`);
+  block?.focus({ preventScroll: true });
+  block
+    ?.querySelector(`[data-script-line="${String(frame.location.line)}"]`)
+    ?.scrollIntoView({ block: "center", behavior: "smooth" });
+  if (!store.canEdit) return;
+
+  const offset = script.source
+    .split("\n")
+    .slice(0, frame.location.line - 1)
+    .reduce((length, line) => length + line.length + 1, 0);
+  if (
+    !(await formulas.start(
+      {
+        target: { kind: "script", viewId: script.id },
+        context: { pageId: script.pageId, holderId: script.id },
+        mode: "script",
+        text: script.source,
+        label: `${store.pages.find((page) => page.id === script.pageId)?.name ?? ""} · ${script.name} · Script source`,
+      },
+      store.submitFormulaDraft,
+    ))
+  )
+    return;
+  const session = formulas.active;
+  if (session?.target.kind === "script" && session.target.viewId === script.id)
+    formulas.updateState(session.state.update({ selection: { anchor: offset } }).state);
+  await nextTick();
+  formulas.focus();
 }
 
 /** Opens the page of a failing assertion and selects its cell. */
@@ -513,7 +565,7 @@ watch(
           :aria-label="block.record.name"
           class="editor__block"
         >
-          <TableCard v-if="block.table" :table="block.table" />
+          <TableCard v-if="block.table" :table="block.table" @trace="goToTrace" />
           <ChartCard v-else-if="block.view.kind === 'chart'" :view="block.view" />
           <ScriptCard v-else-if="block.view.kind === 'script'" :view="block.view" />
           <TextCard v-else :view="block.view" />

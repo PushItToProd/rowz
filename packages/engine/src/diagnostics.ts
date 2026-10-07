@@ -1,5 +1,6 @@
 import { formatAddress, type CellId } from "./address";
 import { quoteName } from "./ast";
+import type { ErrorTraceFrame } from "./errors";
 import { parseFormula } from "./parser";
 import { FormulaSyntaxError } from "./tokenizer";
 import { parseScript } from "./script";
@@ -20,6 +21,7 @@ export interface DocumentError {
   name?: string;
   filter?: boolean;
   column?: number;
+  trace?: ErrorTraceFrame[];
 }
 
 /** Collect errors across the entire document, independent of the displayed page or rows. */
@@ -44,6 +46,7 @@ export function documentErrors(
       blockId,
       code: failure.code,
       message: failure.message,
+      ...(failure.trace === undefined ? {} : { trace: failure.trace }),
       label:
         failure.kind === "cell"
           ? `${quoteName(block.name)}!${formatAddress(failure.cell)}`
@@ -102,8 +105,14 @@ export function documentErrors(
   }
   for (const view of views) {
     const found = new Set<string>();
-    const report = (code: string, message: string, line?: number, expression?: string): void => {
-      const key = JSON.stringify([code, message, line, expression]);
+    const report = (
+      code: string,
+      message: string,
+      line?: number,
+      expression?: string,
+      trace?: ErrorTraceFrame[],
+    ): void => {
+      const key = JSON.stringify([code, message, line, expression, trace?.[0]]);
       if (found.has(key)) return;
       found.add(key);
       errors.push({
@@ -117,11 +126,13 @@ export function documentErrors(
               : view.name,
         code,
         message,
+        ...(trace === undefined ? {} : { trace }),
         ...(line === undefined ? {} : { line }),
       });
     };
     const inspect = (value: Evaluated, expression?: string): void => {
-      if (isError(value)) report(value.code, value.message ?? value.code, undefined, expression);
+      if (isError(value))
+        report(value.code, value.message ?? value.code, undefined, expression, value.trace);
       else if (isButton(value)) {
         const plan = workbook.planAction(value.action);
         if (!plan.ok) inspect(plan.error, expression);

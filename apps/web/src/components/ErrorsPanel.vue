@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import type { DocumentError } from "@spreadsheet-app/engine";
 import { useWorkbookStore } from "../stores/workbook";
+import ErrorTrace from "./ErrorTrace.vue";
 
 const store = useWorkbookStore();
 const emit = defineEmits<{ close: []; go: [target: DocumentError] }>();
@@ -45,6 +46,12 @@ onBeforeUnmount(() => {
           <span class="errors__code">{{ failure.code }}</span>
           <span v-if="failure.message !== failure.code">{{ failure.message }}</span>
         </button>
+        <ErrorTrace
+          v-if="failure.trace?.length"
+          class="errors__trace"
+          :trace="failure.trace"
+          @go="emit('go', { ...failure, trace: $event })"
+        />
       </li>
     </ul>
   </aside>

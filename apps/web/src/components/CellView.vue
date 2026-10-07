@@ -11,6 +11,7 @@ import {
   isMarkdown,
   type CellFormat,
   type CellValue,
+  type ErrorTraceFrame,
   type Scalar,
 } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
@@ -42,6 +43,7 @@ const emit = defineEmits<{
   toggle: [checked: boolean];
   pick: [text: string];
   resizeTable: [size: { rowCount: number; colCount: number }];
+  trace: [trace: ErrorTraceFrame[]];
   confirmation: [open: boolean];
 }>();
 
@@ -325,6 +327,7 @@ function commitInputOnEnter(event: KeyboardEvent): void {
     :text-style="style"
     :resize-to="spillResizeTo"
     @resize="resizeTable"
+    @trace="emit('trace', $event)"
   />
   <span v-else class="cell-value" :class="`cell-value--${kind}`" :style="style">{{ text }}</span>
   <ConfirmDialog

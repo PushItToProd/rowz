@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, snapshotWith, TABLE, wireSnapshot, type MockedApi } from "../testing";
+import { at, identifiedAt, snapshotWith, TABLE, wireSnapshot, type MockedApi } from "../testing";
 import ErrorsPanel from "./ErrorsPanel.vue";
 
 vi.mock("../api/client", async () => {
@@ -55,6 +55,54 @@ it("lists errors with destinations and updates while open", async () => {
     expect(wrapper.text()).toContain("No errors in this document.");
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     expect(wrapper.emitted("close")).toHaveLength(1);
+  } finally {
+    wrapper.unmount();
+  }
+});
+
+it("shows a function origin link in the document errors list", async () => {
+  const snapshot = snapshotWith({ A1: "Spa" });
+  const formulaTable = { ...TABLE, id: "t2", name: "Formula", position: 1 };
+  snapshot.tables = [
+    {
+      ...TABLE,
+      columns: [
+        { name: "Race", type: "text" },
+        { name: "Duration", type: "text" },
+        { name: "Payout (40 hrs)", type: "any" },
+      ],
+    },
+    formulaTable,
+  ];
+  snapshot.cells.push({ ...identifiedAt("A1", formulaTable.id), input: "=PayoutByDuration()" });
+  snapshot.views = [
+    {
+      id: "script-1",
+      pageId: "p1",
+      kind: "script",
+      name: "Script 1",
+      position: 1,
+      source: "PayoutByDuration() = QUERY('Table 1', \"select Spa\")",
+      chartType: null,
+    },
+  ];
+  server.getSnapshot.mockResolvedValue(wireSnapshot(snapshot));
+  await useWorkbookStore().load("s1");
+  const wrapper = mount(ErrorsPanel);
+  try {
+    const traceLink = wrapper.get(".error-trace__link");
+    expect(traceLink.text()).toBe("Raised in PayoutByDuration (Script 1, line 1)");
+    await traceLink.trigger("click");
+    expect(wrapper.emitted("go")?.[0]?.[0]).toMatchObject({
+      pageId: "p1",
+      blockId: "t2",
+      trace: [
+        {
+          function: "PayoutByDuration",
+          location: { scriptId: "script-1", line: 1 },
+        },
+      ],
+    });
   } finally {
     wrapper.unmount();
   }

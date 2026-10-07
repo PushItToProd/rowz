@@ -1217,6 +1217,11 @@ const OPERATORS = [
         reason. A formula that reads a cell holding an error shows the same error, unless
         <code>IFERROR</code> catches it.
       </p>
+      <p>
+        When an error is raised inside a script function, its popover and the document errors list
+        identify the function and show how the formula reached it. The link opens the script at the
+        function definition.
+      </p>
       <table>
         <tbody>
           <tr v-for="(explanation, code) in errorDocs" :key="code" :data-error="code">

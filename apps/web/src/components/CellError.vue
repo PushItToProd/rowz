@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type { ErrorValue } from "@spreadsheet-app/engine";
+import ErrorTrace from "./ErrorTrace.vue";
 
 const props = defineProps<{
   error: ErrorValue;
   textStyle?: Record<string, string>;
   resizeTo?: { rowCount: number; colCount: number };
 }>();
-const emit = defineEmits<{ resize: [] }>();
+const emit = defineEmits<{ resize: []; trace: [trace: NonNullable<ErrorValue["trace"]>] }>();
 const explanation = computed(
   () =>
     props.error.message ??
@@ -30,6 +31,8 @@ const id = useId();
 const titleId = `${id}-title`;
 const descriptionId = `${id}-description`;
 const popover = ref<HTMLElement>();
+const hasTrace = computed(() => !!props.error.trace?.length);
+const interactive = computed(() => !!props.resizeTo || hasTrace.value);
 const position = computed(() => {
   if (!open.value) return {};
   const rect = anchor.value?.getBoundingClientRect();
@@ -116,9 +119,9 @@ onBeforeUnmount(() => {
     class="cell-value cell-value--error"
     :style="textStyle"
     tabindex="0"
-    :aria-haspopup="resizeTo ? 'dialog' : undefined"
-    :aria-expanded="resizeTo ? open : undefined"
-    :aria-controls="resizeTo && open ? id : undefined"
+    :aria-haspopup="interactive ? 'dialog' : undefined"
+    :aria-expanded="interactive ? open : undefined"
+    :aria-controls="interactive && open ? id : undefined"
     :aria-describedby="open ? descriptionId : undefined"
     @mouseenter="show"
     @mouseleave="leave"
@@ -133,8 +136,8 @@ onBeforeUnmount(() => {
       v-if="open"
       :id="id"
       ref="popover"
-      :role="resizeTo ? 'dialog' : 'tooltip'"
-      :aria-labelledby="resizeTo ? titleId : undefined"
+      :role="interactive ? 'dialog' : 'tooltip'"
+      :aria-labelledby="interactive ? titleId : undefined"
       class="cell-error-popover"
       :style="position"
       @mouseenter="show"
@@ -143,6 +146,7 @@ onBeforeUnmount(() => {
     >
       <strong :id="titleId">{{ error.code }}</strong>
       <p :id="descriptionId">{{ explanation }}</p>
+      <ErrorTrace v-if="error.trace?.length" :trace="error.trace" @go="emit('trace', $event)" />
       <button
         v-if="resizeTo"
         type="button"

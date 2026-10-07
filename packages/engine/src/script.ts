@@ -140,7 +140,15 @@ export function scriptNames(scriptId: string, source: string): NameDefinition[] 
     const { name, params, formula } = statement;
     const defined =
       params === undefined ? formula : `LAMBDA(${[...params, `(${formula})`].join(", ")})`;
-    return [{ holderId: scriptId, name, formula: defined }];
+    return [
+      {
+        holderId: scriptId,
+        name,
+        formula: defined,
+        scriptLine: statement.line,
+        ...(params === undefined ? {} : { scriptFunction: true }),
+      },
+    ];
   });
 }
 

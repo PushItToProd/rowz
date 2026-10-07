@@ -2,6 +2,7 @@ import { cellKey, formatAddress, rangeContains, type CellId, type CellRange } fr
 import { isColumnReference, isSingleCell, quoteName, type Node, type Reference } from "./ast";
 import { formatDate, isDate, parseDate } from "./dates";
 import type { Effect } from "./effects";
+import type { ScriptFunctionLocation } from "./errors";
 import {
   evaluate,
   referencesOf,
@@ -31,6 +32,7 @@ import { FormulaSyntaxError } from "./tokenizer";
 import {
   compare,
   error,
+  isLambda,
   isFormulaInput,
   kindOf,
   literalInput,
@@ -81,6 +83,10 @@ interface NameRecord {
   volatile?: boolean;
   /** Set for a bare formula of a script, which has no name: the line it is written on. */
   line?: number;
+  /** The line of a named script definition. */
+  scriptLine?: number;
+  /** Set for a function defined by name and parameters in a script. */
+  functionLocation?: ScriptFunctionLocation;
 }
 
 /** Where an evaluated cell, named value, or script statement is defined. */
@@ -90,9 +96,13 @@ type ErrorLocation =
   | { kind: "statement"; holderId: string; line: number };
 
 /** An evaluated error and its location in the workbook. */
-export type WorkbookError = ErrorLocation & { code: ErrorValue["code"]; message: string };
+export type WorkbookError = ErrorLocation & {
+  code: ErrorValue["code"];
+  message: string;
+  trace?: ErrorValue["trace"];
+};
 /** An `ASSERT` that is false, and where it is. */
-export type AssertionFailure = ErrorLocation & { message: string };
+export type AssertionFailure = ErrorLocation & { message: string; trace?: ErrorValue["trace"] };
 
 /** The value a qualified name stands for when no cell holds its formula. */
 const NO_CELL: CellId = { tableId: "", row: 0, col: 0 };
@@ -594,6 +604,7 @@ export class Workbook {
             cell: id,
             code: value.code,
             message: value.message ?? value.code,
+            ...(value.trace === undefined ? {} : { trace: value.trace }),
           });
         }
       }
@@ -607,6 +618,7 @@ export class Workbook {
             cell,
             code: value.code,
             message: value.message ?? value.code,
+            ...(value.trace === undefined ? {} : { trace: value.trace }),
           });
       }
     }
@@ -619,6 +631,7 @@ export class Workbook {
         name: record.name,
         code: value.code,
         message: value.message ?? value.code,
+        ...(value.trace === undefined ? {} : { trace: value.trace }),
       });
     }
     for (const record of this.statements) {
@@ -630,6 +643,7 @@ export class Workbook {
         line: record.line,
         code: value.code,
         message: value.message ?? value.code,
+        ...(value.trace === undefined ? {} : { trace: value.trace }),
       });
     }
     return failures;
@@ -804,7 +818,7 @@ export class Workbook {
   ): void {
     this.names = new Map();
     this.statements = [];
-    for (const { holderId, name, formula } of definitions) {
+    for (const { holderId, name, formula, scriptLine, scriptFunction } of definitions) {
       const holder = this.tables.holder(holderId);
       if (!holder) continue;
       const key = name.toLowerCase();
@@ -828,7 +842,24 @@ export class Workbook {
           content = { error: error(cause.code, cause.message) };
         }
       }
-      sharing.push({ holder, name, content, precedents: [], evaluating: false });
+      sharing.push({
+        holder,
+        name,
+        content,
+        precedents: [],
+        evaluating: false,
+        ...(scriptLine === undefined ? {} : { scriptLine }),
+        ...(holder.kind !== "script" || !scriptFunction || scriptLine === undefined
+          ? {}
+          : {
+              functionLocation: {
+                scriptId: holder.id,
+                scriptName: holder.name,
+                line: scriptLine,
+                name,
+              },
+            }),
+      });
     }
     for (const record of [...this.names.values()].flat()) {
       record.precedents = this.namePrecedents(record, new Set());
@@ -996,14 +1027,40 @@ export class Workbook {
     this.evaluatingNames.add(record);
     try {
       const { holder } = record;
-      const value = evaluate(
-        record.content.ast,
-        holder.kind === "table"
-          ? this.context({ ...NO_CELL, tableId: holder.id })
-          : this.pageContext(holder.pageId),
-      );
-      record.kept = { epoch: this.epoch, value };
-      return value;
+      const source =
+        holder.kind === "script"
+          ? record.scriptLine !== undefined
+            ? {
+                kind: "script" as const,
+                scriptId: holder.id,
+                scriptName: holder.name,
+                line: record.scriptLine,
+                name: record.name,
+              }
+            : record.line !== undefined
+              ? {
+                  kind: "script" as const,
+                  scriptId: holder.id,
+                  scriptName: holder.name,
+                  line: record.line,
+                }
+              : undefined
+          : undefined;
+      const value = evaluate(record.content.ast, {
+        ...(holder.kind === "table"
+          ? this.context({ ...NO_CELL, tableId: holder.id }, false)
+          : this.pageContext(holder.pageId)),
+        ...(source === undefined ? {} : { traceSource: source }),
+      });
+      const named =
+        record.functionLocation && isLambda(value)
+          ? {
+              ...value,
+              userFunction: { function: record.name, location: record.functionLocation },
+            }
+          : value;
+      record.kept = { epoch: this.epoch, value: named };
+      return named;
     } finally {
       record.evaluating = false;
       this.evaluatingNames.delete(record);
@@ -1144,9 +1201,19 @@ export class Workbook {
     return "holder" in meaning ? meaning.precedents : [this.tableRange(meaning.id)];
   }
 
-  private context(origin: CellId): EvaluationContext {
+  private context(origin: CellId, traceSource = true): EvaluationContext {
+    const tableName = this.tables.table(origin.tableId)?.name;
     return {
       origin,
+      ...(traceSource
+        ? {
+            traceSource: {
+              kind: "cell" as const,
+              cell: origin,
+              ...(tableName === undefined ? {} : { tableName }),
+            },
+          }
+        : {}),
       functions: this.functions,
       resolve: (reference) => this.resolve(reference, origin),
       read: (cell) => this.current(cell),
@@ -1160,10 +1227,16 @@ export class Workbook {
 
   /** The context of a formula written on a page and not in a table, which names the table of every cell it reads. */
   private pageContext(pageId: string): EvaluationContext {
+    const pageName = this.tables.pageName(pageId);
     return {
       // No cell holds this formula, so actions keep the page as their context.
       origin: NO_CELL,
       pageId,
+      traceSource: {
+        kind: "page",
+        pageId,
+        ...(pageName === undefined ? {} : { pageName }),
+      },
       functions: this.functions,
       resolve: (reference) => this.rangeOf(reference, this.tables.findFromPage(reference, pageId)),
       read: (cell) => this.current(cell),
