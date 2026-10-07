@@ -1228,6 +1228,11 @@ const OPERATORS = [
           names the series.
         </li>
         <li>
+          When the first column contains dates and all its nonblank values are dates, bar, line, and
+          scatter charts use a time axis with regular date ticks and ISO date labels. Line points
+          are ordered by date; bars are placed at their dates.
+        </li>
+        <li>
           The data can be any formula that gives a range, such as
           <code>FILTER(Sales!A2:B99, Sales!B2:B99 &gt; 0)</code> or
           <code>HSTACK(Sales!A:A, Sales!D:D)</code> to chart columns that are not side by side.

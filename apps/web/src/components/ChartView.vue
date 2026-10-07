@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import {
   chartData,
+  DAY_MS,
   dateFromMs,
+  dateParts,
   Failure,
+  formatDate,
   formatValue,
   type CellValue,
   type ChartType,
 } from "@spreadsheet-app/engine";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { init, use, type EChartsType, type EChartsCoreOption } from "echarts/core";
+import type { TooltipComponentFormatterCallbackParams } from "echarts";
 import { BarChart, LineChart, PieChart, ScatterChart } from "echarts/charts";
 import { GridComponent, TooltipComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
@@ -78,14 +82,77 @@ const legend = computed(() =>
       : data.value.series.map((series, index) => ({ fill: color(index), text: series.name })),
 );
 const description = computed(() => props.title || props.chart + " chart");
+const timeAxis = computed(() => props.chart !== "pie" && data.value.xIsDate);
+const axisKind = computed(() =>
+  props.chart === "pie"
+    ? "none"
+    : timeAxis.value
+      ? "time"
+      : props.chart === "scatter"
+        ? "value"
+        : "category",
+);
+const timePrecision = computed(() => {
+  let includeTime = false;
+  let includeSeconds = false;
+  if (timeAxis.value) {
+    for (const serial of data.value.x) {
+      if (serial === null) continue;
+      const parts = dateParts(dateFromMs(Math.round(serial * DAY_MS)));
+      includeTime ||= !Number.isInteger(serial);
+      includeSeconds ||= parts.second !== 0;
+    }
+  }
+  return { includeTime, includeSeconds };
+});
 
-function dateTickLabel(tick: number): string {
+function isoDateLabel(timestamp: number): string {
   try {
-    return formatValue(dateFromMs(Math.round(tick) * 86_400_000));
+    const date = dateFromMs(timestamp);
+    const label = formatDate(date).slice(0, 10);
+    if (!timePrecision.value.includeTime) return label;
+    const parts = dateParts(date);
+    const pad = (value: number): string => String(value).padStart(2, "0");
+    const time = `${pad(parts.hour)}:${pad(parts.minute)}${timePrecision.value.includeSeconds ? `:${pad(parts.second)}` : ""}`;
+    return `${label}T${time}`;
   } catch (cause) {
     if (cause instanceof Failure) return "";
     throw cause;
   }
+}
+
+function dateTooltip(params: TooltipComponentFormatterCallbackParams): string {
+  const item = Array.isArray(params) ? params[0] : params;
+  if (!item || !Array.isArray(item.value) || typeof item.value[0] !== "number") return "";
+  const label = isoDateLabel(item.value[0]);
+  const value = item.value[1];
+  const series = item.seriesName ?? "";
+  return `${series}\n${label}${typeof value === "number" ? `: ${formatValue(value)}` : ""}`;
+}
+
+function timedSeriesData(
+  values: readonly (number | null)[],
+): { name: string; value: [number, number | null] }[] {
+  const points = values.flatMap((value, index) => {
+    const serial = data.value.x[index];
+    if (serial === null || serial === undefined || (props.chart === "scatter" && value === null))
+      return [];
+    const timestamp = Math.round(serial * DAY_MS);
+    return [
+      {
+        index,
+        timestamp,
+        point: {
+          name: isoDateLabel(timestamp),
+          value: [timestamp, value] as [number, number | null],
+        },
+      },
+    ];
+  });
+  if (props.chart === "line") {
+    points.sort((left, right) => left.timestamp - right.timestamp || left.index - right.index);
+  }
+  return points.map(({ point }) => point);
 }
 
 const option = computed((): EChartsCoreOption => {
@@ -93,7 +160,12 @@ const option = computed((): EChartsCoreOption => {
     animation: false,
     color: COLORS,
     textStyle: { fontSize: 12 },
-    tooltip: { trigger: "item", renderMode: "richText" },
+    useUTC: true,
+    tooltip: {
+      trigger: "item",
+      renderMode: "richText",
+      ...(timeAxis.value ? { formatter: dateTooltip } : {}),
+    },
   };
   if (props.chart === "pie")
     return {
@@ -114,15 +186,24 @@ const option = computed((): EChartsCoreOption => {
   return {
     ...common,
     grid: { left: 12, right: 16, top: 16, bottom: 12, containLabel: true },
-    xAxis:
-      props.chart === "scatter"
+    xAxis: timeAxis.value
+      ? {
+          type: "time",
+          scale: true,
+          axisLabel: {
+            fontSize: 12,
+            hideOverlap: true,
+            formatter: isoDateLabel,
+          },
+        }
+      : props.chart === "scatter"
         ? {
             type: "value",
             scale: true,
             axisLabel: {
               fontSize: 12,
               hideOverlap: true,
-              formatter: data.value.xIsDate ? dateTickLabel : (value: number) => formatValue(value),
+              formatter: (value: number) => formatValue(value),
             },
           }
         : {
@@ -143,8 +224,10 @@ const option = computed((): EChartsCoreOption => {
       lineStyle: { color: color(index) },
       connectNulls: false,
       symbolSize: props.chart === "line" ? 6 : 9,
-      data:
-        props.chart === "scatter"
+      ...(timeAxis.value && props.chart === "bar" ? { barMaxWidth: 24, barMinWidth: 1 } : {}),
+      data: timeAxis.value
+        ? timedSeriesData(series.values)
+        : props.chart === "scatter"
           ? series.values.flatMap((value, index) => {
               const x = data.value.x[index];
               return value === null || x === null || x === undefined
@@ -190,6 +273,7 @@ onBeforeUnmount(() => {
       v-show="empty === null"
       ref="host"
       class="chart__canvas"
+      :data-axis-kind="axisKind"
       role="img"
       :aria-label="description"
     ></div>

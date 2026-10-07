@@ -106,9 +106,22 @@ describe("chartData", () => {
     const dated = chartData([
       [parseDate("2026-01-01") ?? null, 1],
       [null, 2],
+      ["", 4],
       [parseDate("2026-01-03") ?? null, 3],
     ]);
     expect(dated.xIsDate).toBe(true);
+    expect(
+      chartData([
+        [null, 1],
+        ["", 2],
+      ]).xIsDate,
+    ).toBe(false);
+    expect(
+      chartData([
+        [parseDate("2026-01-01") ?? null, 1],
+        ["later", 2],
+      ]).xIsDate,
+    ).toBe(false);
     expect(data.labels).toEqual(["1.5", "1970-01-11", "later"]);
   });
 

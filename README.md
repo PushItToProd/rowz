@@ -113,6 +113,8 @@ A chart draws a range as bars, lines, a pie, or a scatter. Its data is a formula
 
 Apache ECharts draws charts in blocks and text views with its SVG renderer. Charts fit their container, resize with it, and show values on hover. A text summary exposes the plotted data to screen readers.
 
+When the first column contains dates and all its nonblank values are dates, bar, line, and scatter charts use a time axis. Points are spaced by elapsed time, and ECharts chooses regular date ticks across the period; axis labels and tooltips show ISO dates. Date points in line charts are ordered chronologically. Bars sit at their dates on the time axis.
+
 ### Text views
 
 A text view is Markdown with tags that put values from tables into it:

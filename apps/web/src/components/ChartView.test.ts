@@ -48,9 +48,18 @@ function instance() {
 }
 function option() {
   return instance().setOption.mock.calls.at(-1)![0] as {
-    series: { type: string; name?: string; data: unknown[]; connectNulls?: boolean }[];
+    series: {
+      type: string;
+      name?: string;
+      data: unknown[];
+      connectNulls?: boolean;
+      barMaxWidth?: number;
+      barMinWidth?: number;
+    }[];
     color: string[];
+    useUTC?: boolean;
     grid?: { containLabel: boolean };
+    tooltip?: { formatter?: (params: unknown) => string };
     xAxis?: {
       type: string;
       data?: string[];
@@ -113,8 +122,113 @@ describe("ChartView", () => {
     ]);
     expect(option().xAxis?.type).toBe("value");
   });
+  it.each(["bar", "line", "scatter"] as const)(
+    "uses UTC timestamps and a time axis for %s charts with date X values",
+    (chart) => {
+      const wrapper = render(chart, [
+        [dateFromParts(2020, 3, 1), 30],
+        [dateFromParts(2018, 8, 22), 10],
+        [dateFromParts(2019, 3, 4), 20],
+        [dateFromParts(2019, 3, 4), 21],
+      ]);
+      const plotted = option();
+      expect(wrapper.get(".chart__canvas").attributes("data-axis-kind")).toBe("time");
+      expect(plotted.useUTC).toBe(true);
+      expect(plotted.xAxis).toMatchObject({ type: "time", scale: true });
+      expect(plotted.xAxis?.data).toBeUndefined();
+      const point = (year: number, month: number, day: number, value: number) => ({
+        name: `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+        value: [dateFromParts(year, month, day).ms, value],
+      });
+      expect(plotted.series[0]?.data).toEqual(
+        chart === "line"
+          ? [
+              point(2018, 8, 22, 10),
+              point(2019, 3, 4, 20),
+              point(2019, 3, 4, 21),
+              point(2020, 3, 1, 30),
+            ]
+          : [
+              point(2020, 3, 1, 30),
+              point(2018, 8, 22, 10),
+              point(2019, 3, 4, 20),
+              point(2019, 3, 4, 21),
+            ],
+      );
+      if (chart === "bar") {
+        expect(plotted.series[0]).toMatchObject({ barMaxWidth: 24, barMinWidth: 1 });
+        expect(plotted.series[0]).not.toHaveProperty("barWidth");
+      }
+      expect(
+        plotted.tooltip?.formatter?.({
+          seriesName: "Sales",
+          value: [dateFromParts(2018, 8, 22).ms, 10],
+        }),
+      ).toBe("Sales\n2018-08-22: 10");
+    },
+  );
+  it.each([
+    [dateFromParts(2026, 1, 1, 8, 30), "2026-01-01T08:30", "2026-01-02T08:45"],
+    [dateFromParts(2026, 1, 1, 8, 30, 15), "2026-01-01T08:30:15", "2026-01-02T08:45:00"],
+  ])("shows the time of day in date-axis labels and tooltips", (date, expected, secondLabel) => {
+    render("line", [
+      [date, 5],
+      [dateFromParts(2026, 1, 2, 8, 45), 6],
+    ]);
+    const plotted = option();
+    const point = plotted.series[0]!.data[0] as { value: number[] };
+    const secondPoint = plotted.series[0]!.data[1] as { value: number[] };
+    expect(plotted.xAxis?.axisLabel.formatter(point.value[0]!)).toBe(expected);
+    expect(plotted.xAxis?.axisLabel.formatter(secondPoint.value[0]!)).toBe(secondLabel);
+    expect(plotted.tooltip?.formatter?.({ seriesName: "Sales", value: [date.ms, 5] })).toBe(
+      `Sales\n${expected}: 5`,
+    );
+    expect(
+      plotted.tooltip?.formatter?.({ seriesName: "Sales", value: [secondPoint.value[0], 6] }),
+    ).toBe(`Sales\n${secondLabel}: 6`);
+  });
+  it.each(["bar", "line"] as const)(
+    "keeps non-date and mixed X values categorical for %s",
+    (chart) => {
+      for (const rows of [
+        [
+          ["Jan", 10],
+          ["Feb", 20],
+        ],
+        [
+          [dateFromParts(2026, 1, 1), 10],
+          ["later", 20],
+        ],
+      ] as CellValue[][][]) {
+        const wrapper = render(chart, rows);
+        expect(option().xAxis).toMatchObject({ type: "category" });
+        expect(wrapper.get(".chart__canvas").attributes("data-axis-kind")).toBe("category");
+        wrapper.unmount();
+        wrappers = wrappers.filter((item) => item !== wrapper);
+      }
+    },
+  );
+  it("ignores blank date coordinates while preserving the accessible data summary", () => {
+    const wrapper = render("line", [
+      [dateFromParts(2026, 1, 1), 5],
+      [null, 8],
+      ["", 9],
+      [dateFromParts(2026, 1, 3), 10],
+    ]);
+    expect(wrapper.get(".chart__canvas").attributes("data-axis-kind")).toBe("time");
+    expect(option().series[0]?.data).toEqual([
+      { name: "2026-01-01", value: [dateFromParts(2026, 1, 1).ms, 5] },
+      { name: "2026-01-03", value: [dateFromParts(2026, 1, 3).ms, 10] },
+    ]);
+    expect(wrapper.findAll("[data-chart-value]").map((entry) => entry.text())).toEqual([
+      "2026-01-01: 5",
+      ": 8",
+      ": 9",
+      "2026-01-03: 10",
+    ]);
+  });
   it.each([0, 9999])(
-    "formats date coordinates at year %s and suppresses out-of-range ticks",
+    "formats time-axis ticks at year %s and suppresses out-of-range dates",
     (year) => {
       render("scatter", [
         [dateFromParts(year, 1, 1), 1],
@@ -122,8 +236,11 @@ describe("ChartView", () => {
       ]);
       const point = option().series[0]!.data[0] as { value: number[] };
       const formatter = option().xAxis!.axisLabel.formatter;
+      expect(option().xAxis?.type).toBe("time");
       expect(formatter(point.value[0]!)).toBe(String(year).padStart(4, "0") + "-01-01");
-      expect(formatter(year === 0 ? point.value[0]! - 1 : point.value[0]! + 366)).toBe("");
+      expect(
+        formatter(year === 0 ? point.value[0]! - 86_400_000 : point.value[0]! + 366 * 86_400_000),
+      ).toBe("");
     },
   );
   it.each([

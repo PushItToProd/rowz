@@ -18,6 +18,35 @@ async function expectRenderedChart(svg: Locator): Promise<void> {
     .toBeGreaterThan(0);
 }
 
+test("charts place date values on a time axis", async ({ page }) => {
+  await newSpreadsheet(page);
+  const rows = [
+    ["2018-08-22", "5"],
+    ["2019-03-04", "10"],
+    ["2019-12-03", "15"],
+    ["2020-03-01", "20"],
+    ["2021-08-25", "25"],
+  ];
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index] ?? [];
+    await enter(page, `A${String(index + 1)}`, row[0] ?? "");
+    await enter(page, `B${String(index + 1)}`, row[1] ?? "");
+  }
+
+  await page.getByRole("button", { name: "Add chart" }).last().click();
+  const chart = page.locator('[data-view="Chart 1"]');
+  await chart.getByLabel("Chart data").click();
+  await chart.getByLabel("Chart data").fill("'Table 1'!A1:B5");
+  await chart.getByLabel("Chart data").press("Enter");
+
+  for (const type of ["bar", "line", "scatter"]) {
+    await chart.getByLabel("Chart type").selectOption(type);
+    await expect(chart.locator(".chart__canvas")).toHaveAttribute("data-axis-kind", "time");
+    await expectRenderedChart(chart.locator(".chart__canvas svg"));
+    await expect(chart.locator("[data-chart-value]")).toHaveCount(5);
+  }
+});
+
 test("ECharts renders every type in blocks and templates and resizes its SVG", async ({ page }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "1");

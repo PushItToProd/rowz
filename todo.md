@@ -328,7 +328,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - [ ] axis titles
   - [ ] stacked bars
   - [ ] colors
-- [ ] **P6** when a chart has dates on one axis, they should be spaced out like numeric data, not categorical -- right now if I have a plot with `2018-08-22`, `2019-03-04`, `2019-12-03`, `2020-03-01`, `2021-08-25` on the X-axis, those points all appear equally horizontally spaced, but they should have variable width gaps proportional to the number of days between them just like they would if they were ordinary numbers and the X-axis should have dates at regular intervals covering the time period #charts
+- [x] **P6** when a chart has dates on one axis, they should be spaced out like numeric data, not categorical -- right now if I have a plot with `2018-08-22`, `2019-03-04`, `2019-12-03`, `2020-03-01`, `2021-08-25` on the X-axis, those points all appear equally horizontally spaced, but they should have variable width gaps proportional to the number of days between them just like they would if they were ordinary numbers and the X-axis should have dates at regular intervals covering the time period #charts
 - [x] **P4** draw charts with Apache ECharts, in chart blocks and in text views. Import only the chart kinds and components in use, since the whole library is large. Do this before the other chart items, which it changes. See [DECISIONS.md](DECISIONS.md), "Charts are drawn with Apache ECharts" #charts
 - [x] **P10** show labels on charts on hover #charts
 - [x] allow editing markdown views by just double clicking on the text (instead of clicking "Edit"). save and exit edit mode when the user unfocuses the input (instead of requiring user to hit "Done") (keep the "Edit" and "Done" buttons for user convenience)

@@ -47,8 +47,10 @@ export function chartData(given: readonly (readonly CellValue[])[]): ChartData {
   const body = hasHeader ? rest : rows;
 
   const labelCells = width === 1 ? [] : body.map((cells) => cells[0] ?? null);
+  const isBlankLabel = (cell: CellValue): boolean => cell === null || cell === "";
   return {
-    xIsDate: labelCells.some(isDate) && labelCells.every((cell) => cell === null || isDate(cell)),
+    xIsDate:
+      labelCells.some(isDate) && labelCells.every((cell) => isBlankLabel(cell) || isDate(cell)),
     labels: body.map((cells, index) =>
       width === 1 ? String(index + 1) : formatValue(cells[0] ?? null),
     ),

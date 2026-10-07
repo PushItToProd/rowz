@@ -54,6 +54,7 @@ export {
 export { displayRows, type SortColumn, type SortKey, type TableDisplay } from "./display";
 export { chartData, type ChartData, type ChartSeries } from "./charts";
 export {
+  DAY_MS,
   dateFromMs,
   dateFromParts,
   dateParts,
