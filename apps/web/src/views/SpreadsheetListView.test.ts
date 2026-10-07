@@ -6,6 +6,7 @@ import type { DocumentListItem, FolderRecord, ListedSpreadsheetItem } from "../a
 import type { DocumentSearchResponse } from "@spreadsheet-app/shared";
 import { api } from "../api/client";
 import { DOCUMENT_TEMPLATES } from "../files/templates";
+import { queueListNotice, takeQueuedListNotice } from "../notice";
 import { appDialog, mountDialogHost, respondToDialog, type MockedApi } from "../testing";
 import SpreadsheetListView from "./SpreadsheetListView.vue";
 
@@ -68,6 +69,7 @@ async function waitForGallery(view: VueWrapper) {
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
+  takeQueuedListNotice();
 });
 
 afterEach(() => {
@@ -76,7 +78,17 @@ afterEach(() => {
   dialogHost?.unmount();
   dialogHost = undefined;
   router = undefined;
+  takeQueuedListNotice();
   vi.useRealTimers();
+});
+
+it("keeps a queued route error through the initial document list refresh", async () => {
+  const text = "That document was not found, or you do not have access to it.";
+  queueListNotice({ kind: "error", text });
+
+  const view = await render();
+
+  expect(view.get('[role="alert"]').text()).toContain(text);
 });
 
 it("imports and opens a selected document template", async () => {

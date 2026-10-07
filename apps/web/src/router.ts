@@ -3,6 +3,7 @@ import { useWorkbookStore } from "./stores/workbook";
 import { useSessionStore } from "./stores/session";
 import { useFormulaSessionStore } from "./formula/session";
 import { useDialog } from "./useDialog";
+import { queueListNotice } from "./notice";
 import AuthView from "./views/AuthView.vue";
 import EditorView from "./views/EditorView.vue";
 import HelpView from "./views/HelpView.vue";
@@ -16,8 +17,14 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
       { path: "/signup", name: "signup", component: AuthView, props: { mode: "signup" } },
       { path: "/", name: "spreadsheets", component: SpreadsheetListView },
       { path: "/s/:spreadsheetId/p/:pageId?", name: "editor", component: EditorView, props: true },
+      {
+        path: "/spreadsheets/:spreadsheetId",
+        name: "editor-document",
+        component: EditorView,
+        props: true,
+      },
       { path: "/help", name: "help", component: HelpView },
-      { path: "/:unknown(.*)*", redirect: "/" },
+      { path: "/:unknown(.*)*", name: "not-found", component: SpreadsheetListView },
     ],
     // Links within the help page point at its sections.
     scrollBehavior: (to) => (to.hash ? { el: to.hash } : { top: 0 }),
@@ -27,13 +34,14 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
   const SIGNED_OUT_ONLY = new Set(["login", "signup"]);
   /** Pages anyone can open. */
   const OPEN = new Set(["help"]);
+  const EDITOR_ROUTES = new Set(["editor", "editor-document"]);
   router.beforeEach(async (to, from) => {
     const formulas = useFormulaSessionStore();
     const dialog = useDialog();
     if (
       formulas.active &&
-      from.name === "editor" &&
-      (to.name !== "editor" || to.params.spreadsheetId !== from.params.spreadsheetId)
+      EDITOR_ROUTES.has(String(from.name)) &&
+      (!EDITOR_ROUTES.has(String(to.name)) || to.params.spreadsheetId !== from.params.spreadsheetId)
     ) {
       if (
         !(await dialog.confirm({
@@ -50,8 +58,8 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
     }
     if (
       formulas.active &&
-      from.name === "editor" &&
-      to.name === "editor" &&
+      EDITOR_ROUTES.has(String(from.name)) &&
+      EDITOR_ROUTES.has(String(to.name)) &&
       to.params.spreadsheetId === from.params.spreadsheetId &&
       to.params.pageId !== from.params.pageId &&
       formulas.active.mode === "cell" &&
@@ -61,6 +69,13 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
         formulas.focus();
         return false;
       }
+    }
+    if (to.name === "not-found") {
+      queueListNotice({
+        kind: "error",
+        text: "There is no page at " + to.path.slice(0, 80) + ".",
+      });
+      return { name: "spreadsheets", replace: true };
     }
     const name = typeof to.name === "string" ? to.name : "";
     if (OPEN.has(name)) return true;

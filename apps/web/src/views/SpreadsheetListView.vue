@@ -10,7 +10,7 @@ import ContextMenu from "../components/ContextMenu.vue";
 import ErrorWarning from "../components/ErrorWarning.vue";
 import NoticeMessage from "../components/NoticeMessage.vue";
 import { api, type FolderRecord, type ListedSpreadsheetItem } from "../api/client";
-import type { Notice } from "../notice";
+import { queuedListNotice, takeQueuedListNotice, type Notice } from "../notice";
 import type { MenuItem } from "../components/menu";
 import { APP_NAME } from "../appName";
 import { loadGalleryExamples, uniqueDocumentName, type GalleryExample } from "../files/gallery";
@@ -32,6 +32,12 @@ const searchResults = ref<DocumentSearchResponse | null>(null);
 const searchLoading = ref(false);
 const searchError = ref<string | null>(null);
 const notice = ref<Notice | null>(null);
+function receiveQueuedNotice(): void {
+  const queued = takeQueuedListNotice();
+  if (queued) notice.value = queued;
+}
+receiveQueuedNotice();
+watch(queuedListNotice, receiveQueuedNotice, { flush: "sync" });
 const creatingFolder = ref(false);
 const showingTemplates = ref(false);
 const galleryOpen = ref(false);
@@ -143,15 +149,20 @@ function searchMatchLabel(match: DocumentSearchMatch): string {
   return `${match.kind} · ${location}`;
 }
 
-async function run(action: () => Promise<void>): Promise<void> {
+async function run(
+  action: () => Promise<void>,
+  options: { preserveNotice?: boolean } = {},
+): Promise<void> {
   try {
     await action();
-    if (notice.value?.kind === "error") notice.value = null;
+    if (!options.preserveNotice && notice.value?.kind === "error") notice.value = null;
   } catch (cause) {
-    notice.value = {
-      kind: "error",
-      text: cause instanceof Error ? cause.message : "Something went wrong",
-    };
+    if (!options.preserveNotice || !notice.value) {
+      notice.value = {
+        kind: "error",
+        text: cause instanceof Error ? cause.message : "Something went wrong",
+      };
+    }
   }
 }
 
@@ -160,8 +171,6 @@ async function refreshData(): Promise<void> {
   folders.value = listed.folders;
   documents.value = listed.documents;
 }
-
-const refresh = (): Promise<void> => run(refreshData);
 
 const create = (): Promise<void> =>
   run(async () => {
@@ -471,7 +480,7 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-onMounted(refresh);
+onMounted(() => void run(refreshData, { preserveNotice: true }));
 onBeforeUnmount(() => {
   if (searchTimeout !== undefined) clearTimeout(searchTimeout);
   searchGeneration++;

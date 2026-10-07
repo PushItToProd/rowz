@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { api } from "../api/client";
+import { takeQueuedListNotice } from "../notice";
 import { changeWith, snapshotWith, wireSnapshot, type MockedApi } from "../testing";
 import EditorView from "./EditorView.vue";
 import { useWorkbookStore } from "../stores/workbook";
@@ -19,9 +20,11 @@ const matchMediaDescriptor = Object.getOwnPropertyDescriptor(window, "matchMedia
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
+  takeQueuedListNotice();
 });
 
 afterEach(() => {
+  takeQueuedListNotice();
   if (matchMediaDescriptor) Object.defineProperty(window, "matchMedia", matchMediaDescriptor);
   else Reflect.deleteProperty(window, "matchMedia");
 });
@@ -98,6 +101,40 @@ async function render(
   await flushPromises();
   return wrapper;
 }
+
+it.each([403, 404])("returns to the document list after a %i load response", async (status) => {
+  const wrapper = await render();
+  server.getSnapshot.mockRejectedValueOnce(
+    Object.assign(new Error("Private document details"), { status }),
+  );
+
+  await wrapper.setProps({ spreadsheetId: "missing" });
+  await flushPromises();
+
+  expect(wrapper.vm.$route.name).toBe("spreadsheets");
+  expect(takeQueuedListNotice()).toEqual({
+    kind: "error",
+    text: "That document was not found, or you do not have access to it.",
+  });
+  expect(wrapper.text()).not.toContain("Private document details");
+  wrapper.unmount();
+});
+
+it.each([
+  new Error("Offline"),
+  Object.assign(new Error("The server is unavailable"), { status: 500 }),
+])("keeps non-404 load failures on the editor", async (error) => {
+  const wrapper = await render();
+  server.getSnapshot.mockRejectedValueOnce(error);
+
+  await wrapper.setProps({ spreadsheetId: "unavailable" });
+  await flushPromises();
+
+  expect(wrapper.vm.$route.name).toBe("editor");
+  expect(wrapper.get('[role="alert"]').text()).toBe(error.message);
+  expect(takeQueuedListNotice()).toBeNull();
+  wrapper.unmount();
+});
 
 it("captures Ctrl/Cmd+F only inside the editor and F3 navigates an open find panel", async () => {
   const wrapper = await render("owner", false, true, { A1: "needle", A2: "needle" });

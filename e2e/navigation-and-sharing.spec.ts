@@ -107,7 +107,10 @@ test("spreadsheets are private to the account that made them", async ({ page }) 
   await signUp(page);
   await expect(page.getByText("No documents yet")).toBeVisible();
   await page.goto(privateUrl);
-  await expect(page.getByRole("alert")).toHaveText("Document not found");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("alert")).toContainText(
+    "That document was not found, or you do not have access to it.",
+  );
 
   await page.goto("/");
   await page.getByRole("button", { name: "Sign out" }).click();
@@ -115,6 +118,27 @@ test("spreadsheets are private to the account that made them", async ({ page }) 
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("link", { name: "Untitled document" })).toBeVisible();
+});
+
+test("explains missing document URLs and addresses with no route", async ({ page }) => {
+  await signUp(page);
+
+  await page.goto("/spreadsheets/" + crypto.randomUUID());
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("alert")).toContainText(
+    "That document was not found, or you do not have access to it.",
+  );
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+
+  await page.goto("/nonsense");
+  await expect(page).toHaveURL(/\/$/);
+  const notice = page.getByRole("alert");
+  await expect(notice).toContainText("There is no page at /nonsense.");
+  await notice.getByRole("button", { name: "Dismiss" }).click();
+  await expect(notice).toHaveCount(0);
 });
 
 test("folders organize documents in the list, and deleting one returns them to Unfiled", async ({

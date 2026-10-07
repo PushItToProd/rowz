@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAppRouter } from "./router";
+import { takeQueuedListNotice } from "./notice";
 import { useWorkbookStore } from "./stores/workbook";
 import { useSessionStore } from "./stores/session";
 import { useFormulaSessionStore } from "./formula/session";
@@ -13,11 +14,33 @@ let dialogHost: VueWrapper;
 beforeEach(() => {
   setActivePinia(createPinia());
   useSessionStore().user = { id: "u", name: "User", email: "user@example.com" };
+  takeQueuedListNotice();
   dialogHost = mountDialogHost();
 });
 
 afterEach(() => {
   dialogHost.unmount();
+  takeQueuedListNotice();
+});
+
+it.each(["/nonsense", "/" + "x".repeat(100)])(
+  "redirects unknown path %s to the document list with a text notice",
+  async (path) => {
+    const router = createAppRouter(createMemoryHistory());
+    await router.push(path);
+
+    expect(router.currentRoute.value.name).toBe("spreadsheets");
+    expect(router.currentRoute.value.fullPath).toBe("/");
+    expect(takeQueuedListNotice()).toEqual({
+      kind: "error",
+      text: "There is no page at " + path.slice(0, 80) + ".",
+    });
+  },
+);
+
+it("routes the requested spreadsheet URL to the editor", () => {
+  const router = createAppRouter(createMemoryHistory());
+  expect(router.resolve("/spreadsheets/document-id").name).toBe("editor-document");
 });
 
 describe("departure with a formula draft", () => {

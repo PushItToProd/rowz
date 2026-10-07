@@ -22,6 +22,7 @@ import AssertionsPanel from "../components/AssertionsPanel.vue";
 import HistoryPanel from "../components/HistoryPanel.vue";
 import RunsPanel from "../components/RunsPanel.vue";
 import NoticeMessage from "../components/NoticeMessage.vue";
+import { queueListNotice } from "../notice";
 import SharePanel from "../components/SharePanel.vue";
 import { useSessionStore } from "../stores/session";
 import { watchSpreadsheet } from "../api/live";
@@ -102,6 +103,11 @@ async function returnToEditor(pageId: string): Promise<void> {
 }
 
 const loadError = ref<string | null>(null);
+function isMissingOrForbiddenDocument(cause: unknown): boolean {
+  if (!(cause instanceof Error)) return false;
+  const status = (cause as Error & { status?: unknown }).status;
+  return status === 403 || status === 404;
+}
 const copying = ref(false);
 const pendingCopyNotice = ref<{
   spreadsheetId: string;
@@ -560,9 +566,18 @@ watch(
     try {
       await store.load(spreadsheetId);
     } catch (cause) {
-      if (isActive())
-        loadError.value =
-          cause instanceof Error ? cause.message : "The document could not be opened";
+      if (isActive()) {
+        if (isMissingOrForbiddenDocument(cause)) {
+          queueListNotice({
+            kind: "error",
+            text: "That document was not found, or you do not have access to it.",
+          });
+          await router.replace({ name: "spreadsheets" });
+        } else {
+          loadError.value =
+            cause instanceof Error ? cause.message : "The document could not be opened";
+        }
+      }
       return;
     }
     if (!isActive()) return;
