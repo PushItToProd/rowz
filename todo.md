@@ -452,9 +452,9 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - (Claude) missing on 2026-10-05: Ctrl+Arrow moves one cell and does not jump to the edge of the data. Home, Ctrl+Home, Ctrl+End, and PageDown do nothing in the grid, and End and PageUp were not tried. Ctrl+B and Ctrl+I do not format the selection
 - [x] identify where we should use in-app modals instead of browser-based `input` and alerts -- we have specific tasks for a couple of these already so this would just cover identifying anything I missed
   - (Claude) [docs/native-browser-ui-audit.md](docs/native-browser-ui-audit.md) lists them with replacement options
-- [ ] **P4** (Claude) replace the native `prompt`, `confirm`, and `alert` calls with in-app dialogs, following the audit. 13 call sites remain: five in `TableCard.vue`, and one each in `router.ts`, `SpreadsheetListView.vue`, `ScriptCard.vue`, `ConditionalFormatsPanel.vue`, `HistoryPanel.vue`, `TextCard.vue`, `ChartCard.vue`, and `SharePanel.vue` #everyday
+- [x] **P4** (Claude) replace the native `prompt`, `confirm`, and `alert` calls with in-app dialogs, following the audit. The 13 former confirmation call sites use the shared dialog host. #everyday
   - [x] remove the prompts for reversible deletes: deleting a row, a column, or a page, including ranges, is undone with its formulas and formats. See [DECISIONS.md](DECISIONS.md), "An action that undo reverses asks for no confirmation"
-  - (Claude) a native dialog also pauses browser automation, so an end-to-end test of the remaining native-dialog flows has to answer or replace it
+  - [x] (Claude) update end-to-end tests to interact with the in-app dialogs.
 - [ ] **P5** allow renaming, deleting, and duplicating docs from the docs list view #documents
   - (Claude) the list also has no search and no choice of sort order, and it allows two documents with one name: importing an exported file makes a second "QA Sales Book"
 
@@ -620,3 +620,6 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [x] **P0** Investigate a flaky e2e test: `e2e/data-tables-and-formatting.spec.ts:5` ("a spreadsheet is exported to a file and imported again, and a table to and from CSV") failed once in a full `pnpm e2e:remote` run (15.1s) and passed when the spec file ran alone. Added waits for chart editing to finish and saves to settle, and a reload to verify CSV persistence. Reproduction and browser validation remain blocked by sandbox `EPERM` connecting to `127.0.0.1:3200`; the original cause is unconfirmed #codebase
 
 - [ ] When another session adds a table while this user's "Add chart" request is pending, the new-block focus step can focus the other session's table (`AddBlockRow.vue` captures block IDs before the request) #small-apps
+
+- [ ] In `router.ts`, a navigation guard that awaits the leave-document dialog can discard a formula draft after a newer navigation (browser Back) superseded it; check the navigation is still current after the dialog #formula-editing
+- [ ] In `TableCard.vue` (column type conversion), the handler sets `sessions.columnPopover` after the confirmation dialog without checking the card is still mounted #data-tables

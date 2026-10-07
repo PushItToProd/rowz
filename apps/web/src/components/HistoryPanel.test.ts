@@ -3,7 +3,7 @@ import { changeWith } from "../testing";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type VersionListItem } from "../api/client";
-import type { MockedApi } from "../testing";
+import { appDialog, mountDialogHost, respondToDialog, type MockedApi } from "../testing";
 import HistoryPanel from "./HistoryPanel.vue";
 
 vi.mock("../api/client", async () => {
@@ -23,7 +23,7 @@ const VERSIONS: VersionListItem[] = [
 ];
 
 let wrapper: VueWrapper;
-const confirm = vi.spyOn(window, "confirm");
+let dialogHost: VueWrapper;
 
 async function render(canRestore = true): Promise<void> {
   wrapper = mount(HistoryPanel, {
@@ -42,12 +42,13 @@ function button(name: string, index = 0) {
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
-  confirm.mockReturnValue(true);
+  dialogHost = mountDialogHost();
   server.listVersions.mockResolvedValue(VERSIONS);
   server.restoreVersion.mockResolvedValue(changeWith(undefined));
 });
 afterEach(() => {
   wrapper.unmount();
+  dialogHost.unmount();
 });
 
 describe("HistoryPanel", () => {
@@ -71,12 +72,13 @@ describe("HistoryPanel", () => {
 
   it("restores a version after confirming, and says the spreadsheet must be read again", async () => {
     await render();
-    confirm.mockReturnValue(false);
     await button("Restore", 1).trigger("click");
+    expect(appDialog()?.textContent).toContain("Restore the version from");
+    await respondToDialog("cancel");
     expect(server.restoreVersion).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
     await button("Restore", 1).trigger("click");
+    await respondToDialog("confirm");
     await flushPromises();
     expect(server.restoreVersion).toHaveBeenCalledExactlyOnceWith("s1", "v1");
     expect(wrapper.emitted("restored")).toHaveLength(1);
@@ -106,6 +108,9 @@ describe("HistoryPanel", () => {
     await render();
     server.restoreVersion.mockRejectedValue(new Error("Version not found"));
     await button("Restore").trigger("click");
+    await flushPromises();
+    expect(appDialog()?.textContent).toContain("Restore the version from");
+    await respondToDialog("confirm");
     await flushPromises();
     expect(wrapper.get('[role="alert"]').text()).toBe("Version not found");
     expect(wrapper.emitted("restored")).toBeUndefined();

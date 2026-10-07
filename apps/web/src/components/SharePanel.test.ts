@@ -1,7 +1,7 @@
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type MemberRecord } from "../api/client";
-import type { MockedApi } from "../testing";
+import { appDialog, mountDialogHost, respondToDialog, type MockedApi } from "../testing";
 import SharePanel from "./SharePanel.vue";
 
 vi.mock("../api/client", async () => {
@@ -26,7 +26,7 @@ const GUEST: MemberRecord = {
 };
 
 let wrapper: VueWrapper;
-const confirm = vi.spyOn(window, "confirm");
+let dialogHost: VueWrapper;
 
 async function render(props: { owner?: boolean; userId?: string } = {}): Promise<void> {
   wrapper = mount(SharePanel, {
@@ -40,11 +40,12 @@ const row = (email: string) => wrapper.get(`[data-member="${email}"]`);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  confirm.mockReturnValue(true);
+  dialogHost = mountDialogHost();
   server.listMembers.mockResolvedValue([OWNER, GUEST]);
 });
 afterEach(() => {
   wrapper.unmount();
+  dialogHost.unmount();
 });
 
 describe("SharePanel", () => {
@@ -99,15 +100,15 @@ describe("SharePanel", () => {
 
   it("stops sharing with a guest after confirming", async () => {
     await render();
-    confirm.mockReturnValue(false);
     await row("bo@example.com").get("button").trigger("click");
+    expect(appDialog()?.textContent).toContain("Stop sharing with Bo?");
+    await respondToDialog("cancel");
     expect(server.unshare).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
     server.listMembers.mockResolvedValue([OWNER]);
     await row("bo@example.com").get("button").trigger("click");
+    await respondToDialog("confirm");
     await flushPromises();
-    expect(confirm).toHaveBeenLastCalledWith("Stop sharing with Bo?");
     expect(server.unshare).toHaveBeenCalledExactlyOnceWith("s1", "u2");
     expect(wrapper.find('[data-member="bo@example.com"]').exists()).toBe(false);
   });
@@ -120,6 +121,7 @@ describe("SharePanel", () => {
     expect(row("bo@example.com").get(".share__role").text()).toBe("Can edit");
 
     await row("bo@example.com").get("button").trigger("click");
+    await respondToDialog("confirm");
     await flushPromises();
     expect(server.unshare).toHaveBeenCalledExactlyOnceWith("s1", "u2");
     expect(wrapper.emitted("left")).toHaveLength(1);

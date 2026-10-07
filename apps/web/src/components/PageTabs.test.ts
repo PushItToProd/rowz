@@ -1,11 +1,11 @@
 import { wireSnapshot, changeWith } from "../testing";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import { api } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { snapshotWith, type MockedApi } from "../testing";
+import { appDialog, mountDialogHost, snapshotWith, type MockedApi } from "../testing";
 import PageTabs from "./PageTabs.vue";
 
 vi.mock("../api/client", async () => {
@@ -13,9 +13,9 @@ vi.mock("../api/client", async () => {
   return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
 });
 const server = api as unknown as MockedApi;
-const confirm = vi.spyOn(window, "confirm");
 
 let router: Router;
+let dialogHost: VueWrapper;
 
 async function render(role = "owner"): Promise<VueWrapper> {
   server.getSnapshot.mockResolvedValue(
@@ -49,7 +49,11 @@ async function render(role = "owner"): Promise<VueWrapper> {
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
-  confirm.mockReturnValue(false);
+  dialogHost = mountDialogHost();
+});
+
+afterEach(() => {
+  dialogHost.unmount();
 });
 
 describe("PageTabs", () => {
@@ -102,7 +106,7 @@ describe("PageTabs", () => {
     await wrapper.get('button[aria-label="Delete Page 1"]').trigger("click");
     await flushPromises();
 
-    expect(confirm).not.toHaveBeenCalled();
+    expect(appDialog()).toBeNull();
     expect(server.deletePage).toHaveBeenCalledExactlyOnceWith("p1");
     expect(router.currentRoute.value.params).toEqual({ spreadsheetId: "s1", pageId: "p2" });
     expect(useWorkbookStore().notice).toMatchObject({

@@ -12,9 +12,11 @@ import { APP_NAME } from "../appName";
 import { readSpreadsheetFile } from "../files/spreadsheetFile";
 import { usePageTitle } from "../pageTitle";
 import { useSessionStore } from "../stores/session";
+import { useDialog } from "../useDialog";
 
 const session = useSessionStore();
 const router = useRouter();
+const dialog = useDialog();
 usePageTitle("Documents");
 
 const folders = ref<FolderRecord[]>([]);
@@ -68,7 +70,15 @@ const importFile = (event: Event): Promise<void> =>
 
 const remove = (document: ListedSpreadsheetItem): Promise<void> =>
   run(async () => {
-    if (!window.confirm(`Delete ${document.name}? This cannot be undone.`)) return;
+    if (
+      !(await dialog.confirm({
+        title: "Delete document",
+        message: `Delete ${document.name}? This cannot be undone.`,
+        confirmLabel: "Delete document",
+        danger: true,
+      }))
+    )
+      return;
     await api.deleteSpreadsheet(document.id);
     await refreshData();
   });

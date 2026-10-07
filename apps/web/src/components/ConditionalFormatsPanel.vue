@@ -11,10 +11,12 @@ import { LIMITS, MAX_CONDITIONAL_RULES } from "@spreadsheet-app/shared";
 import { computed, ref } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore, type ConditionalAction } from "../stores/workbook";
+import { useDialog } from "../useDialog";
 
 const props = defineProps<{ table: TableRecord }>();
 const emit = defineEmits<{ close: [] }>();
 const store = useWorkbookStore();
+const dialog = useDialog();
 
 const rules = computed(() => props.table.conditionalFormats);
 /** The rules as the panel lists them: the one that wins comes first, which is the last one stored. */
@@ -101,8 +103,16 @@ async function move(index: number, by: -1 | 1): Promise<void> {
   else if (editing.value === index + by) editing.value = index;
 }
 
-function remove(index: number, rule: ConditionalRule): void {
-  if (!window.confirm(`Remove the conditional format for ${areaOf(rule)}?`)) return;
+async function remove(index: number, rule: ConditionalRule): Promise<void> {
+  if (
+    !(await dialog.confirm({
+      title: "Remove conditional format",
+      message: `Remove the conditional format for ${areaOf(rule)}?`,
+      confirmLabel: "Remove",
+      danger: true,
+    }))
+  )
+    return;
   if (editing.value === index) editing.value = null;
   void store.removeConditionalFormat(props.table.id, index);
 }

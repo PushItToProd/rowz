@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type Router, type RouterHistory } from 
 import { useWorkbookStore } from "./stores/workbook";
 import { useSessionStore } from "./stores/session";
 import { useFormulaSessionStore } from "./formula/session";
+import { useDialog } from "./useDialog";
 import AuthView from "./views/AuthView.vue";
 import EditorView from "./views/EditorView.vue";
 import HelpView from "./views/HelpView.vue";
@@ -28,12 +29,20 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
   const OPEN = new Set(["help"]);
   router.beforeEach(async (to, from) => {
     const formulas = useFormulaSessionStore();
+    const dialog = useDialog();
     if (
       formulas.active &&
       from.name === "editor" &&
       (to.name !== "editor" || to.params.spreadsheetId !== from.params.spreadsheetId)
     ) {
-      if (!window.confirm("Leave this document and discard the unsaved formula draft?")) {
+      if (
+        !(await dialog.confirm({
+          title: "Discard unsaved formula draft",
+          message: "Leave this document and discard the unsaved formula draft?",
+          confirmLabel: "Leave document",
+          danger: true,
+        }))
+      ) {
         formulas.focus();
         return false;
       }

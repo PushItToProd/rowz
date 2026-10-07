@@ -182,8 +182,9 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await expect(text).toBeVisible();
   await expect.poll(order).toEqual(["Text 1", "Fruit", "Chart 1"]);
 
-  page.once("dialog", (dialog) => void dialog.accept());
+  const deleteDialog = page.getByRole("alertdialog", { name: "Delete chart" });
   await chart.getByRole("button", { name: "Delete chart" }).click();
+  await deleteDialog.getByRole("button", { name: "Delete chart" }).click();
   await expect(chart).toHaveCount(0);
   await expect(text).toBeVisible();
 });

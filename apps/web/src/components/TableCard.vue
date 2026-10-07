@@ -7,6 +7,7 @@ import { download, fileName } from "../files/download";
 import type { TableRecord } from "../api/client";
 import { useFormulaSessionStore } from "../formula/session";
 import { undoNotice } from "../notice";
+import { useDialog } from "../useDialog";
 import { useWorkbookStore } from "../stores/workbook";
 import ContextMenu from "./ContextMenu.vue";
 import ChoicesPanel from "./ChoicesPanel.vue";
@@ -24,6 +25,7 @@ import type { MenuItem, MenuScope } from "./menu";
 const props = defineProps<{ table: TableRecord }>();
 const store = useWorkbookStore();
 const sessions = useFormulaSessionStore();
+const dialog = useDialog();
 
 /** The selected cell when it is in this table. Row and column actions apply to it. */
 const selected = computed(() =>
@@ -33,9 +35,16 @@ const selected = computed(() =>
 const view = computed(() => store.rowView(props.table.id));
 const colsFull = computed(() => props.table.colCount >= LIMITS.tableCols);
 
-function remove(): void {
-  if (window.confirm(`Delete ${props.table.name} and everything in it?`)) {
-    void store.deleteTable(props.table.id);
+async function remove(): Promise<void> {
+  if (
+    await dialog.confirm({
+      title: "Delete table",
+      message: `Delete ${props.table.name} and everything in it?`,
+      confirmLabel: "Delete table",
+      danger: true,
+    })
+  ) {
+    await store.deleteTable(props.table.id);
   }
 }
 
@@ -54,7 +63,12 @@ async function importCsv(event: Event): Promise<void> {
   const replaces = store.shownRows(props.table).length > 0;
   if (
     replaces &&
-    !window.confirm(`Replace the contents of ${props.table.name} with ${file.name}?`)
+    !(await dialog.confirm({
+      title: "Replace table contents",
+      message: `Replace the contents of ${props.table.name} with ${file.name}?`,
+      confirmLabel: "Replace",
+      danger: true,
+    }))
   ) {
     return;
   }
@@ -124,11 +138,26 @@ function holdsContentPast(rowCount: number, colCount: number): boolean {
 }
 
 /** Sets the table's size, asking first when a smaller one would discard content. */
-function resize({ rowCount, colCount }: { rowCount: number; colCount: number }): void {
+async function resize({
+  rowCount,
+  colCount,
+}: {
+  rowCount: number;
+  colCount: number;
+}): Promise<void> {
   const { id, name } = props.table;
   const size = `${String(colCount)} ${colCount === 1 ? "column" : "columns"} and ${String(rowCount)} ${rowCount === 1 ? "row" : "rows"}`;
   const asked = `Resizing ${name} to ${size} deletes content beyond the new size. Resize it?`;
-  if (holdsContentPast(rowCount, colCount) && !window.confirm(asked)) return;
+  if (
+    holdsContentPast(rowCount, colCount) &&
+    !(await dialog.confirm({
+      title: "Resize table",
+      message: asked,
+      confirmLabel: "Resize",
+      danger: true,
+    }))
+  )
+    return;
   resizing.value = false;
   if (rowCount === props.table.rowCount && colCount === props.table.colCount) return;
   void store.updateTable(id, { rowCount, colCount });
@@ -177,10 +206,17 @@ const namingItems: MenuItem[] = [
   },
 ];
 
-function dropColumns(): void {
+async function dropColumns(): Promise<void> {
   const computed = (props.table.columns ?? []).some((column) => column.type === "formula");
   const warning = computed ? " Its formula columns will become empty." : "";
-  if (window.confirm(`Remove the column names of ${props.table.name}?${warning}`)) {
+  if (
+    await dialog.confirm({
+      title: "Remove column names",
+      message: `Remove the column names of ${props.table.name}?${warning}`,
+      confirmLabel: "Remove names",
+      danger: true,
+    })
+  ) {
     void store.dropColumns(props.table.id);
   }
 }
@@ -261,14 +297,20 @@ function columnItems(col: number): MenuItem[] {
         const holdsInputs =
           column.type !== "formula" &&
           props.table.rows.some((_row, row) => store.inputOf({ tableId: id, row, col }) !== "");
-        if (
-          holdsInputs &&
-          !window.confirm(
-            `Make ${props.table.name}[${column.name}] a formula column and remove its stored inputs?`,
-          )
-        )
-          return;
-        sessions.columnPopover = { tableId: id, colId };
+        void (async () => {
+          if (
+            holdsInputs &&
+            !(await dialog.confirm({
+              title: "Convert column to formula",
+              message: `Make ${props.table.name}[${column.name}] a formula column and remove its stored inputs?`,
+              confirmLabel: "Convert",
+              danger: true,
+            }))
+          ) {
+            return;
+          }
+          sessions.columnPopover = { tableId: id, colId };
+        })();
       },
     },
   ];

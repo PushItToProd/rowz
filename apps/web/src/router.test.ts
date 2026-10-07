@@ -1,14 +1,23 @@
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory } from "vue-router";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAppRouter } from "./router";
 import { useWorkbookStore } from "./stores/workbook";
 import { useSessionStore } from "./stores/session";
 import { useFormulaSessionStore } from "./formula/session";
+import { appDialog, mountDialogHost, respondToDialog } from "./testing";
+import type { VueWrapper } from "@vue/test-utils";
+
+let dialogHost: VueWrapper;
 
 beforeEach(() => {
   setActivePinia(createPinia());
   useSessionStore().user = { id: "u", name: "User", email: "user@example.com" };
+  dialogHost = mountDialogHost();
+});
+
+afterEach(() => {
+  dialogHost.unmount();
 });
 
 describe("departure with a formula draft", () => {
@@ -27,22 +36,26 @@ describe("departure with a formula draft", () => {
       save,
     );
     const state = sessions.active!.state;
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    try {
-      await router.push("/s/s1/p/p2");
-      expect(confirm).not.toHaveBeenCalled();
-      expect(sessions.active!.state).toBe(state);
-      await router.push("/");
-      expect(router.currentRoute.value.fullPath).toBe("/s/s1/p/p2");
-      expect(sessions.active!.state).toBe(state);
-      confirm.mockReturnValue(true);
-      await router.push("/s/s2/p/p3");
-      expect(router.currentRoute.value.fullPath).toBe("/s/s2/p/p3");
-      expect(sessions.active).toBeUndefined();
-      expect(save).not.toHaveBeenCalled();
-    } finally {
-      confirm.mockRestore();
-    }
+    await router.push("/s/s1/p/p2");
+    expect(appDialog()).toBeNull();
+    expect(sessions.active!.state).toBe(state);
+    const deniedNavigation = router.push("/");
+    await vi.waitFor(() => {
+      expect(appDialog()?.textContent).toContain("Leave this document");
+    });
+    await respondToDialog("cancel");
+    await deniedNavigation;
+    expect(router.currentRoute.value.fullPath).toBe("/s/s1/p/p2");
+    expect(sessions.active!.state).toBe(state);
+    const allowedNavigation = router.push("/s/s2/p/p3");
+    await vi.waitFor(() => {
+      expect(appDialog()).not.toBeNull();
+    });
+    await respondToDialog("confirm");
+    await allowedNavigation;
+    expect(router.currentRoute.value.fullPath).toBe("/s/s2/p/p3");
+    expect(sessions.active).toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
   });
   it.each(["1", "=", "=B2"])(
     "uses the current cell draft %j to decide whether page browsing saves",

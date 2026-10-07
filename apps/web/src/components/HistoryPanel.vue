@@ -3,7 +3,9 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 import { api, type VersionListItem } from "../api/client";
 
 import { useWorkbookStore } from "../stores/workbook";
+import { useDialog } from "../useDialog";
 const store = useWorkbookStore();
+const dialog = useDialog();
 
 const props = defineProps<{ spreadsheetId: string; canRestore: boolean }>();
 const emit = defineEmits<{
@@ -37,10 +39,18 @@ const refresh = (): Promise<void> =>
     versions.value = await api.listVersions(props.spreadsheetId);
   });
 
-function restore(version: VersionListItem): Promise<void> {
+async function restore(version: VersionListItem): Promise<void> {
   const asked = `Restore the version from ${when(version)}? The current document is saved as a version first, so you can undo this.`;
-  if (!window.confirm(asked)) return Promise.resolve();
-  return run(version.id, async () => {
+  if (
+    !(await dialog.confirm({
+      title: "Restore version",
+      message: asked,
+      confirmLabel: "Restore",
+      danger: true,
+    }))
+  )
+    return;
+  await run(version.id, async () => {
     await store.restoreVersion(props.spreadsheetId, version.id);
     emit("restored");
     await refresh();

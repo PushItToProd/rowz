@@ -8,7 +8,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { download } from "../files/download";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, notifyJournaled, savedCells, snapshotWith, TABLE, type MockedApi } from "../testing";
+import {
+  appDialog,
+  at,
+  mountDialogHost,
+  notifyJournaled,
+  respondToDialog,
+  savedCells,
+  snapshotWith,
+  TABLE,
+  type MockedApi,
+} from "../testing";
 import { EditorView } from "@codemirror/view";
 import { useFormulaSessionStore } from "../formula/session";
 import FormulaBar from "./FormulaBar.vue";
@@ -27,7 +37,7 @@ vi.mock("../files/download", () => ({
 const server = api as unknown as MockedApi;
 
 let wrapper: VueWrapper;
-const confirm = vi.spyOn(window, "confirm");
+let dialogHost: VueWrapper;
 
 async function render(inputs: Record<string, string> = {}, role = "owner"): Promise<void> {
   server.getSnapshot.mockResolvedValue(wireSnapshot(snapshotWith(inputs, role)));
@@ -49,13 +59,14 @@ function button(name: string) {
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
-  confirm.mockReturnValue(true);
+  dialogHost = mountDialogHost();
   server.editTable.mockResolvedValue(
     changeWith({ table: TABLE, cells: [], views: [], tables: [] }),
   );
 });
 afterEach(() => {
   wrapper.unmount();
+  dialogHost.unmount();
 });
 
 describe("row and column actions", () => {
@@ -145,7 +156,7 @@ describe("row and column actions", () => {
     await vi.waitFor(() => {
       expect(server.editTable).toHaveBeenCalledExactlyOnceWith("t1", expectedEdit(edit));
     });
-    expect(confirm).not.toHaveBeenCalled();
+    expect(appDialog()).toBeNull();
   });
 
   it("deletes a row or column that holds content without asking and offers undo", async () => {
@@ -154,7 +165,7 @@ describe("row and column actions", () => {
 
     await button("Delete row").trigger("click");
     await flushPromises();
-    expect(confirm).not.toHaveBeenCalled();
+    expect(appDialog()).toBeNull();
     expect(server.editTable).toHaveBeenCalledOnce();
     expect(useWorkbookStore().notice).toMatchObject({
       kind: "success",
@@ -166,7 +177,7 @@ describe("row and column actions", () => {
     await select("A1");
     await button("Delete column").trigger("click");
     await flushPromises();
-    expect(confirm).not.toHaveBeenCalled();
+    expect(appDialog()).toBeNull();
     expect(server.editTable).toHaveBeenCalledOnce();
     expect(useWorkbookStore().notice).toMatchObject({
       kind: "success",
@@ -264,7 +275,7 @@ describe("table actions", () => {
         colCount: 6,
       });
     });
-    expect(confirm).not.toHaveBeenCalled();
+    expect(appDialog()).toBeNull();
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
   });
 
@@ -273,16 +284,16 @@ describe("table actions", () => {
     server.updateTable.mockResolvedValue(
       changeWith({ table: TABLE, cells: [], views: [], tables: [] }),
     );
-    confirm.mockReturnValue(false);
     await resizeTo("2", "4");
-    expect(confirm).toHaveBeenCalledExactlyOnceWith(
+    expect(appDialog()?.textContent).toContain(
       "Resizing Table 1 to 2 columns and 4 rows deletes content beyond the new size. Resize it?",
     );
     expect(server.updateTable).not.toHaveBeenCalled();
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
 
-    confirm.mockReturnValue(true);
+    await respondToDialog("cancel");
     await wrapper.get('[role="dialog"]').trigger("submit");
+    await respondToDialog("confirm");
     await vi.waitFor(() => {
       expect(server.updateTable).toHaveBeenCalledExactlyOnceWith("t1", {
         rowCount: 4,
@@ -297,7 +308,7 @@ describe("table actions", () => {
       changeWith({ table: TABLE, cells: [], views: [], tables: [] }),
     );
     await resizeTo("2", "2");
-    expect(confirm).not.toHaveBeenCalled();
+    expect(appDialog()).toBeNull();
     await vi.waitFor(() => {
       expect(server.updateTable).toHaveBeenCalledOnce();
     });
@@ -335,12 +346,12 @@ describe("table actions", () => {
 
   it("deletes the table after confirmation", async () => {
     await render();
-    confirm.mockReturnValue(false);
     await button("Delete table").trigger("click");
+    await respondToDialog("cancel");
     expect(server.deleteTable).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
     await button("Delete table").trigger("click");
+    await respondToDialog("confirm");
     expect(server.deleteTable).toHaveBeenCalledExactlyOnceWith("t1");
   });
 });
@@ -434,7 +445,7 @@ describe("the menu of row, column, and cell actions", () => {
     await openOnRange("B2", "C4");
     await item("Delete rows 2-4").trigger("click");
     await flushPromises();
-    expect(confirm).not.toHaveBeenCalled();
+    expect(appDialog()).toBeNull();
     expect(server.editTable).toHaveBeenCalledOnce();
     expect(useWorkbookStore().notice).toMatchObject({
       kind: "success",
@@ -445,7 +456,7 @@ describe("the menu of row, column, and cell actions", () => {
     await wrapper.get('[data-cell="C4"]').trigger("contextmenu");
     await item("Delete columns B-C").trigger("click");
     await flushPromises();
-    expect(confirm).not.toHaveBeenCalled();
+    expect(appDialog()).toBeNull();
     expect(server.editTable).toHaveBeenCalledTimes(2);
     expect(useWorkbookStore().notice).toMatchObject({
       kind: "success",
@@ -560,7 +571,7 @@ describe("files", () => {
     const store = useWorkbookStore();
     expect(store.valueOf(at("B2"))).toBe(2);
     expect(store.selectedRange).toEqual({ startRow: 0, endRow: 1, startCol: 0, endCol: 1 });
-    expect(confirm).not.toHaveBeenCalled();
+    expect(appDialog()).toBeNull();
   });
 
   it("grows the table to fit the file", async () => {
@@ -585,15 +596,14 @@ describe("files", () => {
 
   it("asks before importing over a table that holds something", async () => {
     await render({ C3: "kept" });
-    confirm.mockReturnValue(false);
     await choose("data.csv", "x");
-    expect(confirm).toHaveBeenCalledExactlyOnceWith(
-      "Replace the contents of Table 1 with data.csv?",
-    );
+    await flushPromises();
+    expect(appDialog()?.textContent).toContain("Replace the contents of Table 1 with data.csv?");
+    await respondToDialog("cancel");
     expect(server.setCells).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
     await choose("data.csv", "x");
+    await respondToDialog("confirm");
     expect(server.setCells).toHaveBeenCalledExactlyOnceWith(
       "t1",
       [{ rowId: "r0", colId: "c1", input: "x" }],
@@ -657,14 +667,14 @@ describe("column names", () => {
     await renderData();
     server.dropColumns.mockResolvedValue(changeWith(TABLE));
     expect(wrapper.findAll("button").some((found) => found.text() === "Name columns")).toBe(false);
-    confirm.mockReturnValue(false);
     await button("Remove column names").trigger("click");
-    expect(confirm).toHaveBeenCalledExactlyOnceWith(
+    expect(appDialog()?.textContent).toContain(
       "Remove the column names of Table 1? Its formula columns will become empty.",
     );
+    await respondToDialog("cancel");
     expect(server.dropColumns).not.toHaveBeenCalled();
-    confirm.mockReturnValue(true);
     await button("Remove column names").trigger("click");
+    await respondToDialog("confirm");
     expect(server.dropColumns).toHaveBeenCalledExactlyOnceWith("t1");
   });
 
@@ -699,6 +709,8 @@ describe("column names", () => {
     await item(
       address === "C1" ? "✓ Column holds: A formula…" : "Column holds: A formula…",
     ).trigger("click");
+    await flushPromises();
+    if (appDialog()) await respondToDialog("confirm");
     await flushPromises();
     return columnEditor();
   }
@@ -813,16 +825,15 @@ describe("column names", () => {
     await renderData();
     await useWorkbookStore().setCell(at("B1"), "4");
     await flushPromises();
-    confirm.mockReturnValueOnce(false);
     await wrapper.get('[data-cell="B1"]').trigger("contextmenu");
     await item("Column holds: A formula…").trigger("click");
     await flushPromises();
-    expect(confirm).toHaveBeenCalledWith(
+    expect(appDialog()?.textContent).toContain(
       "Make Table 1[Qty] a formula column and remove its stored inputs?",
     );
+    await respondToDialog("cancel");
     expect(wrapper.find(".column-formula-popover").exists()).toBe(false);
     expect(server.updateColumn).not.toHaveBeenCalled();
-    confirm.mockReturnValueOnce(true);
     const view = await openFormula("B1");
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "[Price] * 2" } });
     await button("Apply").trigger("click");

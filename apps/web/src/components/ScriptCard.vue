@@ -9,9 +9,11 @@ import { sameEditingTarget, useFormulaSessionStore } from "../formula/session";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
 import { shown } from "./shownValue";
+import { useDialog } from "../useDialog";
 
 const props = defineProps<{ view: ViewRecord }>();
 const store = useWorkbookStore();
+const dialog = useDialog();
 
 const sessions = useFormulaSessionStore();
 const target = { kind: "script" as const, viewId: props.view.id };
@@ -37,8 +39,17 @@ async function edit(): Promise<void> {
   sessions.focus();
 }
 
-function remove(): void {
-  if (window.confirm(`Delete ${props.view.name}?`)) void store.deleteView(props.view.id);
+async function remove(): Promise<void> {
+  if (
+    await dialog.confirm({
+      title: "Delete script",
+      message: `Delete ${props.view.name}?`,
+      confirmLabel: "Delete script",
+      danger: true,
+    })
+  ) {
+    await store.deleteView(props.view.id);
+  }
 }
 
 /** Each statement of the saved source, with the value of each name. */

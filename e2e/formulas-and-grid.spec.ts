@@ -271,11 +271,10 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
   await expect(resize.getByLabel("Rows")).toHaveValue("21");
   await resize.getByLabel("Columns").fill("3");
   await resize.getByLabel("Rows").fill("3");
-  page.once("dialog", (dialog) => {
-    expect(dialog.message()).toContain("Resizing Table 1 to 3 columns and 3 rows deletes");
-    void dialog.accept();
-  });
+  const resizeConfirm = page.getByRole("alertdialog", { name: "Resize table" });
   await resize.getByRole("button", { name: "Resize" }).click();
+  await expect(resizeConfirm).toContainText("Resizing Table 1 to 3 columns and 3 rows deletes");
+  await resizeConfirm.getByRole("button", { name: "Resize" }).click();
   await expect(resize).toHaveCount(0);
   await expect(table.locator("tbody tr")).toHaveCount(3);
   await expect(cell(page, "D1")).toHaveCount(0);

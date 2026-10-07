@@ -63,9 +63,6 @@ async function trim(page: Page, table: string, rows: number, columns: number): P
 test("capture the README screenshots", async ({ page }) => {
   test.setTimeout(180_000);
 
-  // A formula column asks for its formula.
-  page.on("dialog", (dialog) => void dialog.accept("=[Price] * [Qty]"));
-
   await page.goto("/signup");
   await page.getByLabel("Name").fill("Ada");
   await page.getByLabel("Email").fill(`ada-${crypto.randomUUID()}@example.com`);
@@ -103,6 +100,8 @@ test("capture the README screenshots", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
   await choose("Paid", "Column holds: Checkbox");
   await choose("Column 1", "Column holds: A formula…");
+  await page.getByLabel("Column formula").fill("=[Price] * [Qty]");
+  await page.getByRole("button", { name: "Apply" }).click();
   await header("Column 1").getByText("Column 1").dblclick();
   await page.getByLabel("Column name").fill("Total");
   await page.getByLabel("Column name").press("Enter");

@@ -7,11 +7,13 @@ import { useWorkbookStore } from "../stores/workbook";
 import ChartView from "./ChartView.vue";
 import SessionFormulaField from "./SessionFormulaField.vue";
 import { useFormulaSessionStore } from "../formula/session";
+import { useDialog } from "../useDialog";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
 
 const props = defineProps<{ view: ViewRecord }>();
 const store = useWorkbookStore();
+const dialog = useDialog();
 
 const TYPES: readonly { value: ChartType; label: string }[] = [
   { value: "bar", label: "Bar" },
@@ -40,7 +42,16 @@ async function rename(name: string): Promise<void> {
 }
 async function remove(): Promise<void> {
   if (!(await ready())) return;
-  if (window.confirm(`Delete ${props.view.name}?`)) await store.deleteView(props.view.id);
+  if (
+    await dialog.confirm({
+      title: "Delete chart",
+      message: `Delete ${props.view.name}?`,
+      confirmLabel: "Delete chart",
+      danger: true,
+    })
+  ) {
+    await store.deleteView(props.view.id);
+  }
 }
 
 /** The data to draw, or why there is none. */

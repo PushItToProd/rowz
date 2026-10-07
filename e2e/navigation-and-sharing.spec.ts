@@ -211,8 +211,9 @@ test("a spreadsheet is shared with another account, which can edit it until the 
   await expect(guest.getByRole("button", { name: "Delete table" })).toHaveCount(0);
 
   // Ending the share takes the spreadsheet away.
-  page.once("dialog", (dialog) => void dialog.accept());
+  const stopSharing = page.getByRole("alertdialog", { name: "Stop sharing" });
   await share.getByRole("button", { name: "Stop sharing with Ada" }).click();
+  await stopSharing.getByRole("button", { name: "Stop sharing" }).click();
   await expect(share.locator(`[data-member="${guestEmail}"]`)).toHaveCount(0);
   await expect(guest.getByRole("alert")).toContainText("not found");
   await guestContext.close();

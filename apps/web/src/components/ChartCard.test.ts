@@ -4,7 +4,14 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, snapshotWith, type MockedApi } from "../testing";
+import {
+  appDialog,
+  at,
+  mountDialogHost,
+  respondToDialog,
+  snapshotWith,
+  type MockedApi,
+} from "../testing";
 import ChartCard from "./ChartCard.vue";
 import { EditorView } from "@codemirror/view";
 import { useFormulaSessionStore } from "../formula/session";
@@ -28,7 +35,7 @@ const CHART: ViewRecord = {
 const CELLS = { A1: "apples", B1: "3", A2: "pears", B2: "5", A3: "plums", B3: "=B1+B2" };
 
 let wrapper: VueWrapper;
-const confirm = vi.spyOn(window, "confirm");
+let dialogHost: VueWrapper;
 
 /** Shows the store's first view, so the card follows changes the store makes to it. */
 async function render(view: Partial<ViewRecord> = {}, role = "owner"): Promise<void> {
@@ -53,13 +60,14 @@ async function render(view: Partial<ViewRecord> = {}, role = "owner"): Promise<v
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
-  confirm.mockReturnValue(true);
+  dialogHost = mountDialogHost();
   server.updateView.mockImplementation((_id, changes) =>
     Promise.resolve(changeWith({ ...CHART, ...changes })),
   );
 });
 afterEach(() => {
   wrapper.unmount();
+  dialogHost.unmount();
 });
 
 async function editSource(text: string): Promise<EditorView> {
@@ -219,7 +227,7 @@ describe("ChartCard", () => {
     await wrapper.get("button.danger").trigger("click");
     await flushPromises();
     expect(server.deleteView).not.toHaveBeenCalled();
-    expect(confirm).not.toHaveBeenCalled();
+    expect(appDialog()).toBeNull();
   });
 
   it("keeps a draft when its chart unmounts and reports deletion only on submission", async () => {
@@ -244,12 +252,15 @@ describe("ChartCard", () => {
 
   it("deletes the chart after confirming", async () => {
     await render();
-    confirm.mockReturnValue(false);
     await wrapper.get("button.danger").trigger("click");
+    await flushPromises();
+    expect(appDialog()?.textContent).toContain("Delete Chart 1?");
+    await respondToDialog("cancel");
     expect(server.deleteView).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
     await wrapper.get("button.danger").trigger("click");
+    await flushPromises();
+    await respondToDialog("confirm");
     expect(server.deleteView).toHaveBeenCalledWith("v1");
   });
 

@@ -5,7 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConditionalRule } from "@spreadsheet-app/engine";
 import { api } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, snapshotWith, TABLE, type MockedApi } from "../testing";
+import {
+  appDialog,
+  at,
+  mountDialogHost,
+  respondToDialog,
+  snapshotWith,
+  TABLE,
+  type MockedApi,
+} from "../testing";
 import ConditionalFormatsPanel from "./ConditionalFormatsPanel.vue";
 
 vi.mock("../api/client", async () => {
@@ -15,6 +23,7 @@ vi.mock("../api/client", async () => {
 const server = api as unknown as MockedApi;
 
 let wrapper: VueWrapper;
+let dialogHost: VueWrapper;
 
 const RULES: ConditionalRule[] = [
   {
@@ -47,9 +56,11 @@ async function render(
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
+  dialogHost = mountDialogHost();
 });
 afterEach(() => {
   wrapper.unmount();
+  dialogHost.unmount();
 });
 
 describe("ConditionalFormatsPanel", () => {
@@ -123,10 +134,10 @@ describe("ConditionalFormatsPanel", () => {
 
   it("removes a rule, and gives a viewer the list without the controls", async () => {
     await render(RULES);
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     await wrapper.get('button[aria-label="Remove the rule for B1:B"]').trigger("click");
+    expect(appDialog()?.textContent).toContain("Remove the conditional format for B1:B?");
+    await respondToDialog("confirm");
     await flushPromises();
-    expect(confirm).toHaveBeenCalledOnce();
     expect(server.setConditionalFormats.mock.calls[0]?.[1]).toMatchObject([{ kind: "scale" }]);
     wrapper.unmount();
     setActivePinia(createPinia());
@@ -137,8 +148,8 @@ describe("ConditionalFormatsPanel", () => {
 
   it("keeps the rule when the confirmation to remove it is declined", async () => {
     await render(RULES);
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     await wrapper.get('button[aria-label="Remove the rule for B1:B"]').trigger("click");
+    await respondToDialog("cancel");
     await flushPromises();
     expect(server.setConditionalFormats).not.toHaveBeenCalled();
   });

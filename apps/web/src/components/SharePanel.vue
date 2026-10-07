@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { api, type MemberRecord } from "../api/client";
+import { useDialog } from "../useDialog";
 
 const props = defineProps<{
   spreadsheetId: string;
@@ -23,6 +24,7 @@ const busy = ref(false);
 const email = ref("");
 const role = ref<ShareRole>("editor");
 const panel = ref<HTMLElement>();
+const dialog = useDialog();
 
 const ROLE_LABELS = { owner: "Owner", editor: "Can edit", viewer: "Can view" } as const;
 
@@ -56,13 +58,21 @@ function changeRole(member: MemberRecord, event: Event): Promise<void> {
   });
 }
 
-function remove(member: MemberRecord): Promise<void> {
+async function remove(member: MemberRecord): Promise<void> {
   const own = member.userId === props.userId;
   const asked = own
     ? "Leave this document? You will need to be given it again to open it."
     : `Stop sharing with ${member.name}?`;
-  if (!window.confirm(asked)) return Promise.resolve();
-  return run(async () => {
+  if (
+    !(await dialog.confirm({
+      title: own ? "Leave document" : "Stop sharing",
+      message: asked,
+      confirmLabel: own ? "Leave" : "Stop sharing",
+      danger: true,
+    }))
+  )
+    return;
+  await run(async () => {
     await api.unshare(props.spreadsheetId, member.userId);
     if (own) emit("left");
     else members.value = await api.listMembers(props.spreadsheetId);

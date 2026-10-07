@@ -6,6 +6,8 @@ import {
 } from "@spreadsheet-app/shared";
 import { parseAddress, type CellId } from "@spreadsheet-app/engine";
 import { vi, expect, beforeEach, type Mock } from "vitest";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import DialogHost from "./components/DialogHost.vue";
 import type {
   api,
   Change,
@@ -123,6 +125,35 @@ let nextRevision = 0;
 beforeEach(() => {
   nextRevision = 0;
 });
+
+/** Mounts the app-wide dialog host for component tests. */
+export function mountDialogHost(): VueWrapper {
+  return mount(DialogHost, { attachTo: document.body });
+}
+
+export function appDialog(): HTMLElement | null {
+  return document.querySelector<HTMLElement>("[data-app-dialog] .dialog-host");
+}
+
+/** Clicks a button in the currently displayed promise-based dialog. */
+export async function respondToDialog(action: "confirm" | "cancel" | "close"): Promise<void> {
+  await flushPromises();
+  const button = document.querySelector<HTMLButtonElement>(
+    `[data-app-dialog] [data-dialog-action="${action}"]`,
+  );
+  if (!button) throw new Error(`No app dialog button for ${action}`);
+  button.click();
+  await flushPromises();
+}
+
+export async function fillDialogInput(value: string): Promise<void> {
+  await flushPromises();
+  const input = document.querySelector<HTMLInputElement>("[data-dialog-input]");
+  if (!input) throw new Error("No app dialog input");
+  input.value = value;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  await flushPromises();
+}
 
 type CellFixture = (CellId | IdentifiedCell) & { input: string };
 interface ContentFixture {

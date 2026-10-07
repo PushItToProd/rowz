@@ -5,7 +5,16 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type ViewRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { at, clickResult, identifiedAt, snapshotWith, type MockedApi } from "../testing";
+import {
+  appDialog,
+  at,
+  clickResult,
+  identifiedAt,
+  mountDialogHost,
+  respondToDialog,
+  snapshotWith,
+  type MockedApi,
+} from "../testing";
 import TextCard from "./TextCard.vue";
 
 vi.mock("../api/client", async () => {
@@ -40,7 +49,7 @@ async function replaceDraft(text: string): Promise<void> {
   await flushPromises();
 }
 
-const confirm = vi.spyOn(window, "confirm");
+let dialogHost: VueWrapper;
 
 async function render(source: string, role = "owner"): Promise<void> {
   server.getSnapshot.mockResolvedValue(
@@ -72,13 +81,14 @@ const shown = () => wrapper.get(".text-view");
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
-  confirm.mockReturnValue(true);
+  dialogHost = mountDialogHost();
   server.updateView.mockImplementation((_id, changes) =>
     Promise.resolve(changeWith({ ...TEXT, ...changes })),
   );
 });
 afterEach(() => {
   wrapper.unmount();
+  dialogHost.unmount();
 });
 
 describe("TextCard", () => {
@@ -532,12 +542,13 @@ describe("TextCard", () => {
 
   it("deletes the view after confirming", async () => {
     await render("text");
-    confirm.mockReturnValue(false);
     await button("Delete text").trigger("click");
+    expect(appDialog()?.textContent).toContain("Delete Text 1?");
+    await respondToDialog("cancel");
     expect(server.deleteView).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
     await button("Delete text").trigger("click");
+    await respondToDialog("confirm");
     expect(server.deleteView).toHaveBeenCalledWith("v1");
   });
 

@@ -172,8 +172,9 @@ test("a deleted row is brought back from the history, and a version opens as a c
     .filter({ hasText: "Before deleting row 1 of Table 1" });
   await expect(version).toBeVisible();
 
-  page.once("dialog", (dialog) => void dialog.accept());
+  const restoreDialog = page.getByRole("alertdialog", { name: "Restore version" });
   await version.getByRole("button", { name: "Restore" }).click();
+  await restoreDialog.getByRole("button", { name: "Restore" }).click();
   await expect(page.getByRole("status")).toHaveText(/The version was restored/);
   await expect(cell(page, "A1")).toHaveText("keep me");
   await expect(cell(page, "A2")).toHaveText("and me");
