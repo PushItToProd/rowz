@@ -162,7 +162,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] support optional named arguments to formula functions
   - [ ] **P6** plan before implementing so we can see how hard this would be #formula-language
   - example use case: `=QUERY(Table1!A:A, "select *", column_headers=False)`
-- [ ] **P4** add a `default`/`else` case to `IFS` so you could write either `IFS(x > 100, "foo", x > 0 "bar", "default value")` or, maybe for familiarity/compatibility `IFS(x > 100, "foo", x > 0 "bar", default="default value")` #formula-language
+- [x] add an optional trailing default argument to `IFS` for when no condition is true #formula-language
 - [ ] **Hold** functions that expect one value (IF, UPPER, ...) do not work cell by cell on a range; only operators do. MAP is the workaround. #formula-language
   - [ ] Related: `=UPPER(A:A)` could mean this row's cell, as `=A:A & ""` now does. -- that is, if e.g. D2 = `=UPPER(A:A)`, it should be equivalent to `=UPPER(A2)`
 - [x] **P4** `MAP` doesn't take built-in function names as args - `MAP(A:A, UPPER)` should work but right now it errors with `#NAME?`

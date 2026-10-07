@@ -270,10 +270,10 @@ const ENTRIES: readonly FunctionDoc[] = [
   {
     name: "IFS",
     category: "Logic",
-    syntax: "IFS(condition, value, ...)",
+    syntax: "IFS(condition, value, ..., [default])",
     summary:
-      "Gives the value that follows the first true condition. Later pairs are not evaluated.",
-    example: 'IFS(A1 > 2, "big", A1 > 0, "small")',
+      "Tests conditions in order and gives the value after the first true condition. With an odd argument count, the last argument is the default when no condition is true. Conditions and returned values are evaluated only as reached. Without a default, no match gives #N/A.",
+    example: 'IFS(A1 > 2, "big", A1 > 0, "small", "not positive")',
   },
   {
     name: "SWITCH",
@@ -1576,7 +1576,8 @@ export const errorDocs: Record<ErrorCode, string> = {
     "A value is the wrong kind: text where a number is needed, or a range where a single value is needed.",
   "#REF!": "The formula names a page or table that does not exist.",
   "#NAME?": "The formula uses a function or a word that is not known.",
-  "#N/A": "A lookup or regular expression found no match, or no case of IFS or SWITCH applied.",
+  "#N/A":
+    "A lookup or regular expression found no match, or IFS had no true condition without a default or SWITCH had no matching case without a default.",
   "#SPILL!":
     "The result is several values, but the table may not have enough room or cells in the result range may already have values.",
   "#CYCLE!": "The formula depends on its own cell, directly or through other cells.",

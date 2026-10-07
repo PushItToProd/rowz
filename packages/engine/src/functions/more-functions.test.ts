@@ -111,6 +111,9 @@ describe("logic and information", () => {
   it.each<[string, CellValue]>([
     ['=IFS(A1 > 5, "big", A1 > 0, "small")', "small"],
     ['=IFS(TRUE, "first", 1/0, "never evaluated")', "first"],
+    ['=IFS(A1 > 100, "foo", A1 > 0, "bar", "default value")', "bar"],
+    ['=IFS(TRUE, "first", 1/0, "never evaluated", 1/0)', "first"],
+    ['=IFS(FALSE, "a", "default value")', "default value"],
     ['=SWITCH(A1, 1, "one", 2, "two")', "one"],
     ['=SWITCH(A2, 1, "one", 2, "two", "other")', "two"],
     ['=SWITCH(9, 1, "one", "other")', "other"],
@@ -135,8 +138,11 @@ describe("logic and information", () => {
 
   it.each([
     ['=IFS(FALSE, "a", 0, "b")', "#N/A"],
-    ['=IFS(TRUE, "a", FALSE)', "#ERROR!"],
+    ["=IFS(FALSE)", "#ERROR!"],
     ['=IFS("maybe", 1)', "#VALUE!"],
+    ['=IFS("maybe", 1, "default")', "#VALUE!"],
+    ['=IFS(TRUE, 1/0, "default")', "#DIV/0!"],
+    ['=IFS(FALSE, "a", 1/0)', "#DIV/0!"],
     ['=SWITCH(9, 1, "one", 2, "two")', "#N/A"],
     ['=SWITCH(1/0, 1, "one")', "#DIV/0!"],
     ["=ISBLANK(A1:A2)", "#VALUE!"],

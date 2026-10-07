@@ -12,13 +12,14 @@ export const logicFunctions: Record<string, FunctionDefinition> = {
     if (boolean(condition?.() ?? null)) return whenTrue?.() ?? null;
     return whenFalse ? whenFalse() : false;
   }),
-  /** Takes condition and value pairs and gives the value after the first true condition. */
+  /** Tests condition and value pairs in order, with an optional trailing default. */
   IFS: lazy(2, Infinity, (args): Evaluated => {
-    if (args.length % 2 === 1) fail("#ERROR!", "IFS takes conditions and values in pairs");
-    for (let index = 0; index < args.length; index += 2) {
+    const hasDefault = args.length % 2 === 1;
+    const pairEnd = hasDefault ? args.length - 1 : args.length;
+    for (let index = 0; index < pairEnd; index += 2) {
       if (boolean(args[index]?.() ?? null)) return args[index + 1]?.() ?? null;
     }
-    return fail("#N/A", "No condition is true");
+    return hasDefault ? (args.at(-1)?.() ?? null) : fail("#N/A", "No condition is true");
   }),
   /** Compares a value with each case in turn. A last argument without a pair is the default. */
   SWITCH: lazy(3, Infinity, ([subject, ...rest]): Evaluated => {

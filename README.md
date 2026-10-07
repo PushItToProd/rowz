@@ -178,6 +178,8 @@ Typing a formula offers the functions and names that match, with what each funct
 
 `CLAMP(value, min, max)` is equivalent to `IFS(value < min, min, value > max, max, 1=1, value)` for scalar arguments; ranges are clamped cell by cell. It evaluates all three arguments, propagates their errors, uses the comparison operators' type ordering, and returns the selected input unchanged.
 
+`IFS(condition, value, ..., [default])` checks condition/value pairs in order and returns the value after the first true condition. With an odd argument count, the final argument is the default, evaluated only when no condition is true. Without a default, `IFS` returns `#N/A` when no condition is true.
+
 Comparison operators ignore letter case when comparing text. A number and text with the same digits, such as `12` and `"12"`, do not compare equal.
 
 `REGEXMATCH(text, pattern)` checks for a match, `REGEXEXTRACT(text, pattern)` returns the first match (or first capture group), and `REGEXREPLACE(text, pattern, replacement)` replaces every non-overlapping match. Replacement text supports `$1` and later capture references, `$&` for the whole match, and `$$` for a literal dollar sign. Patterns support literals, `.`, character classes, common character escapes, word boundaries, `^` and `$`, capturing and noncapturing groups, alternation, and greedy or lazy `*`, `+`, `?`, and `{n,m}` quantifiers. Backreferences and lookaround are unsupported. Patterns are limited to 256 characters, replacements are limited to 2,000,000 output characters, and evaluation stops at a fixed step budget.
