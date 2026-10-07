@@ -69,7 +69,7 @@ const statements = computed(() =>
     return {
       line: statement.line,
       label: `${statement.name}${params}`,
-      value: shown(store.nameValue(props.view.id, statement.name)),
+      value: shown(store.nameValue(props.view.id, statement.name, statement.line)),
     };
   }),
 );

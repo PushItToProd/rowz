@@ -550,6 +550,69 @@ describe("names that cannot be defined", () => {
     expect(workbook.getValue(at("A1"))).toBe(1);
   });
 
+  it("reports a repeated script value on its line and keeps the first value usable", () => {
+    const workbook = new Workbook();
+    workbook.setStructure({
+      ...WITH_SCRIPTS,
+      scripts: [
+        {
+          id: "s1",
+          pageId: "p1",
+          name: "Summary",
+          source: "QtyTotal = SUM(Table1!A1:A2)\nQtyTotal = 5",
+        },
+      ],
+    });
+    workbook.setCell(at("A1"), "20");
+    workbook.setCell(at("A2"), "22");
+    workbook.setCell(at("B1", "t2"), "=QtyTotal");
+
+    expect(workbook.getValue(at("B1", "t2"))).toBe(42);
+    expect(workbook.getName("s1", "QtyTotal", 1)).toBe(42);
+    expect(workbook.getName("s1", "QtyTotal", 2)).toMatchObject({
+      code: "#NAME?",
+      message: "QtyTotal is already defined on line 1 of this script",
+    });
+    expect(workbook.errors()).toContainEqual({
+      kind: "name",
+      holderId: "s1",
+      name: "QtyTotal",
+      line: 2,
+      code: "#NAME?",
+      message: "QtyTotal is already defined on line 1 of this script",
+    });
+  });
+
+  it("reports a repeated script function on its line and keeps the first function usable", () => {
+    const workbook = new Workbook();
+    workbook.setStructure({
+      ...WITH_SCRIPTS,
+      scripts: [
+        {
+          id: "s1",
+          pageId: "p1",
+          name: "Summary",
+          source: "Double(x) = x * 2\ndouble(y) = y * 3",
+        },
+      ],
+    });
+    workbook.setCell(at("A1", "t2"), "=Double(4)");
+
+    expect(workbook.getValue(at("A1", "t2"))).toBe(8);
+    expect(workbook.getName("s1", "Double", 2)).toMatchObject({
+      code: "#NAME?",
+      message: "double is already defined on line 1 of this script",
+    });
+    expect(workbook.errors()).toContainEqual({
+      kind: "name",
+      holderId: "s1",
+      name: "double",
+      line: 2,
+      code: "#NAME?",
+      message: "double is already defined on line 1 of this script",
+    });
+  });
+
   it("refuses a name in a table with named columns", () => {
     const structure: WorkbookStructure = {
       ...WITH_SCRIPTS,

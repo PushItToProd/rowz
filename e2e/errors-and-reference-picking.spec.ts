@@ -81,6 +81,28 @@ test("invalid button plans appear in document errors before clicking the button"
   await expect(page.getByRole("button", { name: "1 error", exact: true })).toHaveCount(0);
 });
 
+test("a repeated script name marks its later definition and keeps the first usable", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add script", exact: true }).last().click();
+  const script = page.locator('[data-view="Script 1"]');
+  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  const source = script.getByLabel("Script source");
+  await source.fill("QtyTotal = 3\nQtyTotal = 5");
+  await source.press("Control+Enter");
+
+  await expect(script.locator('[data-script-line="1"] td')).toHaveText("3");
+  await expect(script.locator('[data-script-line="2"] .script__reason')).toHaveText(
+    "QtyTotal is already defined on line 1 of this script",
+  );
+  await enter(page, "A1", "=QtyTotal");
+  await expect(cell(page, "A1")).toHaveText("3");
+  await page.getByRole("button", { name: "1 error", exact: true }).click();
+  const errors = page.getByRole("dialog", { name: "Document errors" });
+  await expect(errors).toContainText("QtyTotal is already defined on line 1 of this script");
+});
+
 test("a function error links to its script definition and places the editor caret there", async ({
   page,
 }) => {

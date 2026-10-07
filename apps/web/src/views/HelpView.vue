@@ -712,11 +712,13 @@ const OPERATORS = [
         <code>ASSERT(Total &gt;= 0, "Sales cannot be negative")</code>.
       </p>
       <p>
-        A bare name must have one meaning in the whole document. If two names, two tables, or a name
-        and table share a spelling, a bare use shows <code>#NAME?</code>. Give them distinct
-        spellings or qualify them by their holder. If the February and March scripts each define
-        <code>Total</code>, write <code>February!Total</code> and <code>March!Total</code>. Add the
-        page when the holder is on another page: <code>'Page 2'!Summary!Total</code>.
+        Each script can define a given name only once, including function names. A repeated
+        definition is an error on the later line; the first definition remains usable. A bare name
+        must also have one meaning in the whole document. If names in different holders, two tables,
+        or a name and table share a spelling, a bare use shows <code>#NAME?</code>. Give them
+        distinct spellings or qualify them by their holder. If the February and March scripts each
+        define <code>Total</code>, write <code>February!Total</code> and <code>March!Total</code>.
+        Add the page when the holder is on another page: <code>'Page 2'!Summary!Total</code>.
       </p>
       <p>
         <code>LAMBDA</code> makes a function. Its last part is what the function computes, and the

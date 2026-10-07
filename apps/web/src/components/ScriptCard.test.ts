@@ -98,6 +98,37 @@ describe("ScriptCard", () => {
     expect(cell.get(".script__reason").text()).toMatch(/SUM/i);
   });
 
+  it.each([
+    {
+      kind: "value",
+      source: "QtyTotal = 3\nQtyTotal = 5",
+      formula: "=QtyTotal",
+      value: 3,
+      firstLine: "3",
+      message: "QtyTotal is already defined on line 1 of this script",
+    },
+    {
+      kind: "function",
+      source: "Double(x) = x * 2\nDouble(y) = y * 3",
+      formula: "=Double(4)",
+      value: 8,
+      firstLine: "function (x)",
+      message: "Double is already defined on line 1 of this script",
+    },
+  ])(
+    "marks a repeated script $kind on the later line",
+    async ({ source, formula, value, firstLine, message }) => {
+      await render(source, { A1: formula });
+
+      expect(rows()[0]?.[1]).toBe(firstLine);
+      expect(wrapper.get('tr[data-script-line="2"] .script__reason').text()).toBe(message);
+      expect(useWorkbookStore().valueOf(at("A1"))).toBe(value);
+      expect(useWorkbookStore().errors).toContainEqual(
+        expect.objectContaining({ line: 2, code: "#NAME?", message }),
+      );
+    },
+  );
+
   it("follows the cells its names read", async () => {
     await render("Total = 'Table 1'!A1 * 2", { A1: "1" });
     expect(rows()).toEqual([["Total", "2"]]);

@@ -73,6 +73,8 @@ interface CellRecord {
 interface NameRecord {
   holder: Holder;
   name: string;
+  /** A repeated script definition is an error, but not another meaning of the name. */
+  duplicate?: boolean;
   content: { ast: Node } | { error: ErrorValue };
   /** The cells the formula reads, through other names as well. */
   precedents: CellRange[];
@@ -92,7 +94,7 @@ interface NameRecord {
 /** Where an evaluated cell, named value, or script statement is defined. */
 type ErrorLocation =
   | { kind: "cell"; cell: CellId }
-  | { kind: "name"; holderId: string; name: string }
+  | { kind: "name"; holderId: string; name: string; line?: number }
   | { kind: "statement"; holderId: string; line: number };
 
 /** An evaluated error and its location in the workbook. */
@@ -557,11 +559,14 @@ export class Workbook {
    * The value of a name that a table or script holds, or `undefined` when it
    * holds none of that spelling.
    */
-  getName(holderId: string, name: string): Evaluated | undefined {
+  getName(holderId: string, name: string, line?: number): Evaluated | undefined {
     this.settle();
     const record = this.names
       .get(name.toLowerCase())
-      ?.find((candidate) => candidate.holder.id === holderId);
+      ?.find(
+        (candidate) =>
+          candidate.holder.id === holderId && (line === undefined || candidate.scriptLine === line),
+      );
     return record && this.valueOfName(record);
   }
 
@@ -629,6 +634,7 @@ export class Workbook {
         kind: "name",
         holderId: record.holder.id,
         name: record.name,
+        ...(record.duplicate && record.scriptLine !== undefined ? { line: record.scriptLine } : {}),
         code: value.code,
         message: value.message ?? value.code,
         ...(value.trace === undefined ? {} : { trace: value.trace }),
@@ -824,15 +830,22 @@ export class Workbook {
       const key = name.toLowerCase();
       const sharing = this.names.get(key) ?? [];
       this.names.set(key, sharing);
+      const previous = sharing.find((other) => other.holder.id === holderId);
+      const duplicate =
+        holder.kind === "script" && scriptLine !== undefined && previous?.scriptLine !== undefined;
       const refuse = (message: string): NameRecord["content"] => ({
         error: error("#NAME?", message),
       });
       const refused = refusedName(name, this.functions);
       let content: NameRecord["content"];
-      if (refused !== undefined) content = refuse(refused);
+      if (duplicate)
+        content = refuse(
+          `${name} is already defined on line ${String(previous.scriptLine)} of this script`,
+        );
+      else if (refused !== undefined) content = refuse(refused);
       else if (this.tables.table(holderId)?.columns?.length) {
         content = refuse(`${holder.name} has named columns, and such a table holds no names`);
-      } else if (sharing.some((other) => other.holder.id === holderId)) {
+      } else if (previous) {
         content = refuse(`${holder.name} defines ${name} twice`);
       } else {
         try {
@@ -845,6 +858,7 @@ export class Workbook {
       sharing.push({
         holder,
         name,
+        ...(duplicate ? { duplicate: true } : {}),
         content,
         precedents: [],
         evaluating: false,
@@ -924,7 +938,7 @@ export class Workbook {
    */
   private meanings(word: string): { names: NameRecord[]; tables: Holder[] } {
     return {
-      names: this.names.get(word.toLowerCase()) ?? [],
+      names: (this.names.get(word.toLowerCase()) ?? []).filter((record) => !record.duplicate),
       tables: this.tables.tablesNamed(word),
     };
   }

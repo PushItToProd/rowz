@@ -111,8 +111,8 @@ export function createValues(context: WorkbookContext) {
    * The value of a name a table or script holds, or `undefined` when it holds
    * none of that spelling.
    */
-  function nameValue(holderId: string, name: string): Evaluated | undefined {
-    return context.engine.value.getName(holderId, name);
+  function nameValue(holderId: string, name: string, line?: number): Evaluated | undefined {
+    return context.engine.value.getName(holderId, name, line);
   }
 
   /** A bare formula of a script, by its line: an `ASSERT` has a value, and shows it there. */

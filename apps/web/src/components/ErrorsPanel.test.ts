@@ -60,6 +60,37 @@ it("lists errors with destinations and updates while open", async () => {
   }
 });
 
+it("lists a repeated script definition and links to its line", async () => {
+  const snapshot = snapshotWith({ A1: "=QtyTotal" });
+  snapshot.views = [
+    {
+      id: "script-1",
+      pageId: "p1",
+      kind: "script",
+      name: "Summary",
+      position: 1,
+      source: "QtyTotal = 3\nQtyTotal = 5",
+      chartType: null,
+    },
+  ];
+  server.getSnapshot.mockResolvedValue(wireSnapshot(snapshot));
+  await useWorkbookStore().load("s1");
+  const wrapper = mount(ErrorsPanel);
+  try {
+    const entry = wrapper.get("li button");
+    expect(entry.find("strong").text()).toBe("Summary!QtyTotal");
+    expect(entry.text()).toContain("QtyTotal is already defined on line 1 of this script");
+    await entry.trigger("click");
+    expect(wrapper.emitted("go")?.[0]?.[0]).toMatchObject({
+      pageId: "p1",
+      blockId: "script-1",
+      line: 2,
+    });
+  } finally {
+    wrapper.unmount();
+  }
+});
+
 it("shows a function origin link in the document errors list", async () => {
   const snapshot = snapshotWith({ A1: "Spa" });
   const formulaTable = { ...TABLE, id: "t2", name: "Formula", position: 1 };

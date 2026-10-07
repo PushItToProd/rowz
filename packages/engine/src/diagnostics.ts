@@ -55,10 +55,12 @@ export function documentErrors(
             : `${block.name} line ${String(failure.line)}`,
       ...(failure.kind === "name"
         ? {
-            line: scripts
-              .get(blockId)
-              ?.find((statement) => statement.kind === "name" && statement.name === failure.name)
-              ?.line,
+            line:
+              failure.line ??
+              scripts
+                .get(blockId)
+                ?.find((statement) => statement.kind === "name" && statement.name === failure.name)
+                ?.line,
           }
         : {}),
       ...(failure.kind === "cell"

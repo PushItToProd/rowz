@@ -38,6 +38,27 @@ const view = (id: string, kind: ViewSource["kind"], source: string) => ({
 });
 
 describe("document errors", () => {
+  it("lists a duplicate script definition at the later line", () => {
+    const duplicate = view("Script", "script", "QtyTotal = 1\nQtyTotal = 5");
+    const workbook = createWorkbook({
+      ...data,
+      tables: [],
+      scripts: [duplicate],
+      cells: [],
+    });
+
+    expect(documentErrors(workbook, [], [duplicate])).toEqual([
+      expect.objectContaining({
+        pageId: "p1",
+        blockId: "Script",
+        label: "Script!QtyTotal",
+        line: 2,
+        code: "#NAME?",
+        message: "QtyTotal is already defined on line 1 of this script",
+      }),
+    ]);
+  });
+
   it("includes hidden cells, formula columns, names, statements, and assertions across pages", () => {
     const workbook = createWorkbook(data);
     const errors = documentErrors(workbook, data.tables, [script]);
