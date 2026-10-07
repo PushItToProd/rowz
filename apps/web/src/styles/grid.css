@@ -283,8 +283,8 @@ select.cell-control--dropdown {
 }
 
 .cell-control--input input {
-  min-width: 0;
-  width: 100%;
+  flex: 1 1 0;
+  min-width: 3ch;
   height: 23px;
   padding: 1px 4px;
   border: 1px solid var(--line);
@@ -295,6 +295,8 @@ select.cell-control--dropdown {
 }
 
 .cell-control--input span {
+  flex: 0 1 auto;
+  min-width: 4ch;
   overflow: hidden;
   text-overflow: ellipsis;
 }

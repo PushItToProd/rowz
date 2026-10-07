@@ -779,3 +779,5 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 - The flaky e2e test (`data-tables-and-formatting.spec.ts:5`) could not be reproduced: five full `pnpm e2e:remote` runs passed. The fix adds waits for the save to finish and a reload check; the root cause is unconfirmed. Skipped the adversarial review for this test-only change.
 
 - `IFS` takes a trailing default argument (odd argument count), like `SWITCH`. The `default=` named-argument form was not implemented because the parser has no named arguments; the item's example also had a missing comma.
+
+- Skipped the adversarial review for the `TEXTBOX`/`NUMBERBOX` label fix: it is a two-rule CSS change with an e2e assertion.

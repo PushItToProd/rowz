@@ -1,5 +1,22 @@
 import { expect, test } from "@playwright/test";
-import { newSpreadsheet, cell, enter, reload, openPageMenu } from "./helpers";
+import { newSpreadsheet, cell, enter, reload, openPageMenu, expectCellSize } from "./helpers";
+
+test("a cell input keeps its label visible at the default column width", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", '=TEXTBOX(A2, "Name")');
+
+  const control = cell(page, "A1");
+  await expectCellSize(page, "A1", "width", 120);
+  const label = control.locator(".cell-control--input > span");
+  const input = control.getByRole("textbox", { name: "Name" });
+  await expect(label).toHaveText("Name");
+  await expect
+    .poll(() => label.evaluate((element) => element.scrollWidth <= element.clientWidth))
+    .toBe(true);
+  await expect
+    .poll(() => input.evaluate((element) => element.getBoundingClientRect().width))
+    .toBeGreaterThan(0);
+});
 
 test("a button writes the sum of two cells into a third, and the result persists", async ({
   page,
