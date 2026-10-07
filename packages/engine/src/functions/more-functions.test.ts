@@ -1,9 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { at, evaluateFormula, workbookWith } from "../testing";
+import { at, evaluateFormula, STRUCTURE, workbookWith } from "../testing";
 import type { CellValue } from "../values";
+import { Workbook } from "../workbook";
 
 function expectError(formula: string, code: string, cells: Record<string, string> = {}): void {
   expect(evaluateFormula(formula, cells), formula).toMatchObject({ kind: "error", code });
+}
+
+function evaluateWithEmptyTables(formula: string): CellValue {
+  const workbook = new Workbook();
+  workbook.setStructure({
+    ...STRUCTURE,
+    tables: [
+      ...STRUCTURE.tables,
+      { id: "empty", pageId: "p1", name: "Empty", rowCount: 0, colCount: 0 },
+      { id: "single", pageId: "p1", name: "SingleRow", rowCount: 1, colCount: 2 },
+    ],
+  });
+  workbook.setCell(at("Z99"), formula);
+  return workbook.getValue(at("Z99"));
 }
 
 describe("math", () => {
@@ -319,6 +334,44 @@ describe("lookups", () => {
     expect(evaluateFormula('=XYLOOKUP("WEST", "q1", A1:C3)', xyCells)).toBe(30);
   });
 
+  it("reports no match for an empty LOOKUP search range", () => {
+    expect(evaluateWithEmptyTables("=LOOKUP(1, Empty)")).toMatchObject({
+      kind: "error",
+      code: "#N/A",
+    });
+  });
+
+  it("requires XYLOOKUP to have a header row and a header column", () => {
+    for (const formula of ["=XYLOOKUP(1, 1, Empty)", "=XYLOOKUP(1, 1, SingleRow)"]) {
+      expect(evaluateWithEmptyTables(formula), formula).toMatchObject({
+        kind: "error",
+        code: "#VALUE!",
+      });
+    }
+  });
+
+  it("does not match lookup keys with a different type", () => {
+    expectError('=LOOKUP("25", A1:A3)', "#N/A", lookupCells);
+
+    const numericColumnKeys = {
+      A1: "",
+      B1: "1",
+      C1: "2",
+      A2: "East",
+      B2: "10",
+      C2: "20",
+      A3: "West",
+      B3: "30",
+      C3: "40",
+    };
+    expectError('=XYLOOKUP("East", "1", A1:C3)', "#N/A", numericColumnKeys);
+    expectError('=XYLOOKUP("1", 1, A1:C3)', "#N/A", {
+      ...numericColumnKeys,
+      A2: "1",
+      A3: "2",
+    });
+  });
+
   it("takes a whole row or column with INDEX when a position is left out or 0", () => {
     const rows = (formula: string): CellValue[][] =>
       workbookWith({ t1: { ...cells, I1: formula } }).getArray(at("I1"));
@@ -474,6 +527,7 @@ describe("more text", () => {
     ['=ENCODEURL("a b&c/d?")', "a%20b%26c%2Fd%3F"],
     ['=SLICE("abcdef", 1, 4)', "bcd"],
     ['=SLICE("abcdef", -3)', "def"],
+    ['=SLICE("abcdef", -4, -1)', "cde"],
     ['=SLUGIFY("Crème brûlée: Foo & Bar!")', "creme-brulee-foo-bar"],
     ['=SLUGIFY("東京 カフェ")', "東京-カフェ"],
     ['=DECODEURL("a%20b%26c")', "a b&c"],
@@ -501,6 +555,9 @@ describe("more text", () => {
     ['=DECODEURL("%ZZ")', "#VALUE!"],
     ['=BASE64DECODE("not base64!")', "#VALUE!"],
     ['=BASE64DECODE("////")', "#VALUE!"],
+    ['=BASE64DECODE("A===")', "#VALUE!"],
+    ['=BASE64DECODE("AA=A")', "#VALUE!"],
+    ['=BASE64DECODE("AB==")', "#VALUE!"],
     ['=DOMAIN("/relative/path")', "#VALUE!"],
     ['=RELATIVE_URL("mailto:user@example.com")', "#VALUE!"],
     ['=MARKDOWN("a") & "b"', "#VALUE!"],

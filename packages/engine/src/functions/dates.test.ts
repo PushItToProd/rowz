@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { dateFromParts } from "../dates";
 import { formatValue, type CellValue } from "../values";
 import { at, STRUCTURE } from "../testing";
 import { Workbook } from "../workbook";
@@ -6,8 +7,8 @@ import { Workbook } from "../workbook";
 // A Wednesday afternoon, as the clock a workbook is given.
 const NOW = Date.UTC(2026, 8, 30, 14, 5, 9, 500);
 
-function evaluate(formula: string, cells: Record<string, string> = {}): CellValue {
-  const workbook = new Workbook({ now: () => NOW });
+function evaluate(formula: string, cells: Record<string, string> = {}, now = NOW): CellValue {
+  const workbook = new Workbook({ now: () => now });
   workbook.setStructure(STRUCTURE);
   for (const [address, input] of Object.entries(cells)) workbook.setCell(at(address), input);
   workbook.setCell(at("Z99"), formula);
@@ -19,8 +20,8 @@ function shown(formula: string, cells: Record<string, string> = {}): string {
   return formatValue(evaluate(formula, cells));
 }
 
-function shownArray(formula: string): string[][] {
-  const workbook = new Workbook({ now: () => NOW });
+function shownArray(formula: string, now = NOW): string[][] {
+  const workbook = new Workbook({ now: () => now });
   workbook.setStructure(STRUCTURE);
   workbook.setCell(at("Z99"), formula);
   return workbook.getArray(at("Z99")).map((row) => row.map(formatValue));
@@ -181,11 +182,60 @@ describe("date functions", () => {
     });
   });
 
+  it("counts leap days and February month ends under all five bases", () => {
+    const cases: { start: string; end: string; expected: number[] }[] = [
+      {
+        start: "DATE(2024, 2, 28)",
+        end: "DATE(2024, 3, 1)",
+        expected: [3 / 360, 2 / 366, 2 / 360, 2 / 365, 3 / 360],
+      },
+      {
+        start: "DATE(2026, 2, 28)",
+        end: "DATE(2026, 3, 31)",
+        expected: [30 / 360, 31 / 365, 31 / 360, 31 / 365, 32 / 360],
+      },
+      {
+        start: "DATE(2024, 2, 29)",
+        end: "DATE(2024, 3, 31)",
+        expected: [30 / 360, 31 / 366, 31 / 360, 31 / 365, 31 / 360],
+      },
+    ];
+
+    for (const { start, end, expected } of cases) {
+      expected.forEach((fraction, basis) => {
+        expect(evaluate(`=YEARFRAC(${start}, ${end}, ${String(basis)})`)).toBe(fraction);
+      });
+    }
+  });
+
+  it("counts year zero as a leap year and handles the last supported year", () => {
+    const cases = [
+      {
+        start: "DATE(0, 1, 1)",
+        end: "DATE(1, 1, 1)",
+        expected: [1, 1, 366 / 360, 366 / 365, 1],
+      },
+      {
+        start: "DATE(9999, 1, 1)",
+        end: "DATE(9999, 12, 31)",
+        // Basis 0 keeps day 31 because the start day is 1; basis 4 maps it to day 30.
+        expected: [1, 364 / 365, 364 / 360, 364 / 365, 359 / 360],
+      },
+    ];
+
+    for (const { start, end, expected } of cases) {
+      expected.forEach((fraction, basis) => {
+        expect(evaluate(`=YEARFRAC(${start}, ${end}, ${String(basis)})`)).toBe(fraction);
+      });
+    }
+  });
+
   it("reads time text as a fraction of a day", () => {
     expect(evaluate('=TIMEVALUE("14:05:09")')).toBe((14 * 3600 + 5 * 60 + 9) / 86400);
     expect(evaluate('=TIMEVALUE("2:05 PM")')).toBe((14 * 3600 + 5 * 60) / 86400);
     expect(evaluate('=TIMEVALUE("12:00 AM")')).toBe(0);
     expect(evaluate('=TIMEVALUE("12:00 PM")')).toBe(0.5);
+    expect(evaluate('=TIMEVALUE("14:05:09.25")')).toBe((14 * 3600 + 5 * 60 + 9.25) / 86400);
     expect(evaluate('=TIMEVALUE("25:00")')).toMatchObject({ kind: "error", code: "#VALUE!" });
   });
 
@@ -206,6 +256,68 @@ describe("date functions", () => {
     expect(shownArray("=LASTXWEEKS(2)")).toEqual([["2026-09-17", "2026-09-30"]]);
     expect(shownArray("=LASTXMONTHS(1)")).toEqual([["2026-08-31", "2026-09-30"]]);
     expect(evaluate("=LASTXDAYS(0)")).toMatchObject({ kind: "error", code: "#VALUE!" });
+  });
+
+  it("keeps date ranges at the supported year 0 and 9999 boundaries", () => {
+    const firstDay = dateFromParts(0, 1, 1).ms;
+    const firstWeekEnd = dateFromParts(0, 1, 7).ms;
+    const leapYearMonthEnd = dateFromParts(0, 3, 31).ms;
+    const lastDay = dateFromParts(9999, 12, 31).ms;
+
+    expect(shownArray("=DATEINTERVAL(DATE(0, 1, 1), DATE(9999, 12, 31))")).toEqual([
+      ["0000-01-01", "9999-12-31"],
+    ]);
+    expect(shownArray("=LASTXDAYS(1)", firstDay)).toEqual([["0000-01-01", "0000-01-01"]]);
+    expect(shownArray("=LASTXWEEKS(1)", firstWeekEnd)).toEqual([["0000-01-01", "0000-01-07"]]);
+    expect(shownArray("=LASTXMONTHS(1)", leapYearMonthEnd)).toEqual([["0000-03-01", "0000-03-31"]]);
+
+    expect(evaluate("=LASTXDAYS(2)", {}, firstDay)).toMatchObject({
+      kind: "error",
+      code: "#VALUE!",
+    });
+    expect(evaluate("=LASTXWEEKS(1)", {}, firstDay)).toMatchObject({
+      kind: "error",
+      code: "#VALUE!",
+    });
+    expect(evaluate("=LASTXMONTHS(1)", {}, firstDay)).toMatchObject({
+      kind: "error",
+      code: "#VALUE!",
+    });
+
+    expect(shownArray("=LASTXDAYS(1)", lastDay)).toEqual([["9999-12-31", "9999-12-31"]]);
+    expect(shownArray("=LASTXWEEKS(1)", lastDay)).toEqual([["9999-12-25", "9999-12-31"]]);
+    expect(shownArray("=LASTXMONTHS(1)", lastDay)).toEqual([["9999-12-01", "9999-12-31"]]);
+  });
+
+  it("truncates fractional range counts and rejects negative or sub-one counts", () => {
+    expect(shownArray("=LASTXDAYS(2.9)")).toEqual([["2026-09-29", "2026-09-30"]]);
+    expect(shownArray("=LASTXWEEKS(1.9)")).toEqual([["2026-09-24", "2026-09-30"]]);
+    expect(shownArray("=LASTXMONTHS(1.9)")).toEqual([["2026-08-31", "2026-09-30"]]);
+
+    for (const formula of [
+      "=LASTXDAYS(-1)",
+      "=LASTXWEEKS(-1)",
+      "=LASTXMONTHS(-1)",
+      "=LASTXDAYS(0.9)",
+      "=LASTXWEEKS(0.9)",
+      "=LASTXMONTHS(0.9)",
+    ]) {
+      expect(evaluate(formula), formula).toMatchObject({ kind: "error", code: "#VALUE!" });
+    }
+  });
+
+  it("clamps LASTXMONTHS across February and month ends", () => {
+    const cases = [
+      [dateFromParts(2026, 3, 31).ms, 1, "2026-03-01", "2026-03-31"],
+      [dateFromParts(2024, 3, 31).ms, 1, "2024-03-01", "2024-03-31"],
+      [dateFromParts(2026, 5, 31).ms, 3, "2026-03-01", "2026-05-31"],
+      [dateFromParts(2024, 5, 31).ms, 3, "2024-03-01", "2024-05-31"],
+      [dateFromParts(2026, 1, 31).ms, 1, "2026-01-01", "2026-01-31"],
+    ] as const;
+
+    for (const [now, months, start, end] of cases) {
+      expect(shownArray(`=LASTXMONTHS(${String(months)})`, now)).toEqual([[start, end]]);
+    }
   });
 
   it("uses the workbook clock for relative date ranges", () => {
