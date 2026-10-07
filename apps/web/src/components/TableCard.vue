@@ -48,6 +48,7 @@ onBeforeUnmount(() => {
 });
 const namesPaneId: `names:${string}` = `names:${props.table.id}`;
 const conditionalFormatsPaneId: `conditional-formats:${string}` = `conditional-formats:${props.table.id}`;
+const conditionalPanel = ref<{ focus(): void }>();
 
 /** The selected cell when it is in this table. Row and column actions apply to it. */
 const selected = computed(() =>
@@ -219,6 +220,13 @@ async function resize({
 
 /** Whether the panel of the table's conditional formats is open. */
 const conditionalOpen = activeSidePane.isOpen(conditionalFormatsPaneId);
+
+/** Opens the conditional formats panel and puts focus in the new-rule criterion. */
+async function addConditionalFormat(): Promise<void> {
+  activeSidePane.open(conditionalFormatsPaneId);
+  await nextTick();
+  conditionalPanel.value?.focus();
+}
 
 /** Whether the panel of the table's names is open, and the formula a new name starts with. */
 const formulaFor = computed(() =>
@@ -686,6 +694,9 @@ const menuItems = computed((): MenuItem[] => {
         run: toggleWrap,
       },
     ],
+    store.canEdit
+      ? [{ label: "Add conditional format…", run: () => void addConditionalFormat() }]
+      : [],
     // What a column holds is set one column at a time.
     scope === "row" || cols.count > 1 ? [] : columnItems(cols.first),
     scope !== "cells" || props.table.columns ? [] : [{ label: "Name this range…", run: nameRange }],
@@ -857,6 +868,7 @@ const menuLabel = computed(() => {
 
       <ConditionalFormatsPanel
         v-if="conditionalOpen"
+        ref="conditionalPanel"
         :table="table"
         @close="activeSidePane.close(conditionalFormatsPaneId)"
       />

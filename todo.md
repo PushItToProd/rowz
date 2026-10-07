@@ -51,8 +51,8 @@ A reference document is the acceptance test of a theme: the theme is done when i
 - [x] **P4** make `CLAMP` eager again: it evaluates all three arguments, so `=CLAMP(-1, 0, 1/0)` is `#DIV/0!`. An agent made it lazy, like `IFS`, by reading the author's `IFS` equivalent literally. The equivalence describes the result for arguments that have values and nothing more. Update the help entry and the README sentence about `CLAMP` to match #formula-language
 - [ ] **P6** in data tables, conditional formatting should be a column property #formatting
   - okay, I guess when I create rules covering a whole column of a data table it does intelligently set it to e.g. `F1:F` so it covers the whole thing, but that behavior doesn't feel obvious from the way it's presented
-- [ ] **P6** create context menu item to add conditional formatting to the selected cell or range #formatting
-- [ ] **P6** in the codemirror editors, let me hit cmd+D/ctrl+D when I have some text highlighted to select multiple instances of that text
+- [x] **P6** create context menu item to add conditional formatting to the selected cell or range #formatting
+- [x] **P6** in the codemirror editors, let me hit cmd+D/ctrl+D when I have some text highlighted to select multiple instances of that text
 - [x] **P4** the formula editor shown in a cell doesn't completely fill the cell - the div with classes `session-formula-field grid__editor` has 6px of padding on left and right (maybe a Firefox quirk?) while the div with class `formula-editor` doesn't fill the full height of the cell either. -- note this is mostly an aesthetic thing. it doesn't necessarily have to fill the cell, it just needs to be less obvious that it doesn't
 
 ## Plans
@@ -675,3 +675,6 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] Collapsed-block preferences: a `getItem` failure replaces the in-memory set with an empty one, so navigating away and back can lose preferences while storage is unavailable (`apps/web/src/blockCollapse.ts` near lines 33 and 46) #small-apps
 - [ ] Collapsed-block preferences leave a localStorage key for each document, including deleted ones and ones with nothing collapsed; remove the key when a document is deleted or its set is empty (`blockCollapse.ts`, `SpreadsheetListView.vue` near line 307) #small-apps
 - [ ] A chart legend with many or long series labels can be clipped by the chart card's maximum height (`charts-text-views.css` near line 69, `ChartView.vue` near line 211) #charts
+
+- [ ] With several cursors from Ctrl+D in the formula editor, accepting an autocomplete suggestion updates only the primary cursor's token (`FormulaEditor.vue` near line 173) #formula-editing
+- [ ] With several cursors from Ctrl+D, picking a reference changes only the primary match and drops the other cursors (`apps/web/src/formula/picking.ts` near lines 24 and 286) #formula-editing

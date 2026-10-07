@@ -223,6 +223,34 @@ describe("shared formula editor", () => {
     await wrapper.get(".cm-content").trigger("keydown", { key: "Enter", keyCode: 13 });
     expect(wrapper.emitted("commit")).toEqual([["Enter", false]]);
   });
+
+  it("binds Mod-D to select the next occurrence and leaves it to the browser when handled nowhere", () => {
+    const { view } = render("word word");
+    expect(view.state.facet(EditorState.allowMultipleSelections)).toBe(true);
+    view.dispatch({ selection: { anchor: 0, head: 4 } });
+
+    const handled = new KeyboardEvent("keydown", {
+      key: "d",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    view.contentDOM.dispatchEvent(handled);
+    expect(handled.defaultPrevented).toBe(true);
+    expect(view.state.selection.ranges.map(({ from, to }) => [from, to])).toEqual([
+      [0, 4],
+      [5, 9],
+    ]);
+
+    const unhandled = new KeyboardEvent("keydown", {
+      key: "d",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    view.contentDOM.dispatchEvent(unhandled);
+    expect(unhandled.defaultPrevented).toBe(false);
+  });
 });
 
 describe("multiline keyboard behavior", () => {

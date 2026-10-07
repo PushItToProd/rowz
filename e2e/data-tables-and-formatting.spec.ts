@@ -338,6 +338,29 @@ test("a conditional format fills the cells that meet a criterion and follows the
   await expect(cell(page, "A2")).toHaveCSS("background-color", "rgb(253, 226, 223)");
 });
 
+test("the cell context menu opens conditional formats for a selected range or whole column", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await cell(page, "A1").click();
+  await cell(page, "A2").click({ modifiers: ["Shift"] });
+  await cell(page, "A2").click({ button: "right" });
+  await expect(page.getByRole("menu", { name: "Actions for A1:A2" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "Add conditional format…", exact: true }).click();
+
+  const panel = page.locator(".conditional-panel");
+  await expect(panel.locator("form p")).toHaveText("Applies to A1:A2.");
+  await expect(page.getByLabel("Criterion")).toBeFocused();
+
+  await panel.getByRole("button", { name: "Close" }).click();
+  const column = page.locator('[data-table="Table 1"] thead th').nth(2);
+  await column.click();
+  await column.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Add conditional format…", exact: true }).click();
+  await expect(panel.locator("form p")).toHaveText("Applies to B1:B.");
+  await expect(page.getByLabel("Criterion")).toBeFocused();
+});
+
 test("a whole-column selection stays whole when the table sort is removed", async ({ page }) => {
   await newSpreadsheet(page);
   for (const [row, values] of [

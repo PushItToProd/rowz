@@ -436,6 +436,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert column right",
       "Delete column B",
       "Wrap text",
+      "Add conditional format…",
       "Name this range…",
       "Clear cells",
     ]);
@@ -477,6 +478,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert 2 columns right",
       "Delete columns B-C",
       "Wrap text",
+      "Add conditional format…",
       "Name this range…",
       "Clear cells",
     ]);
@@ -506,6 +508,17 @@ describe("the menu of row, column, and cell actions", () => {
       { wrap: true },
       false,
     );
+  });
+
+  it("opens conditional formats for the selected range and focuses the criterion", async () => {
+    await openOnRange("B2", "C4");
+    await item("Add conditional format…").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find('[aria-label="Conditional formats of Table 1"]').exists()).toBe(true);
+    expect(wrapper.get(".conditional-panel__add p").text()).toBe("Applies to B2:C4.");
+    expect(document.activeElement).toBe(wrapper.get('[aria-label="Criterion"]').element);
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false);
   });
 
   it("deletes selected rows and columns with content without asking and offers undo", async () => {
@@ -549,6 +562,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert column right",
       "Delete column B",
       "Wrap text",
+      "Add conditional format…",
       "Clear cells",
     ]);
     await wrapper.get('[role="menu"]').trigger("keydown", { key: "Escape" });
@@ -561,6 +575,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert row below",
       "Delete row 3",
       "Wrap text",
+      "Add conditional format…",
       "Clear cells",
     ]);
   });
@@ -580,6 +595,7 @@ describe("the menu of row, column, and cell actions", () => {
       "Insert 2 columns right",
       "Delete columns B-C",
       "Wrap text",
+      "Add conditional format…",
       "Clear cells",
     ]);
   });

@@ -17,6 +17,13 @@ const props = defineProps<{ table: TableRecord }>();
 const emit = defineEmits<{ close: [] }>();
 const store = useWorkbookStore();
 const dialog = useDialog();
+const criterionInput = ref<HTMLInputElement>();
+
+function focus(): void {
+  criterionInput.value?.focus();
+}
+
+defineExpose({ focus });
 
 const rules = computed(() => props.table.conditionalFormats);
 /** The rules as the panel lists them: the one that wins comes first, which is the last one stored. */
@@ -239,6 +246,7 @@ async function save(): Promise<void> {
         <label>
           Criterion
           <input
+            ref="criterionInput"
             v-model="criterion"
             aria-label="Criterion"
             placeholder=">100, Done, <>"

@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { EditorState, StateEffect, StateField, Prec } from "@codemirror/state";
-import { Decoration, EditorView, keymap, type DecorationSet } from "@codemirror/view";
+import {
+  Decoration,
+  drawSelection,
+  EditorView,
+  keymap,
+  type DecorationSet,
+} from "@codemirror/view";
 import {
   defaultKeymap,
   history,
@@ -22,6 +28,7 @@ import { markdownDecorations, markdownLanguage } from "../formula/markdown";
 import { referenceHighlights } from "../formula/references";
 import { pickingSpan, useReferencePickingStore } from "../formula/picking";
 import { applySuggestion, signatureAt, suggestionsAt, type NamingContext } from "../formula/assist";
+import { selectNextOccurrenceKeymap } from "../formula/selectNextOccurrence";
 import type { FormulaMode } from "../formula/session";
 
 const props = withDefaults(
@@ -115,6 +122,8 @@ const tokens = StateField.define<DecorationSet>({
 function extensions() {
   return [
     history(),
+    EditorState.allowMultipleSelections.of(true),
+    drawSelection(),
     ...(multiline.value ? [EditorView.lineWrapping] : []),
     ...(props.mode === "markdown" ? [markdownLanguage] : []),
     tokens,
@@ -190,6 +199,7 @@ function extensions() {
     }),
     Prec.highest(
       keymap.of([
+        ...selectNextOccurrenceKeymap,
         {
           key: "Mod-Enter",
           run: (editor) => {

@@ -191,6 +191,10 @@ const KEYS = [
   ["Enter, in scripts and text views", "Insert a newline."],
   ["Ctrl/Cmd+Enter, in scripts and text views", "Save the source."],
   ["Ctrl/Cmd+[ or Ctrl/Cmd+], in scripts and text views", "Indent or unindent lines."],
+  [
+    "Ctrl/Cmd+D, with text selected in an editor",
+    "Select the next occurrence of that text; with no selection, select the word under the cursor.",
+  ],
   ["Ctrl+A", "Select every cell of the table."],
   ["Shift+F10", "Open the menu of row, column, and cell actions."],
   ["Ctrl+D, Ctrl+R", "Copy the first row of the selection down, or its first column across."],
@@ -1085,7 +1089,9 @@ const OPERATORS = [
       <h2>Conditional formats</h2>
       <p>
         <strong>Conditional formats</strong>, above a table, lists the rules that format cells by
-        their value. Select cells, choose a kind of rule, and press <strong>Add rule</strong>.
+        their value. Select cells, choose a kind of rule, and press <strong>Add rule</strong>. You
+        can also right-click selected cells and choose <strong>Add conditional format…</strong> to
+        open the panel for that selection.
       </p>
       <ul>
         <li>
