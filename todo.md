@@ -442,7 +442,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
     - [ ] **P7** (Claude) `QUERY ... pivot Duration` writes the pivoted numbers as text headers (`"6"`, not `6`), so a header cannot be compared as a number. #formula-language
     - (Claude) each run is entered by hand with a race picked from the dropdown, so one race at one duration appears once. A way to build the grid of every race at every duration from `Races` would remove the hand-entered rows.
   - [ ] **Author** **P3** a video game quest tracker, after https://docs.google.com/spreadsheets/d/1cwsRONdpXMJAvjpamauZ391NrTXX1gEdeTrx1Rf324o #small-apps
-  - [ ] **P4** a few standard templates in the style of Sheets and Excel (invoice, contacts list, to-do list), and one or two in the style of Access and FileMaker #documents
+  - [x] **P4** a few standard templates in the style of Sheets and Excel (invoice, contacts list, to-do list), and one or two in the style of Access and FileMaker #documents
   - [ ] **P10** revise/augment the samples after we've added formatting, conditional formatting, etc. #documents
 - [x] add screenshots to the README
 - [ ] **P8** use icons to make the toolbar denser #everyday
@@ -635,3 +635,6 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] Escape does not close the Names and Conditional formats panels #everyday
 
 - [ ] The origin-trace link in the cell error popover is not reachable by keyboard: the popover is teleported to the end of `<body>` and closes on focusout, so Tab leaves before reaching it (`CellError.vue`, `ErrorTrace.vue`). The errors list has the same link #everyday
+
+- [ ] Documents made from one template get the same name, so copies are hard to tell apart in the document list; number them or ask for a name (`SpreadsheetListView.vue`) #documents
+- [ ] The template picker's button has `aria-controls="document-templates"` while the panel is removed from the DOM when closed #documents

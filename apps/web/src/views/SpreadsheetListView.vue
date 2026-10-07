@@ -10,6 +10,7 @@ import type { Notice } from "../notice";
 import type { MenuItem } from "../components/menu";
 import { APP_NAME } from "../appName";
 import { readSpreadsheetFile } from "../files/spreadsheetFile";
+import { DOCUMENT_TEMPLATES, type DocumentTemplate } from "../files/templates";
 import { usePageTitle } from "../pageTitle";
 import { useSessionStore } from "../stores/session";
 import { useDialog } from "../useDialog";
@@ -23,6 +24,7 @@ const folders = ref<FolderRecord[]>([]);
 const documents = ref<ListedSpreadsheetItem[] | null>(null);
 const error = ref<Notice | null>(null);
 const creatingFolder = ref(false);
+const showingTemplates = ref(false);
 const newFolderName = ref("");
 const editingFolderId = ref<string | null>(null);
 const editingFolderName = ref("");
@@ -53,6 +55,13 @@ const refresh = (): Promise<void> => run(refreshData);
 const create = (): Promise<void> =>
   run(async () => {
     const created = await api.createSpreadsheet("Untitled document");
+    await router.push({ name: "editor", params: { spreadsheetId: created.id } });
+  });
+
+const createFromTemplate = (template: DocumentTemplate): Promise<void> =>
+  run(async () => {
+    showingTemplates.value = false;
+    const created = await api.importSpreadsheet(template.document);
     await router.push({ name: "editor", params: { spreadsheetId: created.id } });
   });
 
@@ -219,6 +228,35 @@ onMounted(refresh);
 
     <div class="list__actions">
       <button type="button" class="primary" @click="create">New document</button>
+      <div class="list__template-picker">
+        <button
+          type="button"
+          :aria-expanded="showingTemplates"
+          aria-controls="document-templates"
+          @click="showingTemplates = !showingTemplates"
+        >
+          New from template
+        </button>
+        <div
+          v-if="showingTemplates"
+          id="document-templates"
+          class="list__templates"
+          role="group"
+          aria-label="Document templates"
+        >
+          <button
+            v-for="template in DOCUMENT_TEMPLATES"
+            :key="template.name"
+            type="button"
+            class="list__template"
+            :aria-label="`Create ${template.name} from template`"
+            @click="createFromTemplate(template)"
+          >
+            <span class="list__template-name">{{ template.name }}</span>
+            <span class="list__template-description">{{ template.description }}</span>
+          </button>
+        </div>
+      </div>
       <button type="button" @click="beginCreateFolder">New folder</button>
       <label class="file-button">
         Import

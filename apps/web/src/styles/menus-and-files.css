@@ -107,7 +107,43 @@
 
 .list__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.list__template-picker {
+  position: relative;
+}
+
+.list__templates {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 4;
+  display: grid;
+  gap: 4px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 14%);
+}
+
+.list__template {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.list__template-name {
+  font-weight: 600;
+}
+
+.list__template-description {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: normal;
 }
 
 .list__folder-form {

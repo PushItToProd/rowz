@@ -1108,6 +1108,8 @@ const OPERATORS = [
           <strong>Export</strong>, at the top of a document, saves the whole document as a file: its
           pages, the blocks on them, and everything typed into cells, formulas included.
           <strong>Import</strong>, on the list of documents, makes a new document from such a file.
+          <strong>New from template</strong> creates an editable copy of an invoice, contacts list,
+          to-do list, or inventory example from the same document list.
         </li>
         <li>
           <strong>Export CSV</strong> saves one table as a CSV file that other spreadsheet apps
