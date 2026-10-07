@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import type { DocumentListItem, FolderRecord, ListedSpreadsheetItem } from "../api/client";
+import type { DocumentSearchResponse } from "@spreadsheet-app/shared";
 import { api } from "../api/client";
 import { DOCUMENT_TEMPLATES } from "../files/templates";
 import { appDialog, mountDialogHost, respondToDialog, type MockedApi } from "../testing";
@@ -260,6 +261,67 @@ it("shows folders as collapsible groups with their documents", async () => {
 
   const unfiled = view.findAll(".list__group")[1]!;
   expect(unfiled.text()).toContain("Loose notes");
+});
+
+it("debounces document search, safely highlights matches, and clears back to the list", async () => {
+  server.listSpreadsheets.mockResolvedValue(listed([], [document(null)]));
+  const results: DocumentSearchResponse = [
+    {
+      spreadsheetId: "d1",
+      name: "Plan <img>",
+      matches: [
+        {
+          kind: "cell",
+          pageName: "Operations",
+          blockName: "Table 1",
+          address: "A1",
+          snippet: "<img src=x>needle & safe",
+          matchStart: 11,
+          matchEnd: 17,
+        },
+      ],
+    },
+  ];
+  server.searchDocuments.mockResolvedValue(results);
+  const view = await render();
+  vi.useFakeTimers();
+
+  const input = view.get('[aria-label="Search documents"]');
+  await input.setValue("needle");
+  expect(server.searchDocuments).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(249);
+  expect(server.searchDocuments).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  await flushPromises();
+
+  expect(server.searchDocuments).toHaveBeenCalledExactlyOnceWith("needle");
+  expect(view.get(".list__search-result").text()).toContain("Operations › Table 1 › A1");
+  expect(view.get(".list__search-result mark").text()).toBe("needle");
+  expect(view.find("img").exists()).toBe(false);
+  expect(view.findAll(".list__group")).toHaveLength(0);
+
+  await view.get('button[aria-label="Clear search"]').trigger("click");
+  await flushPromises();
+  expect((input.element as HTMLInputElement).value).toBe("");
+  expect(view.findAll(".list__group")).toHaveLength(1);
+});
+
+it("shows empty and error states for document search", async () => {
+  server.listSpreadsheets.mockResolvedValue(listed([], [document(null)]));
+  server.searchDocuments.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("offline"));
+  const view = await render();
+  vi.useFakeTimers();
+
+  const input = view.get('[aria-label="Search documents"]');
+  await input.setValue("absent");
+  await vi.advanceTimersByTimeAsync(250);
+  await flushPromises();
+  expect(view.text()).toContain("No documents match");
+
+  await input.setValue("offline");
+  await vi.advanceTimersByTimeAsync(250);
+  await flushPromises();
+  expect(view.get('[role="alert"]').text()).toContain("Search failed: offline");
 });
 
 it("opens an accessible actions menu and renames an owned document inline", async () => {

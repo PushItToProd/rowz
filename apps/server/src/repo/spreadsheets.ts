@@ -39,6 +39,7 @@ import {
 import { RepositoryContext } from "./spreadsheets/context";
 import { replace } from "./spreadsheets/replace";
 import type { ReplaceBody, ReplaceReport } from "@spreadsheet-app/shared";
+import type { DocumentSearchResponse } from "@spreadsheet-app/shared";
 export type {
   Access,
   MemberRecord,
@@ -87,6 +88,10 @@ export class SpreadsheetRepository {
 
   async listSpreadsheets(): Promise<DocumentList> {
     return this.context.listSpreadsheets();
+  }
+
+  async searchDocuments(q: string, limit: number): Promise<DocumentSearchResponse> {
+    return this.context.searchDocuments(q, limit);
   }
 
   async createFolder(name: string): Promise<FolderRecord> {

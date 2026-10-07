@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, nextTick } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, nextTick, watch } from "vue";
 import { useRouter } from "vue-router";
-import { LIMITS } from "@spreadsheet-app/shared";
+import {
+  LIMITS,
+  type DocumentSearchMatch,
+  type DocumentSearchResponse,
+} from "@spreadsheet-app/shared";
 import ContextMenu from "../components/ContextMenu.vue";
 import ErrorWarning from "../components/ErrorWarning.vue";
 import NoticeMessage from "../components/NoticeMessage.vue";
@@ -23,6 +27,10 @@ usePageTitle("Documents");
 
 const folders = ref<FolderRecord[]>([]);
 const documents = ref<ListedSpreadsheetItem[] | null>(null);
+const searchQuery = ref("");
+const searchResults = ref<DocumentSearchResponse | null>(null);
+const searchLoading = ref(false);
+const searchError = ref<string | null>(null);
 const notice = ref<Notice | null>(null);
 const creatingFolder = ref(false);
 const showingTemplates = ref(false);
@@ -44,6 +52,96 @@ const galleryCloseButton = ref<HTMLButtonElement>();
 const galleryOpener = ref<HTMLElement | null>(null);
 const moveMenu = ref<{ document: ListedSpreadsheetItem; x: number; y: number } | null>(null);
 const actionMenu = ref<{ document: ListedSpreadsheetItem; x: number; y: number } | null>(null);
+const searchActive = computed(() => searchQuery.value.length > 0);
+const localNameResults = computed<DocumentSearchResponse>(() => {
+  const query = searchQuery.value.toLocaleLowerCase();
+  if (query.length !== 1) return [];
+  return (documents.value ?? []).flatMap((document) => {
+    const offset = document.name.toLocaleLowerCase().indexOf(query);
+    if (offset < 0) return [];
+    const start = Math.max(0, offset - 40);
+    const end = Math.min(document.name.length, offset + query.length + 40);
+    const prefix = start > 0 ? "…" : "";
+    const suffix = end < document.name.length ? "…" : "";
+    const snippet = `${prefix}${document.name.slice(start, end)}${suffix}`;
+    return [
+      {
+        spreadsheetId: document.id,
+        name: document.name,
+        matches: [
+          {
+            kind: "name" as const,
+            pageName: null,
+            blockName: null,
+            snippet,
+            matchStart: prefix.length + offset - start,
+            matchEnd: prefix.length + offset - start + query.length,
+          },
+        ],
+      },
+    ];
+  });
+});
+const displayedSearchResults = computed(() =>
+  searchQuery.value.length === 1 ? localNameResults.value : searchResults.value,
+);
+
+let searchTimeout: ReturnType<typeof setTimeout> | undefined;
+let searchGeneration = 0;
+
+async function loadSearch(query: string, generation: number): Promise<void> {
+  try {
+    const results = await api.searchDocuments(query);
+    if (generation === searchGeneration) {
+      searchResults.value = results;
+      searchError.value = null;
+    }
+  } catch (cause) {
+    if (generation === searchGeneration) {
+      searchError.value = cause instanceof Error ? cause.message : "Search failed";
+    }
+  } finally {
+    if (generation === searchGeneration) searchLoading.value = false;
+  }
+}
+
+watch(searchQuery, (query) => {
+  if (searchTimeout !== undefined) clearTimeout(searchTimeout);
+  const generation = ++searchGeneration;
+  searchError.value = null;
+  if (query.length < 2) {
+    searchResults.value = null;
+    searchLoading.value = false;
+    return;
+  }
+  searchResults.value = null;
+  searchLoading.value = true;
+  searchTimeout = setTimeout(() => void loadSearch(query, generation), 250);
+});
+
+function retrySearch(): void {
+  const generation = ++searchGeneration;
+  searchError.value = null;
+  searchLoading.value = true;
+  void loadSearch(searchQuery.value, generation);
+}
+
+function highlightedParts(match: DocumentSearchMatch): { text: string; highlighted: boolean }[] {
+  return [
+    { text: match.snippet.slice(0, match.matchStart), highlighted: false },
+    {
+      text: match.snippet.slice(match.matchStart, match.matchEnd),
+      highlighted: true,
+    },
+    { text: match.snippet.slice(match.matchEnd), highlighted: false },
+  ].filter(({ text }) => text.length > 0);
+}
+
+function searchMatchLabel(match: DocumentSearchMatch): string {
+  if (match.kind === "name") return "Document name";
+  const location = [match.pageName, match.blockName, match.address].filter(Boolean).join(" › ");
+  return `${match.kind} · ${location}`;
+}
 
 async function run(action: () => Promise<void>): Promise<void> {
   try {
@@ -374,6 +472,10 @@ function formatDate(iso: string): string {
 }
 
 onMounted(refresh);
+onBeforeUnmount(() => {
+  if (searchTimeout !== undefined) clearTimeout(searchTimeout);
+  searchGeneration++;
+});
 </script>
 
 <template>
@@ -387,6 +489,23 @@ onMounted(refresh);
     </header>
 
     <NoticeMessage v-if="notice" :notice="notice" @dismiss="notice = null" />
+
+    <div class="list__search">
+      <label class="list__search-field">
+        <span>Search documents</span>
+        <input
+          v-model="searchQuery"
+          type="search"
+          aria-label="Search documents"
+          placeholder="Names and content"
+          maxlength="200"
+          autocomplete="off"
+        />
+      </label>
+      <button v-if="searchActive" type="button" aria-label="Clear search" @click="searchQuery = ''">
+        Clear
+      </button>
+    </div>
 
     <div class="list__actions">
       <button type="button" class="primary" @click="create">New document</button>
@@ -447,7 +566,43 @@ onMounted(refresh);
       <button type="button" @click="cancelCreateFolder">Cancel</button>
     </form>
 
-    <p v-if="documents === null && !notice">Loading…</p>
+    <div v-if="searchActive" class="list__search-content">
+      <p v-if="searchError" class="list__search-error" role="alert">
+        Search failed: {{ searchError }}
+        <button type="button" @click="retrySearch">Try again</button>
+      </p>
+      <p
+        v-else-if="searchLoading || (searchQuery.length === 1 && documents === null)"
+        class="list__search-status"
+        role="status"
+      >
+        Searching…
+      </p>
+      <p v-else-if="displayedSearchResults?.length === 0" class="list__search-empty">
+        No documents match
+      </p>
+      <ul v-else-if="displayedSearchResults" class="list__search-results">
+        <li v-for="result in displayedSearchResults" :key="result.spreadsheetId">
+          <article class="list__search-result">
+            <RouterLink :to="{ name: 'editor', params: { spreadsheetId: result.spreadsheetId } }">
+              {{ result.name }}
+            </RouterLink>
+            <ul>
+              <li v-for="(match, index) in result.matches" :key="`${match.kind}-${index}`">
+                <span class="list__search-location">{{ searchMatchLabel(match) }}</span>
+                <span class="list__search-snippet">
+                  <template v-for="(part, partIndex) in highlightedParts(match)" :key="partIndex">
+                    <mark v-if="part.highlighted">{{ part.text }}</mark>
+                    <span v-else>{{ part.text }}</span>
+                  </template>
+                </span>
+              </li>
+            </ul>
+          </article>
+        </li>
+      </ul>
+    </div>
+    <p v-else-if="documents === null && !notice">Loading…</p>
     <div v-else-if="documents?.length === 0 && folders.length === 0" class="list__empty">
       <p>No documents yet. Create one to get started.</p>
       <button type="button" @click="openGallery">Browse samples and templates</button>

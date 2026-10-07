@@ -291,6 +291,7 @@ export function mockApi(): MockedApi {
   return {
     replace: vi.fn(),
     listSpreadsheets: vi.fn().mockResolvedValue({ folders: [], documents: [] }),
+    searchDocuments: vi.fn().mockResolvedValue([]),
     createFolder: vi.fn(),
     renameFolder: vi.fn(),
     deleteFolder: vi.fn().mockResolvedValue(undefined),

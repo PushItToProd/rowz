@@ -30,6 +30,7 @@ import type {
   IdentityFormatRange,
   ResizeLinesBody,
   UpdateTableBody,
+  DocumentSearchResponse,
 } from "@spreadsheet-app/shared";
 import type {
   ChartType,
@@ -148,6 +149,8 @@ export const api = {
       }),
     ),
   listSpreadsheets: (): Promise<DocumentListItem> => body(routes.spreadsheets.$get()),
+  searchDocuments: (q: string, limit = 20): Promise<DocumentSearchResponse> =>
+    body(routes.search.$get({ query: { q, limit: String(limit) } })),
   createFolder: (name: string): Promise<FolderRecord> =>
     body(routes.folders.$post({ json: { name } })),
   renameFolder: (folderId: string, name: string): Promise<FolderRecord> =>

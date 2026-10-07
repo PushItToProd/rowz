@@ -1,5 +1,42 @@
 import { z } from "zod";
 
+export const documentSearchQuery = z.object({
+  q: z.string().min(2).max(200),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+export const documentSearchKind = z.enum([
+  "name",
+  "page",
+  "table",
+  "column",
+  "cell",
+  "text",
+  "script",
+  "chart",
+]);
+
+export type DocumentSearchKind = z.infer<typeof documentSearchKind>;
+
+export interface DocumentSearchMatch {
+  kind: DocumentSearchKind;
+  pageName: string | null;
+  blockName: string | null;
+  address?: string;
+  snippet: string;
+  /** Zero-based UTF-16 offsets into `snippet`, as used by String.slice. */
+  matchStart: number;
+  matchEnd: number;
+}
+
+export interface DocumentSearchResult {
+  spreadsheetId: string;
+  name: string;
+  matches: DocumentSearchMatch[];
+}
+
+export type DocumentSearchResponse = DocumentSearchResult[];
+
 export const searchScope = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("document") }),
   z.object({ kind: z.literal("page"), id: z.uuid() }),

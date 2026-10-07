@@ -145,6 +145,28 @@ test("folders organize documents in the list, and deleting one returns them to U
   await expect(unfiled.getByRole("link", { name: "Untitled document" })).toBeVisible();
 });
 
+test("searches document content and names from the Documents page", async ({ page }) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "cross-document-search-token");
+  await page.getByRole("link", { name: "← Documents" }).click();
+
+  const search = page.getByRole("searchbox", { name: "Search documents" });
+  await search.fill("document-search-token");
+  const result = page.locator(".list__search-result");
+  await expect(result.getByRole("link", { name: "Untitled document" })).toBeVisible();
+  await expect(result.locator("mark")).toHaveText("document-search-token");
+  await expect(result).toContainText("A1");
+  await expect(page.locator(".list__groups")).toHaveCount(0);
+
+  await search.fill("Untitled");
+  await expect(result.locator("mark")).toHaveText("Untitled");
+
+  await search.fill("no-document-has-this");
+  await expect(page.getByText("No documents match")).toBeVisible();
+  await page.getByRole("button", { name: "Clear search" }).click();
+  await expect(page.getByRole("link", { name: "Untitled document" })).toBeVisible();
+});
+
 test("renames, duplicates, and deletes a document from the list", async ({ page }) => {
   await newSpreadsheet(page);
   await page.getByRole("link", { name: "← Documents" }).click();

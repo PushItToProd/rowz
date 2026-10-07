@@ -267,7 +267,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - [x] **P4** standalone find without replace - search just the current document #everyday
     - [x] **P4** allow filtering by just the current page or block #everyday
   - [x] **P4** find and replace within a document #everyday
-  - [ ] **P5** cross-document search #everyday
+  - [x] **P5** cross-document search #everyday
   - don't implement cross-document find and replace -- too risky
 - [ ] **P7** support hiding rows and columns #everyday
 - [ ] **P8** support hiding pages #everyday
@@ -538,6 +538,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 
 These items harden rowz for several users, hostile input, or a deployed server. They are parked while one person uses rowz on their own machine. Review findings of that kind go here.
 
+- [ ] Cross-document search (`apps/server/src/repo/spreadsheets/search.ts`) scans and ranks every readable document before applying the document limit, and the list UI does not abort in-flight requests; bound the work per request and abort superseded requests #documents
 - [ ] **P10** The Runs panel lists runs by people whose share has ended, with their name and email, because `action_runs.user_id` outlives a share (`apps/server/src/repo/spreadsheets/runs.ts`). Show a former member as such, without the email #small-apps
 - [ ] **P10** A text-view input commit can overwrite a newer value written from another tab, because its fingerprint names the target but not the value it was rendered with; include the rendered value and answer 409 on mismatch #sharing
 - [ ] **P10** A text-view `BUTTON` click sends only its occurrence index, so a stale view whose conditional content shifted can run a different button; send a render token or the button's label/action fingerprint and answer 409 on mismatch #sharing

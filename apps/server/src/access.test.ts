@@ -52,6 +52,7 @@ type Route = [method: string, path: string, body?: unknown];
 /** Account-scoped routes; moving a document also checks that the caller can read it. */
 const accountRoutes: Route[] = [
   ["GET", "/spreadsheets"],
+  ["GET", "/search?q=not-a-match"],
   ["POST", "/spreadsheets", { name: "x" }],
   ["POST", "/spreadsheets/import", {}],
   ["POST", "/folders", { name: "x" }],
@@ -262,6 +263,7 @@ describe("a user outside the workspace", () => {
     await createSpreadsheet(stranger, "Mine");
     const listed = await stranger.json<{ documents: SpreadsheetSummary[] }>("GET", "/spreadsheets");
     expect(listed.documents.map((item) => item.name)).toEqual(["Mine"]);
+    expect(await stranger.json("GET", "/search?q=Private")).toEqual([]);
   });
 });
 
@@ -282,6 +284,9 @@ describe("a viewer", () => {
     ).toMatchObject([{ kind: "cell_button", user: { name: "Owner", email: owner.email } }]);
     const listed = await viewer.json<{ documents: SpreadsheetSummary[] }>("GET", "/spreadsheets");
     expect(listed.documents.map((item) => item.id)).toEqual([snapshot.id]);
+    expect(await viewer.json("GET", "/search?q=Private")).toMatchObject([
+      { spreadsheetId: snapshot.id, name: "Private" },
+    ]);
 
     const routes = writeRoutes();
     expect(await statuses(viewer, routes)).toEqual(routes.map(() => 403));

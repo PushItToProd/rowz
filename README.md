@@ -65,6 +65,8 @@ Open http://localhost:5173 and create an account. Development needs no database 
 
 The Documents page lists documents you own and documents shared with you. Create flat folders to group the documents in your own list. Folders are private to your account, so moving a shared document changes only how it appears in your list. Deleting a folder returns its documents to the unfiled list without deleting them. Use a document's **⋯** menu to rename or delete documents you own, or duplicate any document you can read. Deleting a document asks for confirmation and cannot be undone.
 
+Search above the document list finds case-insensitive literal text in document, page, table, and column names; stored cell inputs; and text, script, and chart sources. Results show a short snippet and open the matching document. The editor's Find and Replace still works within one document.
+
 ### Developing from another machine
 
 To open the dev server from a second machine, put the URL that machine will use in `.env.local` at the repository root:
@@ -275,6 +277,8 @@ String literals, date literals, and `label` text use double quotes only. Inside 
 
 **Find** searches the current document, page, or selected block. Ctrl/Cmd+F opens it while focus is in the editor; browser find remains available elsewhere. Search stored cell inputs (including formulas as written) or displayed values. Both modes also search Markdown/text, chart, and script sources, column formulas, table filters, and named formulas. Matches show their page, block, and cell address or source. Enter/F3 advances to the next match; Shift+Enter/Shift+F3 goes back. Case sensitive and whole cell/entire source options narrow the search. Search text is literal, with no regular expressions.
 
+The Documents page search looks across every document you can read, including shared documents. It searches names, stored cell inputs, and text, script, and chart sources. Results show up to five snippets per document and open the document.
+
 Current page and selected block scopes follow navigation while Find is open. The panel counts every match and shows the first 1,000.
 
 In **Stored inputs** mode, **Replace one** changes the selected occurrence and **Replace all** changes every occurrence in the chosen scope, including matches beyond the displayed list. Replacement text is literal, including inside formulas. An input or source whose replacement would introduce a syntax error stays unchanged and appears in the skipped replacements list; unresolved names are allowed. Computed cells in formula columns are skipped; edit their column formula through find and replace instead. One document undo step reverses the entire replacement. Replacements that exceed the undo journal's size limit are refused without changing the document; choose a smaller scope. Escape closes the panel.
@@ -309,6 +313,8 @@ Cell writes and a record in `action_runs` commit in one transaction. Email is se
 Every change to what a document holds runs in a transaction that first locks the document's row, so changes to one document happen one at a time and each reads what the one before it left. A request that changes anything must also come from a page served at `BASE_URL`: the server refuses one whose `Origin` header names another origin. `action_runs` records who clicked a cell button or a text-view button, or changed a control, along with the effects and outcome.
 
 Every document belongs to a workspace, and users reach documents through workspace membership with a role of owner, editor, or viewer. All data access goes through `SpreadsheetRepository`, which checks membership in each query. A document outside the user's workspaces is reported as not found.
+
+`GET /api/search?q=...&limit=...` searches readable documents by literal text. The query must contain 2 to 200 characters; the default result limit is 20 documents, with a maximum of 50 and five matches per document.
 
 `apps/server/src/repo/spreadsheets.ts` keeps the public repository API. Its implementation modules are in `apps/server/src/repo/spreadsheets/`: document reads, folders, sharing, file import/copy, versions, undo/redo, pages, tables, columns, formats, views, cell writes, structural edits, and formula rewrites. `context.ts` owns the single access subquery, authorized lookups, and the shared `locked`, `change`, and `touch` methods. Calls between public methods use `context.repository`, preserving repository overrides and spies; transaction contexts belong to new repository instances. Content writes still go through `ContentWriter` in `repo/journal.ts`.
 

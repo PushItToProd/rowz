@@ -43,6 +43,7 @@ import * as structureOperations from "./structure";
 import * as historyOperations from "./history";
 import * as rewritesOperations from "./rewrites";
 import * as runsOperations from "./runs";
+import * as searchOperations from "./search";
 
 export const pageColumns = { id: pages.id, name: pages.name, position: pages.position };
 
@@ -207,6 +208,7 @@ export class RepositoryContext {
   }
   readonly read = documentsOperations.read.bind(null, this);
   readonly listRuns = runsOperations.listRuns.bind(null, this);
+  readonly searchDocuments = searchOperations.searchDocuments.bind(null, this);
 
   async pruneJournal(tx: Database, spreadsheetId: string): Promise<void> {
     const entries = await tx

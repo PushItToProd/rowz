@@ -10,6 +10,7 @@ import {
   type Env,
 } from "./http";
 import { pageRoutes } from "./routes/pages";
+import { searchRoutes } from "./routes/search";
 import { folderRoutes } from "./routes/folders";
 import { spreadsheetRoutes } from "./routes/spreadsheets";
 import { tableRoutes } from "./routes/tables";
@@ -55,6 +56,7 @@ export function createApp(dependencies: AppDependencies) {
     .use(requireSession(dependencies))
     .use(announceChanges(changes))
     .route("/folders", folderRoutes())
+    .route("/search", searchRoutes())
     .route("/spreadsheets", spreadsheetRoutes(changes, dependencies.shutdown))
     .route("/pages", pageRoutes())
     .route("/tables", tableRoutes(dependencies))

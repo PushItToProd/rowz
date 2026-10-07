@@ -457,6 +457,12 @@ const OPERATORS = [
         the grid undoes the entire replacement in one step. Replacements too large for the undo
         journal are refused; choose a smaller scope.
       </p>
+      <p>
+        Search above the Documents list to find literal text across documents you can read. It
+        searches document, page, table, and column names; stored cell inputs; and text, script, and
+        chart sources. Results show up to five snippets per document. Find and Replace in the editor
+        remains scoped to one document.
+      </p>
     </section>
     <section id="structure">
       <h2>Pages and tables</h2>
