@@ -128,3 +128,8 @@ input {
   border: none;
   background: transparent;
 }
+
+.notice__action {
+  font-weight: 600;
+  white-space: nowrap;
+}

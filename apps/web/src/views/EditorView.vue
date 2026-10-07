@@ -99,12 +99,28 @@ async function returnToEditor(pageId: string): Promise<void> {
 
 const loadError = ref<string | null>(null);
 const copying = ref(false);
+const pendingCopyNotice = ref<{
+  spreadsheetId: string;
+  originalId: string;
+  originalPageId: string | undefined;
+  name: string;
+} | null>(null);
 async function saveCopy(): Promise<void> {
   copying.value = true;
+  const originalId = props.spreadsheetId;
+  const originalPageId = props.pageId;
   try {
-    const copy = await api.copySpreadsheet(props.spreadsheetId);
+    const copy = await api.copySpreadsheet(originalId);
+    pendingCopyNotice.value = {
+      spreadsheetId: copy.id,
+      originalId,
+      originalPageId,
+      name: copy.name,
+    };
     await openCopy(copy.id);
+    if (router.currentRoute.value.params.spreadsheetId !== copy.id) pendingCopyNotice.value = null;
   } catch (error) {
+    pendingCopyNotice.value = null;
     store.notice = {
       kind: "error",
       text: error instanceof Error ? error.message : "Could not save a copy",
@@ -252,6 +268,7 @@ watch(
       window.clearTimeout(refreshTimer);
       stop?.();
     });
+    if (pendingCopyNotice.value?.spreadsheetId !== spreadsheetId) pendingCopyNotice.value = null;
     loadError.value = null;
     opened.value = null;
     try {
@@ -264,6 +281,24 @@ watch(
     }
     if (!isActive()) return;
     opened.value = spreadsheetId;
+    const savedCopy = pendingCopyNotice.value;
+    if (savedCopy?.spreadsheetId === spreadsheetId) {
+      pendingCopyNotice.value = null;
+      store.notice = {
+        kind: "success",
+        text: `Copy saved. You are now editing “${savedCopy.name}”.`,
+        action: {
+          label: "Back to original",
+          to: {
+            name: "editor",
+            params: {
+              spreadsheetId: savedCopy.originalId,
+              ...(savedCopy.originalPageId ? { pageId: savedCopy.originalPageId } : {}),
+            },
+          },
+        },
+      };
+    }
     stop = watchSpreadsheet(spreadsheetId, (change) => {
       if (change) {
         void store.receiveChange(change).catch((cause: unknown) => {

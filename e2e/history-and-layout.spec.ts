@@ -112,6 +112,15 @@ test("Save a copy opens an independent document with working formulas", async ({
   await page.getByRole("button", { name: "Save a copy", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Untitled document (copy)");
   expect(page.url()).not.toBe(original);
+  const copy = page.url();
+  await expect(page.locator('.notice--floating[role="status"]')).toContainText(
+    "Copy saved. You are now editing “Untitled document (copy)”.",
+  );
+  await page.getByRole("link", { name: "Back to original", exact: true }).click();
+  await expect(page).toHaveURL(original);
+  await expect(cell(page, "A1")).toHaveText("21");
+  await expect(cell(page, "B1")).toHaveText("42");
+  await page.goto(copy);
   await expect(cell(page, "B1")).toHaveText("42");
   await enter(page, "A1", "5");
   await expect(cell(page, "B1")).toHaveText("10");

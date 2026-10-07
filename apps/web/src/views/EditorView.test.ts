@@ -57,12 +57,12 @@ async function render(role = "owner", empty = false) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: "/", name: "editor", component: { template: "<div />" } },
+      { path: "/s/:spreadsheetId/p/:pageId?", name: "editor", component: { template: "<div />" } },
       { path: "/spreadsheets", name: "spreadsheets", component: { template: "<div />" } },
       { path: "/help", name: "help", component: { template: "<div />" } },
     ],
   });
-  await router.push("/");
+  await router.push({ name: "editor", params: { spreadsheetId: "s1" } });
   const wrapper = mount(EditorView, {
     props: { spreadsheetId: "s1", pageId: "p1" },
     global: {
@@ -112,7 +112,10 @@ it("blocks page-control clicks on save failure, and cancel does not replay them"
 
 it("lets a viewer save a copy and navigate to it", async () => {
   const wrapper = await render("viewer");
-  server.copySpreadsheet.mockResolvedValue({ id: "copy", name: "Copy", updatedAt: "" });
+  server.copySpreadsheet.mockResolvedValue({ id: "copy", name: "Budget (copy)", updatedAt: "" });
+  server.getSnapshot.mockResolvedValue(
+    wireSnapshot({ ...snapshotWith({}, "owner"), id: "copy", name: "Budget (copy)" }),
+  );
   const push = vi.spyOn(wrapper.vm.$router, "push");
   await wrapper
     .findAll("button")
@@ -121,6 +124,13 @@ it("lets a viewer save a copy and navigate to it", async () => {
   await flushPromises();
   expect(server.copySpreadsheet).toHaveBeenCalledWith("s1");
   expect(push).toHaveBeenCalledWith({ name: "editor", params: { spreadsheetId: "copy" } });
+  await wrapper.setProps({ spreadsheetId: "copy" });
+  await flushPromises();
+  expect(wrapper.get('[role="status"]').text()).toContain(
+    "Copy saved. You are now editing “Budget (copy)”.",
+  );
+  expect(wrapper.get(".notice__action").text()).toBe("Back to original");
+  expect(wrapper.get(".notice__action").attributes("href")).toBe("/s/s1/p/p1");
   wrapper.unmount();
 });
 

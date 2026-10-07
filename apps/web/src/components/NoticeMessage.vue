@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from "vue";
+import { RouterLink } from "vue-router";
 import type { Notice } from "../notice";
 
 const props = defineProps<{ notice: Notice }>();
@@ -11,6 +12,8 @@ const ERROR_MS = 8000;
 watch(
   () => props.notice,
   (notice, _previous, onCleanup) => {
+    if (notice.action) return;
+
     const timer = window.setTimeout(
       () => {
         if (props.notice === notice) emit("dismiss");
@@ -42,7 +45,10 @@ onUnmounted(() => {
     :class="`notice--${notice.kind}`"
     :role="notice.kind === 'error' ? 'alert' : 'status'"
   >
-    {{ notice.text }}
+    <span>{{ notice.text }}</span>
+    <RouterLink v-if="notice.action" class="notice__action" :to="notice.action.to">
+      {{ notice.action.label }}
+    </RouterLink>
     <button type="button" aria-label="Dismiss" @click="emit('dismiss')">×</button>
   </div>
 </template>

@@ -130,7 +130,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] **P5** (Claude) A text view writes a cell's value without the cell's number format. `{{Sales!D1}}` shows `7.5` where the cell shows `$7.50`. The author decided that a bare cell reference in a template carries the cell's number format. A computed value such as `{{Sales!D1 * 2}}` has no cell to take a format from, and `TEXT` formats it #small-apps
 - [ ] **P6** (Claude) Changing a column's type to Checkbox turns each cell that is not true or false into `#VALUE!` without a warning. In the test the document's error count went from 7 to 14. Say how many cells do not fit the new type before changing it #data-tables
 - [x] **P3** (Claude) A click anywhere in a cell of a checkbox column ticks or clears it, so the mouse cannot select such a cell without changing it. Only the box itself should toggle #data-tables
-- [ ] **P4** (Claude) "Save a copy" opens the copy at once, and the only sign is "(copy)" at the end of the name in the header. A later edit meant for the original goes to the copy. Show a message that the copy is now open, or keep the original open and link to the copy #documents
+- [x] **P4** (Claude) "Save a copy" opens the copy at once, and the only sign is "(copy)" at the end of the name in the header. A later edit meant for the original goes to the copy. Show a message that the copy is now open, or keep the original open and link to the copy #documents
 - [ ] **Author** **P8** (Claude) After a reload the Undo button is disabled, though the server keeps the journal of changes. Decide whether undo should continue across a reload #everyday
 
 ## Formula language and functions
@@ -617,3 +617,5 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - [ ] When an action runs while a formula edit is active, the draft save can clear a pending save's error and the action is then skipped without notice (`stores/workbook/queue.ts` line 30 does not forward `clearPreviousError`) #everyday
 - [ ] In `SpreadsheetListView.vue`, an older successful request can clear a newer request's error, and cancelling a delete clears the error #everyday
+
+- [ ] **P0** Investigate a flaky e2e test: `e2e/data-tables-and-formatting.spec.ts:5` ("a spreadsheet is exported to a file and imported again, and a table to and from CSV") failed once in a full `pnpm e2e:remote` run (15.1s) and passed when the spec file ran alone #codebase

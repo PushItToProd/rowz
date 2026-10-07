@@ -1,5 +1,6 @@
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
+import { createMemoryHistory, createRouter } from "vue-router";
 import type { Notice } from "../notice";
 import NoticeMessage from "./NoticeMessage.vue";
 
@@ -53,5 +54,34 @@ it("dismisses on Escape and keeps success notices brief", async () => {
   await flushPromises();
   expect(wrapper.emitted("dismiss")).toBeUndefined();
   await vi.advanceTimersByTimeAsync(1);
+  expect(wrapper.emitted("dismiss")).toHaveLength(1);
+});
+
+it("keeps notices with action links until dismissed", async () => {
+  vi.useFakeTimers();
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: "/s/:spreadsheetId", name: "editor", component: { template: "<div />" } }],
+  });
+  await router.push({ name: "editor", params: { spreadsheetId: "copy" } });
+  wrapper = mount(NoticeMessage, {
+    props: {
+      notice: {
+        kind: "success",
+        text: "Copy saved. You are now editing “Budget (copy)”.",
+        action: {
+          label: "Back to original",
+          to: { name: "editor", params: { spreadsheetId: "original" } },
+        },
+      },
+    },
+    global: { plugins: [router] },
+  });
+
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(wrapper.emitted("dismiss")).toBeUndefined();
+  expect(wrapper.get(".notice__action").text()).toBe("Back to original");
+
+  await wrapper.get('[aria-label="Dismiss"]').trigger("click");
   expect(wrapper.emitted("dismiss")).toHaveLength(1);
 });
