@@ -292,6 +292,26 @@ describe("shared formula editor", () => {
     expect(string.view.state.doc.toString()).toBe('="don\'t"');
   });
 
+  it("inserts apostrophes literally in script comments", () => {
+    const comment = render("// A note ", { mode: "script" });
+    type(comment.view, "'");
+    expect(comment.view.state.doc.toString()).toBe("// A note '");
+  });
+
+  it("wraps a selected name in apostrophes in either selection direction", () => {
+    const forward = render("=Foo");
+    forward.view.dispatch({ selection: { anchor: 1, head: 4 } });
+    type(forward.view, "'");
+    expect(forward.view.state.doc.toString()).toBe("='Foo'");
+    expect(forward.view.state.selection.main).toMatchObject({ anchor: 2, head: 5 });
+
+    const backward = render("=Foo");
+    backward.view.dispatch({ selection: { anchor: 4, head: 1 } });
+    type(backward.view, "'");
+    expect(backward.view.state.doc.toString()).toBe("='Foo'");
+    expect(backward.view.state.selection.main).toMatchObject({ anchor: 5, head: 2 });
+  });
+
   it("keeps bracket behavior deliberate in cell, script, and Markdown editors", () => {
     const literal = render("value", { mode: "cell" });
     type(literal.view, "(");

@@ -2,7 +2,7 @@ import { EditorState, Prec, StateField, type Extension, type Text } from "@codem
 import { EditorView } from "@codemirror/view";
 import type { FormulaMode } from "./session";
 
-type QuoteContext = "string" | "name" | undefined;
+type QuoteContext = "string" | "name" | "comment" | undefined;
 interface QuoteSpan {
   from: number;
   to: number;
@@ -39,6 +39,8 @@ function quoteSpans(doc: Text, mode: FormulaMode): QuoteSpan[] {
 
     if (mode === "script" && character === "/" && source[index + 1] === "/") {
       const newline = source.indexOf("\n", index + 2);
+      const end = newline === -1 ? source.length : newline;
+      spans.push({ from: index + 2, to: end + 1, context: "comment" });
       if (newline === -1) break;
       index = newline;
       continue;
@@ -157,17 +159,20 @@ export function closeBracketLanguageData(mode: FormulaMode): Extension {
       const input = state.field(quoteInput);
       if (context) {
         const brackets =
-          input?.escaped?.position === position && input.escaped.quote === quote
-            ? []
-            : quote !== undefined && next === quote
-              ? [quote]
-              : [];
+          context === "comment"
+            ? ["(", "[", '"']
+            : input?.escaped?.position === position && input.escaped.quote === quote
+              ? []
+              : quote !== undefined && next === quote
+                ? [quote]
+                : [];
         return [{ closeBrackets: { brackets } }];
       }
 
       const brackets = ["(", "[", '"'];
-      const before = source[position - 1];
-      if (!isWordCharacter(before)) brackets.push("'");
+      const selection = state.selection.main;
+      const before = source[(selection.empty ? position : selection.from) - 1];
+      if (!selection.empty || !isWordCharacter(before)) brackets.push("'");
       if (input?.escaped?.position === position) {
         const index = brackets.indexOf(input.escaped.quote);
         if (index !== -1) brackets.splice(index, 1);
