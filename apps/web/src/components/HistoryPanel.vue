@@ -40,7 +40,7 @@ const refresh = (): Promise<void> =>
   });
 
 async function restore(version: VersionListItem): Promise<void> {
-  const asked = `Restore the version from ${when(version)}? The current document is saved as a version first, so you can undo this.`;
+  const asked = `Restore the version from ${when(version)}? The current document is saved as a version first, so you can restore it from History.`;
   if (
     !(await dialog.confirm({
       title: "Restore version",

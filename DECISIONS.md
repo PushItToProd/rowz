@@ -66,9 +66,11 @@ A delete chosen from a menu is confirmed in or beside that menu: the item change
 
 ## 2026-10-07: A name opens for editing on one click
 
-**Decision.** A block's name and a document's name open for editing on one click, not a double-click.
+**Decision.** A name that is renamed in place opens for editing on one click, not a double-click: a document's, a page's, a block's, a column's, and a name in the Names panel.
 
-**Why.** The author asked for it. A name has no other use for a single click.
+**A click that already means something comes first.** A click on another page's tab switches to that page, and a click on a column's header selects the column. One click renames such a name only when its page is already active or its column already selected.
+
+**Why.** The author asked for it. A block's or a document's name has no other use for a single click, and a page's or a column's has none once it is selected.
 
 **Script and text blocks keep double-click.** One click there would swap rendered text for its source on a click that may only be meant to select or scroll. A way to tell the two apart, such as starting the edit only if the pointer stays put for a moment after the click, is to be investigated and is in `todo.md`.
 

@@ -10,11 +10,11 @@ Write what a person would say to a colleague looking at the same screen.
 - Do not explain what the screen already makes obvious. A table needs no "Select a cell to insert or delete its row or column."
 - No marketing voice, no apology, no exclamation.
 
-| Instead of                                                                                                | Write                                                                                                    |
-| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Edit the selected cell, keeping what it holds.                                                            | Edit the selected cell's current contents.                                                               |
-| Put the document back as it was on {date}? What it holds now is kept as a version, so this can be undone. | Restore the version from {date}? The current document is saved as a version first, so you can undo this. |
-| column of this row                                                                                        | this row's value                                                                                         |
+| Instead of                                                                                                | Write                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Edit the selected cell, keeping what it holds.                                                            | Edit the selected cell's current contents.                                                                             |
+| Put the document back as it was on {date}? What it holds now is kept as a version, so this can be undone. | Restore the version from {date}? The current document is saved as a version first, so you can restore it from History. |
+| column of this row                                                                                        | this row's value                                                                                                       |
 
 ## Vocabulary
 
@@ -66,7 +66,7 @@ A formula error such as `#VALUE!` with its explanation is already the actual err
 
 - **Say how to fix it when the fix is known.** A table name with a space, written without quotes, gets a message that says the name needs single quotes, not "Expected )".
 - **List the alternatives when the problem is a choice.** "Total has more than one meaning: February!Total, March!Total. Use one of these qualified names."
-- **Offer the fix as an action when the app can perform it.** A spill error caused by table size has a "Resize table to fit" button.
+- **Offer the fix as an action when the app can perform it.** A spill error caused by table size has a "Resize to fit" button.
 - **Link to where the error arose.** See "Errors are always visible, and an error leads to its origin" in [README.md](README.md).
 
 ### Keep it short
@@ -76,15 +76,16 @@ Use as few sentences as answer the questions above. No "please" and no "sorry": 
 ## Sentences
 
 - **Lead with what matters.** "Select **Filters** to add effects to your image", not "If you want to add effects to your image, select **Filters**".
-- **Use the active voice.** "Restart the app to see your changes", not "The changes will be applied when the app is restarted".
-- **Address the person as "you".**
+- **Use the active voice for what the person does.** "Restart the app to see your changes", not "The changes will be applied when the app is restarted".
+- **An error summary has the thing that failed as its subject.** "The file could not be saved because the request timed out." rowz does not speak as "we", so nothing else can be the subject, and the passive is correct there.
+- **Address the person as "you" when telling them what to do.** A summary of what failed, a label, and function help need no "you".
 - **Sentence case everywhere**: capitalize the first word and proper nouns only. "Add chart", not "Add Chart".
 - **A full sentence ends with a period.** A button, label, menu item, or heading does not.
 
 ## Buttons, menu items, and dialogs
 
-- Name the action and its object: "Delete rows 3-6", "Add chart", "Resize table to fit".
-- A button is one or two words where the object is clear from its surroundings.
+- Name the action and its object: "Delete rows 3-6", "Add chart".
+- A button is one or two words where the object is clear from its surroundings: "Resize to fit" in a table's error popover, not "Resize table to fit". A third word is acceptable when two would be unclear.
 - A dialog's title says what is being asked in a few words and does not explain the remedy. Its buttons answer the title: a confirmation's button repeats the action ("Delete table"), not "OK" or "Yes".
 - A dialog that asks for a decision offers a way out.
 

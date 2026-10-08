@@ -10,6 +10,7 @@ Each job below has one component. Use it, and extend it when it falls short. A s
 | ------------------------------------- | ------------------------------------------------------------------------ |
 | A menu of actions on a thing          | `ContextMenu.vue`, with items described in `components/menu.ts`          |
 | Confirm, ask for one value, or tell   | `useDialog()` in `useDialog.ts`, drawn by `DialogHost.vue`               |
+| Confirm a delete chosen from a menu   | `ContextMenu.vue`, as a property of the item in `components/menu.ts`     |
 | A passing message                     | `NoticeMessage.vue`                                                      |
 | Details anchored to a cell or chip    | The popover in `CellError.vue`                                           |
 | Any place a formula is typed          | `FormulaEditor.vue` and the session components built on it               |
@@ -38,7 +39,8 @@ Anything a person can act on has a menu of its actions that opens on right-click
 - Leave out an item that cannot apply to what was clicked. A column header's menu has no "Insert row".
 - A right-click on a control opens the menu of the component the control is directly part of. A page tab's move and delete buttons open the tab's menu, and a block's header buttons open the block's menu. The browser's own menu does not appear over a part of the app that has a menu.
 - A child component with a menu of its own takes precedence inside its area: within a block, a grid cell opens the cell menu. A text field or editor keeps the browser's menu, which has copy, paste, and spelling.
-- A menu holds the actions of one thing. It does not also list the actions of the things that contain it, which would make every menu long. The containing things' menus are reached from tabs along the top of the menu: a right-click on a cell shows tabs such as Cell, Row, Column, Table, and Page, and choosing one shows that thing's menu.
+- A menu holds the actions of one thing. It does not also list the actions of the things that contain it, which would make every menu long.
+- On trial: the containing things' menus are reached from tabs along the top of the menu. A right-click on a cell shows tabs such as Cell, Row, Column, Table, and Page, and choosing one shows that thing's menu. The author decides whether to keep the tabs after using them, so build them once and do not treat them as settled.
 - A menu, popover, or dialog draws above everything else on the page and stays inside the window. Nothing on the page covers part of it.
 
 ## Show controls unless there is a reason to hide them
@@ -53,7 +55,7 @@ Acting on the thing itself is the first way to do something: drag a header borde
 
 Keep an explicit control for the same action, so that a gesture is never the only way. The control may be a menu item. A text view opens for editing on double-click and also has Edit and Done buttons.
 
-A name that can be renamed in place, such as a block's or a document's, opens for editing on one click. A script or text block opens on double-click, because one click there would replace rendered text with its source on a click that may only be meant to select or scroll.
+A name that can be renamed in place opens for editing on one click: a document's, a page's, a block's, a column's, and a name in the Names panel. Where a click on the name already does something else, the first click does that and a click on the name of the thing already selected renames it. A click on another page's tab switches to that page, and a click on the active page's name renames it. A click on a column's header selects the column, and a click on a selected column's name renames it. A script or text block opens on double-click, because one click there would replace rendered text with its source on a click that may only be meant to select or scroll.
 
 Make the target of a frequent action large. The strip along the bottom and right edge of a table adds a row or column from a click anywhere on it.
 
@@ -71,7 +73,8 @@ A large change to what is on screen follows from an action that asks for one: go
 
 ## Saving and discarding
 
-- Enter, Tab, and moving focus save. A field does not need a Done button to keep its contents.
+- Enter, Tab, and moving focus save a field that edits something that exists. Such a field does not need a Done button to keep its contents.
+- A form that makes a new thing from several fields, such as a new name with its formula, is one unfinished entry. Enter or its button submits it, Tab moves between its fields, and clicking outside keeps what was typed.
 - Escape discards a single-line edit. A multiline editor has a Cancel button, and Escape does not discard there.
 - Escape closes any menu, popover, dialog, or panel.
 
@@ -92,6 +95,8 @@ Do not confirm a small edit that happens in view and that undo reverses, such as
 
 A confirmation should not send the pointer across the screen. When a delete is chosen from a menu, the second step happens in or beside the menu: the item changes to ask for confirmation, or a small confirmation opens next to it. A second click on the same spot counts only after a short delay, so an accidental double click does not confirm. The delay is short enough not to slow a deliberate one.
 
+The menu owns this confirmation. An item in `components/menu.ts` says that it needs one, and `ContextMenu.vue` draws it, so every menu confirms the same way and no caller opens a dialog for it.
+
 Use a dialog when the confirmation has to explain what will be lost, as shrinking a table over filled cells or replacing a table's contents on import does. The dialog says what will be lost.
 
 ### After a delete
@@ -106,7 +111,9 @@ Undo does not make the distinction unnecessary. A person who takes a delete for 
 
 ## Say what an edit will affect
 
-When an edit reaches further than the place it is typed, say so before it applies. The formula-column editor is labeled "Editing formula for every row in Sales[Amount]".
+When an edit changes values in more places than the one it is typed in, say so before it applies. The formula-column editor is labeled "Editing formula for every row in Sales[Amount]".
+
+A rename is not such an edit. It rewrites the formulas that use the name so that each keeps its meaning, as Excel and Sheets do, and says nothing.
 
 Before a change that will turn cells into errors or discard values, say how many.
 
@@ -148,14 +155,15 @@ New work follows these rules. The existing app falls short of them in the places
 - There is no command palette, and no general form dialog for an action's parameters.
 - No key moves focus between regions of the page.
 - The link in a cell's error popover cannot be reached with Tab.
-- A context menu has no tabs for the menus of the containing things.
+- A context menu has no tabs for the menus of the containing things, which are to be built as a trial.
+- A right-click on a button or other control in a block's header shows the browser's menu, not the block's.
 - A block's header repeats its menu's actions as a row of buttons.
-- A text view's editor closes when one of its own buttons takes focus, and the block changes size between showing and editing.
+- A text view's editor closes when "Pick reference" is clicked, and the block changes size between showing and editing.
 - A delete chosen from a menu is confirmed in a dialog in the middle of the screen, and a delete item is not in the danger color.
 - Deleting a page is not confirmed.
 - Closed messages are not kept in a history.
 - A notice holds one line of text and has no place for an underlying error, which [writing.md](writing.md) asks for.
-- `EditableName.vue` opens on double-click.
+- `EditableName.vue` opens on double-click, for every name it edits.
 - Native `<select>` elements and `title` attributes remain, as the audit lists.
 
 ## Look

@@ -47,6 +47,8 @@ An error is shown wherever the document is summarized: the header, the page tab,
 
 Naming the problem is half of the job. Every place that reports an error also lets the person go to where it arose: the cell, the script line, the function, and the chain of calls between them. A new feature that can fail supplies that link.
 
+A warning on a page tab, a block, or a document in the list is such a place. Clicking it goes to the error, or opens the errors list showing only that page's, block's, or document's errors. The warnings are plain icons today, and [todo.md](../../todo.md) tracks the change.
+
 ### An ambiguous thing is an error, not a guess
 
 When what the person wrote has more than one meaning, rowz reports it and lists the meanings. It does not pick the nearest or the first. A silent pick lets one edit change what other formulas read with nothing on screen to show it.

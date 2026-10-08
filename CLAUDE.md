@@ -33,7 +33,7 @@ The rules agents break most often:
 - **A delete control looks destructive.** A plain "×" means close.
 - **Interface text is plain.** Say "document", "page", and "block". Do not explain what the screen makes obvious.
 - **Excel and Sheets set the ceiling for problems outside the author's priorities.** If neither solves it, mention it and add a todo. Do not build a mechanism for it.
-- **A function evaluates every argument unless choosing among them is its purpose,** as it is for `IF` and `IFS`. When the author describes a function by an equivalent formula, take the result from it and not the laziness or error handling.
+- **A function evaluates every argument unless choosing among them is its purpose,** as it is for `IF`, `IFS`, `SWITCH`, `IFERROR`, and `IFNA`. When the author describes a function by an equivalent formula, take the result from it and not the laziness or error handling.
 - **A function matches its Excel or Sheets namesake** unless its help entry says otherwise.
 
 ## Commands
