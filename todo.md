@@ -11,7 +11,8 @@ A prefix such as `**P3**` is the author's priority for an item. When instructed 
 | P0        | Something that shipped is broken, or the development loop is: a failing or flaky test, a bug in a finished feature         |
 | P1 to P9  | Rank, with P1 soonest. The number is not tied to a theme                                                                   |
 | P10       | Parked. Mostly the hardening under [Before sharing with others](#before-sharing-with-others). Not picked up unless the author says so |
-| P99       | Not planned. Kept so the idea and the reason are not lost                                                                  |
+| P11 to P98 | Backlog, in rough order with the lower number first. Not picked up unless the author says so |
+| P99 and up | Not planned. Kept so the idea and the reason are not lost                                                                  |
 | Hold      | Waits for a decision by the author. Not picked up                                                                          |
 | Author | Needs the author first: a decision, a design, or something only the author can supply or run. Not picked up. A priority after it applies once the author has acted |
 
@@ -80,46 +81,38 @@ Items that have not been moved to a section yet. An agent adding an item puts it
 - [ ] **P10** A quoted criteria literal containing `*` or `?` still goes through `wildcard()`, so a 255-character quoted literal throws `#VALUE!` from the wildcard length limit even though quoted text is literal #formula-language
 - [ ] **P10** A `TEXTBOX` commit of exactly 8,192 formula-like or numeric-looking characters gains a leading apostrophe and exceeds the stored-cell limit, so the write fails; make the control's limit one less than the cell limit #small-apps
 - [ ] **Author** **P5** `FILTER_COLUMNS` and `FILTER` skip the error check on later conditions for a column that an earlier condition already rejected (`keep[col] &&= boolean(flag)` short-circuits), so a later `#DIV/0!` is hidden by an earlier `FALSE`. `AND` propagates it. Decide whether to check every condition cell, and test it. #formula-language
-
-### Not triaged
-
-These bugs have no priority yet, so they are not picked up.
-
-- [ ] When an action runs while a formula edit is active, the draft save can clear a pending save's error and the action is then skipped without notice (`stores/workbook/queue.ts` line 30 does not forward `clearPreviousError`) #everyday
-- [ ] In `SpreadsheetListView.vue`, an older successful request can clear a newer request's error, and cancelling a delete clears the error #everyday
-- [ ] Displayed-value search searches a Markdown cell's raw text (`**hello**`, link destinations) and not the rendered text (`apps/web/src/stores/workbook/search.ts`) #everyday
-- [ ] The Choices panel (`choosingFor` in `TableCard.vue`) is outside the one-open-side-pane state, so it can stay open beside Names or Conditional formats #everyday
-- [ ] Escape does not close the Names and Conditional formats panels #everyday
-- [ ] The origin-trace link in the cell error popover is not reachable by keyboard: the popover is teleported to the end of `<body>` and closes on focusout, so Tab leaves before reaching it (`CellError.vue`, `ErrorTrace.vue`). The errors list has the same link #everyday
-- [ ] After deleting a page from its context menu, keyboard focus falls to the body because the page tab that held it is removed; move focus to the neighboring tab (`PageTabs.vue`, `ContextMenu.vue`) #everyday
-- [ ] A right-click on a `<label>` inside a block (Import CSV, a chart's Data label) opens the block menu; `EditorView.vue` near line 512 should exclude labels #everyday
-- [ ] A failing assertion in a script name (`Positive = ASSERT(...)`) has no line, so revealing it focuses the script block but cannot scroll to the definition; scroll to the `data-script-line` of the definition (`apps/web/src/stores/workbook/values.ts` near line 69, `ScriptCard.vue` near line 122) #everyday
-- [ ] The failing-assertions panel drops the optional error trace, so an assertion propagated from a script function has no Open definition button (`apps/web/src/stores/workbook/values.ts` near line 32, `AssertionsPanel.vue`) #everyday
-- [ ] `useCopyFeedback.ts` creates its 2-second timer after the clipboard promise resolves, so a copy that completes after the panel unmounts leaves a timer running #everyday
-- [ ] When another session adds a table while this user's "Add chart" request is pending, the new-block focus step can focus the other session's table (`AddBlockRow.vue` captures block IDs before the request) #small-apps
-- [ ] On a narrow screen, frozen columns can cover every non-frozen column (three default-width columns are 360px, wider than a 320px viewport); cap the frozen width at part of the grid's width or ignore the freeze below a width (`GridView.vue` near line 367, `grid.css` near line 79) #small-apps
-- [ ] Collapsed-block preferences: a `getItem` failure replaces the in-memory set with an empty one, so navigating away and back can lose preferences while storage is unavailable (`apps/web/src/blockCollapse.ts` near lines 33 and 46) #small-apps
-- [ ] Collapsed-block preferences leave a localStorage key for each document, including deleted ones and ones with nothing collapsed; remove the key when a document is deleted or its set is empty (`blockCollapse.ts`, `SpreadsheetListView.vue` near line 307) #small-apps
-- [ ] An ambiguous-name message can recommend a qualified name (`Summary!Total`) that is itself still ambiguous, for a name and a table on one holder (`workbook.ts`, near line 961). Offer a spelling that resolves #formula-language
-- [ ] Renaming the first of two same-name definitions in one script leaves `renamedNames` seeing the name in the after-set, so formulas that used it are not rewritten and then resolve to the second definition (`apps/server/src/repo/spreadsheets/views.ts` near line 83) #formula-language
-- [ ] `SORTBY` treats error keys and blank keys as equal, so a blank key can stay ahead of an error key; Excel puts errors before blanks, and blanks last (`packages/engine/src/functions/arrays.ts` near line 192, `cellOrder`) #formula-language
-- [ ] In `router.ts`, a navigation guard that awaits the leave-document dialog can discard a formula draft after a newer navigation (browser Back) superseded it; check the navigation is still current after the dialog #formula-editing
-- [ ] Formula assist lists a duplicate script definition twice and qualifies it as if ambiguous (`apps/web/src/stores/workbook/values.ts` near line 67) #formula-editing
-- [ ] With several cursors from Ctrl+D in the formula editor, accepting an autocomplete suggestion updates only the primary cursor's token (`FormulaEditor.vue` near line 173) #formula-editing
-- [ ] With several cursors from Ctrl+D, picking a reference changes only the primary match and drops the other cursors (`apps/web/src/formula/picking.ts` near lines 24 and 286) #formula-editing
-- [ ] The bracket-pairing code (`apps/web/src/formula/closeBrackets.ts`) rescans the whole document on every edit (the state field) and on every bracket input (the language data provider), including in Markdown where the result is unused; keep the quote spans incremental or limit the scan to the nearby text #formula-editing
-- [ ] With several cursors from Ctrl+D, bracket pairing uses the main selection's rules for every cursor, so `(` can pair inside a string or comment at another cursor (`closeBrackets.ts` near line 148) #formula-editing
-- [ ] An unfinished quote in one script statement makes later statements look like string content, so bracket pairing stops there; script comment scanning already ends an open quote at the line end (`quoteSpans`, `closeBrackets.ts` near line 23) #formula-editing
-- [ ] Apostrophes can pair inside script comments, and apostrophe wrapping of a selected name depends on the selection direction (`closeBrackets.ts` near lines 168 and 169) #formula-editing
-- [ ] The escaped-quote handler in `closeBrackets.ts` (near line 178) can rewrite a skipped quote closer into doubled quotes while an IME composition is active #formula-editing
-- [ ] The column-type warning does not count text cells that become formulas with errors (a Text cell holding `=1/0` turns into `#DIV/0!` when the column changes to Anything or Choice): `inputFitsColumnType` in `packages/engine/src/workbook.ts` near line 148 treats any parsable formula as fitting #data-tables
-- [ ] The column-type warning counts cells before the dialog and does not recount after confirmation, so another session's edits can make the count stale (`TableCard.vue` near line 343) #data-tables
-- [ ] The Wrap text format does nothing for a choice-column value or a `TEXTBOX` cell, which render as native controls (`CellView.vue` near lines 213 and 346), so the toolbar shows it pressed while the value stays clipped #formatting
-- [ ] A chart legend with many or long series labels can be clipped by the chart card's maximum height (`charts-text-views.css` near line 69, `ChartView.vue` near line 211) #charts
-- [ ] Inline rename in the document list: a whitespace-only name does nothing and says nothing; a list refresh leaves a stale draft that can revert a newer rename made elsewhere (`SpreadsheetListView.vue` near lines 50 and 119) #documents
-- [ ] Numbering a copy's name ("Plan (2)") uses the client's document list, so two tabs with stale lists can pick the same name and the server permits both (`SpreadsheetListView.vue` near line 153, `files.ts` near line 241) #documents
-- [ ] The CSV append confirmation does not say that cells starting with `=` are stored as formulas (as in replace import), so a file can add a button; actions still run only when the button is clicked (`TableCard.vue` near line 151) #documents
-- [ ] The flaky export/import e2e test (`data-tables-and-formatting.spec.ts:5`) failed once more in a full run (20.2s) after the hardening commit and passed in 11 later full runs; capture its trace on the next failure (`pnpm e2e:remote` with Playwright trace retained) #codebase
+- [ ] **P5** When an action runs while a formula edit is active, the draft save can clear a pending save's error and the action is then skipped without notice (`stores/workbook/queue.ts` line 30 does not forward `clearPreviousError`) #everyday
+- [ ] **P9** In `SpreadsheetListView.vue`, an older successful request can clear a newer request's error, and cancelling a delete clears the error #everyday
+- [ ] **P8** Displayed-value search searches a Markdown cell's raw text (`**hello**`, link destinations) and not the rendered text (`apps/web/src/stores/workbook/search.ts`) #everyday
+- [ ] **P6** The Choices panel (`choosingFor` in `TableCard.vue`) is outside the one-open-side-pane state, so it can stay open beside Names or Conditional formats #everyday
+- [ ] **P6** Escape does not close the Names and Conditional formats panels #everyday
+- [ ] **P8** The origin-trace link in the cell error popover is not reachable by keyboard: the popover is teleported to the end of `<body>` and closes on focusout, so Tab leaves before reaching it (`CellError.vue`, `ErrorTrace.vue`). The errors list has the same link #everyday
+- [ ] **P8** After deleting a page from its context menu, keyboard focus falls to the body because the page tab that held it is removed; move focus to the neighboring tab (`PageTabs.vue`, `ContextMenu.vue`) #everyday
+- [ ] **P7** A right-click on a `<label>` inside a block (Import CSV, a chart's Data label) opens the block menu; `EditorView.vue` near line 512 should exclude labels #everyday
+- [ ] **P7** A failing assertion in a script name (`Positive = ASSERT(...)`) has no line, so revealing it focuses the script block but cannot scroll to the definition; scroll to the `data-script-line` of the definition (`apps/web/src/stores/workbook/values.ts` near line 69, `ScriptCard.vue` near line 122) #everyday
+- [ ] **P7** The failing-assertions panel drops the optional error trace, so an assertion propagated from a script function has no Open definition button (`apps/web/src/stores/workbook/values.ts` near line 32, `AssertionsPanel.vue`) #everyday
+- [ ] **P11** `useCopyFeedback.ts` creates its 2-second timer after the clipboard promise resolves, so a copy that completes after the panel unmounts leaves a timer running #everyday
+- [ ] **P10** On a narrow screen, frozen columns can cover every non-frozen column (three default-width columns are 360px, wider than a 320px viewport); cap the frozen width at part of the grid's width or ignore the freeze below a width (`GridView.vue` near line 367, `grid.css` near line 79) #small-apps
+- [ ] **P11** Collapsed-block preferences: a `getItem` failure replaces the in-memory set with an empty one, so navigating away and back can lose preferences while storage is unavailable (`apps/web/src/blockCollapse.ts` near lines 33 and 46) #small-apps
+- [ ] **P11** Collapsed-block preferences leave a localStorage key for each document, including deleted ones and ones with nothing collapsed; remove the key when a document is deleted or its set is empty (`blockCollapse.ts`, `SpreadsheetListView.vue` near line 307) #small-apps
+- [ ] **P6** An ambiguous-name message can recommend a qualified name (`Summary!Total`) that is itself still ambiguous, for a name and a table on one holder (`workbook.ts`, near line 961). Offer a spelling that resolves #formula-language
+- [ ] **P9** Renaming the first of two same-name definitions in one script leaves `renamedNames` seeing the name in the after-set, so formulas that used it are not rewritten and then resolve to the second definition (`apps/server/src/repo/spreadsheets/views.ts` near line 83) #formula-language
+- [ ] **P8** `SORTBY` treats error keys and blank keys as equal, so a blank key can stay ahead of an error key; Excel puts errors before blanks, and blanks last (`packages/engine/src/functions/arrays.ts` near line 192, `cellOrder`) #formula-language
+- [ ] **P7** In `router.ts`, a navigation guard that awaits the leave-document dialog can discard a formula draft after a newer navigation (browser Back) superseded it; check the navigation is still current after the dialog #formula-editing
+- [ ] **P9** Formula assist lists a duplicate script definition twice and qualifies it as if ambiguous (`apps/web/src/stores/workbook/values.ts` near line 67) #formula-editing
+- [ ] **P8** With several cursors from Ctrl+D in the formula editor, accepting an autocomplete suggestion updates only the primary cursor's token (`FormulaEditor.vue` near line 173) #formula-editing
+- [ ] **P9** With several cursors from Ctrl+D, picking a reference changes only the primary match and drops the other cursors (`apps/web/src/formula/picking.ts` near lines 24 and 286) #formula-editing
+- [ ] **P7** The bracket-pairing code (`apps/web/src/formula/closeBrackets.ts`) rescans the whole document on every edit (the state field) and on every bracket input (the language data provider), including in Markdown where the result is unused; keep the quote spans incremental or limit the scan to the nearby text #formula-editing
+- [ ] **P9** With several cursors from Ctrl+D, bracket pairing uses the main selection's rules for every cursor, so `(` can pair inside a string or comment at another cursor (`closeBrackets.ts` near line 148) #formula-editing
+- [ ] **P7** An unfinished quote in one script statement makes later statements look like string content, so bracket pairing stops there; script comment scanning already ends an open quote at the line end (`quoteSpans`, `closeBrackets.ts` near line 23) #formula-editing
+- [ ] **P6** Apostrophes can pair inside script comments, and apostrophe wrapping of a selected name depends on the selection direction (`closeBrackets.ts` near lines 168 and 169) #formula-editing
+- [ ] **P9** The escaped-quote handler in `closeBrackets.ts` (near line 178) can rewrite a skipped quote closer into doubled quotes while an IME composition is active #formula-editing
+- [ ] **P8** The column-type warning does not count text cells that become formulas with errors (a Text cell holding `=1/0` turns into `#DIV/0!` when the column changes to Anything or Choice): `inputFitsColumnType` in `packages/engine/src/workbook.ts` near line 148 treats any parsable formula as fitting #data-tables
+- [ ] **P7** The Wrap text format does nothing for a choice-column value or a `TEXTBOX` cell, which render as native controls (`CellView.vue` near lines 213 and 346), so the toolbar shows it pressed while the value stays clipped #formatting
+- [ ] **P7** A chart legend with many or long series labels can be clipped by the chart card's maximum height (`charts-text-views.css` near line 69, `ChartView.vue` near line 211) #charts
+- [ ] **P8** Inline rename in the document list: a whitespace-only name does nothing and says nothing; a list refresh leaves a stale draft that can revert a newer rename made elsewhere (`SpreadsheetListView.vue` near lines 50 and 119) #documents
+- [ ] **P8** The CSV append confirmation does not say that cells starting with `=` are stored as formulas (as in replace import), so a file can add a button; actions still run only when the button is clicked (`TableCard.vue` near line 151) #documents
+- [ ] **P2** The flaky export/import e2e test (`data-tables-and-formatting.spec.ts:5`) failed once more in a full run (20.2s) after the hardening commit and passed in 11 later full runs; capture its trace on the next failure (`pnpm e2e:remote` with Playwright trace retained) #codebase
 
 ### From the QA pass of 2026-10-05
 
@@ -410,14 +403,11 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
 - [ ] **P4** remove the row of action buttons from each block's header. The ellipsis menu and the right-click menu already list the same actions, so a table shows each of its nine three times. Keep the name and the ellipsis. See [DECISIONS.md](DECISIONS.md), "A menu's actions are not repeated as buttons" #small-apps
 - [ ] **P4** the text view's editor, as the author saw it on the `overnight-work` branch. See "Editing in place" in [docs/design/ui.md](docs/design/ui.md) #small-apps
   - [ ] clicking "Pick references" takes focus from the editor, which ends the edit, so the button cannot be used. Treat the editor's own controls and popovers as part of the editor when deciding that focus has left
-  - [ ] the block changes size between showing and editing. Keep its place and size
+  - [ ] the block changes size between showing and editing. Keep its place and size in both, ideally the full width of the page
   - [ ] the editing state looks unstyled beside the rest of the block
-- the text editing UX is really janky right now
-  - [ ] there's a "Pick reference" button(?) floating in the upper right but clicking on it unfocuses the editor and immediately closes it, so the button is unusable
-  - [ ] I'm finding the "double click to focus" and "single click to unfocus" actually very annoying. I keep wanting a single click to start editing (but it should also allow me to drag to select text without entering edit mode) and I sort of want to have to explicitly click the save button rather than going back to view mode as soon as I unfocus the text input
-  - [ ] I don't like how the block resizes between edit mode and view mode -- would rather they both stay the same size (ideally full width)
-  - [ ] I feel like the text preview should be on the right side instead of below the text being edited
-- [ ] **P8** investigate opening a script or text block for editing on one click without catching clicks meant for something else. Some apps wait briefly after the click and start editing only if the pointer stays put, so a click followed by scrolling or moving away does nothing. Find what the technique is called and how other apps tune it, then try it out. Double-click stays until then #small-apps
+  - [ ] show the preview to the right of the text being edited, not below it
+  - [ ] try leaving the editor only on an explicit Save, not when focus leaves the text. The author finds the return to the rendered view on a single click outside annoying. This changes the focus-change saving that "Editing in place" describes, so update [docs/design/ui.md](docs/design/ui.md) if the author keeps it
+- [ ] **P8** investigate opening a script or text block for editing on one click without catching clicks meant for something else. The author wants one click to start editing, and a drag that selects rendered text must not start it. Some apps wait briefly after the click and start editing only if the pointer stays put, so a click followed by scrolling or moving away does nothing. Find what the technique is called and how other apps tune it, then try it out. Double-click stays until then #small-apps
 
 ## Formatting
 
@@ -642,6 +632,9 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] **P10** The CSV append confirmation previews the mapping from the table as it was when the dialog opened, and the server maps the rows against the current columns; a rename or a plain/named switch in another session can change the mapping after confirmation, and a table deleted while the request waits for the lock gets 404 and not 409 (`TableCard.vue` near line 128, `repo/spreadsheets/tables.ts` near line 148, `context.ts` near line 289) #documents
 - [ ] **P10** Copied deep links drop a reverse-proxy path prefix: `deepLinks.ts` builds root-relative `/s/...` paths and `clipboard.ts` resolves them from the origin root #small-apps
 - [ ] **P10** explore Yjs + Hocuspocus for sync #sharing
+- [ ] **P10** When another session adds a table while this user's "Add chart" request is pending, the new-block focus step can focus the other session's table (`AddBlockRow.vue` captures block IDs before the request) #sharing
+- [ ] **P10** The column-type warning counts cells before the dialog and does not recount after confirmation, so another session's edits can make the count stale (`TableCard.vue` near line 343) #sharing
+- [ ] **P10** Numbering a copy's name ("Plan (2)") uses the client's document list, so two tabs with stale lists can pick the same name and the server permits both (`SpreadsheetListView.vue` near line 153, `files.ts` near line 241) #sharing
 
 - [ ] **P10** (Claude) `personalWorkspace()` in [spreadsheets.ts](apps/server/src/repo/spreadsheets.ts) puts a new spreadsheet, an import, and a copy into the caller's oldest workspace membership whatever the role. Once a user can belong to a shared workspace, a new spreadsheet or "Save a copy" can land in a workspace that other members read, and the caller may not own it. Choose a workspace where the caller is an owner, or one made for the caller. #sharing
 
