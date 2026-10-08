@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import type { ChoiceSettings } from "../columnTypes";
@@ -12,6 +12,17 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: [] }>();
 const store = useWorkbookStore();
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") emit("close");
+}
+
+onMounted(() => {
+  document.addEventListener("keydown", onKeydown);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("keydown", onKeydown);
+});
 
 const column = computed(() => props.table.columns?.[props.col]);
 const from = column.value?.choicesFrom;

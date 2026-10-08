@@ -22,11 +22,13 @@ export const SIDE_PANES = {
 export type SidePaneId =
   | (typeof SIDE_PANES)[keyof typeof SIDE_PANES]
   | `names:${string}`
-  | `conditional-formats:${string}`;
+  | `conditional-formats:${string}`
+  | `choices:${string}`;
 
 export function tableIdOfSidePane(id: SidePaneId | null): string | undefined {
   if (id?.startsWith("names:")) return id.slice("names:".length);
   if (id?.startsWith("conditional-formats:")) return id.slice("conditional-formats:".length);
+  if (id?.startsWith("choices:")) return id.slice("choices:".length);
   return undefined;
 }
 

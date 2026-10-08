@@ -2,7 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { api, type ViewRecord } from "../api/client";
+import { api, type TableRecord, type ViewRecord } from "../api/client";
 import { bodyFindAll, bodyGet, bodyHas } from "../testing/teleported";
 import { takeQueuedListNotice } from "../notice";
 import { changeWith, snapshotWith, wireSnapshot, type MockedApi } from "../testing";
@@ -38,12 +38,28 @@ async function render(
   realTableCard = false,
   extraViews: ViewRecord[] = [],
   initialPath = "/s/s1/p/p1",
+  choicesTable = false,
 ) {
   const snapshot = snapshotWith(inputs, role);
+  const choiceColumns: NonNullable<TableRecord["columns"]> = [
+    { name: "Race", type: "text" },
+    { name: "Payout", type: "number" },
+    { name: "Note", type: "any" },
+  ];
+  const tables = choicesTable
+    ? snapshot.tables.map((table, index) =>
+        index === 0
+          ? {
+              ...table,
+              columns: choiceColumns,
+            }
+          : table,
+      )
+    : snapshot.tables;
   server.getSnapshot.mockResolvedValue(
     wireSnapshot({
       ...snapshot,
-      tables: empty ? [] : snapshot.tables,
+      tables: empty ? [] : tables,
       views: empty
         ? []
         : [
@@ -510,6 +526,40 @@ it("expands a collapsed table before revealing one of its errors", async () => {
     "true",
   );
   expect(wrapper.get(".table-card__grid").isVisible()).toBe(true);
+  wrapper.unmount();
+});
+
+it("closes Choices when another shared side panel opens, and closes that panel for Choices", async () => {
+  const wrapper = await render("owner", false, false, {}, true, [], "/s/s1/p/p1", true);
+  const openChoices = async () => {
+    await wrapper.get('[data-table="Table 1"] [data-cell="A1"]').trigger("contextmenu");
+    await flushPromises();
+    await bodyFindAll('[role="menuitem"]')
+      .find((item) => item.text() === "Column holds: A choice…")!
+      .trigger("click");
+    await flushPromises();
+  };
+
+  await openChoices();
+  expect(wrapper.find("form.choices-panel").exists()).toBe(true);
+
+  await wrapper
+    .findAll("button")
+    .find((button) => button.text() === "History")!
+    .trigger("click");
+  await flushPromises();
+  expect(wrapper.find('[aria-label="History"]').exists()).toBe(true);
+  expect(wrapper.find("form.choices-panel").exists()).toBe(false);
+
+  await openChoices();
+  expect(wrapper.find("form.choices-panel").exists()).toBe(true);
+  expect(wrapper.find('[aria-label="History"]').exists()).toBe(false);
+
+  const store = useWorkbookStore();
+  store.pages = [...store.pages, { id: "p2", name: "Page 2", position: 1 }];
+  await wrapper.setProps({ pageId: "p2" });
+  await flushPromises();
+  expect(wrapper.find("form.choices-panel").exists()).toBe(false);
   wrapper.unmount();
 });
 

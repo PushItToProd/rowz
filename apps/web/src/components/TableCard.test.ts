@@ -1537,6 +1537,33 @@ describe("dropdown columns", () => {
     });
   });
 
+  it("shares the one open side pane state with conditional formats", async () => {
+    await renderChoices();
+    expect(wrapper.find("form.choices-panel").exists()).toBe(true);
+
+    await button("Conditional formats").trigger("click");
+    expect(wrapper.find(".conditional-panel").exists()).toBe(true);
+    expect(wrapper.find("form.choices-panel").exists()).toBe(false);
+
+    await wrapper.get('[data-cell="A1"]').trigger("contextmenu");
+    await bodyFindAll('[role="menuitem"]')
+      .find((item) => item.text() === "Column holds: A choice…")!
+      .trigger("click");
+    expect(wrapper.find("form.choices-panel").exists()).toBe(true);
+    expect(wrapper.find(".conditional-panel").exists()).toBe(false);
+  });
+
+  it("closes choices on Escape without saving the draft", async () => {
+    await renderChoices();
+    await wrapper.get("form.choices-panel textarea").setValue("Trial\nSprint");
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find("form.choices-panel").exists()).toBe(false);
+    expect(server.updateColumn).not.toHaveBeenCalled();
+  });
+
   it("saves nothing for an empty list, and closes on Cancel", async () => {
     await renderChoices();
     const save = wrapper.get<HTMLButtonElement>('form.choices-panel button[type="submit"]');

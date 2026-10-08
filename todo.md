@@ -96,7 +96,7 @@ Items that have not been moved to a section yet. An agent adding an item puts it
 - [ ] **P5** When an action runs while a formula edit is active, the draft save can clear a pending save's error and the action is then skipped without notice (`stores/workbook/queue.ts` line 30 does not forward `clearPreviousError`) #everyday
 - [ ] **P9** In `SpreadsheetListView.vue`, an older successful request can clear a newer request's error, and cancelling a delete clears the error #everyday
 - [ ] **P8** Displayed-value search searches a Markdown cell's raw text (`**hello**`, link destinations) and not the rendered text (`apps/web/src/stores/workbook/search.ts`) #everyday
-- [ ] **P6** The Choices panel (`choosingFor` in `TableCard.vue`) is outside the one-open-side-pane state, so it can stay open beside Names or Conditional formats #everyday
+- [x] **P6** The Choices panel (`choosingFor` in `TableCard.vue`) is outside the one-open-side-pane state, so it can stay open beside Names or Conditional formats #everyday
 - [x] **P6** Escape does not close the Names and Conditional formats panels #everyday
 - [ ] **P8** The origin-trace link in the cell error popover is not reachable by keyboard: the popover is teleported to the end of `<body>` and closes on focusout, so Tab leaves before reaching it (`CellError.vue`, `ErrorTrace.vue`). The errors list has the same link #everyday
 - [x] **P8** After deleting a page from its context menu, keyboard focus falls to the body because the page tab that held it is removed; move focus to the neighboring tab (`PageTabs.vue`, `ContextMenu.vue`) #everyday

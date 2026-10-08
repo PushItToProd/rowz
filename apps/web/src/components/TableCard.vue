@@ -7,7 +7,7 @@ import {
   type ErrorTraceFrame,
 } from "@spreadsheet-app/engine";
 import { GRID_SIZE, LIMITS } from "@spreadsheet-app/shared";
-import { computed, nextTick, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { parseCsv, toCsv } from "../files/csv";
 import { prepareCsvAppend } from "../files/csv-append";
 import { download, fileName } from "../files/download";
@@ -52,6 +52,7 @@ onBeforeUnmount(() => {
 });
 const namesPaneId: `names:${string}` = `names:${props.table.id}`;
 const conditionalFormatsPaneId: `conditional-formats:${string}` = `conditional-formats:${props.table.id}`;
+const choicesPaneId: `choices:${string}` = `choices:${props.table.id}`;
 const conditionalPanel = ref<{ focus(): void }>();
 
 /** The selected cell when it is in this table. Row and column actions apply to it. */
@@ -358,6 +359,15 @@ const COLUMN_TYPES: readonly { type: ColumnType; label: string }[] = [
 
 /** The column whose choices are being edited, while the panel for them is open. */
 const choosingFor = ref<number | null>(null);
+const choicesOpen = activeSidePane.isOpen(choicesPaneId);
+watch(activeSidePane.active, (id) => {
+  if (id !== choicesPaneId) choosingFor.value = null;
+});
+
+function closeChoices(): void {
+  choosingFor.value = null;
+  activeSidePane.close(choicesPaneId);
+}
 
 interface ColumnChanges {
   type: ColumnType;
@@ -495,6 +505,7 @@ function columnItems(col: number): MenuItem[] {
       label: `${column.type === "choice" ? "✓ " : ""}Column holds: A choice…`,
       run: () => {
         choosingFor.value = col;
+        activeSidePane.open(choicesPaneId);
       },
     },
     {
@@ -998,12 +1009,12 @@ const menuLabel = computed(() => {
       </div>
 
       <ChoicesPanel
-        v-if="choosingFor !== null && table.columns?.[choosingFor]"
+        v-if="choicesOpen && choosingFor !== null && table.columns?.[choosingFor]"
         :key="choosingFor"
         :table="table"
         :col="choosingFor"
         :save-choices="saveChoices"
-        @close="choosingFor = null"
+        @close="closeChoices"
       />
 
       <TableDisplayBar v-if="table.columns" :table="table" />
