@@ -28,7 +28,7 @@ export interface SortColumn {
 /**
  * The stored row indexes of a table in the order it is shown. Rows `shown`
  * rejects are left out. The sort is stable, so rows that tie keep their
- * stored order, and empty cells go last in either direction.
+ * stored order, errors sort before empty cells, and empty cells go last in either direction.
  */
 export function displayRows(
   rowCount: number,

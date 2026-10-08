@@ -185,6 +185,22 @@ describe("SORT", () => {
     expect(run("=SORT(A1:A5, 1, FALSE)", data).flat()).toEqual(["b", "a", 10, 2, null]);
   });
 
+  it("sorts errors before empty cells in either direction", () => {
+    const data = { A1: "", A2: "=1/0", A3: "2", A4: "1" };
+    expect(run("=SORT(A1:A4)", data).flat()).toEqual([
+      1,
+      2,
+      expect.objectContaining({ kind: "error", code: "#DIV/0!" }),
+      null,
+    ]);
+    expect(run("=SORT(A1:A4, 1, FALSE)", data).flat()).toEqual([
+      2,
+      1,
+      expect.objectContaining({ kind: "error", code: "#DIV/0!" }),
+      null,
+    ]);
+  });
+
   it.each([
     ["=SORT(A1:C5, 4)", "#VALUE!"],
     ["=SORT(A1:C5, 0)", "#VALUE!"],
@@ -232,6 +248,30 @@ describe("SORTBY", () => {
   it("orders mixed types like SORT and puts error keys last", () => {
     const data = { A1: "a", A2: "b", A3: "c", B1: "2", B2: "=1/0", B3: "1" };
     expect(run("=SORTBY(A1:A3, B1:B3)", data)).toEqual([["c"], ["a"], ["b"]]);
+  });
+
+  it("sorts errors before empty keys and keeps empty keys last in either direction", () => {
+    const data = {
+      A1: "blank key",
+      A2: "error key",
+      B2: "=1/0",
+      A3: "two",
+      B3: "2",
+      A4: "one",
+      B4: "1",
+    };
+    expect(run("=SORTBY(A1:A4, B1:B4)", data)).toEqual([
+      ["one"],
+      ["two"],
+      ["error key"],
+      ["blank key"],
+    ]);
+    expect(run("=SORTBY(A1:A4, B1:B4, -1)", data)).toEqual([
+      ["two"],
+      ["one"],
+      ["error key"],
+      ["blank key"],
+    ]);
   });
 
   it("matches existing whole-column behavior on an empty sheet", () => {

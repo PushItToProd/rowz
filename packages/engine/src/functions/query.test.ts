@@ -34,9 +34,14 @@ const DATA = {
 };
 
 /** Runs a query over the data and gives the cells it fills, with dates and errors as the text they show. */
-function run(query: string, range = "A1:D7", extra = ""): (string | number | boolean | null)[][] {
+function run(
+  query: string,
+  range = "A1:D7",
+  extra = "",
+  data: Record<string, string> = DATA,
+): (string | number | boolean | null)[][] {
   const formula = `=QUERY(Table1!${range}, "${query.replaceAll('"', '""')}"${extra})`;
-  const workbook = workbookWith({ t1: DATA, t2: { A1: formula } });
+  const workbook = workbookWith({ t1: data, t2: { A1: formula } });
   return workbook
     .getArray(at("A1", "t2"))
     .map((row) =>
@@ -249,6 +254,30 @@ describe("ordering and paging", () => {
     expect(ascending.flat()).toEqual(["Carrot", "apple", "Leek", "Apple", "Banana", "Milk"]);
     const [, ...descending] = run("select A order by C desc");
     expect(descending.flat()).toEqual(["Banana", "Apple", "Leek", "apple", "Carrot", "Milk"]);
+  });
+
+  it("orders errors before empty cells in either direction", () => {
+    const data = {
+      A1: "blank key",
+      A2: "error key",
+      B2: "=1/0",
+      A3: "two",
+      B3: "2",
+      A4: "one",
+      B4: "1",
+    };
+    expect(run("select A order by B", "A1:B4", ", 0", data)).toEqual([
+      ["one"],
+      ["two"],
+      ["error key"],
+      ["blank key"],
+    ]);
+    expect(run("select A order by B desc", "A1:B4", ", 0", data)).toEqual([
+      ["two"],
+      ["one"],
+      ["error key"],
+      ["blank key"],
+    ]);
   });
 
   it("breaks ties with the next column, and keeps the data's order when a tie is not broken", () => {

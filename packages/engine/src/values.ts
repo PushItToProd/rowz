@@ -342,8 +342,9 @@ export function compare(leftValue: Scalar, rightValue: Scalar): number {
   return KIND_RANK[kindOf(left)] - KIND_RANK[kindOf(right)];
 }
 
-/** Orders two cells for sorting. Empty cells and non-values go last, whichever way the sort runs. */
+/** Orders scalar values by direction, non-values after scalars, and empty cells after non-values. */
 export function cellOrder(a: CellValue, b: CellValue, direction: number): number {
+  if (a === null || b === null) return Number(a === null) - Number(b === null);
   const sortable = (cell: CellValue): boolean => isScalar(cell) && cell !== null;
   if (!sortable(a) || !sortable(b)) return Number(sortable(b)) - Number(sortable(a));
   return isScalar(a) && isScalar(b) ? compare(a, b) * direction : 0;

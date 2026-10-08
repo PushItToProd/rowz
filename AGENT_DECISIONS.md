@@ -2,6 +2,14 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-07: Errors sort before empty cells everywhere
+
+**Choice.** `cellOrder` in `packages/engine/src/values.ts` puts empty cells last and errors just before them, in either direction. SORT, SORTBY, table display sorting, and QUERY `ORDER BY` all use it. QUERY had its own comparator with the same error/blank tie, so it now calls `cellOrder`.
+
+**Why.** The todo item named SORTBY, but the other sorts shared the defect, and one ordering rule in one function is what Excel does.
+
+**To change.** Revert the `null` line in `cellOrder` and the QUERY change in `functions/query.ts`.
+
 ## 2026-10-06: Text and number controls in typed columns
 
 **Choice.** TEXTBOX preserves text in untyped and text columns. Other typed columns parse its text and refuse invalid commits. NUMBERBOX normalizes numeric input before writing, so `007` becomes number `7` in a number or untyped column and text `"7"` in a text column. Empty commits clear either target.

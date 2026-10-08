@@ -13,7 +13,7 @@ import {
   type SelectItem,
 } from "../query";
 import {
-  compare,
+  cellOrder,
   formatValue,
   isError,
   isRange,
@@ -49,11 +49,9 @@ function detectHeaders(cells: readonly CellValue[][]): number {
   return labeled && typed ? 1 : 0;
 }
 
-/** Orders two cells for ORDER BY. Empty cells and non-values go last. */
+/** Orders two cells for ORDER BY. Errors precede empty cells, and empty cells stay last. */
 function order(a: CellValue, b: CellValue): number {
-  const sortable = (cell: CellValue): boolean => isScalar(cell) && cell !== null;
-  if (!sortable(a) || !sortable(b)) return Number(sortable(b)) - Number(sortable(a));
-  return isScalar(a) && isScalar(b) ? compare(a, b) : 0;
+  return cellOrder(a, b, 1);
 }
 
 /** A key that is equal for two lists of cells exactly when the cells are equal, ignoring letter case. */
@@ -218,11 +216,8 @@ class Runner {
     keyed.sort((a, b) => {
       for (const [index, { descending }] of orderBy.entries()) {
         const [left = null, right = null] = [a.keys[index], b.keys[index]];
-        const sortable = (cell: CellValue): boolean => isScalar(cell) && cell !== null;
-        const result = order(left, right);
-        // Empty cells stay last whichever way the column is sorted.
-        const flipped = descending && sortable(left) && sortable(right) ? -result : result;
-        if (flipped !== 0) return flipped;
+        const result = cellOrder(left, right, descending ? -1 : 1);
+        if (result !== 0) return result;
       }
       return 0;
     });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { displayRows } from "./display";
-import type { CellValue } from "./values";
+import { error, type CellValue } from "./values";
 
 const GRID: CellValue[][] = [
   ["pear", 3],
@@ -22,6 +22,15 @@ describe("displayRows", () => {
 
   it("sorts descending, still putting empty cells last", () => {
     expect(displayRows(5, valueAt, [{ col: 0, descending: true }])).toEqual([0, 3, 1, 4, 2]);
+  });
+
+  it("puts errors before empty cells in either direction", () => {
+    const values: CellValue[] = [null, error("#DIV/0!"), 2, 1];
+    const keyAt = (row: number): CellValue => values[row] ?? null;
+    expect(displayRows(values.length, keyAt, [{ col: 0, descending: false }])).toEqual([
+      3, 2, 1, 0,
+    ]);
+    expect(displayRows(values.length, keyAt, [{ col: 0, descending: true }])).toEqual([2, 3, 1, 0]);
   });
 
   it("keeps stored order among rows that tie", () => {
