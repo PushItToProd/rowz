@@ -252,7 +252,11 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
 - [x] **P6** `SORTBY` #formula-language
 - [x] **P6** `SCAN` for running totals, balances, and cumulative state #formula-language
 - [ ] **P7** more text processing: "regex matching, extraction, replacement; literal substring predicates; text-before/text-after helpers" #formula-language
-  - (Claude) the regex functions are done. Substring predicates and text-before and text-after helpers remain
+  - (Claude) the regex functions, `TEXTBEFORE`, and `TEXTAFTER` are done
+  - **Author** literal substring predicates remain; choose their function names
+  - [ ] **P8** verify whether an empty delimiter with `|instance_num| > 1` follows Excel; `TEXTBEFORE("abc", "", 2)` returns `"a"` here, but Excel may return `""`
+  - [ ] **P8** support array-valued `if_not_found`; `scalar()` currently returns `#VALUE!`, but Excel accepts an array fallback
+  - [ ] **P8** broadcast `instance_num`, `match_mode`, and `match_end` over arrays; only `text` broadcasts today
 - [ ] **P6** reusable function ergonomics: parameter help for user defined functions and better arg-specific errors #formula-language
 - [ ] **P7** formula-checking: "array-aware assertions and explicit approximate numeric comparison" #formula-language
 

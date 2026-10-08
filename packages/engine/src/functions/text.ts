@@ -1,11 +1,13 @@
 import { isDate } from "../dates";
 import { formatDateAs, FormatError, formatNumber } from "../format";
-import { parseNumber, toText, type Scalar } from "../values";
+import { isRange, parseNumber, toText, type Evaluated, type Scalar } from "../values";
 import {
   array,
   boolean,
   eager,
+  element,
   fail,
+  grid,
   integer,
   items,
   limitCells,
@@ -35,6 +37,200 @@ const MAX_DECIMALS = 20;
 function count(value: Parameters<typeof integer>[0], what: string): number {
   const length = integer(value);
   return length < 0 ? fail("#VALUE!", `${what} cannot be negative`) : length;
+}
+
+interface TextMatch {
+  start: number;
+  end: number;
+}
+
+interface FoldedText {
+  value: string;
+  originalOffset(offset: number): number | undefined;
+  foldedOffset(offset: number): number | undefined;
+}
+
+/** Case folds text and maps offsets when a character's lowercase form changes its length. */
+function foldText(value: string): FoldedText {
+  const folded = value.toLowerCase();
+  if (folded.length === value.length) {
+    return {
+      value: folded,
+      originalOffset: (offset) => offset,
+      foldedOffset: (offset) => offset,
+    };
+  }
+
+  const originalOffsets = new Map<number, number>([[0, 0]]);
+  const foldedOffsets = new Map<number, number>([[0, 0]]);
+  let originalOffset = 0;
+  let foldedOffset = 0;
+  for (const character of value) {
+    originalOffset += character.length;
+    foldedOffset += character.toLowerCase().length;
+    originalOffsets.set(foldedOffset, originalOffset);
+    foldedOffsets.set(originalOffset, foldedOffset);
+  }
+
+  return {
+    value: folded,
+    originalOffset: (offset) => originalOffsets.get(offset),
+    foldedOffset: (offset) => foldedOffsets.get(offset),
+  };
+}
+
+/** Finds one delimiter occurrence in either direction without splitting a delimiter. */
+function delimiterSearch(source: string, delimiter: string, ignoreCase: boolean) {
+  const foldedSource = ignoreCase ? foldText(source) : foldTextIdentity(source);
+  const foldedDelimiter = ignoreCase ? delimiter.toLowerCase() : delimiter;
+
+  function next(from: number): TextMatch | undefined {
+    let fromFolded = foldedSource.foldedOffset(from);
+    if (fromFolded === undefined) return undefined;
+    let index = foldedSource.value.indexOf(foldedDelimiter, fromFolded);
+    while (index !== -1) {
+      const start = foldedSource.originalOffset(index);
+      const end = foldedSource.originalOffset(index + foldedDelimiter.length);
+      if (start !== undefined && end !== undefined && start >= from) return { start, end };
+      fromFolded = index + 1;
+      index = foldedSource.value.indexOf(foldedDelimiter, fromFolded);
+    }
+    return undefined;
+  }
+
+  function previous(before: number): TextMatch | undefined {
+    let beforeFolded = foldedSource.foldedOffset(before);
+    if (beforeFolded === undefined) return undefined;
+    let index = foldedSource.value.lastIndexOf(
+      foldedDelimiter,
+      beforeFolded - foldedDelimiter.length,
+    );
+    while (index !== -1) {
+      const start = foldedSource.originalOffset(index);
+      const end = foldedSource.originalOffset(index + foldedDelimiter.length);
+      if (start !== undefined && end !== undefined && end <= before) return { start, end };
+      beforeFolded = index - 1;
+      index = foldedSource.value.lastIndexOf(
+        foldedDelimiter,
+        beforeFolded - foldedDelimiter.length,
+      );
+    }
+    return undefined;
+  }
+
+  return { next, previous };
+}
+
+function foldTextIdentity(value: string): FoldedText {
+  return {
+    value,
+    originalOffset: (offset) => offset,
+    foldedOffset: (offset) => offset,
+  };
+}
+
+/** Returns the selected occurrence, including the optional delimiter at the search endpoint. */
+function delimiterMatch(
+  source: string,
+  delimiter: string,
+  instance: number,
+  ignoreCase: boolean,
+  matchEnd: boolean,
+): TextMatch | undefined {
+  if (delimiter === "") {
+    const length = graphemeLength(source);
+    const position =
+      instance > 0
+        ? offsetAtGrapheme(source, instance - 1)
+        : offsetAtGrapheme(source, length - Math.abs(instance) + 1);
+    return { start: position, end: position };
+  }
+
+  const search = delimiterSearch(source, delimiter, ignoreCase);
+  const directionalMatch = matchEnd
+    ? instance > 0
+      ? { start: source.length, end: source.length }
+      : { start: 0, end: 0 }
+    : undefined;
+
+  if (instance > 0) {
+    let remaining = instance;
+    let from = 0;
+    while (remaining > 0) {
+      const found = search.next(from);
+      if (!found) return remaining === 1 ? directionalMatch : undefined;
+      if (remaining === 1) return found;
+      remaining -= 1;
+      from = found.end;
+    }
+    return undefined;
+  }
+
+  let remaining = Math.abs(instance);
+  let before = source.length;
+  while (remaining > 0) {
+    const found = search.previous(before);
+    if (!found) return remaining === 1 ? directionalMatch : undefined;
+    if (remaining === 1) return found;
+    remaining -= 1;
+    before = found.start;
+  }
+  return undefined;
+}
+
+function textBeforeOrAfter(
+  source: string,
+  delimiter: string,
+  instance: number,
+  ignoreCase: boolean,
+  matchEnd: boolean,
+  ifNotFound: Scalar | undefined,
+  after: boolean,
+): Scalar {
+  if (instance === 0) fail("#VALUE!", "instance_num cannot be 0");
+  const length = graphemeLength(source);
+  if (Math.abs(instance) > length) {
+    fail(
+      "#VALUE!",
+      `The absolute value of instance_num ${String(instance)} exceeds the text length ${String(length)}`,
+    );
+  }
+
+  const match = delimiterMatch(source, delimiter, instance, ignoreCase, matchEnd);
+  if (!match) {
+    if (ifNotFound !== undefined) return ifNotFound;
+    return fail("#N/A", "The delimiter was not found in the text");
+  }
+  return after ? source.slice(match.end) : source.slice(0, match.start);
+}
+
+function textBeforeAfter(after: boolean): FunctionDefinition {
+  return eager(2, 6, (value, delimiter, ...optional) => {
+    const [instance = 1, matchMode = 0, matchEnd = 0, ifNotFound] = optional;
+    const separator = text(delimiter);
+    const occurrence = integer(instance);
+    const mode = integer(matchMode);
+    const ending = integer(matchEnd);
+    const fallback = ifNotFound === undefined ? undefined : scalar(ifNotFound);
+    if (mode !== 0 && mode !== 1) fail("#VALUE!", "match_mode must be 0 or 1");
+    if (ending !== 0 && ending !== 1) fail("#VALUE!", "match_end must be 0 or 1");
+
+    const extract = (cell: Evaluated): Scalar =>
+      textBeforeOrAfter(
+        text(cell),
+        separator,
+        occurrence,
+        mode === 1,
+        ending === 1,
+        fallback,
+        after,
+      );
+
+    if (!isRange(value)) return extract(value);
+    const rows = grid(value);
+    limitCells(rows.reduce((total, row) => total + row.length, 0));
+    return array(rows.map((row) => row.map((cell) => element(() => extract(cell)))));
+  });
 }
 
 /** Finds `needle` in `haystack` from a 1-based position, and gives a 1-based position. */
@@ -281,6 +477,10 @@ export const textFunctions: Record<string, FunctionDefinition> = {
   SEARCH: eager(2, 3, (needle, haystack, start = 1) =>
     search(text(needle), text(haystack), integer(start)),
   ),
+  /** Text before the selected occurrence of one delimiter. */
+  TEXTBEFORE: textBeforeAfter(false),
+  /** Text after the selected occurrence of one delimiter. */
+  TEXTAFTER: textBeforeAfter(true),
   SUBSTITUTE: eager(3, 3, (value, old, replacement) => {
     const target = text(old);
     return target === "" ? text(value) : text(value).replaceAll(target, text(replacement));

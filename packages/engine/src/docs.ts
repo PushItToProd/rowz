@@ -420,6 +420,23 @@ const ENTRIES: readonly FunctionDoc[] = [
     example: 'SEARCH("L", "hello")',
   },
   {
+    name: "TEXTBEFORE",
+    category: "Text",
+    syntax:
+      "TEXTBEFORE(text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found])",
+    summary:
+      "Returns text before one delimiter (not an array of delimiters) at the selected occurrence. `instance_num` defaults to 1; negative values count from the end, and 0 or a magnitude past the text length gives #VALUE!. An empty delimiter matches from the front for positive instances and from the end for negative ones. `match_mode` defaults to 0 for case-sensitive matching; 1 ignores case. `match_end` defaults to 0; 1 treats the text end as a delimiter for positive instances and the text start as a delimiter for negative instances. A missing match gives #N/A or `if_not_found`. Text arrays return corresponding arrays.",
+    example: 'TEXTBEFORE("Ada Lovelace", " ")',
+  },
+  {
+    name: "TEXTAFTER",
+    category: "Text",
+    syntax: "TEXTAFTER(text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found])",
+    summary:
+      "Returns text after one delimiter (not an array of delimiters) at the selected occurrence. `instance_num` defaults to 1; negative values count from the end, and 0 or a magnitude past the text length gives #VALUE!. An empty delimiter matches from the front for positive instances and from the end for negative ones. `match_mode` defaults to 0 for case-sensitive matching; 1 ignores case. `match_end` defaults to 0; 1 treats the text end as a delimiter for positive instances and the text start as a delimiter for negative instances. A missing match gives #N/A or `if_not_found`. Text arrays return corresponding arrays.",
+    example: 'TEXTAFTER("Ada Lovelace", " ")',
+  },
+  {
     name: "REGEXMATCH",
     category: "Text",
     syntax: "REGEXMATCH(text, pattern)",

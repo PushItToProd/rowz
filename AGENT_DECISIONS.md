@@ -2,6 +2,14 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-08: Text delimiter function behavior
+
+**Choice.** `TEXTBEFORE` and `TEXTAFTER` accept one scalar delimiter and broadcast over the text argument's array dimensions. `match_end` adds the text end as a delimiter for positive instances and the text start for negative instances, whether or not a real delimiter is at that endpoint. An empty delimiter matches at each grapheme boundary; positive instances count from the front and negative instances from the end. The instance limit uses grapheme length, consistent with `LEN`.
+
+**Why.** The functions follow Excel's delimiter and search-direction rules while using rowz's array model and grapheme-based text length. The endpoint contributes its own delimiter occurrence, independently of a real delimiter at the same position.
+
+**To change.** Update `textBeforeOrAfter` and `delimiterMatch` in `packages/engine/src/functions/text.ts`, along with their tests and help entries.
+
 ## 2026-10-07: Errors sort before empty cells everywhere
 
 **Choice.** `cellOrder` in `packages/engine/src/values.ts` puts empty cells last and errors just before them, in either direction. SORT, SORTBY, table display sorting, and QUERY `ORDER BY` all use it. QUERY had its own comparator with the same error/blank tie, so it now calls `cellOrder`.
