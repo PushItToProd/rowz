@@ -329,6 +329,10 @@ it("opens block actions from card margins and leaves grid cell menus to the tabl
   expect(labels).toContain("Delete table");
   expect(labels).toContain("Move up");
   expect(labels).toContain("Add table below");
+  const deleteTable = menu
+    .findAll('[role="menuitem"]')
+    .find((item) => item.text() === "Delete table");
+  expect(deleteTable?.classes()).toContain("danger");
 
   await menu.trigger("keydown", { key: "Escape" });
   await flushPromises();

@@ -441,6 +441,14 @@ describe("the menu of row, column, and cell actions", () => {
     ]);
   });
 
+  it("marks deleted rows, columns, and cell contents as dangerous", async () => {
+    await open("B2");
+
+    for (const name of ["Delete row 2", "Delete column B", "Clear cells"]) {
+      expect(item(name).classes()).toContain("danger");
+    }
+  });
+
   it("copies a link using the selected cell's stable row and column IDs", async () => {
     const descriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
     const writeText = vi.fn(() => Promise.resolve());

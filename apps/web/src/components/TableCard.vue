@@ -777,7 +777,7 @@ const menuItems = computed((): MenuItem[] => {
     // What a column holds is set one column at a time.
     scope === "row" || cols.count > 1 ? [] : columnItems(cols.first),
     scope !== "cells" || props.table.columns ? [] : [{ label: "Name this range…", run: nameRange }],
-    [{ label: "Clear cells", run: () => void store.clearSelection() }],
+    [{ label: "Clear cells", danger: true, run: () => void store.clearSelection() }],
   ];
   return groups
     .filter((group) => group.length > 0)

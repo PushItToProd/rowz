@@ -58,6 +58,14 @@ describe("ContextMenu", () => {
     expect(focused()).toBe("First");
   });
 
+  it("marks dangerous items with the danger class", () => {
+    render(items().all);
+    const menuItems = bodyFindAll('[role="menuitem"]');
+
+    expect(menuItems[0]?.classes()).not.toContain("danger");
+    expect(menuItems[2]?.classes()).toContain("danger");
+  });
+
   it("focuses the menu when all its items are disabled, so Escape closes it", async () => {
     render([{ label: "Unavailable", disabled: true, run: vi.fn() }]);
     await flushPromises();

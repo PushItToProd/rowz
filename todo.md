@@ -473,7 +473,7 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
 
 ## Menus, dialogs, and messages
 
-- [ ] **P4** show a delete item in a context menu in the danger color #everyday
+- [x] **P4** show a delete item in a context menu in the danger color #everyday
 - [ ] **P4** (Claude) turn on ESLint's `no-alert` for `apps/web`, so `alert`, `confirm`, and `prompt` cannot come back #codebase
 - [ ] **P5** confirm a delete chosen from a menu in or beside the menu, not in a dialog in the middle of the screen: the item changes to "Confirm deletion?", or a small confirmation opens next to it. A second click counts only after a short delay, so an accidental double click does not confirm. Build both forms far enough for the author to choose. Keep the dialog where the confirmation explains what will be lost. See [DECISIONS.md](DECISIONS.md), "Removing a whole container is confirmed, beside the menu" #everyday
   - [ ] confirm deleting a page, which is not confirmed today

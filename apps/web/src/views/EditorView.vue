@@ -492,6 +492,7 @@ const blockMenuItems = computed((): MenuItem[] => {
     const action = control.dataset.blockAction ?? "";
     return {
       label: action,
+      danger: /^(?:Delete|Remove)\b/.test(action),
       run: () => {
         runBlockAction(block.record.id, action);
       },
