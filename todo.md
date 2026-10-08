@@ -18,7 +18,17 @@ A prefix such as `**P3**` is the author's priority for an item. When instructed 
 
 A sub-item without a prefix takes its parent's. An item that only groups sub-items, such as "more actions", has no prefix. An item with no prefix and no prefixed parent has not been triaged: do not pick it up, and point it out to the author.
 
-`./todos.sh` lists the open prioritized items in order, with sub-items under the priority they take.
+A box holds one of three marks:
+
+| Mark  | Meaning                                                                                                             |
+| ----- | ------------------------------------------------------------------------------------------------------------------- |
+| `[ ]` | Open                                                                                                                |
+| `[x]` | Done                                                                                                                |
+| `[*]` | May be done. A change touched it, and whether the change satisfies it completely is for the author to say. Not picked up |
+
+An agent that marks an item `[*]` keeps the item's priority prefix and adds a sub-item beneath it: `- [ ] **Author** **P4** may be resolved: ...`, with the item's own priority, what is in doubt, and the hash of the latest commit at the time of writing. The author changes `[*]` to `[x]` or back to `[ ]` and deletes the sub-item.
+
+`./todos.sh` lists the open prioritized items in order, with sub-items under the priority they take. It leaves out a `[*]` item and lists its `Author` sub-item.
 
 ## Themes
 
