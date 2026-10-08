@@ -74,6 +74,14 @@ describe("quoted text criteria", () => {
     expect(criterion('="foo*"')("foobar")).toBe(false);
   });
 
+  it("does not apply wildcard matching or its length limit to quoted literals", () => {
+    const literal = `?${"a".repeat(254)}*`;
+    const matches = criterion(`="${literal}"`);
+    expect(matches(literal)).toBe(true);
+    expect(matches(literal.replace("?", "x"))).toBe(false);
+    expect(matches(`${literal.slice(0, -1)}x`)).toBe(false);
+  });
+
   it("does not coerce a number to the same text", () => {
     const matches = criterion('="12"');
     expect(matches(12)).toBe(false);

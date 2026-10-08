@@ -110,11 +110,12 @@ export function criterion(given: Scalar): (cell: CellValue) => boolean {
   }
 
   if (typeof target === "string" && equality) {
-    const matches = wildcard(target);
     const wantsMatch = comparison === "=";
-    return (cell) =>
-      (typeof cell === "string" &&
-        (parsed.quotedText ? compare(cell, target) === 0 : matches(cell))) === wantsMatch;
+    if (parsed.quotedText) {
+      return (cell) => (typeof cell === "string" && compare(cell, target) === 0) === wantsMatch;
+    }
+    const matches = wildcard(target);
+    return (cell) => (typeof cell === "string" && matches(cell)) === wantsMatch;
   }
 
   return (cell) => {
