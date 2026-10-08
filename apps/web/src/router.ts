@@ -41,7 +41,10 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
   /** Pages anyone can open. */
   const OPEN = new Set(["help"]);
   const EDITOR_ROUTES = new Set(["editor", "editor-document"]);
+  let latestNavigation = 0;
   router.beforeEach(async (to, from) => {
+    const navigation = ++latestNavigation;
+    const isCurrentNavigation = () => navigation === latestNavigation;
     const formulas = useFormulaSessionStore();
     const dialog = useDialog();
     if (
@@ -49,14 +52,14 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
       EDITOR_ROUTES.has(String(from.name)) &&
       (!EDITOR_ROUTES.has(String(to.name)) || to.params.spreadsheetId !== from.params.spreadsheetId)
     ) {
-      if (
-        !(await dialog.confirm({
-          title: "Discard unsaved formula draft",
-          message: "Leave this document and discard the unsaved formula draft?",
-          confirmLabel: "Leave document",
-          danger: true,
-        }))
-      ) {
+      const confirmed = await dialog.confirm({
+        title: "Discard unsaved formula draft",
+        message: "Leave this document and discard the unsaved formula draft?",
+        confirmLabel: "Leave document",
+        danger: true,
+      });
+      if (!isCurrentNavigation()) return;
+      if (!confirmed) {
         formulas.focus();
         return false;
       }
@@ -71,7 +74,9 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
       formulas.active.mode === "cell" &&
       !formulas.active.state.doc.toString().startsWith("=")
     ) {
-      if (!(await formulas.submit(useWorkbookStore().submitFormulaDraft))) {
+      const saved = await formulas.submit(useWorkbookStore().submitFormulaDraft);
+      if (!isCurrentNavigation()) return;
+      if (!saved) {
         formulas.focus();
         return false;
       }
@@ -86,6 +91,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
     const name = typeof to.name === "string" ? to.name : "";
     if (OPEN.has(name)) return true;
     const user = await useSessionStore().load();
+    if (!isCurrentNavigation()) return;
     if (!user && !SIGNED_OUT_ONLY.has(name)) {
       return { name: "login", query: { redirect: to.fullPath } };
     }

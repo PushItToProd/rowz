@@ -94,6 +94,77 @@ describe("departure with a formula draft", () => {
     expect(sessions.active).toBeUndefined();
     expect(save).not.toHaveBeenCalled();
   });
+  it("does not discard a draft when a newer page navigation supersedes the leave dialog", async () => {
+    const router = createAppRouter(createMemoryHistory());
+    await router.push("/s/s1/p/p1");
+    await router.push("/s/s1/p/p2");
+    const sessions = useFormulaSessionStore();
+    await sessions.start(
+      {
+        target: { kind: "chart", viewId: "v1" },
+        context: { pageId: "p2" },
+        mode: "formula",
+        text: "draft",
+      },
+      () => Promise.resolve("saved"),
+    );
+    const state = sessions.active!.state;
+
+    const supersededNavigation = router.push("/");
+    await vi.waitFor(() => {
+      expect(appDialog()).not.toBeNull();
+    });
+    router.back();
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.fullPath).toBe("/s/s1/p/p1");
+    });
+
+    await respondToDialog("confirm");
+    await supersededNavigation;
+
+    expect(router.currentRoute.value.fullPath).toBe("/s/s1/p/p1");
+    expect(sessions.active?.state).toBe(state);
+  });
+  it("does not refocus a draft when a newer page navigation supersedes its save", async () => {
+    const router = createAppRouter(createMemoryHistory());
+    await router.push("/s/s1/p/p1");
+    const sessions = useFormulaSessionStore();
+    const target = { kind: "cell" as const, tableId: "t1", rowId: "r0", colId: "c1" };
+    await sessions.start(
+      {
+        target,
+        context: { pageId: "p1", tableId: "t1" },
+        mode: "cell",
+        text: "1",
+      },
+      () => Promise.resolve("saved"),
+    );
+    const focus = vi.fn();
+    sessions.attachField(target, focus);
+    let rejectSave!: (error: Error) => void;
+    const save = vi.spyOn(useWorkbookStore(), "submitFormulaDraft").mockImplementation(
+      () =>
+        new Promise<"saved" | "deleted">((_, reject) => {
+          rejectSave = reject;
+        }),
+    );
+    const submit = vi.spyOn(sessions, "submit");
+
+    const supersededNavigation = router.push("/s/s1/p/p2");
+    await vi.waitFor(() => {
+      expect(save).toHaveBeenCalledTimes(1);
+    });
+    const currentNavigation = router.push("/s/s1/p/p3");
+    await vi.waitFor(() => {
+      expect(submit).toHaveBeenCalledTimes(2);
+    });
+    rejectSave(new Error("Offline"));
+    await Promise.all([supersededNavigation, currentNavigation]);
+
+    expect(router.currentRoute.value.fullPath).toBe("/s/s1/p/p1");
+    expect(sessions.active).toMatchObject({ saving: false, error: "Offline" });
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
   it.each(["1", "=", "=B2"])(
     "uses the current cell draft %j to decide whether page browsing saves",
     async (text) => {
