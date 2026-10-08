@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { LIMITS } from "@spreadsheet-app/shared";
 import type { ViewRecord } from "../api/client";
 import { namingContext } from "../formula/context";
+import { focusIsWithinField } from "../formula/fieldFocus";
 import { sameEditingTarget, useFormulaSessionStore } from "../formula/session";
 import { useWorkbookStore } from "../stores/workbook";
 import FormulaEditor from "./FormulaEditor.vue";
@@ -51,8 +52,7 @@ function cancel(): void {
 function blur(): void {
   void nextTick(() => {
     // Page navigation and the editor's controls preserve focus until their own handler runs.
-    if (session.value && sessions.owner === token && !root.value?.contains(document.activeElement))
-      void done();
+    if (session.value && sessions.owner === token && !focusIsWithinField(root.value)) void done();
   });
 }
 async function commit(key: "Enter" | "Tab", backwards: boolean): Promise<void> {

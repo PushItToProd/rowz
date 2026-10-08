@@ -483,6 +483,7 @@ function connectPicking(): void {
   );
 }
 function requestPicking(): void {
+  if (!canPick.value) return;
   connectPicking();
   picking.request();
 }
@@ -500,7 +501,8 @@ function requestPicking(): void {
       v-if="!readonly && showPickingControl"
       type="button"
       class="formula-editor__pick"
-      :disabled="!canPick"
+      :aria-disabled="!canPick"
+      :tabindex="canPick ? undefined : -1"
       :aria-pressed="ownsPicking && picking.explicit"
       @mousedown.prevent
       @click.stop="requestPicking"
@@ -531,6 +533,13 @@ function requestPicking(): void {
 }
 .formula-editor__pick[aria-pressed="true"] {
   background: #dbeafe;
+}
+.formula-editor__pick[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: default;
+}
+.formula-editor__pick[aria-disabled="true"]:hover {
+  border-color: var(--line);
 }
 .formula-editor__pick-message {
   position: absolute;

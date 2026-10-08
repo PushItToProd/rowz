@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useWorkbookStore } from "../stores/workbook";
 import { namingContext } from "../formula/context";
 import { cellEditingRequest } from "../formula/cells";
+import { focusIsWithinField } from "../formula/fieldFocus";
 import {
   sameEditingTarget,
   useFormulaSessionStore,
@@ -289,13 +290,7 @@ function transfer(event: MouseEvent): void {
 function blur(): void {
   // Completion clicks and focus transfers within this field keep the session open.
   void nextTick(() => {
-    if (
-      mounted &&
-      ownsEditor.value &&
-      !root.value?.contains(document.activeElement) &&
-      !document.activeElement?.closest(".context-menu")
-    )
-      void submit();
+    if (mounted && ownsEditor.value && !focusIsWithinField(root.value)) void submit();
   });
 }
 onBeforeUnmount(() => {

@@ -601,6 +601,82 @@ describe("TextCard", () => {
     expect(button("Edit").exists()).toBe(true);
   });
 
+  it("keeps editing while focus moves to the reference control", async () => {
+    await render("{{ 'Table 1'!A1 }}");
+    await button("Edit").trigger("click");
+    const editor = await editorView();
+    const referenceEnd = editor.state.doc.toString().indexOf("A1") + 2;
+    editor.dispatch({ selection: { anchor: referenceEnd } });
+    await flushPromises();
+
+    const pick = wrapper.get<HTMLButtonElement>(".formula-editor__pick");
+    expect(pick.attributes("disabled")).toBeUndefined();
+    pick.element.focus();
+    await flushPromises();
+    expect(wrapper.find(".cm-content").exists()).toBe(true);
+    expect(server.updateView).not.toHaveBeenCalled();
+
+    await pick.trigger("click");
+    await flushPromises();
+    expect(pick.attributes("aria-pressed")).toBe("true");
+    expect(wrapper.find(".cm-content").exists()).toBe(true);
+    expect(server.updateView).not.toHaveBeenCalled();
+  });
+
+  it("keeps editing when reference picking is unavailable", async () => {
+    await render("plain text");
+    await button("Edit").trigger("click");
+    await editorView();
+    const pick = wrapper.get<HTMLButtonElement>(".formula-editor__pick");
+    expect(pick.attributes("aria-disabled")).toBe("true");
+    expect(pick.element.disabled).toBe(false);
+
+    const mousedown = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    pick.element.dispatchEvent(mousedown);
+    expect(mousedown.defaultPrevented).toBe(true);
+    await pick.trigger("click");
+    await flushPromises();
+
+    expect(pick.attributes("aria-pressed")).toBe("false");
+    expect(wrapper.find(".cm-content").exists()).toBe(true);
+    expect(server.updateView).not.toHaveBeenCalled();
+  });
+
+  it.each(["cm-tooltip", "context-menu"])(
+    "keeps editing while focus moves into its %s popup",
+    async (popupClass) => {
+      await render("old");
+      await button("Edit").trigger("click");
+      const editor = await editorView();
+      await replaceDraft("new");
+
+      const popup = document.createElement("div");
+      popup.className = popupClass;
+      const control = document.createElement("button");
+      popup.append(control);
+      document.body.append(popup);
+      const outside = document.createElement("button");
+      document.body.append(outside);
+      try {
+        control.focus();
+        await flushPromises();
+        expect(wrapper.find(".cm-content").exists()).toBe(true);
+        expect(server.updateView).not.toHaveBeenCalled();
+
+        editor.focus();
+        outside.focus();
+        await flushPromises();
+        expect(server.updateView).toHaveBeenCalledExactlyOnceWith("v1", {
+          source: "new",
+        });
+        expect(wrapper.find(".cm-content").exists()).toBe(false);
+      } finally {
+        popup.remove();
+        outside.remove();
+      }
+    },
+  );
+
   it("goes on editing when it is the window that loses focus", async () => {
     await render("old");
     await button("Edit").trigger("click");
