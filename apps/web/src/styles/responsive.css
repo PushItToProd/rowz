@@ -82,6 +82,10 @@
     padding: 10px;
   }
 
+  .text-view__editing-layout--editing {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   /* Keep the title above the menu on narrow screens. */
   .table-card__header,
   .view-card__header {

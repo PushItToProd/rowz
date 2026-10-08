@@ -590,6 +590,22 @@ describe("TextCard", () => {
     expect(shown().text()).toBe("new 2");
   });
 
+  it("keeps the text preview beside its editor in the same full-width block", async () => {
+    await render("old");
+    const card = wrapper.get(".view-card").element;
+    const previewClasses = shown().classes();
+
+    await chooseAction("Edit");
+
+    const layout = wrapper.get(".text-view__editing-layout--editing").element;
+    expect(layout.children).toHaveLength(2);
+    expect(layout.children[0]).toBe(wrapper.get(".view-source-editor").element);
+    expect(layout.children[1]).toBe(shown().element);
+    expect(shown().classes()).toEqual(previewClasses);
+    expect(wrapper.get(".view-card").element).toBe(card);
+    expect(wrapper.get(".view-card").attributes("data-view-kind")).toBe("text");
+  });
+
   it("saves and stops editing when the editor loses focus", async () => {
     await render("old");
     await chooseAction("Edit");

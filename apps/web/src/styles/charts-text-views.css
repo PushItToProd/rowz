@@ -66,6 +66,10 @@
   background: var(--surface);
 }
 
+.view-card[data-view-kind="text"] {
+  max-width: none;
+}
+
 .view-card[data-view-kind="chart"]:not([data-source-editing]) {
   max-height: var(--block-max-height);
   overflow: hidden;
@@ -118,7 +122,68 @@
   overflow: auto;
 }
 
+.text-view__editing-layout {
+  min-width: 0;
+}
+
+.text-view__editing-layout--editing {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.view-source-editor.text-view__source-editor {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  align-content: start;
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.view-source-editor.text-view__source-editor > .formula-editor,
+.view-source-editor.text-view__source-editor > .notice {
+  grid-column: 1 / -1;
+}
+
+.view-source-editor.text-view__source-editor .formula-editor {
+  margin: 0;
+}
+
+.view-source-editor.text-view__source-editor .formula-editor__pick {
+  padding: 5px 10px;
+  font-size: 1rem;
+  line-height: normal;
+}
+
+.view-source-editor.text-view__source-editor .formula-editor__pick[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.view-source-editor.text-view__source-editor .formula-editor__pick-message {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.text-view__editing-layout--editing > .text-view {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
 .text-view {
+  min-width: 0;
   line-height: 1.55;
   max-height: var(--block-max-height);
   overflow: auto;

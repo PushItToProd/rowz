@@ -50,13 +50,18 @@ const confirmation = ref<string | null>(null);
 const pendingButton = ref<number | null>(null);
 const returnFocus = ref<HTMLElement>();
 const textView = ref<HTMLElement>();
+const textViewEditingHeight = ref<number>();
 watch([() => props.view.id, () => props.view.source], () => {
   inputDrafts.clear();
   inputErrors.clear();
   inputRenderVersion.value += 1;
 });
+watch(editing, (isEditing) => {
+  if (!isEditing) textViewEditingHeight.value = undefined;
+});
 async function edit(): Promise<void> {
   if (!store.canEdit) return;
+  textViewEditingHeight.value = textView.value?.getBoundingClientRect().height;
   await sessions.start(
     {
       target,
@@ -503,8 +508,6 @@ function editFromText(event: MouseEvent): void {
     </header>
 
     <div v-show="!collapsed" class="block-card__body" :inert="collapsed">
-      <ViewSourceEditor v-if="editing" :view="view" mode="markdown" label="Text view source" />
-
       <ConfirmDialog
         v-if="confirmation !== null"
         :message="confirmation"
@@ -514,52 +517,75 @@ function editFromText(event: MouseEvent): void {
       />
 
       <div
-        ref="textView"
-        class="text-view"
-        :role="textScrollable ? 'region' : undefined"
-        :tabindex="textScrollable ? 0 : undefined"
-        :aria-label="textScrollable ? `${view.name} content` : undefined"
-        :title="store.canEdit && !editing ? 'Double-click to edit' : undefined"
-        @input="rememberTextInput"
-        @keydown="commitTextInput"
-        @focusout="commitTextInput"
-        @click="runTextButton"
-        @dblclick="editFromText"
+        class="text-view__editing-layout"
+        :class="{ 'text-view__editing-layout--editing': editing }"
+        :style="
+          editing && textViewEditingHeight !== undefined
+            ? { minHeight: `${textViewEditingHeight}px` }
+            : undefined
+        "
       >
-        <template v-for="(part, index) in parts" :key="index">
-          <!-- eslint-disable-next-line vue/no-v-html -- markdown-it output with raw HTML disabled -->
-          <div v-if="part.type === 'markdown'" class="text-view__markdown" v-html="part.html"></div>
-          <table v-else-if="part.type === 'table'" class="text-view__table">
-            <tbody>
-              <tr v-for="(cells, row) in part.rows" :key="row">
-                <td
-                  v-for="(cell, col) in cells"
-                  :key="col"
-                  :class="{ 'text-view__number': typeof cell === 'number' }"
-                >
-                  <span
-                    v-if="isError(cell)"
-                    class="md-error"
-                    :aria-label="`${cell.code} ${cell.message ?? cell.code}`"
-                    :title="cell.message ?? cell.code"
+        <ViewSourceEditor
+          v-if="editing"
+          class="text-view__source-editor"
+          :view="view"
+          mode="markdown"
+          label="Text view source"
+        />
+
+        <div
+          ref="textView"
+          class="text-view"
+          :role="textScrollable ? 'region' : undefined"
+          :tabindex="textScrollable ? 0 : undefined"
+          :aria-label="textScrollable ? `${view.name} content` : undefined"
+          :title="store.canEdit && !editing ? 'Double-click to edit' : undefined"
+          @input="rememberTextInput"
+          @keydown="commitTextInput"
+          @focusout="commitTextInput"
+          @click="runTextButton"
+          @dblclick="editFromText"
+        >
+          <template v-for="(part, index) in parts" :key="index">
+            <!-- eslint-disable vue/no-v-html -- markdown-it output with raw HTML disabled -->
+            <div
+              v-if="part.type === 'markdown'"
+              class="text-view__markdown"
+              v-html="part.html"
+            ></div>
+            <!-- eslint-enable vue/no-v-html -->
+            <table v-else-if="part.type === 'table'" class="text-view__table">
+              <tbody>
+                <tr v-for="(cells, row) in part.rows" :key="row">
+                  <td
+                    v-for="(cell, col) in cells"
+                    :key="col"
+                    :class="{ 'text-view__number': typeof cell === 'number' }"
                   >
-                    {{ cell.code }}
-                    <span class="md-error__message">{{ cell.message ?? cell.code }}</span>
-                  </span>
-                  <template v-else>{{ formatValue(cell) }}</template>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <ChartView
-            v-else-if="part.type === 'chart'"
-            :chart="part.chart.chart"
-            :rows="part.chart.rows"
-            :title="part.chart.title"
-          />
-          <p v-else class="view-card__problem" role="alert">{{ part.message }}</p>
-        </template>
-        <p v-if="parts.length === 0" class="view-card__problem">This view is empty.</p>
+                    <span
+                      v-if="isError(cell)"
+                      class="md-error"
+                      :aria-label="`${cell.code} ${cell.message ?? cell.code}`"
+                      :title="cell.message ?? cell.code"
+                    >
+                      {{ cell.code }}
+                      <span class="md-error__message">{{ cell.message ?? cell.code }}</span>
+                    </span>
+                    <template v-else>{{ formatValue(cell) }}</template>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <ChartView
+              v-else-if="part.type === 'chart'"
+              :chart="part.chart.chart"
+              :rows="part.chart.rows"
+              :title="part.chart.title"
+            />
+            <p v-else class="view-card__problem" role="alert">{{ part.message }}</p>
+          </template>
+          <p v-if="parts.length === 0" class="view-card__problem">This view is empty.</p>
+        </div>
       </div>
     </div>
   </section>

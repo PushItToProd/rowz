@@ -428,9 +428,9 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
   - [*] clicking "Pick references" takes focus from the editor, which ends the edit, so the button cannot be used. Treat the editor's own controls and popovers as part of the editor when deciding that focus has left
     - (Claude) the button is logically disabled while the caret is outside a `{{ }}` expression (`canPick` in `FormulaEditor.vue`). It uses `aria-disabled` so its `mousedown.prevent` handler can preserve focus, and `requestPicking` ignores it when the current caret cannot accept a reference
     - [ ] **Author** **P4** the "Pick references" item may be resolved: the fix was made from reading the code (a disabled button was the likely cause) and passed the unit and e2e suites, but nobody confirmed it in a browser. Check that clicking the button keeps the text view edit open. Latest commit when written: 39d83d7
-  - [ ] the block changes size between showing and editing. Keep its place and size in both, ideally the full width of the page
-  - [ ] the editing state looks unstyled beside the rest of the block
-  - [ ] show the preview to the right of the text being edited, not below it
+  - [x] the block changes size between showing and editing. Keep its place and size in both, ideally the full width of the page
+  - [x] the editing state looks unstyled beside the rest of the block
+  - [x] show the preview to the right of the text being edited, not below it
   - [ ] try leaving the editor only on an explicit Save, not when focus leaves the text. The author finds the return to the rendered view on a single click outside annoying. This changes the focus-change saving that "Editing in place" describes, so update [docs/design/ui.md](docs/design/ui.md) if the author keeps it
 - [ ] **P8** investigate opening a script or text block for editing on one click without catching clicks meant for something else. The author wants one click to start editing, and a drag that selects rendered text must not start it. Some apps wait briefly after the click and start editing only if the pointer stays put, so a click followed by scrolling or moving away does nothing. Find what the technique is called and how other apps tune it, then try it out. Double-click stays until then #small-apps
 
