@@ -144,9 +144,18 @@ function parseTyped(input: string, type: ColumnDefinition["type"]): CellContent 
   }
 }
 
-/** Whether a stored input avoids an input-parsing error in a column of this type. */
-export function inputFitsColumnType(input: string, type: ColumnDefinition["type"]): boolean {
-  return input === "" || type === "formula" || parseTyped(input, type).type !== "invalid";
+/** Whether an input avoids a parsing error, and a formula result avoids an evaluation error. */
+export function inputFitsColumnType(
+  input: string,
+  type: ColumnDefinition["type"],
+  evaluated?: Evaluated,
+): boolean {
+  if (input === "" || type === "formula") return true;
+  const content = parseTyped(input, type);
+  return (
+    content.type !== "invalid" &&
+    (content.type !== "formula" || evaluated === undefined || !isError(evaluated))
+  );
 }
 
 function parseContent(input: string): CellContent {
@@ -209,6 +218,7 @@ function countWithUnit(count: number, unit: string): string {
  * which `planAction` turns into effects for the caller to apply.
  */
 export class Workbook {
+  private structure: WorkbookStructure = { pages: [], tables: [] };
   private tables = new TableResolver({ pages: [], tables: [] });
   private readonly cells = new Map<string, Map<string, CellRecord>>();
   /** Computed values of formula cells. */
@@ -259,6 +269,7 @@ export class Workbook {
    * References are matched to tables by name, so every formula is re-resolved.
    */
   setStructure(structure: WorkbookStructure): void {
+    this.structure = structure;
     this.tables = new TableResolver(structure);
     for (const table of structure.tables) {
       if (!this.cells.has(table.id)) this.cells.set(table.id, new Map());
@@ -394,6 +405,41 @@ export class Workbook {
   /** The column a cell is in, when its table has named columns. */
   columnOf(id: CellId): ColumnDefinition | undefined {
     return this.tables.table(id.tableId)?.columns?.[id.col];
+  }
+
+  /** Counts stored inputs that parse or evaluate to errors after changing a column to Anything or Choice. */
+  countColumnTypeMisfits(tableId: string, col: number, type: "any" | "choice"): number {
+    const table = this.structure.tables.find((candidate) => candidate.id === tableId);
+    if (!table?.columns?.[col]) return 0;
+
+    const inputs = [...(this.cells.get(tableId)?.values() ?? [])].filter(
+      (record) => record.id.col === col && !record.computed,
+    );
+    if (inputs.length === 0) return 0;
+
+    const projected = new Workbook({ functions: this.functions, now: this.now });
+    projected.setStructure({
+      ...this.structure,
+      tables: this.structure.tables.map((candidate) =>
+        candidate.id !== tableId
+          ? candidate
+          : {
+              ...candidate,
+              columns: candidate.columns?.map((column, index) =>
+                index === col ? { ...column, type } : column,
+              ),
+            },
+      ),
+    });
+    for (const records of this.cells.values()) {
+      for (const record of records.values()) {
+        if (!record.computed) projected.setCell(record.id, record.input);
+      }
+    }
+
+    return inputs.filter(
+      ({ id, input }) => !inputFitsColumnType(input, type, projected.getValue(id)),
+    ).length;
   }
 
   /** Why a cell cannot be used as the stored target of an input control. */

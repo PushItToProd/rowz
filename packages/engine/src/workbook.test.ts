@@ -20,6 +20,28 @@ describe("column input acceptance", () => {
   ] as const)("matches engine coercion for %j in %s columns", (input, type, expected) => {
     expect(inputFitsColumnType(input, type)).toBe(expected);
   });
+
+  it("counts text inputs that become formulas with errors in Anything and Choice columns", () => {
+    const structure = {
+      ...STRUCTURE,
+      tables: STRUCTURE.tables.map((table) =>
+        table.id === "t1"
+          ? {
+              ...table,
+              rowCount: 2,
+              colCount: 1,
+              columns: [{ name: "Value", type: "text" as const }],
+            }
+          : table,
+      ),
+    };
+    const workbook = workbookWith({ t1: { A1: "=1/0", A2: "=1+1" } }, structure);
+
+    expect(workbook.getValue(at("A1"))).toBe("=1/0");
+    expect(inputFitsColumnType("=1/0", "any", evaluateFormula("=1/0"))).toBe(false);
+    expect(workbook.countColumnTypeMisfits("t1", 0, "any")).toBe(1);
+    expect(workbook.countColumnTypeMisfits("t1", 0, "choice")).toBe(1);
+  });
 });
 
 describe("volatile recalculation", () => {

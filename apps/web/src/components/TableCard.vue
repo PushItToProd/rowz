@@ -385,10 +385,10 @@ function typeMisfitMessage(
       detail = "are not TRUE or FALSE and will show #VALUE! as Checkbox";
       break;
     case "any":
-      detail = "are malformed formulas and will show #ERROR! as Anything";
+      detail = "contain formulas that will show errors as Anything";
       break;
     case "choice":
-      detail = "are malformed formulas and will show #ERROR! as a dropdown";
+      detail = "contain formulas that will show errors as a dropdown";
       break;
     default:
       return null;
@@ -406,7 +406,10 @@ async function changeColumnType(colId: string, changes: ColumnChanges): Promise<
 
   if (column.type !== changes.type && changes.type !== "formula") {
     const inputs = current.rows.map((_row, row) => store.inputOf({ tableId, row, col }));
-    const misfits = countMisfits(changes.type, inputs);
+    const misfits =
+      changes.type === "any" || changes.type === "choice"
+        ? store.countColumnTypeMisfits(tableId, col, changes.type)
+        : countMisfits(changes.type, inputs);
     if (misfits > 0) {
       const message = typeMisfitMessage(misfits, inputs.length, column.name, changes.type);
       if (message) {

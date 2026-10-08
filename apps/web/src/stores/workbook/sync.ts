@@ -23,6 +23,10 @@ export function createSync(context: WorkbookContext) {
     return context.tables.value.some((table) => table.id === tableId);
   }
 
+  function countColumnTypeMisfits(tableId: string, col: number, type: "any" | "choice"): number {
+    return context.engine.value.countColumnTypeMisfits(tableId, col, type);
+  }
+
   function identityOf(id: CellId): IdentifiedCell | undefined {
     const table = context.tables.value.find((candidate) => candidate.id === id.tableId);
     if (!table?.rows) return undefined;
@@ -369,6 +373,7 @@ export function createSync(context: WorkbookContext) {
   }
   return {
     hasTable,
+    countColumnTypeMisfits,
     identityOf,
     positionOf,
     withStableSelection,

@@ -289,6 +289,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
   } = createActions(context);
   const {
     hasTable,
+    countColumnTypeMisfits,
     identityOf,
     positionOf,
     withStableSelection,
@@ -552,6 +553,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     undo,
     redo,
     columnOf,
+    countColumnTypeMisfits,
     choicesOf,
     formatOf,
     formatSelection,

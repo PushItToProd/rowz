@@ -815,9 +815,13 @@ describe("column names", () => {
   ];
   const DATA_TABLE = { ...TABLE, columns: COLUMNS };
 
-  async function renderData(inputs: Record<string, string> = {}): Promise<void> {
+  async function renderData(
+    inputs: Record<string, string> = {},
+    columns: TableRecord["columns"] = COLUMNS,
+  ): Promise<void> {
+    const table = { ...TABLE, columns };
     server.getSnapshot.mockResolvedValue(
-      wireSnapshot({ ...snapshotWith(inputs), tables: [DATA_TABLE] }),
+      wireSnapshot({ ...snapshotWith(inputs), tables: [table] }),
     );
     await useWorkbookStore().load("s1");
     const store = useWorkbookStore();
@@ -829,9 +833,7 @@ describe("column names", () => {
       },
       { attachTo: document.body },
     );
-    server.updateColumn.mockResolvedValue(
-      changeWith({ table: DATA_TABLE, cells: [], views: [], tables: [] }),
-    );
+    server.updateColumn.mockResolvedValue(changeWith({ table, cells: [], views: [], tables: [] }));
   }
 
   function item(name: string) {
@@ -907,6 +909,25 @@ describe("column names", () => {
 
     expect(server.updateColumn).not.toHaveBeenCalled();
     expect(useWorkbookStore().tables[0]?.columns?.[0]?.type).toBe("number");
+  });
+
+  it("warns when text formulas return errors after changing to Anything", async () => {
+    const textColumns = COLUMNS.map((column, index) =>
+      index === 0 ? { ...column, type: "text" as const } : column,
+    );
+    await renderData({ A1: "=1/0" }, textColumns);
+
+    expect(useWorkbookStore().valueOf(at("A1"))).toBe("=1/0");
+    await wrapper.get('[data-cell="A1"]').trigger("contextmenu");
+    await item("Column holds: Anything").trigger("click");
+    await flushPromises();
+
+    expect(appDialog()?.textContent).toContain(
+      "1 of 4 cells in 'Price' contain formulas that will show errors as Anything. Change the type anyway?",
+    );
+    await respondToDialog("cancel");
+    await flushPromises();
+    expect(server.updateColumn).not.toHaveBeenCalled();
   });
 
   function columnEditor(): EditorView {
@@ -1485,7 +1506,7 @@ describe("dropdown columns", () => {
     await flushPromises();
 
     expect(appDialog()?.textContent).toContain(
-      "1 of 4 cells in 'Race' are malformed formulas and will show #ERROR! as a dropdown. Change the type anyway?",
+      "1 of 4 cells in 'Race' contain formulas that will show errors as a dropdown. Change the type anyway?",
     );
     await respondToDialog("cancel");
     await flushPromises();
