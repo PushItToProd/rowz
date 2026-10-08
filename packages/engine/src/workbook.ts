@@ -761,10 +761,7 @@ export class Workbook {
     if (control.control === "dropdown" && value !== null && choice === undefined) {
       return refuse(`${toText(value)} is not one of the choices`);
     }
-    return {
-      ok: true,
-      effects: [{ type: "setCell", ...control.target, input: literalInput(choice ?? value) }],
-    };
+    return write(literalInput(choice ?? value));
   }
 
   /** The effects an action asks for. Throws `Failure` when the action cannot run. */

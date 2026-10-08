@@ -231,6 +231,40 @@ describe("text and number controls in typed columns", () => {
   });
 });
 
+describe("checkbox and dropdown controls in typed columns", () => {
+  it.each<[string, Scalar, string]>([
+    ["=CHECKBOX(A1)", true, "Number: TRUE is not a number"],
+    ['=DROPDOWN("abc", A1)', "abc", "Number: abc is not a number"],
+  ])("%s refuses a write that does not fit the target column", (formula, value, message) => {
+    const workbook = new Workbook();
+    workbook.setStructure({
+      ...STRUCTURE,
+      tables: STRUCTURE.tables.map((table) =>
+        table.id === "t1"
+          ? {
+              ...table,
+              rowCount: 1,
+              colCount: 2,
+              columns: [
+                { name: "Number", type: "number" },
+                { name: "Control", type: "any" },
+              ] as const,
+            }
+          : table,
+      ),
+    });
+    workbook.setCell(at("A1"), "12");
+    workbook.setCell(at("B1"), formula);
+
+    expect(choose(workbook, "B1", value)).toEqual({
+      kind: "error",
+      code: "#VALUE!",
+      message,
+    });
+    expect(workbook.getValue(at("A1"))).toBe(12);
+  });
+});
+
 describe("TEXTBOX", () => {
   it("shows the target value and label, and writes committed text as text", () => {
     const workbook = workbookWith({ t1: { A1: "'123", B1: '=TEXTBOX(A1, "Name")' } });

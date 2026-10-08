@@ -885,7 +885,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Controls",
     syntax: "CHECKBOX(cell, [label])",
     summary:
-      "Shows a checkbox that is ticked when the cell holds TRUE. Ticking or clearing it writes TRUE or FALSE to the cell.",
+      "Shows a checkbox that is ticked when the cell holds TRUE. Ticking or clearing it writes TRUE or FALSE to the cell if the target column can parse that value.",
     example: 'CHECKBOX(A1, "Done")',
   },
   {
@@ -893,7 +893,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Controls",
     syntax: "DROPDOWN(choices, cell)",
     summary:
-      'Shows a list to choose from and writes the choice to the cell. The choices are the values of a range, or text with commas between them such as "low, medium, high".',
+      'Shows a list to choose from and writes the choice to the cell if the target column can parse that value. The choices are the values of a range, or text with commas between them such as "low, medium, high".',
     example: "DROPDOWN(B1:B3, A1)",
   },
   {
