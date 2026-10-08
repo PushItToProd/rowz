@@ -88,10 +88,10 @@ function clampArray(value: Evaluated, minimum: Evaluated, maximum: Evaluated): E
       Array.from({ length: width }, (_, col) =>
         element(() => {
           const valueCell = cellAt(grids[0], row, col);
-          const minimumCell = cellAt(grids[1], row, col);
-          const maximumCell = cellAt(grids[2], row, col);
           const valueScalar = scalar(valueCell);
+          const minimumCell = cellAt(grids[1], row, col);
           const minimumScalar = scalar(minimumCell);
+          const maximumCell = cellAt(grids[2], row, col);
           const maximumScalar = scalar(maximumCell);
           if (compare(valueScalar, minimumScalar) < 0) return minimumCell;
           return compare(valueScalar, maximumScalar) > 0 ? maximumCell : valueCell;

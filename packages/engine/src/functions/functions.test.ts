@@ -147,6 +147,22 @@ describe("math functions", () => {
       [{ kind: "error", code: "#DIV/0!" }],
       [1],
     ]);
+
+    const errorBeforeBroadcastMismatch = workbookWith({
+      t1: {
+        A1: "1",
+        A2: "2",
+        A3: "=1/0",
+        C1: "1",
+        C2: "2",
+        Z99: "=CLAMP(A1:A3, 0, C1:C2)",
+      },
+    });
+    expect(errorBeforeBroadcastMismatch.getArray(at("Z99"))).toMatchObject([
+      [1],
+      [2],
+      [{ kind: "error", code: "#DIV/0!" }],
+    ]);
   });
 
   it("returns a blank unchanged when it falls inside the bounds", () => {
