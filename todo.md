@@ -68,7 +68,15 @@ Items that have not been moved to a section yet. An agent adding an item puts it
   - [formula-language-proposal.md](plans/formula-language-proposal.md): records, lists, and tables as values, one expression language everywhere a formula is written, and libraries
   - [function-suite-design-review.md](plans/function-suite-design-review.md): where the current functions do not compose predictably, with recommendations, table query pipelines, explicit `@` intersection, and collections kept in one cell
   - [plain-text-file-format-proposal.md](plans/plain-text-file-format-proposal.md): a document as Markdown-like text that an ordinary editor and version control can work with, edited Obsidian-style, without a rowz server
-- [ ] **Author** (Claude) for the author: `AGENT_DECISIONS.md` has 47 entries and nothing marks which the author has reviewed. Its entries are out of date order and four headings have no date. Mark the reviewed ones, or move them to `DECISIONS.md` or delete them as they are reviewed
+- [ ] **Author** (Claude) for the author: `AGENT_DECISIONS.md` has 63 entries (the overnight-work run added more dated 2026-10-07 and 2026-10-08: errors sort before blanks, `Notice.detail`, `TEXTBEFORE` and `TEXTAFTER`, QUERY pivot header types) and nothing marks which the author has reviewed. Its entries are out of date order and four headings have no date. Mark the reviewed ones, or move them to `DECISIONS.md` or delete them as they are reviewed
+- [ ] **Author** **P3** (Claude) for the author: bring `docs/design/` in line with the overnight-work commits. An agent run may not edit it
+  - [formula-language.md](docs/design/formula-language.md) line 26 ("The engine does not do this yet...") is stale: the `and` and `or` operators and the `AND` and `OR` functions are lazy, and `ALL` and `ANY` exist. Delete the paragraph
+  - [ui.md](docs/design/ui.md) near line 166 says `EditableName.vue` opens on double-click. It opens on one click
+  - [ui.md](docs/design/ui.md) still lists the missing danger color for context-menu delete items as an app gap. The color exists
+  - [ui.md](docs/design/ui.md) could say that a click anywhere in a named column header, outside its controls and the resize handle, starts renaming
+- [ ] **Author** **P3** (Claude) for the author: regenerate `docs/screenshots/editor.png` with `pnpm screenshots`. It shows the removed block header buttons and the text view editor above its preview. The text view layout is checked at 1280x800 only, not at phone width, in the dark theme, or with long content
+- [ ] **Author** **P3** (Claude) for the author: review these overnight-work commits closely: 453f7ac (block header buttons removed, five rounds), 75b0a94 (one-click rename), 74f3350 (lazy `AND` and `OR`), 43750ae (`Notice.detail`, which overlaps the open "underlying error" item under Menus, dialogs, and messages). Commit 4e9aa4f lacks the Co-Authored-By trailer
+- [ ] **P8** (Claude) a Vue warning appears during `pnpm e2e:remote`: injection "Symbol(contextMenuClickGuard)" not found, from `ContextMenu` rendered in `SpreadsheetListView`. Not investigated #codebase
 - [ ] **P1** conduct a review of the codebase and find all the places that need updating to align with the design principles #codebase
 - [x] **P1** merge the changes from the design-principles branch #codebase
 
@@ -414,7 +422,7 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
     - block context menu should appear when right-clicking on the card around it but not the controls within it. keep a button in the upper right with a vertical ellipsis that I can click to show the same menu as well
 - [ ] **P7** data tables - allow choices to be drawn from a formula's result (when the formula value changes, keep the raw underlying value in the cell but flag it visibly as invalid) #data-tables
 - [x] **P6** allow creating links to navigate directly to a page, table cell, block, etc. #small-apps
-- [ ] **P7** (Claude) the editor for a formula column's formula looks unfinished beside the other panels: its heading is small, "Pick reference" is smaller than the other buttons, and Apply and Cancel touch. See `_scratch/qa/15-formula-col.png` #formula-editing
+- [ ] **Author** **P7** (Claude) the editor for a formula column's formula looks unfinished beside the other panels: its heading is small, "Pick reference" is smaller than the other buttons, and Apply and Cancel touch. See `_scratch/qa/15-formula-col.png` #formula-editing
 - [x] **P4** (Claude) a block added below the visible part of the page is not scrolled into view, so nothing seems to happen after "Add chart". Scroll to a new block and put the keyboard focus in it #small-apps
 - [ ] **P7** (Claude) the row of "Add table", "Add chart", "Add text", and "Add script" buttons between every two blocks takes a line of each gap on a page of five blocks. Consider showing the rows between blocks only when the pointer or the focus is in the gap, and keeping the first and last #small-apps
 - [x] **P5** (Claude) the label of a `TEXTBOX` or `NUMBERBOX` in a cell is cut to one letter at the default column width ("N…" for "Name"), because the input keeps a fixed width. Let the input shrink before the label does #small-apps
@@ -431,7 +439,7 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
   - [x] the block changes size between showing and editing. Keep its place and size in both, ideally the full width of the page
   - [x] the editing state looks unstyled beside the rest of the block
   - [x] show the preview to the right of the text being edited, not below it
-  - [ ] try leaving the editor only on an explicit Save, not when focus leaves the text. The author finds the return to the rendered view on a single click outside annoying. This changes the focus-change saving that "Editing in place" describes, so update [docs/design/ui.md](docs/design/ui.md) if the author keeps it
+  - [ ] **Author** try leaving the editor only on an explicit Save, not when focus leaves the text. The author finds the return to the rendered view on a single click outside annoying. This changes the focus-change saving that "Editing in place" describes, so update [docs/design/ui.md](docs/design/ui.md) if the author keeps it
 - [ ] **P8** investigate opening a script or text block for editing on one click without catching clicks meant for something else. The author wants one click to start editing, and a drag that selects rendered text must not start it. Some apps wait briefly after the click and start editing only if the pointer stays put, so a click followed by scrolling or moving away does nothing. Find what the technique is called and how other apps tune it, then try it out. Double-click stays until then #small-apps
 
 ## Formatting
