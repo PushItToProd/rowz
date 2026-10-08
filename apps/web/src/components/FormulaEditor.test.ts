@@ -312,6 +312,27 @@ describe("shared formula editor", () => {
     expect(backward.view.state.selection.main).toMatchObject({ anchor: 5, head: 2 });
   });
 
+  it.each([
+    {
+      source: `First = "unfinished\nSecond = `,
+      quote: "'",
+      expected: `First = "unfinished\nSecond = ('')`,
+    },
+    {
+      source: `First = 'unfinished\nSecond = `,
+      quote: '"',
+      expected: `First = 'unfinished\nSecond = ("")`,
+    },
+  ])(
+    "pairs brackets and quotes after an unfinished quote in a script statement",
+    ({ source, quote, expected }) => {
+      const { view } = render(source, { mode: "script" });
+      type(view, "(");
+      type(view, quote);
+      expect(view.state.doc.toString()).toBe(expected);
+    },
+  );
+
   it("keeps bracket behavior deliberate in cell, script, and Markdown editors", () => {
     const literal = render("value", { mode: "cell" });
     type(literal.view, "(");

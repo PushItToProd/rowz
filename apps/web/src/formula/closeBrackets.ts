@@ -23,17 +23,27 @@ function quoteSpans(doc: Text, mode: FormulaMode): QuoteSpan[] {
   for (let index = 0; index < source.length; index += 1) {
     const character = source[index];
     if (quote) {
-      if (character !== quote) continue;
-      if (source[index + 1] === quote) {
-        index += 1;
+      if (character === quote) {
+        if (source[index + 1] === quote) {
+          index += 1;
+          continue;
+        }
+        spans.push({
+          from: start + 1,
+          to: index + 1,
+          context: quote === '"' ? "string" : "name",
+        });
+        quote = undefined;
         continue;
       }
-      spans.push({
-        from: start + 1,
-        to: index + 1,
-        context: quote === '"' ? "string" : "name",
-      });
-      quote = undefined;
+      if (mode === "script" && character === "\n") {
+        spans.push({
+          from: start + 1,
+          to: index + 1,
+          context: quote === '"' ? "string" : "name",
+        });
+        quote = undefined;
+      }
       continue;
     }
 
