@@ -419,8 +419,9 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
   - where a click on the name already does something, rename only on a click on the thing already selected: the active page's name, and a selected column's name. A click on another page's tab still switches page, and a click on a column's header still selects the column
 - [ ] **P4** remove the row of action buttons from each block's header. The ellipsis menu and the right-click menu already list the same actions, so a table shows each of its nine three times. Keep the name and the ellipsis. See [DECISIONS.md](DECISIONS.md), "A menu's actions are not repeated as buttons" #small-apps
 - [ ] **P4** the text view's editor, as the author saw it on the `overnight-work` branch. See "Editing in place" in [docs/design/ui.md](docs/design/ui.md) #small-apps
-  - [x] clicking "Pick references" takes focus from the editor, which ends the edit, so the button cannot be used. Treat the editor's own controls and popovers as part of the editor when deciding that focus has left
+  - [*] clicking "Pick references" takes focus from the editor, which ends the edit, so the button cannot be used. Treat the editor's own controls and popovers as part of the editor when deciding that focus has left
     - (Claude) the button is logically disabled while the caret is outside a `{{ }}` expression (`canPick` in `FormulaEditor.vue`). It uses `aria-disabled` so its `mousedown.prevent` handler can preserve focus, and `requestPicking` ignores it when the current caret cannot accept a reference
+    - [ ] **Author** **P4** the "Pick references" item may be resolved: the fix was made from reading the code (a disabled button was the likely cause) and passed the unit and e2e suites, but nobody confirmed it in a browser. Check that clicking the button keeps the text view edit open. Latest commit when written: 39d83d7
   - [ ] the block changes size between showing and editing. Keep its place and size in both, ideally the full width of the page
   - [ ] the editing state looks unstyled beside the rest of the block
   - [ ] show the preview to the right of the text being edited, not below it
