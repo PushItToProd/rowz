@@ -103,8 +103,8 @@ export function criterion(given: Scalar): (cell: CellValue) => boolean {
   const target = parsed.value;
   const equality = comparison === "=" || comparison === "<>";
 
-  if (target === null || target === "") {
-    // An empty criterion is about emptiness: `""` matches empty cells and `"<>"` the others.
+  if (target === null || (target === "" && !parsed.quotedText)) {
+    // An unquoted empty criterion is about emptiness: `""` matches empty cells and `"<>"` the others.
     const wantsEmpty = comparison === "=";
     return (cell) => (cell === null || cell === "") === wantsEmpty;
   }

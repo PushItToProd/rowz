@@ -79,4 +79,11 @@ describe("quoted text criteria", () => {
     expect(matches(12)).toBe(false);
     expect(matches("12")).toBe(true);
   });
+
+  it("compares explicitly quoted empty text instead of matching every non-empty cell", () => {
+    expect(criterion('>""')("apple")).toBe(true);
+    expect(criterion('<""')("apple")).toBe(false);
+    expect(criterion('>""')(1)).toBe(false);
+    expect(criterion('<""')(1)).toBe(false);
+  });
 });
