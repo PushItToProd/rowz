@@ -350,7 +350,7 @@ describe("names in a workbook", () => {
     const workbook = workbookWith(
       [name("s1", "Total", "1")],
       {
-        t1: { A1: "=Summary!Total" },
+        t1: { A1: "=Summary!Total", A2: "=Total", A3: "=Archive!Summary!Total" },
       },
       structure,
     );
@@ -358,8 +358,12 @@ describe("names in a workbook", () => {
     const value = workbook.getValue(at("A1", "t1"));
     expect(value).toMatchObject({ code: "#NAME?" });
     expect(messageOf(value)).toBe(
-      "Summary!Total has more than one meaning: Archive!Summary!Total, Summary!Total. Use one of these qualified names.",
+      "Summary!Total has more than one meaning: Archive!Summary!Total, the table Total on page Summary. Use Archive!Summary!Total for the named value. Rename the table Total on page Summary to give it a unique qualified name.",
     );
+    expect(messageOf(workbook.getValue(at("A2", "t1")))).toBe(
+      "Total has more than one meaning: Archive!Summary!Total, the table Total on page Summary. Use Archive!Summary!Total for the named value. Rename the table Total on page Summary to give it a unique qualified name.",
+    );
+    expect(workbook.getValue(at("A3", "t1"))).toBe(1);
   });
 
   it("recalculates a whole-table use when a cell in that table changes", () => {

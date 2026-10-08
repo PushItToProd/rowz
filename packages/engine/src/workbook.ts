@@ -1002,6 +1002,42 @@ export class Workbook {
     return [...parts, ...(name === undefined ? [] : [name])].map(quoteName).join("!");
   }
 
+  /** A qualified spelling only when it resolves to this meaning on the formula's page. */
+  private qualifiedSpelling(
+    meaning: NameRecord | Holder,
+    pageId: string | undefined,
+  ): string | undefined {
+    const pageIdOfMeaning = "holder" in meaning ? meaning.holder.pageId : meaning.pageId;
+    const page = this.tables.pageName(pageIdOfMeaning);
+    if (!page) return undefined;
+
+    if ("holder" in meaning) {
+      const holder = this.tables.findHolder(meaning.holder.name, page, pageId);
+      const record = holder
+        ? this.names
+            .get(meaning.name.toLowerCase())
+            ?.find((candidate) => candidate.holder.id === holder.id)
+        : undefined;
+      return record === meaning ? this.written(meaning.holder, meaning.name) : undefined;
+    }
+
+    const holder = this.tables.findHolder(page, undefined, pageId);
+    const record = holder
+      ? this.names
+          .get(meaning.name.toLowerCase())
+          ?.find((candidate) => candidate.holder.id === holder.id)
+      : undefined;
+    const table = this.tables.tableOnPage(page, meaning.name);
+    return table?.id === meaning.id && !record ? this.written(meaning) : undefined;
+  }
+
+  private tableDescription(table: Pick<Holder, "name" | "pageId">): string {
+    const page = this.tables.pageName(table.pageId);
+    return page === undefined
+      ? `the table ${quoteName(table.name)}`
+      : `the table ${quoteName(table.name)} on page ${quoteName(page)}`;
+  }
+
   /**
    * Everything a word written alone can mean: every name of that spelling,
    * and every table of that spelling, on any page. More than one meaning is
@@ -1016,16 +1052,38 @@ export class Workbook {
   }
 
   /** The one name or table a word written alone means, or `undefined`. */
-  private bareMeaning(word: string): NameRecord | TableDefinition | undefined {
+  private bareMeaning(word: string, pageId?: string): NameRecord | TableDefinition | undefined {
     const { names, tables } = this.meanings(word);
     if (names.length + tables.length > 1) {
-      const all = [
-        ...names.map((record) => this.written(record.holder, record.name)),
-        ...tables.map((table) => this.written(table)),
+      const meanings = [
+        ...names.map((meaning) => ({ meaning, kind: "named value" })),
+        ...tables.map((meaning) => ({ meaning, kind: "table" })),
       ];
+      const candidates = meanings.map(({ meaning, kind }) => {
+        const spelling = this.qualifiedSpelling(meaning, pageId);
+        const description =
+          spelling ??
+          ("holder" in meaning
+            ? `the named value ${this.written(meaning.holder, meaning.name)}`
+            : this.tableDescription(meaning));
+        return { kind, spelling, description };
+      });
+      const spellings = candidates.map(({ spelling }) => spelling);
+      const all = candidates.map(({ description }) => description);
+      if (spellings.every((spelling) => spelling !== undefined)) {
+        fail(
+          "#NAME?",
+          `${word} has more than one meaning: ${spellings.join(", ")}. Use one of these qualified names.`,
+        );
+      }
+      const instructions = candidates.map(({ kind, spelling, description }) =>
+        spelling === undefined
+          ? `Rename ${description} to give it a unique qualified name.`
+          : `Use ${spelling} for the ${kind}.`,
+      );
       fail(
         "#NAME?",
-        `${word} has more than one meaning: ${all.join(", ")}. Use one of these qualified names.`,
+        `${word} has more than one meaning: ${all.join(", ")}. ${instructions.join(" ")}`,
       );
     }
     if (names[0]) return names[0];
@@ -1034,8 +1092,8 @@ export class Workbook {
   }
 
   /** A bare document name; tables are values, not action targets. */
-  private bareName(word: string): NameRecord | undefined {
-    const meaning = this.bareMeaning(word);
+  private bareName(word: string, pageId?: string): NameRecord | undefined {
+    const meaning = this.bareMeaning(word, pageId);
     return meaning && "holder" in meaning ? meaning : undefined;
   }
 
@@ -1067,15 +1125,29 @@ export class Workbook {
     const table = this.tables.tableOnPage(node.holder, node.name);
     if (record && table) {
       const writtenName = this.written(record.holder, record.name);
-      const writtenTable = this.written({
+      const tableHolder: Holder = {
         kind: "table",
         id: table.id,
         pageId: table.pageId,
         name: table.name,
-      });
+      };
+      const nameSpelling = this.qualifiedSpelling(record, pageId);
+      const tableSpelling = this.qualifiedSpelling(tableHolder, pageId);
+      const alternatives = [
+        nameSpelling ?? `the named value ${writtenName}`,
+        tableSpelling ?? this.tableDescription(tableHolder),
+      ];
+      const advice =
+        nameSpelling && tableSpelling
+          ? `Use ${nameSpelling} for the named value. Use ${tableSpelling} for the table.`
+          : nameSpelling
+            ? `Use ${nameSpelling} for the named value. Rename ${this.tableDescription(tableHolder)} to give it a unique qualified name.`
+            : tableSpelling
+              ? `Use ${tableSpelling} for the table. Rename the named value ${writtenName} to give it a unique qualified name.`
+              : `Rename the named value ${writtenName} or ${this.tableDescription(tableHolder)} to give them distinct names.`;
       fail(
         "#NAME?",
-        `${node.holder}!${node.name} has more than one meaning: ${writtenName}, ${writtenTable}. Use one of these qualified names.`,
+        `${node.holder}!${node.name} has more than one meaning: ${alternatives.join(", ")}. ${advice}`,
       );
     }
     if (record) return record;
@@ -1092,7 +1164,7 @@ export class Workbook {
     try {
       return "holder" in use
         ? this.qualifiedMeaning({ type: "qualified", ...use }, pageId)
-        : this.bareMeaning(use.name);
+        : this.bareMeaning(use.name, pageId);
     } catch (cause) {
       if (cause instanceof Failure) return undefined;
       throw cause;
@@ -1157,7 +1229,7 @@ export class Workbook {
   private scope(pageId: string | undefined): NameScope {
     return {
       bare: (word) => {
-        const meaning = this.bareMeaning(word);
+        const meaning = this.bareMeaning(word, pageId);
         if (!meaning) return undefined;
         return "holder" in meaning ? this.nameValue(meaning) : this.tableValue(meaning);
       },
@@ -1188,7 +1260,9 @@ export class Workbook {
     if (node?.type !== "name" && node?.type !== "qualified") return undefined;
     const holderPage = pageId ?? this.tables.table(origin.tableId)?.pageId;
     const record =
-      node.type === "name" ? this.bareName(node.name) : this.qualifiedName(node, holderPage);
+      node.type === "name"
+        ? this.bareName(node.name, holderPage)
+        : this.qualifiedName(node, holderPage);
     if (!record || !("ast" in record.content) || record.content.ast.type !== "reference") {
       return undefined;
     }
