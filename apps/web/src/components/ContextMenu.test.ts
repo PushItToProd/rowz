@@ -304,4 +304,31 @@ describe("ContextMenu", () => {
     opener.remove();
     render([]);
   });
+
+  it("leaves focus with an asynchronous action that moves it elsewhere", async () => {
+    const opener = document.createElement("button");
+    const target = document.createElement("button");
+    document.body.append(opener, target);
+    opener.focus();
+    let finish!: () => void;
+    const action = new Promise<void>((resolve) => {
+      finish = resolve;
+    }).then(() => {
+      target.focus();
+    });
+    render([{ label: "Edit", restoreFocus: false, run: () => action }]);
+    await flushPromises();
+
+    try {
+      await bodyGet('[role="menuitem"]').trigger("click");
+      wrapper.unmount();
+      finish();
+      await flushPromises();
+      expect(document.activeElement).toBe(target);
+    } finally {
+      opener.remove();
+      target.remove();
+      render([]);
+    }
+  });
 });

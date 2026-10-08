@@ -3,6 +3,7 @@ import type { Router } from "vue-router";
 import { nextTick } from "vue";
 import type { useWorkbookStore } from "./stores/workbook";
 import { setBlockCollapsed } from "./blockCollapse";
+import type { ActiveSidePane } from "./sidePane";
 
 export interface RevealLocationTarget {
   pageId: string;
@@ -46,6 +47,7 @@ export function useLocationReveal(
   store: ReturnType<typeof useWorkbookStore>,
   router: Router,
   spreadsheetId: () => string,
+  activeSidePane: ActiveSidePane,
 ) {
   const highlightTimers = new WeakMap<HTMLElement, number>();
 
@@ -108,12 +110,9 @@ export function useLocationReveal(
       return;
     }
 
-    if (target.name && target.line === undefined) {
-      const toggle = block?.querySelector<HTMLButtonElement>("[data-open-names]");
-      if (toggle?.getAttribute("aria-expanded") === "false") {
-        toggle.click();
-        await nextTick();
-      }
+    if (target.name && target.line === undefined && blockId) {
+      activeSidePane.open(`names:${blockId}`);
+      await nextTick();
     }
 
     const location =

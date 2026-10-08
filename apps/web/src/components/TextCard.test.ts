@@ -17,6 +17,7 @@ import {
   type MockedApi,
 } from "../testing";
 import TextCard from "./TextCard.vue";
+import { chooseBlockAction, openBlockActionMenu } from "../testing/blockMenu";
 
 vi.mock("../api/client", async () => {
   const testing = await import("../testing");
@@ -83,6 +84,9 @@ function button(name: string) {
 }
 
 const shown = () => wrapper.get(".text-view");
+async function chooseAction(label: string): Promise<void> {
+  await chooseBlockAction(wrapper, "Text 1", label, TextCard);
+}
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -570,7 +574,7 @@ describe("TextCard", () => {
     await render("old");
     expect(wrapper.find(".cm-content").exists()).toBe(false);
 
-    await button("Edit").trigger("click");
+    await chooseAction("Edit");
     const editor = await editorView();
     expect(editor.state.doc.toString()).toBe("old");
     await replaceDraft("new {{ 1 + 1 }}");
@@ -588,7 +592,7 @@ describe("TextCard", () => {
 
   it("saves and stops editing when the editor loses focus", async () => {
     await render("old");
-    await button("Edit").trigger("click");
+    await chooseAction("Edit");
     const editor = await editorView();
     expect(document.activeElement).toBe(editor.contentDOM);
     await replaceDraft("new");
@@ -598,12 +602,19 @@ describe("TextCard", () => {
       source: "new",
     });
     expect(wrapper.find(".cm-content").exists()).toBe(false);
-    expect(button("Edit").exists()).toBe(true);
+    const opened = await openBlockActionMenu(wrapper, "Text 1", TextCard);
+    try {
+      expect(opened.menu.findAll('[role="menuitem"]').some((item) => item.text() === "Edit")).toBe(
+        true,
+      );
+    } finally {
+      opened.close();
+    }
   });
 
   it("keeps editing while focus moves to the reference control", async () => {
     await render("{{ 'Table 1'!A1 }}");
-    await button("Edit").trigger("click");
+    await chooseAction("Edit");
     const editor = await editorView();
     const referenceEnd = editor.state.doc.toString().indexOf("A1") + 2;
     editor.dispatch({ selection: { anchor: referenceEnd } });
@@ -625,7 +636,7 @@ describe("TextCard", () => {
 
   it("keeps editing when reference picking is unavailable", async () => {
     await render("plain text");
-    await button("Edit").trigger("click");
+    await chooseAction("Edit");
     await editorView();
     const pick = wrapper.get<HTMLButtonElement>(".formula-editor__pick");
     expect(pick.attributes("aria-disabled")).toBe("true");
@@ -646,7 +657,7 @@ describe("TextCard", () => {
     "keeps editing while focus moves into its %s popup",
     async (popupClass) => {
       await render("old");
-      await button("Edit").trigger("click");
+      await chooseAction("Edit");
       const editor = await editorView();
       await replaceDraft("new");
 
@@ -679,7 +690,7 @@ describe("TextCard", () => {
 
   it("goes on editing when it is the window that loses focus", async () => {
     await render("old");
-    await button("Edit").trigger("click");
+    await chooseAction("Edit");
     await replaceDraft("new");
     // The browser sends a blur and leaves the editor as the document's active element.
     (await editorView()).contentDOM.dispatchEvent(new FocusEvent("blur"));
@@ -699,19 +710,19 @@ describe("TextCard", () => {
 
   it("does not save when nothing changed", async () => {
     await render("same");
-    await button("Edit").trigger("click");
+    await chooseAction("Edit");
     await button("Done").trigger("click");
     expect(server.updateView).not.toHaveBeenCalled();
   });
 
   it("deletes the view after confirming", async () => {
     await render("text");
-    await button("Delete text").trigger("click");
+    await chooseAction("Delete text");
     expect(appDialog()?.textContent).toContain("Delete Text 1?");
     await respondToDialog("cancel");
     expect(server.deleteView).not.toHaveBeenCalled();
 
-    await button("Delete text").trigger("click");
+    await chooseAction("Delete text");
     await respondToDialog("confirm");
     expect(server.deleteView).toHaveBeenCalledWith("v1");
   });
@@ -729,7 +740,7 @@ describe("TextCard", () => {
 
 it("Cancel restores the saved preview and Escape retains a multiline draft", async () => {
   await render("saved {{ 1 }}");
-  await button("Edit").trigger("click");
+  await chooseAction("Edit");
   await replaceDraft("draft {{ 2 }}");
   expect(shown().text()).toBe("draft 2");
   await wrapper.get(".cm-content").trigger("keydown", { key: "Escape" });

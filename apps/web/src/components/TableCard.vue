@@ -39,7 +39,7 @@ const props = withDefaults(defineProps<{ table: TableRecord; collapsed?: boolean
 });
 const emit = defineEmits<{
   trace: [trace: ErrorTraceFrame[]];
-  actions: [event: MouseEvent];
+  actions: [event: MouseEvent, items: MenuItem[]];
   "toggle-collapse": [];
 }>();
 const store = useWorkbookStore();
@@ -54,6 +54,8 @@ const namesPaneId: `names:${string}` = `names:${props.table.id}`;
 const conditionalFormatsPaneId: `conditional-formats:${string}` = `conditional-formats:${props.table.id}`;
 const choicesPaneId: `choices:${string}` = `choices:${props.table.id}`;
 const conditionalPanel = ref<{ focus(): void }>();
+const importInput = ref<HTMLInputElement>();
+const appendInput = ref<HTMLInputElement>();
 
 /** The selected cell when it is in this table. Row and column actions apply to it. */
 const selected = computed(() =>
@@ -311,29 +313,6 @@ function nameRange(): void {
   activeSidePane.open(namesPaneId);
 }
 
-/** Where the menu that offers the two ways to name columns is open, if it is. */
-const namingAt = ref<{ x: number; y: number } | null>(null);
-
-function openNaming(event: MouseEvent): void {
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  namingAt.value = { x: box.left, y: box.bottom + 4 };
-}
-
-const namingItems: MenuItem[] = [
-  {
-    label: "Use the first row as the names",
-    run: () => {
-      void store.nameColumns(props.table.id, true);
-    },
-  },
-  {
-    label: "Name them Column 1, Column 2, …",
-    run: () => {
-      void store.nameColumns(props.table.id, false);
-    },
-  },
-];
-
 async function dropColumns(): Promise<void> {
   const computed = (props.table.columns ?? []).some((column) => column.type === "formula");
   const warning = computed ? " Its formula columns will become empty." : "";
@@ -348,6 +327,75 @@ async function dropColumns(): Promise<void> {
     void store.dropColumns(props.table.id);
   }
 }
+
+/** The actions available from the table's block menu. */
+const blockMenuActions = computed((): MenuItem[] => {
+  const names = !props.table.columns && props.table.names.length > 0;
+  const namesLabel = `Names${props.table.names.length ? ` (${String(props.table.names.length)})` : ""}`;
+  const conditionalFormatsLabel = `Conditional formats${
+    props.table.conditionalFormats.length
+      ? ` (${String(props.table.conditionalFormats.length)})`
+      : ""
+  }`;
+  if (!store.canEdit) {
+    return [
+      ...(names
+        ? [
+            {
+              label: namesLabel,
+              run: () => {
+                activeSidePane.open(namesPaneId);
+              },
+            },
+          ]
+        : []),
+      { label: "Export CSV", run: exportCsv },
+    ];
+  }
+
+  return [
+    { label: "Resize", run: () => (resizing.value = true) },
+    { label: "Freeze rows and columns", run: openFreezeSettings },
+    ...(!props.table.columns
+      ? [
+          {
+            label: namesLabel,
+            run: () => {
+              activeSidePane.open(namesPaneId);
+            },
+          },
+        ]
+      : []),
+    {
+      label: conditionalFormatsLabel,
+      run: () => {
+        activeSidePane.open(conditionalFormatsPaneId);
+      },
+    },
+    ...(props.table.columns
+      ? [{ label: "Remove column names", danger: true, run: dropColumns }]
+      : [
+          {
+            label: "Use the first row as the names",
+            run: () => void store.nameColumns(props.table.id, true),
+          },
+          {
+            label: "Name them Column 1, Column 2, …",
+            run: () => void store.nameColumns(props.table.id, false),
+          },
+        ]),
+    { label: "Import CSV", run: () => importInput.value?.click() },
+    { label: "Append CSV rows", run: () => appendInput.value?.click() },
+    { label: "Export CSV", run: exportCsv },
+    { label: "Delete table", danger: true, run: remove },
+  ];
+});
+
+function getBlockMenuActions(): MenuItem[] {
+  return blockMenuActions.value;
+}
+
+defineExpose({ getBlockMenuActions });
 
 const COLUMN_TYPES: readonly { type: ColumnType; label: string }[] = [
   { type: "any", label: "Anything" },
@@ -834,97 +882,13 @@ const menuLabel = computed(() => {
           />
         </h2>
       </div>
-      <div class="table-card__actions">
-        <div v-if="store.canEdit" v-show="!collapsed" class="table-card__direct-actions">
-          <button
-            type="button"
-            data-block-action="Resize"
-            aria-haspopup="dialog"
-            @click="resizing = !resizing"
-          >
-            Resize
-          </button>
-          <button
-            type="button"
-            data-block-action="Freeze rows and columns"
-            aria-haspopup="dialog"
-            @click="openFreezeSettings"
-          >
-            Freeze
-          </button>
-          <button
-            v-if="!table.columns"
-            type="button"
-            data-block-action="Names"
-            data-open-names
-            :aria-expanded="namesOpen"
-            @click="activeSidePane.toggle(namesPaneId)"
-          >
-            Names{{ table.names.length > 0 ? ` (${table.names.length})` : "" }}
-          </button>
-          <button
-            type="button"
-            data-block-action="Conditional formats"
-            :aria-expanded="conditionalOpen"
-            @click="activeSidePane.toggle(conditionalFormatsPaneId)"
-          >
-            Conditional formats{{
-              table.conditionalFormats.length > 0 ? ` (${table.conditionalFormats.length})` : ""
-            }}
-          </button>
-          <button
-            v-if="table.columns"
-            type="button"
-            data-block-action="Remove column names"
-            @click="dropColumns"
-          >
-            Remove column names
-          </button>
-          <button
-            v-else
-            type="button"
-            data-block-action="Name columns"
-            aria-haspopup="menu"
-            @click="openNaming"
-          >
-            Name columns
-          </button>
-          <label class="file-button" data-block-action="Import CSV">
-            Import CSV
-            <input type="file" accept=".csv,.tsv,.txt,text/csv" @change="importCsv" />
-          </label>
-          <label class="file-button" data-block-action="Append CSV rows">
-            Append CSV rows
-            <input type="file" accept=".csv,.tsv,.txt,text/csv" @change="appendCsv" />
-          </label>
-          <button type="button" data-block-action="Export CSV" @click="exportCsv">
-            Export CSV
-          </button>
-          <button type="button" data-block-action="Delete table" class="danger" @click="remove">
-            Delete table
-          </button>
-        </div>
-        <div v-else v-show="!collapsed" class="table-card__direct-actions">
-          <button
-            v-if="!table.columns && table.names.length > 0"
-            type="button"
-            data-block-action="Names"
-            data-open-names
-            :aria-expanded="namesOpen"
-            @click="activeSidePane.toggle(namesPaneId)"
-          >
-            Names ({{ table.names.length }})
-          </button>
-          <button type="button" data-block-action="Export CSV" @click="exportCsv">
-            Export CSV
-          </button>
-        </div>
+      <div class="block-card__menu">
         <button
           type="button"
           class="table-card__menu-trigger"
           aria-haspopup="menu"
           :aria-label="`Block actions for ${table.name}`"
-          @click.stop="emit('actions', $event)"
+          @click.stop="emit('actions', $event, getBlockMenuActions())"
         >
           ⋮
         </button>
@@ -942,6 +906,27 @@ const menuLabel = computed(() => {
         @save="saveFreezeSettings"
       />
     </header>
+
+    <template v-if="store.canEdit">
+      <input
+        ref="importInput"
+        class="table-card__file-input"
+        type="file"
+        accept=".csv,.tsv,.txt,text/csv"
+        aria-hidden="true"
+        tabindex="-1"
+        @change="importCsv"
+      />
+      <input
+        ref="appendInput"
+        class="table-card__file-input"
+        type="file"
+        accept=".csv,.tsv,.txt,text/csv"
+        aria-hidden="true"
+        tabindex="-1"
+        @change="appendCsv"
+      />
+    </template>
 
     <div v-show="!collapsed" class="block-card__body" :inert="collapsed">
       <ColumnFormulaPopover
@@ -1061,14 +1046,6 @@ const menuLabel = computed(() => {
         "
       />
     </div>
-    <ContextMenu
-      v-if="namingAt"
-      :x="namingAt.x"
-      :y="namingAt.y"
-      label="Name columns"
-      :items="namingItems"
-      @close="namingAt = null"
-    />
     <ContextMenu
       v-if="menuAt && selected"
       :x="menuAt.x"

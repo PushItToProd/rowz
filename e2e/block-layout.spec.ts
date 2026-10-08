@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { cell, enter, newSpreadsheet, reload } from "./helpers";
+import { cell, chooseBlockAction, enter, newSpreadsheet, reload } from "./helpers";
 
 test("a table collapses to its header and stays collapsed after reload", async ({ page }) => {
   await newSpreadsheet(page);
@@ -46,7 +46,7 @@ test("going to an error expands its collapsed table", async ({ page }) => {
 test("printing shows collapsed table bodies and renders their windowed rows", async ({ page }) => {
   await newSpreadsheet(page);
   const table = page.locator('.table-card[data-table="Table 1"]');
-  await table.getByRole("button", { name: "Resize", exact: true }).click();
+  await chooseBlockAction(page, "Table 1", "Resize");
   const resize = table.getByRole("dialog", { name: "Resize Table 1" });
   await resize.getByLabel("Rows").fill("201");
   await resize.getByRole("button", { name: "Resize", exact: true }).click();
@@ -72,7 +72,7 @@ test("a long text view scrolls inside its own card", async ({ page }) => {
   await newSpreadsheet(page);
   await page.getByRole("button", { name: "Add text", exact: true }).last().click();
   const card = page.locator('[data-view="Text 1"]');
-  await card.getByRole("button", { name: "Edit", exact: true }).click();
+  await chooseBlockAction(page, "Text 1", "Edit");
   const source = Array.from(
     { length: 100 },
     (_, index) => `Paragraph ${String(index + 1)} with enough text to create a tall report.`,

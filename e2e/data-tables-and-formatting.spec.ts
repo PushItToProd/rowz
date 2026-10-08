@@ -1,6 +1,14 @@
 import { expect, test, type Locator } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { signUp, newSpreadsheet, cell, enter, reload } from "./helpers";
+import {
+  chooseBlockAction,
+  signUp,
+  newSpreadsheet,
+  cell,
+  enter,
+  reload,
+  uploadFromBlockMenu,
+} from "./helpers";
 
 test("a spreadsheet is exported to a file and imported again, and a table to and from CSV", async ({
   page,
@@ -22,7 +30,7 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
 
   // The CSV holds the values the table shows.
   const csvDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export CSV" }).click();
+  await chooseBlockAction(page, "Table 1", "Export CSV");
   const csv = await csvDownload;
   expect(csv.suggestedFilename()).toBe("Table 1.csv");
   // Saved here because a download has no path when the browser runs on another machine.
@@ -52,10 +60,10 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   // A CSV file goes into a table from its first cell, and the table grows to fit.
   await page.getByRole("button", { name: "New document" }).click();
   await expect(cell(page, "A1")).toBeVisible();
-  await page.getByLabel("Import CSV").setInputFiles(csvPath);
+  await uploadFromBlockMenu(page, "Table 1", "Import CSV", csvPath);
   await expect(cell(page, "A2")).toHaveText("pears, ripe");
   await expect(cell(page, "B2")).toHaveText("6");
-  await page.getByLabel("Append CSV rows").setInputFiles(csvPath);
+  await uploadFromBlockMenu(page, "Table 1", "Append CSV rows", csvPath);
   const appendConfirm = page.getByRole("dialog", { name: "Append CSV rows" });
   await expect(appendConfirm).toContainText(
     "Append 2 rows to Table 1? Columns are matched by position.",
@@ -103,8 +111,7 @@ test("a table with named columns has typed columns, a formula column, and column
   };
 
   // The first row becomes the names, and the data moves up.
-  await page.getByRole("button", { name: "Name columns" }).click();
-  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
   await expect(header("Price")).toBeVisible();
   await expect(cell(page, "A1")).toHaveText("pen");
 
@@ -211,8 +218,7 @@ test("warns before changing a column type when stored values do not fit", async 
   await enter(page, "A2", "TRUE");
   await enter(page, "A3", "not done");
   await enter(page, "A4", "FALSE");
-  await page.getByRole("button", { name: "Name columns" }).click();
-  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
 
   const header = page.locator('[data-table="Table 1"] thead th[data-column="Done"]');
   await header.click({ button: "right" });
@@ -251,8 +257,7 @@ test("a data table is sorted and filtered in place, and edits and fills act on t
       await enter(page, `${"AB"[col] ?? ""}${String(row + 1)}`, text);
     }
   }
-  await page.getByRole("button", { name: "Name columns" }).click();
-  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
 
   // Sorting by Item shows apple, fig, pear, which are stored rows 2, 3, and 1.
   await page
@@ -304,8 +309,7 @@ test("a dropdown column offers a list of choices, and a choice is picked", async
   await newSpreadsheet(page);
   await enter(page, "A1", "Race");
   await enter(page, "A2", "one");
-  await page.getByRole("button", { name: "Name columns" }).click();
-  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
 
   await page
     .locator('[data-table="Table 1"] thead th[data-column="Race"]')
@@ -329,7 +333,7 @@ test("a conditional format fills the cells that meet a criterion and follows the
   await newSpreadsheet(page);
   await enter(page, "A1", "50");
   await enter(page, "A2", "150");
-  await page.getByRole("button", { name: "Conditional formats" }).click();
+  await chooseBlockAction(page, "Table 1", "Conditional formats");
   await cell(page, "A1").click();
   await cell(page, "A2").click({ modifiers: ["Shift"] });
   await page.getByLabel("Criterion").fill(">100");
@@ -384,8 +388,7 @@ test("a whole-column selection stays whole when the table sort is removed", asyn
     for (const [col, value] of values.entries())
       await enter(page, `${"AB"[col] ?? ""}${String(row + 1)}`, value);
   }
-  await page.getByRole("button", { name: "Name columns" }).click();
-  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
   await page.getByRole("button", { name: "Add sort", exact: true }).click();
   await page.getByLabel("Sort column 1").selectOption({ label: "Qty" });
   await page.getByLabel("Sort direction 1").selectOption("descending");
@@ -393,7 +396,7 @@ test("a whole-column selection stays whole when the table sort is removed", asyn
 
   const qtyHeader = page.locator('[data-table="Table 1"] thead th[data-column="Qty"]');
   await qtyHeader.click();
-  await page.getByRole("button", { name: "Conditional formats", exact: true }).click();
+  await chooseBlockAction(page, "Table 1", "Conditional formats");
   const panel = page.locator(".conditional-panel");
   await expect(panel.locator("form p")).toHaveText("Applies to B1:B.");
 

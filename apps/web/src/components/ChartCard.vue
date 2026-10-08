@@ -10,11 +10,15 @@ import { sameEditingTarget, useFormulaSessionStore } from "../formula/session";
 import { useDialog } from "../useDialog";
 import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
+import type { MenuItem } from "./menu";
 
 const props = withDefaults(defineProps<{ view: ViewRecord; collapsed?: boolean }>(), {
   collapsed: false,
 });
-const emit = defineEmits<{ actions: [event: MouseEvent]; "toggle-collapse": [] }>();
+const emit = defineEmits<{
+  actions: [event: MouseEvent, items: MenuItem[]];
+  "toggle-collapse": [];
+}>();
 const store = useWorkbookStore();
 const dialog = useDialog();
 
@@ -36,11 +40,8 @@ async function ready(): Promise<boolean> {
   if (!saved) sessions.focus();
   return saved;
 }
-async function setType(event: Event): Promise<void> {
-  const field = event.target as HTMLSelectElement;
-  const chartType = field.value as ChartType;
+async function setType(chartType: ChartType): Promise<void> {
   if (!(await ready())) {
-    field.value = props.view.chartType ?? "bar";
     return;
   }
   await store.updateView(props.view.id, { chartType });
@@ -63,9 +64,29 @@ async function remove(): Promise<void> {
 }
 
 const sourceField = ref<InstanceType<typeof SessionFormulaField>>();
-function editSource(): void {
-  void sourceField.value?.begin();
+async function editSource(): Promise<void> {
+  await sourceField.value?.begin();
 }
+
+const blockMenuActions = computed((): MenuItem[] => {
+  if (!store.canEdit) return [];
+  const chartType = props.view.chartType ?? "bar";
+  return [
+    { label: "Edit", restoreFocus: false, run: editSource },
+    ...TYPES.map((type) => ({
+      label: `${type.value === chartType ? "✓ " : ""}Chart type: ${type.label}`,
+      disabled: type.value === chartType,
+      run: () => setType(type.value),
+    })),
+    { label: "Delete chart", danger: true, run: remove },
+  ];
+});
+
+function getBlockMenuActions(): MenuItem[] {
+  return blockMenuActions.value;
+}
+
+defineExpose({ getBlockMenuActions });
 
 /** The data to draw, or why there is none. */
 const data = computed((): { rows: CellValue[][] } | { problem: string } => {
@@ -114,29 +135,13 @@ const data = computed((): { rows: CellValue[][] } | { problem: string } => {
           />
         </h2>
       </div>
-      <div class="view-card__actions">
-        <div v-if="store.canEdit" v-show="!collapsed" class="view-card__direct-actions">
-          <button type="button" data-block-action="Edit" @click="editSource">Edit</button>
-          <select
-            data-block-action="Chart type"
-            aria-label="Chart type"
-            :value="view.chartType ?? 'bar'"
-            @change="setType"
-          >
-            <option v-for="type in TYPES" :key="type.value" :value="type.value">
-              {{ type.label }}
-            </option>
-          </select>
-          <button type="button" data-block-action="Delete chart" class="danger" @click="remove">
-            Delete chart
-          </button>
-        </div>
+      <div class="block-card__menu">
         <button
           type="button"
           class="view-card__menu-trigger"
           aria-haspopup="menu"
           :aria-label="`Block actions for ${view.name}`"
-          @click.stop="emit('actions', $event)"
+          @click.stop="emit('actions', $event, getBlockMenuActions())"
         >
           ⋮
         </button>

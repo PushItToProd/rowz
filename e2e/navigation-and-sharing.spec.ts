@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { APP_NAME } from "./appName";
-import { PASSWORD, signUp, newSpreadsheet, cell, enter } from "./helpers";
+import { PASSWORD, signUp, newSpreadsheet, cell, enter, openBlockMenu } from "./helpers";
 
 test("editing shows errors, the formula bar, and keyboard navigation", async ({ page }) => {
   await newSpreadsheet(page);
@@ -269,7 +269,9 @@ test("a spreadsheet is shared with another account, which can edit it until the 
   await guest.getByRole("link", { name: "Untitled document" }).click();
   await expect(cell(guest, "A1")).toHaveText("from the owner");
   await enter(guest, "B1", "from the guest");
-  await expect(guest.getByRole("button", { name: "Delete table" })).toBeVisible();
+  let guestBlockMenu = await openBlockMenu(guest, "Table 1");
+  await expect(guestBlockMenu.getByRole("menuitem", { name: "Delete table" })).toBeVisible();
+  await guest.keyboard.press("Escape");
 
   // The owner sees the guest's edit without reloading, and the guest the owner's.
   await expect(cell(page, "B1")).toHaveText("from the guest");
@@ -281,7 +283,9 @@ test("a spreadsheet is shared with another account, which can edit it until the 
   await page.getByRole("button", { name: "Share" }).click();
   await share.getByLabel("What Ada can do").nth(0).selectOption("viewer");
   await expect(guest.getByText("View only")).toBeVisible();
-  await expect(guest.getByRole("button", { name: "Delete table" })).toHaveCount(0);
+  guestBlockMenu = await openBlockMenu(guest, "Table 1");
+  await expect(guestBlockMenu.getByRole("menuitem", { name: "Delete table" })).toHaveCount(0);
+  await guest.keyboard.press("Escape");
 
   // Ending the share takes the spreadsheet away.
   const stopSharing = page.getByRole("alertdialog", { name: "Stop sharing" });

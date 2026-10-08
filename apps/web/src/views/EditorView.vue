@@ -50,10 +50,15 @@ const props = defineProps<{ spreadsheetId: string; pageId?: string }>();
 const store = useWorkbookStore();
 const router = useRouter();
 const route = useRoute();
-const { revealLocation } = useLocationReveal(store, router, () => props.spreadsheetId);
+const activeSidePane = provideActiveSidePane();
+const { revealLocation } = useLocationReveal(
+  store,
+  router,
+  () => props.spreadsheetId,
+  activeSidePane,
+);
 const formulas = useFormulaSessionStore();
 const picking = useReferencePickingStore();
-const activeSidePane = provideActiveSidePane();
 const replayed = new WeakSet<Event>();
 
 async function copyBlockLink(pageId: string, blockId: string): Promise<void> {
@@ -443,24 +448,29 @@ const pageMenuItems = computed((): MenuItem[] => {
     }));
 });
 
-/** The actions for a block, opened from its card or its action button. */
-const blockMenu = ref<{ x: number; y: number; blockId: string } | null>(null);
+/** The actions for a block, opened from its ellipsis or by right-clicking its header. */
+const blockMenu = ref<{ x: number; y: number; blockId: string; directActions?: MenuItem[] } | null>(
+  null,
+);
+const blockActionProviders = new Map<string, () => MenuItem[]>();
 
-function actionControls(blockId: string): HTMLElement[] {
-  return [
-    ...(document
-      .getElementById(`block-${blockId}`)
-      ?.querySelectorAll<HTMLElement>("[data-block-action]") ?? []),
-  ];
+interface BlockActionProvider {
+  getBlockMenuActions(): MenuItem[];
 }
 
-function runBlockAction(blockId: string, action: string): void {
-  setBlockCollapsed(props.spreadsheetId, blockId, false);
-  void nextTick(() => {
-    actionControls(blockId)
-      .find((control) => control.dataset.blockAction === action)
-      ?.click();
-  });
+function isBlockActionProvider(instance: unknown): instance is BlockActionProvider {
+  return (
+    typeof instance === "object" &&
+    instance !== null &&
+    "getBlockMenuActions" in instance &&
+    typeof instance.getBlockMenuActions === "function"
+  );
+}
+
+function registerBlockActionProvider(blockId: string, instance: unknown): void {
+  if (isBlockActionProvider(instance))
+    blockActionProviders.set(blockId, () => instance.getBlockMenuActions());
+  else blockActionProviders.delete(blockId);
 }
 
 function renameBlock(blockId: string): void {
@@ -488,16 +498,14 @@ const blockMenuItems = computed((): MenuItem[] => {
   const menu = blockMenu.value;
   const block = menu && blocks.value.find((candidate) => candidate.record.id === menu.blockId);
   if (!menu || !block) return [];
-  const availableActions = actionControls(block.record.id).map((control) => {
-    const action = control.dataset.blockAction ?? "";
-    return {
-      label: action,
-      danger: /^(?:Delete|Remove)\b/.test(action),
-      run: () => {
-        runBlockAction(block.record.id, action);
-      },
-    };
-  });
+  const directActions = menu.directActions ?? blockActionProviders.get(block.record.id)?.() ?? [];
+  const availableActions = directActions.map((action) => ({
+    ...action,
+    run: () => {
+      setBlockCollapsed(props.spreadsheetId, block.record.id, false);
+      return action.run();
+    },
+  }));
   const groups: MenuItem[][] = [
     [
       {
@@ -616,10 +624,14 @@ function openBlockMenu(event: MouseEvent, block: { id: string; name: string }): 
   blockMenu.value = { x: event.clientX, y: event.clientY, blockId: block.id };
 }
 
-function openBlockActionMenu(event: MouseEvent, block: { id: string; name: string }): void {
+function openBlockActionMenu(
+  event: MouseEvent,
+  block: { id: string; name: string },
+  directActions: MenuItem[],
+): void {
   const trigger = event.currentTarget as HTMLElement;
   const box = trigger.getBoundingClientRect();
-  blockMenu.value = { x: box.right, y: box.bottom, blockId: block.id };
+  blockMenu.value = { x: box.right, y: box.bottom, blockId: block.id, directActions };
 }
 
 function onBlockKeydown(event: KeyboardEvent, block: { id: string; name: string }): void {
@@ -827,31 +839,35 @@ watch(
         >
           <TableCard
             v-if="block.table"
+            :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
             :table="block.table"
             :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
             @trace="goToTrace"
-            @actions="openBlockActionMenu($event, block.record)"
+            @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
             @toggle-collapse="toggleBlockCollapse(block.record.id)"
           />
           <ChartCard
             v-else-if="block.view.kind === 'chart'"
+            :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
             :view="block.view"
             :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
-            @actions="openBlockActionMenu($event, block.record)"
+            @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
             @toggle-collapse="toggleBlockCollapse(block.record.id)"
           />
           <ScriptCard
             v-else-if="block.view.kind === 'script'"
+            :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
             :view="block.view"
             :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
-            @actions="openBlockActionMenu($event, block.record)"
+            @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
             @toggle-collapse="toggleBlockCollapse(block.record.id)"
           />
           <TextCard
             v-else
+            :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
             :view="block.view"
             :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
-            @actions="openBlockActionMenu($event, block.record)"
+            @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
             @toggle-collapse="toggleBlockCollapse(block.record.id)"
           />
           <div

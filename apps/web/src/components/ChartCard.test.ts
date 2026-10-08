@@ -16,6 +16,7 @@ import ChartCard from "./ChartCard.vue";
 import { EditorView } from "@codemirror/view";
 import { useFormulaSessionStore } from "../formula/session";
 import FormulaSessionHost from "./FormulaSessionHost.vue";
+import { chooseBlockAction } from "../testing/blockMenu";
 
 vi.mock("../api/client", async () => {
   const testing = await import("../testing");
@@ -86,6 +87,10 @@ async function editSource(text: string): Promise<EditorView> {
   return editor;
 }
 
+async function chooseAction(label: string): Promise<void> {
+  await chooseBlockAction(wrapper, "Chart 1", label, ChartCard);
+}
+
 describe("ChartCard", () => {
   it("draws the cells its data names, computing formulas among them", async () => {
     await render();
@@ -112,13 +117,21 @@ describe("ChartCard", () => {
     await render({ chartType: "pie" });
     expect(wrapper.findAll("[data-chart-value]")).toHaveLength(3);
 
-    await wrapper.get("select").setValue("line");
+    await chooseAction("Chart type: Line");
     await flushPromises();
     expect(server.updateView).toHaveBeenCalledWith("v1", {
       revision: expect.any(Number),
       chartType: "line",
     });
     expect(wrapper.get(".chart").attributes("data-chart")).toBe("line");
+  });
+
+  it("keeps focus in the data source editor when Edit is chosen from the block menu", async () => {
+    await render();
+    await chooseAction("Edit");
+
+    const editor = EditorView.findFromDOM(wrapper.get(".cm-content").element as HTMLElement)!;
+    expect(document.activeElement).toBe(editor.contentDOM);
   });
 
   it("saves new data on Enter and on leaving the box, but not when nothing changed", async () => {
@@ -220,11 +233,11 @@ describe("ChartCard", () => {
     await render();
     await editSource("retain me");
     server.updateView.mockRejectedValue(new Error("Offline"));
-    await wrapper.get("select").setValue("pie");
+    await chooseAction("Chart type: Pie");
     await flushPromises();
     expect(server.updateView).toHaveBeenCalledExactlyOnceWith("v1", { source: "retain me" });
-    expect(wrapper.get("select").element).toHaveProperty("value", "bar");
-    await wrapper.get("button.danger").trigger("click");
+    expect(wrapper.get(".chart").attributes("data-chart")).toBe("bar");
+    await chooseAction("Delete chart");
     await flushPromises();
     expect(server.deleteView).not.toHaveBeenCalled();
     expect(appDialog()).toBeNull();
@@ -252,13 +265,13 @@ describe("ChartCard", () => {
 
   it("deletes the chart after confirming", async () => {
     await render();
-    await wrapper.get("button.danger").trigger("click");
+    await chooseAction("Delete chart");
     await flushPromises();
     expect(appDialog()?.textContent).toContain("Delete Chart 1?");
     await respondToDialog("cancel");
     expect(server.deleteView).not.toHaveBeenCalled();
 
-    await wrapper.get("button.danger").trigger("click");
+    await chooseAction("Delete chart");
     await flushPromises();
     await respondToDialog("confirm");
     expect(server.deleteView).toHaveBeenCalledWith("v1");

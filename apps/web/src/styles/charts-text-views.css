@@ -79,20 +79,6 @@
   margin-bottom: 10px;
 }
 
-.view-card__actions {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.view-card__actions select {
-  padding: 4px 6px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  font: inherit;
-}
-
 .view-card__source {
   display: flex;
   gap: 8px;

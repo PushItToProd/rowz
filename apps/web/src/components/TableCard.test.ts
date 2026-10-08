@@ -25,6 +25,7 @@ import FormulaBar from "./FormulaBar.vue";
 import FormulaSessionHost from "./FormulaSessionHost.vue";
 import { undo } from "@codemirror/commands";
 import { bodyFindAll, bodyGet, bodyHas } from "../testing/teleported";
+import { chooseBlockAction, openBlockActionMenu } from "../testing/blockMenu";
 import TableCard from "./TableCard.vue";
 
 vi.mock("../api/client", async () => {
@@ -94,7 +95,7 @@ describe("row and column actions", () => {
   it("sets freeze counts from the table action menu", async () => {
     await render();
     server.updateTable.mockResolvedValue(changeWith());
-    await button("Freeze").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Freeze rows and columns");
 
     const settings = wrapper.get('form[aria-label="Freeze Table 1"]');
     const fields = settings.findAll("input");
@@ -253,10 +254,7 @@ describe("row and column actions", () => {
     await render({}, "viewer");
     await select("B3");
     expect(wrapper.find(".table-card__lines").exists()).toBe(false);
-    expect(wrapper.findAll(".table-card__actions button").map((found) => found.text())).toEqual([
-      "Export CSV",
-      "⋮",
-    ]);
+    expect(wrapper.findAll(".block-card__menu button").map((found) => found.text())).toEqual(["⋮"]);
     expect(wrapper.find('button[aria-label="Block actions for Table 1"]').exists()).toBe(true);
     expect(wrapper.find('input[type="file"]').exists()).toBe(false);
   });
@@ -265,12 +263,48 @@ describe("row and column actions", () => {
 describe("table side panes", () => {
   it("shows one table side pane at a time", async () => {
     await render();
-    await button("Names").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Names");
+    expect(wrapper.find('[aria-label="Names in Table 1"]').exists()).toBe(true);
+    await chooseBlockAction(wrapper, "Table 1", "Names");
     expect(wrapper.find('[aria-label="Names in Table 1"]').exists()).toBe(true);
 
-    await button("Conditional formats").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Conditional formats");
     expect(wrapper.find('[aria-label="Names in Table 1"]').exists()).toBe(false);
     expect(wrapper.find('[aria-label="Conditional formats of Table 1"]').exists()).toBe(true);
+    await chooseBlockAction(wrapper, "Table 1", "Conditional formats");
+    expect(wrapper.find('[aria-label="Conditional formats of Table 1"]').exists()).toBe(true);
+  });
+
+  it("keeps name and conditional format counts in the table menu", async () => {
+    await render();
+    const rule = {
+      kind: "criterion" as const,
+      startRow: 0,
+      endRow: null,
+      startCol: 0,
+      endCol: null,
+      criterion: ">0",
+      format: { fill: "red" as const },
+    };
+    await wrapper.setProps({
+      table: {
+        ...TABLE,
+        names: [
+          { name: "First", formula: "1" },
+          { name: "Second", formula: "2" },
+          { name: "Third", formula: "3" },
+        ],
+        conditionalFormats: [{ ...rule }, { ...rule }],
+      },
+    });
+    const opened = await openBlockActionMenu(wrapper, "Table 1", TableCard);
+    try {
+      const labels = opened.menu.findAll('[role="menuitem"]').map((item) => item.text());
+      expect(labels).toContain("Names (3)");
+      expect(labels).toContain("Conditional formats (2)");
+    } finally {
+      opened.close();
+    }
   });
 });
 
@@ -300,7 +334,7 @@ describe("table actions", () => {
   });
 
   async function resizeTo(columns: string, rows: string): Promise<void> {
-    await button("Resize").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Resize");
     const form = wrapper.get('[role="dialog"]');
     const [colCount, rowCount] = form.findAll("input");
     await colCount!.setValue(columns);
@@ -313,7 +347,7 @@ describe("table actions", () => {
     server.updateTable.mockResolvedValue(
       changeWith({ table: TABLE, cells: [], views: [], tables: [] }),
     );
-    await button("Resize").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Resize");
     const form = wrapper.get('[role="dialog"]');
     expect(form.attributes("aria-label")).toBe("Resize Table 1");
     expect(form.findAll("input").map((input) => input.element.value)).toEqual(["3", "4"]);
@@ -368,7 +402,7 @@ describe("table actions", () => {
 
   it("refuses a size a table cannot have, and sends nothing for the size it has", async () => {
     await render();
-    await button("Resize").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Resize");
     const form = wrapper.get('[role="dialog"]');
     const submit = form.get('button[type="submit"]');
     for (const bad of ["0", "101", "2.5", ""]) {
@@ -388,7 +422,7 @@ describe("table actions", () => {
       () => button("Cancel").trigger("click"),
       () => wrapper.get(".grid").trigger("mousedown"),
     ]) {
-      await button("Resize").trigger("click");
+      await chooseBlockAction(wrapper, "Table 1", "Resize");
       expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
       await close();
       expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
@@ -398,11 +432,11 @@ describe("table actions", () => {
 
   it("deletes the table after confirmation", async () => {
     await render();
-    await button("Delete table").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Delete table");
     await respondToDialog("cancel");
     expect(server.deleteTable).not.toHaveBeenCalled();
 
-    await button("Delete table").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Delete table");
     await respondToDialog("confirm");
     expect(server.deleteTable).toHaveBeenCalledExactlyOnceWith("t1");
   });
@@ -665,10 +699,15 @@ describe("the menu of row, column, and cell actions", () => {
 
 describe("files", () => {
   /** Chooses a file in the table's file input, as picking one in the browser's dialog does. */
-  async function choose(name: string, content: string, action = "Import CSV"): Promise<void> {
-    const input = wrapper.get<HTMLInputElement>(
-      `label[data-block-action="${action}"] input[type="file"]`,
-    );
+  async function choose(
+    name: string,
+    content: string,
+    action = "Import CSV",
+    tableName = "Table 1",
+  ): Promise<void> {
+    await chooseBlockAction(wrapper, tableName, action);
+    const input = wrapper.findAll('input[type="file"]')[action === "Import CSV" ? 0 : 1];
+    if (!input) throw new Error(`No file input for ${action}`);
     Object.defineProperty(input.element, "files", {
       configurable: true,
       value: [new File([content], name, { type: "text/csv" })],
@@ -679,7 +718,7 @@ describe("files", () => {
 
   it("exports the values the table shows as CSV, without the empty rows and columns at its end", async () => {
     await render({ A1: "name", B1: "total", A2: "a, b", B2: "=1+2" });
-    await button("Export CSV").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Export CSV");
     expect(download).toHaveBeenCalledExactlyOnceWith(
       "Table 1.csv",
       'name,total\r\n"a, b",3',
@@ -763,7 +802,12 @@ describe("files", () => {
     const store = useWorkbookStore();
     wrapper = mount(TableCard, { props: { table: named }, attachTo: document.body });
 
-    await choose("sales.csv", "item,QTY,Notes\nPen,2,first\nPencil,3,second", "Append CSV rows");
+    await choose(
+      "sales.csv",
+      "item,QTY,Notes\nPen,2,first\nPencil,3,second",
+      "Append CSV rows",
+      "Sales",
+    );
     expect(appDialog()?.textContent).toContain(
       "Append 2 rows to Sales? Matched columns: Item, Qty, Notes.",
     );
@@ -771,7 +815,12 @@ describe("files", () => {
     await respondToDialog("cancel");
     expect(server.appendCsvRows).not.toHaveBeenCalled();
 
-    await choose("sales.csv", "QTY,qTy,item,Unknown\n007,999,Pen,ignored", "Append CSV rows");
+    await choose(
+      "sales.csv",
+      "QTY,qTy,item,Unknown\n007,999,Pen,ignored",
+      "Append CSV rows",
+      "Sales",
+    );
     expect(appDialog()?.textContent).toContain(
       "Append 1 row to Sales? Matched columns: Qty, Item. Ignored: Unknown. Duplicate columns ignored: qTy.",
     );
@@ -855,13 +904,19 @@ describe("column names", () => {
     server.nameColumns.mockResolvedValue(
       changeWith({ table: DATA_TABLE, cells: [], views: [], tables: [] }),
     );
-    await button("Name columns").trigger("click");
-    expect(bodyGet('[role="menu"]').attributes("aria-label")).toBe("Name columns");
-    await item("Use the first row as the names").trigger("click");
+    const opened = await openBlockActionMenu(wrapper, "Table 1");
+    const labels = opened.menu.findAll('[role="menuitem"]').map((entry) => entry.text());
+    expect(opened.menu.attributes("aria-label")).toBe("Actions for Table 1");
+    expect(labels).toContain("Use the first row as the names");
+    expect(labels).toContain("Name them Column 1, Column 2, …");
+    await opened.menu
+      .findAll('[role="menuitem"]')
+      .find((entry) => entry.text() === "Use the first row as the names")!
+      .trigger("click");
+    opened.close();
     expect(server.nameColumns).toHaveBeenCalledExactlyOnceWith("t1", true);
 
-    await button("Name columns").trigger("click");
-    await item("Name them Column 1, Column 2, …").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Name them Column 1, Column 2, …");
     expect(server.nameColumns).toHaveBeenLastCalledWith("t1", false);
   });
 
@@ -869,13 +924,13 @@ describe("column names", () => {
     await renderData();
     server.dropColumns.mockResolvedValue(changeWith(TABLE));
     expect(wrapper.findAll("button").some((found) => found.text() === "Name columns")).toBe(false);
-    await button("Remove column names").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Remove column names", TableCard);
     expect(appDialog()?.textContent).toContain(
       "Remove the column names of Table 1? Its formula columns will become empty.",
     );
     await respondToDialog("cancel");
     expect(server.dropColumns).not.toHaveBeenCalled();
-    await button("Remove column names").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Remove column names", TableCard);
     await respondToDialog("confirm");
     expect(server.dropColumns).toHaveBeenCalledExactlyOnceWith("t1");
   });
@@ -1541,7 +1596,7 @@ describe("dropdown columns", () => {
     await renderChoices();
     expect(wrapper.find("form.choices-panel").exists()).toBe(true);
 
-    await button("Conditional formats").trigger("click");
+    await chooseBlockAction(wrapper, "Table 1", "Conditional formats");
     expect(wrapper.find(".conditional-panel").exists()).toBe(true);
     expect(wrapper.find("form.choices-panel").exists()).toBe(false);
 

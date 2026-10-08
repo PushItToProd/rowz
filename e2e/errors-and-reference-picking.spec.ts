@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { newSpreadsheet, cell, dragReference, enter } from "./helpers";
+import { chooseBlockAction, newSpreadsheet, cell, dragReference, enter } from "./helpers";
 
 test("errors stay visible across pages and in the document list", async ({ page }) => {
   await newSpreadsheet(page);
@@ -87,7 +87,7 @@ test("a repeated script name marks its later definition and keeps the first usab
   await newSpreadsheet(page);
   await page.getByRole("button", { name: "Add script", exact: true }).last().click();
   const script = page.locator('[data-view="Script 1"]');
-  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  await chooseBlockAction(page, "Script 1", "Edit");
   const source = script.getByLabel("Script source");
   await source.fill("QtyTotal = 3\nQtyTotal = 5");
   await source.press("Control+Enter");
@@ -117,15 +117,14 @@ test("a function error opens its cell and the Raised in link opens its script de
       await enter(page, `${"ABC"[col] ?? ""}${String(row + 1)}`, value);
     }
   }
-  await page.getByRole("button", { name: "Name columns", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
   await page.locator('[data-table="Table 1"]').getByText("Table 1").dblclick();
   await page.getByLabel("Table name").fill("Runs");
   await page.getByLabel("Table name").press("Enter");
 
   await page.getByRole("button", { name: "Add script", exact: true }).last().click();
   const script = page.locator('[data-view="Script 1"]');
-  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  await chooseBlockAction(page, "Script 1", "Edit");
   const source = script.getByLabel("Script source");
   const filler = Array.from(
     { length: 45 },
@@ -212,7 +211,7 @@ test("script drafts complete parameters, keep history across pages, and retain f
   await pages.getByText("Page 1", { exact: true }).click();
   await page.getByRole("button", { name: "Add script", exact: true }).last().click();
   const script = page.locator('[data-view="Script 1"]');
-  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  await chooseBlockAction(page, "Script 1", "Edit");
   const source = script.getByLabel("Script source");
   await source.fill("Double(amount) = am");
   await expect(page.getByRole("option", { name: /^amount/ })).toBeVisible();
@@ -226,7 +225,7 @@ test("script drafts complete parameters, keep history across pages, and retain f
   await source.press("Control+Enter");
   await expect(source).toHaveCount(0);
   await expect(script.locator(".script tr").last()).toContainText("4");
-  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  await chooseBlockAction(page, "Script 1", "Edit");
   await source.fill("Total = 77");
   await pages.getByText("Page 2", { exact: true }).click();
   const dock = page.getByRole("region", { name: "Formula draft" });
@@ -266,7 +265,7 @@ test("Markdown drafts complete only template expressions and Cancel restores the
   await newSpreadsheet(page);
   await page.getByRole("button", { name: "Add text", exact: true }).last().click();
   const text = page.locator('[data-view="Text 1"]');
-  await text.getByRole("button", { name: "Edit", exact: true }).click();
+  await chooseBlockAction(page, "Text 1", "Edit");
   const source = text.getByLabel("Text view source");
   await source.fill("# Heading\n**bold** and `{{ A1 + 2 }}`");
   await expect(text.locator(".formula-prose--heading").last()).toContainText("Heading");
@@ -282,7 +281,7 @@ test("Markdown drafts complete only template expressions and Cancel restores the
   await expect(text.locator(".text-view")).toHaveText("2");
   await source.press("Control+Enter");
   await expect(source).toHaveCount(0);
-  await text.getByRole("button", { name: "Edit", exact: true }).click();
+  await chooseBlockAction(page, "Text 1", "Edit");
   await source.fill("Draft {{ 9 }}");
   await expect(text.locator(".text-view")).toHaveText("Draft 9");
   await source.press("Escape");
@@ -445,7 +444,7 @@ test("multiline sources pick only in expressions, and unfinished new names pick 
   await newSpreadsheet(page);
   await page.getByRole("button", { name: "Add text", exact: true }).last().click();
   const text = page.locator('[data-view="Text 1"]');
-  await text.getByRole("button", { name: "Edit", exact: true }).click();
+  await chooseBlockAction(page, "Text 1", "Edit");
   const source = text.getByLabel("Text view source");
   await source.fill("Prose");
   await expect(text.getByRole("button", { name: "Pick reference", exact: true })).toBeDisabled();
@@ -456,7 +455,7 @@ test("multiline sources pick only in expressions, and unfinished new names pick 
   await source.press("Control+Enter");
   await page.getByRole("button", { name: "Add script", exact: true }).last().click();
   const script = page.locator('[data-view="Script 1"]');
-  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  await chooseBlockAction(page, "Script 1", "Edit");
   const scriptSource = script.getByLabel("Script source");
   await scriptSource.fill("// Comment");
   await expect(script.getByRole("button", { name: "Pick reference", exact: true })).toBeDisabled();
@@ -464,7 +463,7 @@ test("multiline sources pick only in expressions, and unfinished new names pick 
   await cell(page, "A1").click();
   await expect(scriptSource).toHaveText("Total = 'Table 1'!A1");
   await scriptSource.press("Control+Enter");
-  await page.locator("[data-open-names]").click();
+  await chooseBlockAction(page, "Table 1", "Names");
   const panel = page.getByRole("region", { name: "Names in Table 1" });
   await panel.getByLabel("New name", { exact: true }).fill("Total");
   const formula = panel.getByLabel("Formula of the new name", { exact: true });
@@ -512,8 +511,7 @@ test("named headers use same-row filters, reject multiple columns, and keep hidd
     for (const [col, text] of inputs.entries())
       await enter(page, `${"AB"[col] ?? ""}${String(row + 1)}`, text);
   }
-  await page.getByRole("button", { name: "Name columns", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Use the first row as the names", exact: true }).click();
+  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
   const item = page.locator('[data-table="Table 1"] thead th[data-column="Item"]');
   const qty = page.locator('[data-table="Table 1"] thead th[data-column="Qty"]');
   await item.click({ button: "right" });

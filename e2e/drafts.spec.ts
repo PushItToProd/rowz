@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { newSpreadsheet, cell, enter, reload } from "./helpers";
+import { chooseBlockAction, newSpreadsheet, cell, enter, reload } from "./helpers";
 
 test("an open draft follows its row when another tab inserts above it", async ({
   page,
@@ -55,7 +55,7 @@ test("saving a script does not scroll to the selected cell", async ({ page }) =>
   await cell(page, "A1").click();
   await page.getByRole("button", { name: "Add script", exact: true }).last().click();
   const script = page.locator('[data-view="Script 1"]');
-  await script.getByRole("button", { name: "Edit", exact: true }).click();
+  await chooseBlockAction(page, "Script 1", "Edit");
   const source = script.getByLabel("Script source");
   await source.fill("Total = 42");
   await source.scrollIntoViewIfNeeded();
@@ -117,7 +117,7 @@ test("named formulas use shared editing while new names require an explicit subm
   page,
 }) => {
   await newSpreadsheet(page);
-  await page.locator("[data-open-names]").click();
+  await chooseBlockAction(page, "Table 1", "Names");
   const panel = page.getByRole("region", { name: "Names in Table 1" });
   let created = 0;
   page.on("request", (request) => {

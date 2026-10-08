@@ -27,6 +27,7 @@ let resizeObserver: ResizeObserver | undefined;
 let unregister: (() => void) | undefined;
 let closed = false;
 let focusRestoreAfter: Promise<unknown> | undefined;
+let restoreFocusAfterAction = true;
 
 function buttons(): HTMLButtonElement[] {
   return [...(menu.value?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
@@ -86,7 +87,10 @@ function close(): void {
 }
 
 function choose(item: MenuItem): void {
-  if (!item.keepOpen) close();
+  if (!item.keepOpen) {
+    restoreFocusAfterAction = item.restoreFocus !== false;
+    close();
+  }
   const result = item.run();
   if (!item.keepOpen && result instanceof Promise) {
     focusRestoreAfter = result;
@@ -101,12 +105,12 @@ function restoreFocus(): void {
 
 function restoreFocusWhenReady(): void {
   if (!focusRestoreAfter) {
-    restoreFocus();
+    if (restoreFocusAfterAction) restoreFocus();
     return;
   }
   const afterAction = async (): Promise<void> => {
     await nextTick();
-    restoreFocus();
+    if (restoreFocusAfterAction) restoreFocus();
   };
   void focusRestoreAfter.then(afterAction, afterAction);
 }

@@ -1,5 +1,32 @@
-import { expect, test, type Locator } from "@playwright/test";
-import { newSpreadsheet, cell, enter, reload } from "./helpers";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { chooseBlockAction, newSpreadsheet, cell, enter, openBlockMenu, reload } from "./helpers";
+
+const CHART_TYPE_LABELS = {
+  bar: "Bar",
+  line: "Line",
+  pie: "Pie",
+  scatter: "Scatter",
+} as const;
+
+async function chooseChartType(
+  page: Page,
+  chart: Locator,
+  type: keyof typeof CHART_TYPE_LABELS,
+): Promise<void> {
+  const currentType = await chart.locator(".chart").getAttribute("data-chart");
+  if (currentType === type) {
+    const menu = await openBlockMenu(page, "Chart 1");
+    const selected = menu.getByRole("menuitem", {
+      name: `✓ Chart type: ${CHART_TYPE_LABELS[type]}`,
+      exact: true,
+    });
+    await expect(selected).toBeDisabled();
+    await page.keyboard.press("Escape");
+    return;
+  }
+
+  await chooseBlockAction(page, "Chart 1", `Chart type: ${CHART_TYPE_LABELS[type]}`);
+}
 
 async function expectRenderedChart(svg: Locator): Promise<void> {
   await expect(svg).toBeVisible();
@@ -35,12 +62,14 @@ test("charts place date values on a time axis", async ({ page }) => {
 
   await page.getByRole("button", { name: "Add chart" }).last().click();
   const chart = page.locator('[data-view="Chart 1"]');
-  await chart.getByLabel("Chart data").click();
+  await chooseBlockAction(page, "Chart 1", "Edit");
+  await expect(chart.getByLabel("Chart data")).toBeFocused();
   await chart.getByLabel("Chart data").fill("'Table 1'!A1:B5");
   await chart.getByLabel("Chart data").press("Enter");
 
-  for (const type of ["bar", "line", "scatter"]) {
-    await chart.getByLabel("Chart type").selectOption(type);
+  for (const type of ["bar", "line", "scatter"] as const) {
+    await chooseChartType(page, chart, type);
+    await expect(chart.locator(".chart")).toHaveAttribute("data-chart", type);
     await expect(chart.locator(".chart__canvas")).toHaveAttribute("data-axis-kind", "time");
     await expectRenderedChart(chart.locator(".chart__canvas svg"));
     await expect(chart.locator("[data-chart-value]")).toHaveCount(5);
@@ -58,8 +87,8 @@ test("ECharts renders every type in blocks and templates and resizes its SVG", a
   await card.getByLabel("Chart data").click();
   await card.getByLabel("Chart data").fill("'Table 1'!A1:B2");
   await card.getByLabel("Chart data").press("Enter");
-  for (const type of ["bar", "line", "pie", "scatter"]) {
-    await card.getByLabel("Chart type").selectOption(type);
+  for (const type of ["bar", "line", "pie", "scatter"] as const) {
+    await chooseChartType(page, card, type);
     await expect(card.locator(".chart")).toHaveAttribute("data-chart", type);
     await expect(card.getByLabel("Chart data")).toHaveCount(1);
     await expect(
@@ -92,7 +121,7 @@ test("ECharts renders every type in blocks and templates and resizes its SVG", a
 
   await page.getByRole("button", { name: "Add text" }).last().click();
   const text = page.locator('[data-view="Text 1"]');
-  await text.getByRole("button", { name: "Edit" }).click();
+  await chooseBlockAction(page, "Text 1", "Edit");
   await text
     .getByLabel("Text view source")
     .fill(
@@ -127,7 +156,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await chart.getByLabel("Chart data").press("Enter");
   await expect(chart.locator("[data-chart-value]")).toHaveCount(2);
 
-  await chart.getByLabel("Chart type").selectOption("pie");
+  await chooseChartType(page, chart, "pie");
   await expect(chart.locator("[data-chart-value]")).toHaveCount(2);
   await expect(chart).toContainText("pears 63%");
 
@@ -142,7 +171,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await expect(page.locator(".editor__block").nth(1)).toContainText("Text 1");
   await expect(page.locator(".editor__block").nth(2)).toContainText("Chart 1");
   await expect(text.getByRole("heading", { name: "New text view" })).toBeVisible();
-  await text.getByRole("button", { name: "Edit" }).click();
+  await chooseBlockAction(page, "Text 1", "Edit");
   await text
     .getByLabel("Text view source")
     .fill(
@@ -169,7 +198,9 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await page.keyboard.type("\n## That is all");
   await cell(page, "C4").click();
   await expect(text.getByLabel("Text view source")).toBeHidden();
-  await expect(text.getByRole("button", { name: "Edit" })).toBeVisible();
+  const textMenu = await openBlockMenu(page, "Text 1");
+  await expect(textMenu.getByRole("menuitem", { name: "Edit", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(text.getByRole("heading", { name: "That is all" })).toBeVisible();
 
   // Both follow a cell change.
@@ -186,7 +217,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
 
   await reload(page);
   await expect(chart.locator("[data-chart-value]")).toHaveCount(2);
-  await expect(chart.getByLabel("Chart type")).toHaveValue("pie");
+  await expect(chart.locator(".chart")).toHaveAttribute("data-chart", "pie");
   await expect(text.getByRole("listitem")).toHaveText(["apples: 15", "pears: 5"]);
 
   // The inserted text view moves down, then above the table, and stays there.
@@ -212,7 +243,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await expect.poll(order).toEqual(["Text 1", "Fruit", "Chart 1"]);
 
   const deleteDialog = page.getByRole("alertdialog", { name: "Delete chart" });
-  await chart.getByRole("button", { name: "Delete chart" }).click();
+  await chooseBlockAction(page, "Chart 1", "Delete chart");
   await deleteDialog.getByRole("button", { name: "Delete chart" }).click();
   await expect(chart).toHaveCount(0);
   await expect(text).toBeVisible();
@@ -223,7 +254,7 @@ test("a text view button runs the selected stored action", async ({ page }) => {
   await enter(page, "A1", "1");
   await page.getByRole("button", { name: "Add text" }).last().click();
   const text = page.locator('[data-view="Text 1"]');
-  await text.getByRole("button", { name: "Edit" }).click();
+  await chooseBlockAction(page, "Text 1", "Edit");
   await text
     .getByLabel("Text view source")
     .fill(
@@ -273,7 +304,7 @@ test("text-view input controls commit to their bound cells", async ({ page }) =>
   await enter(page, "A2", "1.5");
   await page.getByRole("button", { name: "Add text" }).last().click();
   const text = page.locator('[data-view="Text 1"]');
-  await text.getByRole("button", { name: "Edit" }).click();
+  await chooseBlockAction(page, "Text 1", "Edit");
   await text
     .getByLabel("Text view source")
     .fill(
@@ -330,7 +361,7 @@ test("a direct cell reference in a text view uses its number format", async ({ p
 
   await page.getByRole("button", { name: "Add text" }).last().click();
   const text = page.locator('[data-view="Text 1"]');
-  await text.getByRole("button", { name: "Edit" }).click();
+  await chooseBlockAction(page, "Text 1", "Edit");
   await text.getByLabel("Text view source").fill("{{ 'Table 1'!D1 }} / {{ 'Table 1'!D1 * 2 }}");
   await expect(text.locator(".text-view")).toContainText("$7.50 / 15");
   await text.getByRole("button", { name: "Done" }).click();

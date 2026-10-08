@@ -493,12 +493,12 @@ const OPERATORS = [
           {{ LIMITS.tableCols }} columns.
         </li>
         <li>
-          <strong>Resize</strong> sets how many columns and rows a table has. A smaller size deletes
-          the rows and columns past it, as deleting them by hand does, and asks first when they hold
-          something.
+          <strong>Resize</strong> in a table's block menu sets how many columns and rows it has. A
+          smaller size deletes the rows and columns past it, as deleting them by hand does, and asks
+          first when they hold something.
         </li>
         <li>
-          <strong>Freeze</strong> in the table's <strong>⋮</strong> menu chooses how many leading
+          <strong>Freeze rows and columns</strong> in a table's block menu chooses how many leading
           rows and columns stay in view while its grid scrolls. A row or column header's context
           menu can freeze through that line or unfreeze it. Data tables keep their named-column
           header in view; their row freeze count is limited to that header, and leading columns can
@@ -562,8 +562,9 @@ const OPERATORS = [
     <section id="columns">
       <h2>Tables with named columns</h2>
       <p>
-        <strong>Name columns</strong>, above a table, gives each column a name in place of its
-        letter. The names can come from the table's first row, which then stops being a row of data.
+        Choose <strong>Use the first row as the names</strong> or
+        <strong>Name them Column 1, Column 2, …</strong> in a plain table's block menu to give each
+        column a name in place of its letter. Using the first row removes it from the data.
         Double-click a name to change it.
       </p>
       <ul>
@@ -605,15 +606,15 @@ const OPERATORS = [
           <code>SUM(Sales[Amount])</code> read the same cells. A row for which the filter gives an
           error stays shown. The row numbers are the stored ones. While a table is sorted or
           filtered, a selection covers the rows shown, you cannot insert a row above or below, and
-          formatting needs one row or whole columns. Use <strong>Freeze</strong> in the table menu
-          to keep leading columns in view; a data table's named-column header stays visible, and its
-          row freeze setting is limited to that header. Plain tables can freeze leading rows and
-          columns. A row or column header menu can freeze through that position or unfreeze the
-          grid.
+          formatting needs one row or whole columns. Use <strong>Freeze rows and columns</strong> in
+          the table's block menu to keep leading columns in view; a data table's named-column header
+          stays visible, and its row freeze setting is limited to that header. Plain tables can
+          freeze leading rows and columns. A row or column header menu can freeze through that
+          position or unfreeze the grid.
         </li>
         <li>
-          <strong>Remove column names</strong> makes the table a plain table again. Its formula
-          columns become empty, and its sort and filter are cleared.
+          <strong>Remove column names</strong> in a data table's block menu makes it a plain table
+          again. Its formula columns become empty, and its sort and filter are cleared.
         </li>
       </ul>
     </section>
@@ -776,10 +777,10 @@ const OPERATORS = [
     <section id="names">
       <h2>Names and your own functions</h2>
       <p>
-        The new-name form creates a name only with <strong>Add name</strong> or Enter. Tab and
-        clicking outside retain the unfinished name and formula. Cancel or closing the form discards
-        them. Its formula supports the same completion and reference picking as other formula
-        editors.
+        Choose <strong>Names</strong> in a plain table's block menu to open the Names panel. The
+        new-name form creates a name only with <strong>Add name</strong> or Enter. Tab and clicking
+        outside retain the unfinished name and formula. Cancel or closing the form discards them.
+        Its formula supports the same completion and reference picking as other formula editors.
       </p>
       <p>
         <code>LET</code> gives a name to a value so a formula can use it more than once:
@@ -1109,10 +1110,11 @@ const OPERATORS = [
     <section id="conditional">
       <h2>Conditional formats</h2>
       <p>
-        <strong>Conditional formats</strong>, above a table, lists the rules that format cells by
-        their value. Select cells, choose a kind of rule, and press <strong>Add rule</strong>. You
-        can also right-click selected cells and choose <strong>Add conditional format…</strong> to
-        open the panel for that selection.
+        <strong>Conditional formats</strong> in a table's block menu opens the rules that format
+        cells by their value. Select cells, choose a kind of rule, and press
+        <strong>Add rule</strong>. You can also right-click selected cells and choose
+        <strong>Add conditional format…</strong>
+        to open the panel for that selection.
       </p>
       <ul>
         <li>
@@ -1219,21 +1221,21 @@ const OPERATORS = [
           your folders.
         </li>
         <li>
-          <strong>Export CSV</strong> saves one table as a CSV file that other spreadsheet apps
-          open. The file contains the values the cells show, not their formulas.
+          <strong>Export CSV</strong> in a table's block menu saves the values its cells show as a
+          CSV file that other spreadsheet apps can open. The file does not contain formulas.
         </li>
         <li>
-          <strong>Import CSV</strong> replaces the table contents, starting at A1. The table grows
-          to fit, up to {{ LIMITS.tableRows }} rows and {{ LIMITS.tableCols }} columns. A cell in
-          the file that starts with <code>=</code> becomes a formula. Files with semicolons or tabs
-          between cells are read too.
+          <strong>Import CSV</strong> in a table's block menu replaces its contents, starting at A1.
+          The table grows to fit, up to {{ LIMITS.tableRows }} rows and
+          {{ LIMITS.tableCols }} columns. A cell in the file that starts with <code>=</code> becomes
+          a formula. Files with semicolons or tabs between cells are read too.
         </li>
         <li>
-          <strong>Append CSV rows</strong> adds rows after the last row of a data table or the last
-          used row of a plain table. In a data table, the first row is a header; names match without
-          regard to case, unmatched CSV columns are ignored, and table columns missing from the file
-          stay blank. In a plain table, every row is appended, including the first, and columns
-          match by position. Appending is one undoable change.
+          <strong>Append CSV rows</strong> in a table's block menu adds rows after the last row of a
+          data table or the last used row of a plain table. In a data table, the first row is a
+          header; names match without regard to case, unmatched CSV columns are ignored, and table
+          columns missing from the file stay blank. In a plain table, every row is appended,
+          including the first, and columns match by position. Appending is one undoable change.
         </li>
       </ul>
     </section>
@@ -1242,7 +1244,9 @@ const OPERATORS = [
       <h2>Charts</h2>
       <p>
         <strong>Add chart</strong> puts a chart on a page. Type the cells to draw into its
-        <strong>Data</strong> box, and choose bar, line, pie, or scatter. The chart redraws when the
+        <strong>Data</strong> box, and choose <strong>Chart type: Bar</strong>,
+        <strong>Chart type: Line</strong>, <strong>Chart type: Pie</strong>, or
+        <strong>Chart type: Scatter</strong> in the chart's block menu. The chart redraws when the
         cells change. Charts fit the width of their block and show values on hover, including charts
         embedded in text views.
       </p>
@@ -1279,8 +1283,8 @@ const OPERATORS = [
     <section id="text-views">
       <h2>Text views</h2>
       <p>
-        <strong>Add text</strong> puts a text view on a page. Double-click the text, or choose
-        <strong>Edit</strong>, to write it. The text is
+        <strong>Add text</strong> puts a text view on a page. Double-click the text or choose
+        <strong>Edit</strong> in its block menu to write it. The text is
         <a href="https://commonmark.org/help/" target="_blank" rel="noreferrer">Markdown</a>, and
         tags put values from the document into it. The view shows the result as you type. Leaving
         the source normally saves the text. Reference picks and browsing pages keep the draft open.

@@ -10,11 +10,15 @@ import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
 import { shown } from "./shownValue";
 import { useDialog } from "../useDialog";
+import type { MenuItem } from "./menu";
 
 const props = withDefaults(defineProps<{ view: ViewRecord; collapsed?: boolean }>(), {
   collapsed: false,
 });
-const emit = defineEmits<{ actions: [event: MouseEvent]; "toggle-collapse": [] }>();
+const emit = defineEmits<{
+  actions: [event: MouseEvent, items: MenuItem[]];
+  "toggle-collapse": [];
+}>();
 const store = useWorkbookStore();
 const dialog = useDialog();
 
@@ -54,6 +58,20 @@ async function remove(): Promise<void> {
     await store.deleteView(props.view.id);
   }
 }
+
+const blockMenuActions = computed((): MenuItem[] => {
+  if (!store.canEdit) return [];
+  return [
+    ...(!editing.value ? [{ label: "Edit", restoreFocus: false, run: edit }] : []),
+    { label: "Delete script", danger: true, run: remove },
+  ];
+});
+
+function getBlockMenuActions(): MenuItem[] {
+  return blockMenuActions.value;
+}
+
+defineExpose({ getBlockMenuActions });
 
 /** Each statement of the saved source, with the value of each name. */
 const statements = computed(() =>
@@ -129,19 +147,13 @@ onBeforeUnmount(() => resizeObserver?.disconnect());
           />
         </h2>
       </div>
-      <div class="view-card__actions">
-        <div v-if="store.canEdit" v-show="!collapsed" class="view-card__direct-actions">
-          <button v-if="!editing" type="button" data-block-action="Edit" @click="edit">Edit</button>
-          <button type="button" data-block-action="Delete script" class="danger" @click="remove">
-            Delete script
-          </button>
-        </div>
+      <div class="block-card__menu">
         <button
           type="button"
           class="view-card__menu-trigger"
           aria-haspopup="menu"
           :aria-label="`Block actions for ${view.name}`"
-          @click.stop="emit('actions', $event)"
+          @click.stop="emit('actions', $event, getBlockMenuActions())"
         >
           ⋮
         </button>

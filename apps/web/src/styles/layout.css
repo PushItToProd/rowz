@@ -317,17 +317,12 @@ input.editable-name--editing {
   min-height: 28px;
 }
 
-.table-card__header--collapsed .table-card__actions,
-.view-card__header--collapsed .view-card__actions {
-  margin-left: auto;
-}
-
-.table-card__direct-actions,
-.view-card__direct-actions {
+.block-card__menu {
   display: flex;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
   gap: 6px;
   align-items: center;
+  margin-left: auto;
 }
 
 .block-card__body {
@@ -341,14 +336,7 @@ input.editable-name--editing {
   }
 }
 
-.table-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-/* The form that sets a table's size, which opens under the table's buttons. */
+/* The form that sets a table's size, which opens under the table header. */
 .resize-table {
   position: absolute;
   top: 100%;

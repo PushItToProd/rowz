@@ -1,6 +1,7 @@
 // The text view step reaches into the page to size a textarea, which needs the DOM types.
 /// <reference lib="dom" />
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { chooseBlockAction } from "./helpers";
 
 // Builds a small demo spreadsheet and saves the screenshots the README shows.
 // Run with `pnpm screenshots`.
@@ -96,8 +97,7 @@ test("capture the README screenshots", async ({ page }) => {
     await header(column).click({ button: "right" });
     await page.getByRole("menuitem", { name: item }).click();
   };
-  await page.getByRole("button", { name: "Name columns" }).click();
-  await page.getByRole("menuitem", { name: "Use the first row as the names" }).click();
+  await chooseBlockAction(page, "Orders", "Use the first row as the names");
   await choose("Paid", "Column holds: Checkbox");
   await choose("Column 1", "Column holds: A formula…");
   await page.getByLabel("Column formula").fill("=[Price] * [Qty]");
@@ -122,7 +122,7 @@ test("capture the README screenshots", async ({ page }) => {
 
   await page.getByRole("button", { name: "Add text" }).last().click();
   const text = page.locator('[data-view="Text 1"]');
-  await text.getByRole("button", { name: "Edit" }).click();
+  await chooseBlockAction(page, "Text 1", "Edit");
   await text
     .getByLabel("Text view source")
     .fill(

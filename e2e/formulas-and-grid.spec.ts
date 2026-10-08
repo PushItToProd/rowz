@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { newSpreadsheet, cell, enter, reload, openPageMenu, expectCellSize } from "./helpers";
+import {
+  chooseBlockAction,
+  newSpreadsheet,
+  cell,
+  enter,
+  reload,
+  openPageMenu,
+  expectCellSize,
+} from "./helpers";
 
 test("a cell input keeps its label visible at the default column width", async ({ page }) => {
   await newSpreadsheet(page);
@@ -317,7 +325,7 @@ test("rows and columns can be inserted and deleted, and formulas follow", async 
   // Resize sets both at once. A smaller size asks before it discards content.
   await enter(page, "B1", "=A4*2");
   await expect(cell(page, "B1")).toHaveText("28");
-  await table.getByRole("button", { name: "Resize" }).click();
+  await chooseBlockAction(page, "Table 1", "Resize");
   const resize = page.getByRole("dialog", { name: "Resize Table 1" });
   await expect(resize.getByLabel("Columns")).toHaveValue("10");
   await expect(resize.getByLabel("Rows")).toHaveValue("21");

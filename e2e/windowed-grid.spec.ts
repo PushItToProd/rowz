@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { cell, enter, expectCellSize, newSpreadsheet } from "./helpers";
+import { cell, enter, expectCellSize, newSpreadsheet, uploadFromBlockMenu } from "./helpers";
 
 test("a large grid windows cells and keeps an offscreen edit alive", async ({ page }) => {
   await newSpreadsheet(page);
   const csv = Array.from({ length: 1000 }, (_, row) => `${String(row)},value`).join("\n");
-  await page.getByLabel("Import CSV").setInputFiles({
+  await uploadFromBlockMenu(page, "Table 1", "Import CSV", {
     name: "large.csv",
     mimeType: "text/csv",
     buffer: Buffer.from(csv),
@@ -63,7 +63,7 @@ test("Markdown line breaks do not change windowed row geometry", async ({ page }
   const csv = Array.from({ length: 201 }, (_, row) =>
     Array.from({ length: 40 }, () => String(row)).join(","),
   ).join("\n");
-  await page.getByLabel("Import CSV").setInputFiles({
+  await uploadFromBlockMenu(page, "Table 1", "Import CSV", {
     name: "wide.csv",
     mimeType: "text/csv",
     buffer: Buffer.from(csv),
@@ -162,7 +162,7 @@ test("frozen first row and column stay in place while a windowed grid scrolls", 
   const csv = Array.from({ length: 250 }, (_, row) =>
     Array.from({ length: 40 }, (_, col) => `${String(row)}-${String(col)}`).join(","),
   ).join("\n");
-  await page.getByLabel("Import CSV").setInputFiles({
+  await uploadFromBlockMenu(page, "Table 1", "Import CSV", {
     name: "wide.csv",
     mimeType: "text/csv",
     buffer: Buffer.from(csv),

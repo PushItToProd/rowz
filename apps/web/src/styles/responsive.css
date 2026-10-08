@@ -82,7 +82,7 @@
     padding: 10px;
   }
 
-  /* The name on one line and the buttons under it, where both have room. */
+  /* Keep the title above the menu on narrow screens. */
   .table-card__header,
   .view-card__header {
     flex-wrap: wrap;
@@ -97,13 +97,6 @@
 
   .block-card__title {
     flex-basis: 100%;
-  }
-
-  .table-card__actions,
-  .view-card__actions {
-    flex-basis: 100%;
-    flex-wrap: wrap;
-    justify-content: flex-start;
   }
 
   .editor__add {

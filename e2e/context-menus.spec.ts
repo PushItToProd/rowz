@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { cell, newSpreadsheet } from "./helpers";
+import { cell, newSpreadsheet, openBlockMenu } from "./helpers";
 
 function pageTab(pages: Locator, name: string): Locator {
   return pages
@@ -33,6 +33,69 @@ test("page and block context menus leave table cell actions to the grid", async 
   await cell(page, "A1").click({ button: "right" });
   await expect(page.getByRole("menu", { name: "Actions for A1" })).toBeVisible();
   await expect(page.getByRole("menu", { name: "Actions for Table 1" })).toHaveCount(0);
+});
+
+test("the block ellipsis opens its actions menu from the keyboard", async ({ page }) => {
+  await newSpreadsheet(page);
+  const button = page.getByRole("button", { name: "Block actions for Table 1" });
+  const menu = page.getByRole("menu", { name: "Actions for Table 1" });
+
+  await button.focus();
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Freeze rows and columns" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(button).toBeFocused();
+});
+
+test("each block's ellipsis and right-click menus list the same actions", async ({ page }) => {
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add chart" }).last().click();
+  await page.getByRole("button", { name: "Add text" }).last().click();
+  await page.getByRole("button", { name: "Add script" }).last().click();
+
+  const checkMenus = async (blockName: string, header: Locator, actions: string[]) => {
+    const ellipsisMenu = await openBlockMenu(page, blockName);
+    const ellipsisLabels = await ellipsisMenu.getByRole("menuitem").allTextContents();
+    for (const action of actions) expect(ellipsisLabels).toContain(action);
+    await page.keyboard.press("Escape");
+
+    await header.click({ button: "right", position: { x: 8, y: 8 } });
+    const rightClickMenu = page.getByRole("menu", { name: `Actions for ${blockName}` });
+    await expect(rightClickMenu).toBeVisible();
+    await expect(rightClickMenu.getByRole("menuitem")).toHaveText(ellipsisLabels);
+    await page.keyboard.press("Escape");
+  };
+
+  await checkMenus("Table 1", page.locator('[data-table="Table 1"] .table-card__header'), [
+    "Resize",
+    "Freeze rows and columns",
+    "Names",
+    "Conditional formats",
+    "Use the first row as the names",
+    "Name them Column 1, Column 2, …",
+    "Import CSV",
+    "Append CSV rows",
+    "Export CSV",
+    "Delete table",
+  ]);
+  await checkMenus("Chart 1", page.locator('[data-view="Chart 1"] .view-card__header'), [
+    "Edit",
+    "✓ Chart type: Bar",
+    "Chart type: Line",
+    "Chart type: Pie",
+    "Chart type: Scatter",
+    "Delete chart",
+  ]);
+  await checkMenus("Text 1", page.locator('[data-view="Text 1"] .view-card__header'), [
+    "Edit",
+    "Delete text",
+  ]);
+  await checkMenus("Script 1", page.locator('[data-view="Script 1"] .view-card__header'), [
+    "Edit",
+    "Delete script",
+  ]);
 });
 
 test("page tab menus stay above the table and entirely inside the viewport", async ({ page }) => {

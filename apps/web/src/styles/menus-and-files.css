@@ -99,7 +99,8 @@
   border-color: var(--accent);
 }
 
-.file-button input {
+.file-button input,
+.table-card__file-input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -424,11 +425,6 @@
 .list__document-rename input {
   flex: 1;
   min-width: 0;
-}
-
-.table-card__actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .cell-value--markdown code {

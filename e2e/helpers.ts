@@ -1,5 +1,11 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+interface FilePayload {
+  name: string;
+  mimeType: string;
+  buffer: Buffer;
+}
+
 export const PASSWORD = "correct horse battery staple";
 
 function uniqueEmail(): string {
@@ -25,6 +31,38 @@ export async function newSpreadsheet(page: Page): Promise<void> {
 
 export function cell(page: Page, address: string, table = "Table 1"): Locator {
   return page.locator(`[data-table="${table}"] [data-cell="${address}"]`);
+}
+
+/** Opens the shared menu for a block from its ellipsis button. */
+export async function openBlockMenu(page: Page, blockName: string): Promise<Locator> {
+  const button = page.getByRole("button", { name: `Block actions for ${blockName}` });
+  const menu = page.getByRole("menu", { name: `Actions for ${blockName}` });
+  await button.scrollIntoViewIfNeeded();
+  await button.click();
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/** Chooses a block action from its ellipsis menu. */
+export async function chooseBlockAction(
+  page: Page,
+  blockName: string,
+  action: string,
+): Promise<void> {
+  const menu = await openBlockMenu(page, blockName);
+  await menu.getByRole("menuitem", { name: action, exact: true }).click();
+}
+
+/** Opens a file chooser from a block menu action and selects a file. */
+export async function uploadFromBlockMenu(
+  page: Page,
+  blockName: string,
+  action: "Import CSV" | "Append CSV rows",
+  path: string | FilePayload,
+): Promise<void> {
+  const chooser = page.waitForEvent("filechooser");
+  await chooseBlockAction(page, blockName, action);
+  await (await chooser).setFiles(path);
 }
 
 export async function dragReference(page: Page, from: Locator, to: Locator): Promise<void> {

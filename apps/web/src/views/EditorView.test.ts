@@ -1,4 +1,4 @@
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -135,6 +135,20 @@ async function render(
   });
   await flushPromises();
   return wrapper;
+}
+
+async function chooseBlockMenuItem(
+  wrapper: VueWrapper,
+  blockName: string,
+  label: string,
+): Promise<void> {
+  await wrapper.get(`button[aria-label="Block actions for ${blockName}"]`).trigger("click");
+  await flushPromises();
+  const menu = bodyGet(`[role="menu"][aria-label="Actions for ${blockName}"]`);
+  const item = menu.findAll('[role="menuitem"]').find((candidate) => candidate.text() === label);
+  if (!item) throw new Error(`No block menu item named ${label}`);
+  await item.trigger("click");
+  await flushPromises();
 }
 
 it("opens a stored-identity cell deep link without changing its history URL", async () => {
@@ -379,7 +393,7 @@ it("opens block actions from card margins and leaves grid cell menus to the tabl
   wrapper.unmount();
 });
 
-it("opens the block menu from header controls and keeps the browser menu on the name input", async () => {
+it("opens the block menu from the header and keeps the browser menu on the name input", async () => {
   const wrapper = await render("owner", false, false, {}, true);
   const header = wrapper.get('[data-table="Table 1"] .table-card__header');
   const menuSelector = '[role="menu"][aria-label="Actions for Table 1"]';
@@ -401,15 +415,7 @@ it("opens the block menu from header controls and keeps the browser menu on the 
   };
 
   await openBlockMenu(header.get('button[aria-label="Collapse Table 1"]').element);
-
-  const select = document.createElement("select");
-  header.element.append(select);
-  await openBlockMenu(select);
-
-  const link = document.createElement("a");
-  link.href = "#block=t1";
-  header.element.append(link);
-  await openBlockMenu(link);
+  await openBlockMenu(header.get('button[aria-label="Block actions for Table 1"]').element);
 
   await header.get(".editable-name").trigger("dblclick");
   await flushPromises();
@@ -570,10 +576,7 @@ it.each([
   const wrapper = await render("owner", false, false, {}, true);
   const store = useWorkbookStore();
   store.pages = [...store.pages, { id: "p2", name: "Page 2", position: 1 }];
-  const paneButton = wrapper
-    .findAll(".table-card__actions button")
-    .find((button) => button.text().startsWith(label));
-  await paneButton!.trigger("click");
+  await chooseBlockMenuItem(wrapper, "Table 1", label);
   expect(wrapper.find(paneSelector).exists()).toBe(true);
 
   await wrapper.setProps({ pageId: "p2" });
