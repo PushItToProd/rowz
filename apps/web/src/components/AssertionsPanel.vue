@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import type { ErrorTraceFrame } from "@spreadsheet-app/engine";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useWorkbookStore } from "../stores/workbook";
+import ErrorTrace from "./ErrorTrace.vue";
+import { renderErrorTraceText } from "./errorTraceText";
 import { useCopyFeedback } from "./useCopyFeedback";
 
 const store = useWorkbookStore();
@@ -8,6 +11,7 @@ const emit = defineEmits<{
   close: [];
   /** The user picked a failing assertion: open its page, and select its cell if it is in one. */
   go: [target: (typeof store.assertions)[number]];
+  trace: [trace: ErrorTraceFrame[]];
 }>();
 
 const panel = ref<HTMLElement>();
@@ -18,7 +22,10 @@ function pageName(failure: (typeof store.assertions)[number]): string {
 }
 
 function assertionText(failure: (typeof store.assertions)[number]): string {
-  return `${failure.label} (page ${pageName(failure)}): ${failure.message}`;
+  return [
+    `${failure.label} (page ${pageName(failure)}): ${failure.message}`,
+    ...renderErrorTraceText(failure.trace ?? []),
+  ].join("\n");
 }
 
 function assertionKey(failure: (typeof store.assertions)[number]): string {
@@ -103,6 +110,12 @@ onBeforeUnmount(() => {
             Copy
           </button>
         </div>
+        <ErrorTrace
+          v-if="failure.trace?.length"
+          class="errors__trace"
+          :trace="failure.trace"
+          @go="emit('trace', $event)"
+        />
       </li>
     </ul>
   </aside>

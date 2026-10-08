@@ -2,6 +2,14 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-08: Script assertion locations and error traces
+
+**Choice.** Resolve a script name assertion's line from its parsed definition when the engine failure has no line. Carry the assertion's optional trace into the panel, render it with the shared `ErrorTrace` component, and include the same trace lines when copying the assertion.
+
+**Why.** Named script failures already retain their source line in `scriptNames`, and the existing trace component supplies the standard origin link and caller chain. Copying those rendered lines preserves the details visible in the panel.
+
+**To change.** Update assertion location construction in `apps/web/src/stores/workbook/values.ts` and trace display and navigation in `apps/web/src/components/AssertionsPanel.vue` and `apps/web/src/views/EditorView.vue`.
+
 ## 2026-10-08: QUERY pivot headings and group keys
 
 **Choice.** A single pivot value with one aggregate keeps its cell value type in the heading. Composite pivot labels and labels combined with aggregate names remain text. Group keys use `identityOf` for scalar cells and a structural encoding for object values, including Map entries and the closure-specific parts of an evaluation context. The resolver, function registry, and clock callbacks shared by one query are omitted from that encoding.

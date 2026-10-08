@@ -61,6 +61,14 @@ export function createValues(context: WorkbookContext) {
           failure.kind === "name"
             ? `${holder?.name ?? ""}!${failure.name}`
             : `${holder?.name ?? ""} line ${String(failure.line)}`;
+        const line =
+          failure.kind === "name"
+            ? (failure.line ??
+              (script
+                ? scriptNames(script.id, script.source).find(({ name }) => name === failure.name)
+                    ?.scriptLine
+                : undefined))
+            : failure.line;
         return holder
           ? {
               pageId: holder.pageId,
@@ -69,14 +77,22 @@ export function createValues(context: WorkbookContext) {
               ...(failure.kind === "name"
                 ? {
                     name: failure.name,
-                    ...(failure.line === undefined ? {} : { line: failure.line }),
+                    ...(line === undefined ? {} : { line }),
                   }
                 : { line: failure.line }),
               ...(script ? { scriptId: script.id } : {}),
             }
           : undefined;
       })();
-      return where ? [{ ...where, message: failure.message }] : [];
+      return where
+        ? [
+            {
+              ...where,
+              message: failure.message,
+              ...(failure.trace === undefined ? {} : { trace: failure.trace }),
+            },
+          ]
+        : [];
     }),
   );
 

@@ -95,3 +95,63 @@ it("keeps a later assertion's text selection when an earlier assertion disappear
     wrapper.unmount();
   }
 });
+
+it("shows, copies, and opens the definition from an assertion's error trace", async () => {
+  const snapshot = snapshotWith();
+  snapshot.views = [
+    {
+      id: "v1",
+      pageId: "p1",
+      kind: "script",
+      name: "Summary",
+      position: 1,
+      source: ['Broken() = ASSERT(FALSE, "The check failed")', "Result = Broken()"].join("\n"),
+      chartType: null,
+    },
+  ];
+  server.getSnapshot.mockResolvedValue(wireSnapshot(snapshot));
+  const store = useWorkbookStore();
+  await store.load("s1");
+  const wrapper = mount(AssertionsPanel);
+  const clipboard = vi.fn().mockResolvedValue(undefined);
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: clipboard },
+  });
+  try {
+    const failure = store.assertions[0]!;
+    expect(failure.trace).toMatchObject([
+      {
+        function: "Broken",
+        location: { scriptId: "v1", scriptName: "Summary", line: 1 },
+      },
+    ]);
+    expect(wrapper.get(".error-trace__text").text()).toBe("Raised in Broken (Summary, line 1)");
+    expect(wrapper.get(".error-trace__callers").text()).toBe(
+      "Called from Result (Summary, line 2)",
+    );
+
+    await wrapper.get(".assertions__go").trigger("click");
+    expect(wrapper.emitted("go")?.[0]?.[0]).toMatchObject({
+      blockId: "v1",
+      name: "Result",
+      line: 2,
+    });
+
+    await wrapper.get(".assertions__copy").trigger("click");
+    await flushPromises();
+    expect(clipboard).toHaveBeenCalledWith(
+      "Summary!Result (page Page 1): The check failed\n" +
+        "Raised in Broken (Summary, line 1)\n" +
+        "Called from Result (Summary, line 2)",
+    );
+
+    await wrapper.get(".error-trace__link").trigger("click");
+    expect(wrapper.emitted("trace")?.[0]?.[0]).toEqual(failure.trace);
+  } finally {
+    wrapper.unmount();
+    if (descriptor) Object.defineProperty(navigator, "clipboard", descriptor);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  }
+});

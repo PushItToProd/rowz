@@ -175,6 +175,26 @@ describe("ScriptCard", () => {
       ["Summary line 1", "A1 must be positive"],
     ]);
   });
+
+  it("gives a failing assertion defined as a name its script line", async () => {
+    await render(
+      '// The definition is on the next line\nPositive = ASSERT(FALSE, "Must be positive")',
+    );
+
+    expect(useWorkbookStore().assertions).toEqual([
+      expect.objectContaining({
+        blockId: "v1",
+        label: "Summary!Positive",
+        name: "Positive",
+        line: 2,
+        scriptId: "v1",
+        message: "Must be positive",
+      }),
+    ]);
+    expect(wrapper.get('tr[data-script-line="2"] .script__reason').text()).toContain(
+      "Must be positive",
+    );
+  });
 });
 
 it("saving on blur preserves the selected cell without scrolling to it", async () => {

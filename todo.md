@@ -6,24 +6,24 @@ Items added by AI agents should be prefixed `(Claude)`, `(GPT)`, etc. The author
 
 A prefix such as `**P3**` is the author's priority for an item. When instructed to work autonomously, do these items in ascending order: all P0s first, then P1s, and so on. Items with the same priority are co-equal unless you're instructed otherwise. Among them, do smaller, higher-value items before bigger, more complex ones. Remove the prefix when checking an item off. Check items off before making commits.
 
-| Prefix    | Meaning                                                                                                                    |
-| --------- | -------------------------------------------------------------------------------------------------------------------------- |
-| P0        | Something that shipped is broken, or the development loop is: a failing or flaky test, a bug in a finished feature         |
-| P1 to P9  | Rank, with P1 soonest. The number is not tied to a theme                                                                   |
-| P10       | Parked. Mostly the hardening under [Before sharing with others](#before-sharing-with-others). Not picked up unless the author says so |
-| P11 to P98 | Backlog, in rough order with the lower number first. Not picked up unless the author says so |
-| P99 and up | Not planned. Kept so the idea and the reason are not lost                                                                  |
-| Hold      | Waits for a decision by the author. Not picked up                                                                          |
-| Author | Needs the author first: a decision, a design, or something only the author can supply or run. Not picked up. A priority after it applies once the author has acted |
+| Prefix     | Meaning                                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P0         | Something that shipped is broken, or the development loop is: a failing or flaky test, a bug in a finished feature                                                 |
+| P1 to P9   | Rank, with P1 soonest. The number is not tied to a theme                                                                                                           |
+| P10        | Parked. Mostly the hardening under [Before sharing with others](#before-sharing-with-others). Not picked up unless the author says so                              |
+| P11 to P98 | Backlog, in rough order with the lower number first. Not picked up unless the author says so                                                                       |
+| P99 and up | Not planned. Kept so the idea and the reason are not lost                                                                                                          |
+| Hold       | Waits for a decision by the author. Not picked up                                                                                                                  |
+| Author     | Needs the author first: a decision, a design, or something only the author can supply or run. Not picked up. A priority after it applies once the author has acted |
 
 A sub-item without a prefix takes its parent's. An item that only groups sub-items, such as "more actions", has no prefix. An item with no prefix and no prefixed parent has not been triaged: do not pick it up, and point it out to the author.
 
 A box holds one of three marks:
 
-| Mark  | Meaning                                                                                                             |
-| ----- | ------------------------------------------------------------------------------------------------------------------- |
-| `[ ]` | Open                                                                                                                |
-| `[x]` | Done                                                                                                                |
+| Mark  | Meaning                                                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------------------------------------ |
+| `[ ]` | Open                                                                                                                     |
+| `[x]` | Done                                                                                                                     |
 | `[*]` | May be done. A change touched it, and whether the change satisfies it completely is for the author to say. Not picked up |
 
 An agent that marks an item `[*]` keeps the item's priority prefix and adds a sub-item beneath it: `- [ ] **Author** **P4** may be resolved: ...`, with the item's own priority, what is in doubt, and the hash of the latest commit at the time of writing. The author changes `[*]` to `[x]` or back to `[ ]` and deletes the sub-item.
@@ -103,8 +103,8 @@ Items that have not been moved to a section yet. An agent adding an item puts it
 - [ ] **P8** deleting a page with the page tab's standalone trash button bypasses `ContextMenu.vue` and can still lose keyboard focus; move focus to the neighboring tab there too (`PageTabs.vue`) #everyday
 - [x] **P7** A right-click on a button, a `<select>`, or a link in a block's header shows the browser's menu, because `openBlockMenu` in `EditorView.vue` returns early for those targets. Open the block's menu there, as a page tab's buttons open the tab's menu. A text field or editor keeps the browser's menu. See "Menus" in [docs/design/ui.md](docs/design/ui.md) #everyday
   - (Codex) completed on 2026-10-07: block headers now open the app menu for controls and links, while text inputs and editors keep the browser menu.
-- [ ] **P7** A failing assertion in a script name (`Positive = ASSERT(...)`) has no line, so revealing it focuses the script block but cannot scroll to the definition; scroll to the `data-script-line` of the definition (`apps/web/src/stores/workbook/values.ts` near line 69, `ScriptCard.vue` near line 122) #everyday
-- [ ] **P7** The failing-assertions panel drops the optional error trace, so an assertion propagated from a script function has no Open definition button (`apps/web/src/stores/workbook/values.ts` near line 32, `AssertionsPanel.vue`) #everyday
+- [x] **P7** A failing assertion in a script name (`Positive = ASSERT(...)`) has no line, so revealing it focuses the script block but cannot scroll to the definition; scroll to the `data-script-line` of the definition (`apps/web/src/stores/workbook/values.ts` near line 69, `ScriptCard.vue` near line 122) #everyday
+- [x] **P7** The failing-assertions panel drops the optional error trace, so an assertion propagated from a script function has no Open definition button (`apps/web/src/stores/workbook/values.ts` near line 32, `AssertionsPanel.vue`) #everyday
 - [ ] **P11** `useCopyFeedback.ts` creates its 2-second timer after the clipboard promise resolves, so a copy that completes after the panel unmounts leaves a timer running #everyday
 - [ ] **P10** On a narrow screen, frozen columns can cover every non-frozen column (three default-width columns are 360px, wider than a 320px viewport); cap the frozen width at part of the grid's width or ignore the freeze below a width (`GridView.vue` near line 367, `grid.css` near line 79) #small-apps
 - [ ] **P11** Collapsed-block preferences: a `getItem` failure replaces the in-memory set with an empty one, so navigating away and back can lose preferences while storage is unavailable (`apps/web/src/blockCollapse.ts` near lines 33 and 46) #small-apps
@@ -442,7 +442,7 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
 - [x] **P6** create context menu item to add conditional formatting to the selected cell or range #formatting
 - [ ] **P6** in data tables, conditional formatting should be a column property #formatting
   - okay, I guess when I create rules covering a whole column of a data table it does intelligently set it to e.g. `F1:F` so it covers the whole thing, but that behavior doesn't feel obvious from the way it's presented
-- [ ] more formatting: 
+- [ ] more formatting:
   - [ ] **P8** borders #formatting
   - [x] basic conditional formatting (`plans/data-tables.md`, stage 3)
   - [ ] conditional formatting followups:

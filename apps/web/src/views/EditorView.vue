@@ -280,6 +280,10 @@ function goToAssertionLocation(target: Parameters<typeof revealLocation>[0]) {
   closeLocationPaneOnNarrow(SIDE_PANES.assertions);
   return revealLocation(target);
 }
+function goToAssertionTrace(trace: ErrorTraceFrame[]) {
+  closeLocationPaneOnNarrow(SIDE_PANES.assertions);
+  return goToTrace(trace);
+}
 watch(
   () => props.spreadsheetId,
   () => {
@@ -959,6 +963,7 @@ watch(
       v-if="assertionsOpen && loaded"
       @close="activeSidePane.close(SIDE_PANES.assertions)"
       @go="goToAssertionLocation"
+      @trace="goToAssertionTrace"
     />
     <HistoryPanel
       v-if="historyOpen && loaded"

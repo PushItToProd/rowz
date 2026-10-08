@@ -324,7 +324,11 @@ it.each([true, false])(
           kind: "script",
           name: "Script 1",
           position: 3,
-          source: "PayoutByDuration() = 1/0",
+          source: [
+            "PayoutByDuration() = 1/0",
+            'FailCheck() = ASSERT(FALSE, "broken")',
+            "ScriptCheck = FailCheck()",
+          ].join("\n"),
           chartType: null,
         },
       ],
@@ -346,6 +350,15 @@ it.each([true, false])(
     const assertions = wrapper.get('[role="dialog"][aria-label="Failing assertions"]');
     await assertions.get(".assertions__go").trigger("click");
     await flushPromises();
+    expect(wrapper.find('[role="dialog"][aria-label="Failing assertions"]').exists()).toBe(!narrow);
+
+    if (narrow) await wrapper.get(".editor__assertions").trigger("click");
+    const tracedAssertions = wrapper.get('[role="dialog"][aria-label="Failing assertions"]');
+    const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+    scrollIntoView.mockClear();
+    await tracedAssertions.get(".error-trace__link").trigger("click");
+    await flushPromises();
+    expect(scrollIntoView.mock.contexts).toContain(wrapper.get("#block-script-1").element);
     expect(wrapper.find('[role="dialog"][aria-label="Failing assertions"]').exists()).toBe(!narrow);
     expect(window.matchMedia).toHaveBeenCalledWith("(max-width: 640px)");
     wrapper.unmount();
