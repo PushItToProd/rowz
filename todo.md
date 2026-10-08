@@ -28,6 +28,8 @@ A box holds one of three marks:
 
 An agent that marks an item `[*]` keeps the item's priority prefix and adds a sub-item beneath it: `- [ ] **Author** **P4** may be resolved: ...`, with the item's own priority, what is in doubt, and the hash of the latest commit at the time of writing. The author changes `[*]` to `[x]` or back to `[ ]` and deletes the sub-item.
 
+`(e2e-unverified)` at the end of an item means an agent finished it while the end-to-end tests could not be run. The agent removes the mark once the suite passes with the change in it.
+
 `./todos.sh` lists the open prioritized items in order, with sub-items under the priority they take. It leaves out a `[*]` item and lists its `Author` sub-item.
 
 ## Themes
