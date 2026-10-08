@@ -89,6 +89,27 @@ describe("SharePanel", () => {
     );
   });
 
+  it("replaces a server error with in-app validation for an invalid email", async () => {
+    await render();
+    server.share.mockRejectedValueOnce(new Error("No account uses zed@example.com"));
+    const input = wrapper.get<HTMLInputElement>('input[type="email"]');
+    const form = wrapper.get("form");
+
+    await input.setValue("zed@example.com");
+    await form.trigger("submit");
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toBe("No account uses zed@example.com");
+
+    await input.setValue("not an email");
+    await form.trigger("submit");
+    await flushPromises();
+
+    expect(form.attributes("novalidate")).toBeDefined();
+    expect(wrapper.get('[role="alert"]').text()).toBe("Enter a valid email address.");
+    expect(wrapper.get('[role="alert"]').text()).not.toContain("No account uses zed@example.com");
+    expect(server.share).toHaveBeenCalledExactlyOnceWith("s1", "zed@example.com", "editor");
+  });
+
   it("changes what a guest can do", async () => {
     await render();
     server.share.mockResolvedValue([OWNER, { ...GUEST, role: "viewer" }]);

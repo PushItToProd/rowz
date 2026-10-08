@@ -329,6 +329,10 @@ function beginRenameDocument(document: ListedSpreadsheetItem): void {
   void documentNameEditors.get(document.id)?.start();
 }
 
+function rejectEmptyDocumentName(): void {
+  notice.value = { kind: "error", text: "Enter a document name." };
+}
+
 const renameDocument = (document: ListedSpreadsheetItem, name: string): Promise<void> =>
   run(async () => {
     if (document.role !== "owner") return;
@@ -687,7 +691,9 @@ onBeforeUnmount(() => {
               :ref="(editor) => captureDocumentNameEditor(document.id, editor)"
               :value="document.name"
               :label="`Document name for ${document.name}`"
+              empty-behavior="discard"
               @rename="renameDocument(document, $event)"
+              @empty="rejectEmptyDocumentName"
             />
             <RouterLink v-else :to="{ name: 'editor', params: { spreadsheetId: document.id } }">
               {{ document.name }}

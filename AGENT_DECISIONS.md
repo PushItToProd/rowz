@@ -2,6 +2,22 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-08: Consistent CSV formula warnings
+
+**Choice.** Use one warning sentence in both CSV replacement and append confirmations.
+
+**Why.** The replacement confirmation also lacked the warning. Both paths store cells beginning with `=` as formulas, so both confirmations should say so.
+
+**To change.** Update `CSV_FORMULA_NOTICE` and its uses in `apps/web/src/components/TableCard.vue`.
+
+## 2026-10-08: Reset document-name drafts on refresh
+
+**Choice.** Cancel an open `EditableName` draft when its incoming value changes. On the document list, cancel an empty draft and show a notice; keep the shared component's existing empty-draft behavior elsewhere.
+
+**Why.** A list refresh can bring a newer document name while a draft is open. Keeping that draft would let a later Enter restore the older name.
+
+**To change.** Update the value watcher or empty-name behavior in `apps/web/src/components/EditableName.vue` and `apps/web/src/views/SpreadsheetListView.vue`.
+
 ## 2026-10-08: Script assertion locations and error traces
 
 **Choice.** Resolve a script name assertion's line from its parsed definition when the engine failure has no line. Carry the assertion's optional trace into the panel, render it with the shared `ErrorTrace` component, and include the same trace lines when copying the assertion.

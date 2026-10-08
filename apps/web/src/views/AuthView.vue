@@ -13,6 +13,7 @@ const router = useRouter();
 const name = ref("");
 const email = ref("");
 const password = ref("");
+const emailInput = ref<HTMLInputElement>();
 const error = ref<string | null>(null);
 const submitting = ref(false);
 /** The address a confirmation link was sent to, when the account must be confirmed before signing in. */
@@ -23,8 +24,33 @@ const heading = computed(() => (isSignup.value ? "Create an account" : "Sign in"
 usePageTitle(heading);
 const MIN_PASSWORD_LENGTH = 8;
 
+function validate(): boolean {
+  if (isSignup.value && !name.value.trim()) {
+    error.value = "Enter your name.";
+    return false;
+  }
+  if (!email.value.trim()) {
+    error.value = "Enter your email address.";
+    return false;
+  }
+  if (emailInput.value?.validity.typeMismatch) {
+    error.value = "Enter a valid email address.";
+    return false;
+  }
+  if (password.value.length === 0) {
+    error.value = "Enter your password.";
+    return false;
+  }
+  if (isSignup.value && password.value.length < MIN_PASSWORD_LENGTH) {
+    error.value = `Use at least ${String(MIN_PASSWORD_LENGTH)} characters for your password.`;
+    return false;
+  }
+  return true;
+}
+
 async function submit(): Promise<void> {
   error.value = null;
+  if (!validate()) return;
   submitting.value = true;
   try {
     if (!isSignup.value) await session.signIn(email.value, password.value);
@@ -47,14 +73,21 @@ async function submit(): Promise<void> {
   <main class="auth">
     <p class="brand">{{ APP_NAME }}</p>
     <h1>{{ heading }}</h1>
-    <form @submit.prevent="submit">
+    <form novalidate @submit.prevent="submit">
       <label v-if="isSignup">
         Name
         <input v-model="name" name="name" autocomplete="name" required />
       </label>
       <label>
         Email
-        <input v-model="email" name="email" type="email" autocomplete="email" required />
+        <input
+          ref="emailInput"
+          v-model="email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          required
+        />
       </label>
       <label>
         Password

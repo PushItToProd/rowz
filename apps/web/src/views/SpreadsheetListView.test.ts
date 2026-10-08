@@ -409,7 +409,7 @@ it("opens an owned document name for editing on one click and keeps an Open link
   expect(view.get('a[aria-label="Open Forecast"]').text()).toBe("Open");
 });
 
-it("refuses an empty document name and cancels inline rename with Escape", async () => {
+it("cancels an empty document name and explains why", async () => {
   // Clear a pending one-time response if the previous rename test stopped early.
   server.listSpreadsheets.mockReset().mockResolvedValue(listed([], [document(null)]));
   const view = await render();
@@ -426,12 +426,54 @@ it("refuses an empty document name and cancels inline rename with Escape", async
   await input.setValue("   ");
   await input.trigger("keydown", { key: "Enter" });
   expect(server.renameSpreadsheet).not.toHaveBeenCalled();
-  expect(view.find('[aria-label="Document name for Plan"]').exists()).toBe(true);
-
-  await input.setValue("Unsaved name");
-  await input.trigger("keydown", { key: "Escape" });
   expect(view.find('[aria-label="Document name for Plan"]').exists()).toBe(false);
-  expect(view.get(".editable-name").text()).toBe("Plan");
+  expect(view.get('[role="alert"] > span').text()).toBe("Enter a document name.");
+});
+
+it("drops an open document-name draft when a list refresh brings a newer name", async () => {
+  const updated = { ...document(null), name: "Remote rename" };
+  let completeCopy!: () => void;
+  server.listSpreadsheets
+    .mockResolvedValueOnce(listed([], [document(null)]))
+    .mockResolvedValueOnce(listed([], [updated, { ...document(null), id: "d2", name: "Copy" }]));
+  server.copySpreadsheet.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        completeCopy = () => {
+          resolve({ id: "d2", name: "Copy", updatedAt: "2026-10-04T12:00:00.000Z" });
+        };
+      }),
+  );
+  const view = await render();
+
+  await view.get('button[aria-label="Actions for Plan"]').trigger("click", {
+    clientX: 40,
+    clientY: 60,
+  });
+  await flushPromises();
+  const duplicate = bodyFindAll('[role="menuitem"]').find((item) => item.text() === "Duplicate");
+  expect(duplicate).toBeDefined();
+  await duplicate!.trigger("click");
+  await flushPromises();
+  expect(server.copySpreadsheet).toHaveBeenCalledExactlyOnceWith("d1");
+
+  const name = view.get(".editable-name");
+  await name.trigger("mousedown", { button: 0 });
+  await clickWithDetail(name.element);
+  const input = view.get<HTMLInputElement>('[aria-label="Document name for Plan"]');
+  await input.setValue("Stale draft");
+  completeCopy();
+  await flushPromises();
+
+  expect(server.listSpreadsheets).toHaveBeenCalledTimes(2);
+  expect(view.find('[aria-label="Document name for Plan"]').exists()).toBe(false);
+  const remoteName = view
+    .findAll(".list__items > li")
+    .find((item) => item.text().includes("Remote rename"))!
+    .get(".editable-name");
+  expect(remoteName.text()).toBe("Remote rename");
+  expect(globalThis.document.activeElement).toBe(remoteName.element);
+  expect(server.renameSpreadsheet).not.toHaveBeenCalled();
 });
 
 it("shows only Duplicate for a shared document", async () => {

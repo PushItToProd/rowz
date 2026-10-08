@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -15,15 +15,27 @@ const props = withDefaults(
      * and F2 renames.
      */
     href?: string;
+    /** Whether committing an empty name keeps the editor open or cancels it and emits `empty`. */
+    emptyBehavior?: "keep" | "discard";
   }>(),
-  { clickToEdit: true, href: undefined },
+  { clickToEdit: true, href: undefined, emptyBehavior: "keep" },
 );
-const emit = defineEmits<{ rename: [name: string] }>();
+const emit = defineEmits<{ rename: [name: string]; empty: [] }>();
 
 const draft = ref<string | null>(null);
 const input = ref<HTMLInputElement>();
 const shown = ref<HTMLElement>();
 let clickCanEdit: boolean | null = null;
+
+watch(
+  () => props.value,
+  (value, previous) => {
+    if (value !== previous && draft.value !== null) {
+      draft.value = null;
+      void nextTick(() => shown.value?.focus());
+    }
+  },
+);
 
 const description = computed(() => {
   if (props.disabled) return undefined;
@@ -51,7 +63,10 @@ function commit(keepEmptyDraft = false): void {
   const name = draft.value?.trim();
   if (name === undefined) return;
   if (name === "") {
-    if (!keepEmptyDraft) draft.value = null;
+    if (props.emptyBehavior === "discard") {
+      draft.value = null;
+      emit("empty");
+    } else if (!keepEmptyDraft) draft.value = null;
     return;
   }
   draft.value = null;

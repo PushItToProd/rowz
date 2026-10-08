@@ -771,7 +771,9 @@ describe("files", () => {
     await render({ C3: "kept" });
     await choose("data.csv", "x");
     await flushPromises();
-    expect(appDialog()?.textContent).toContain("Replace the contents of Table 1 with data.csv?");
+    expect(appDialog()?.textContent).toContain(
+      "Replace the contents of Table 1 with data.csv? Cells starting with = are stored as formulas.",
+    );
     await respondToDialog("cancel");
     expect(server.setCells).not.toHaveBeenCalled();
 
@@ -809,7 +811,7 @@ describe("files", () => {
       "Sales",
     );
     expect(appDialog()?.textContent).toContain(
-      "Append 2 rows to Sales? Matched columns: Item, Qty, Notes.",
+      "Append 2 rows to Sales? Matched columns: Item, Qty, Notes. Cells starting with = are stored as formulas.",
     );
     expect(server.appendCsvRows).not.toHaveBeenCalled();
     await respondToDialog("cancel");
@@ -822,7 +824,7 @@ describe("files", () => {
       "Sales",
     );
     expect(appDialog()?.textContent).toContain(
-      "Append 1 row to Sales? Matched columns: Qty, Item. Ignored: Unknown. Duplicate columns ignored: qTy.",
+      "Append 1 row to Sales? Matched columns: Qty, Item. Ignored: Unknown. Duplicate columns ignored: qTy. Cells starting with = are stored as formulas.",
     );
     await respondToDialog("confirm");
     await flushPromises();
@@ -853,7 +855,7 @@ describe("files", () => {
     await render();
     await choose("grid.csv", "header,value\nfirst,1", "Append CSV rows");
     expect(appDialog()?.textContent).toContain(
-      "Append 2 rows to Table 1? Columns are matched by position.",
+      "Append 2 rows to Table 1? Columns are matched by position. Cells starting with = are stored as formulas.",
     );
     await respondToDialog("confirm");
     await flushPromises();

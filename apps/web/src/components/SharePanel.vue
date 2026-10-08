@@ -22,6 +22,7 @@ const members = ref<MemberRecord[] | null>(null);
 const error = ref<string | null>(null);
 const busy = ref(false);
 const email = ref("");
+const emailInput = ref<HTMLInputElement>();
 const role = ref<ShareRole>("editor");
 const panel = ref<HTMLElement>();
 const dialog = useDialog();
@@ -45,11 +46,24 @@ const refresh = (): Promise<void> =>
     members.value = await api.listMembers(props.spreadsheetId);
   });
 
-const share = (): Promise<void> =>
-  run(async () => {
-    members.value = await api.share(props.spreadsheetId, email.value.trim(), role.value);
+function share(): Promise<void> {
+  error.value = null;
+  const address = email.value.trim();
+  if (!address) {
+    error.value = "Enter an email address.";
+    return Promise.resolve();
+  }
+  if (emailInput.value) emailInput.value.value = address;
+  email.value = address;
+  if (emailInput.value?.validity.typeMismatch) {
+    error.value = "Enter a valid email address.";
+    return Promise.resolve();
+  }
+  return run(async () => {
+    members.value = await api.share(props.spreadsheetId, address, role.value);
     email.value = "";
   });
+}
 
 function changeRole(member: MemberRecord, event: Event): Promise<void> {
   const chosen = (event.target as HTMLSelectElement).value as ShareRole;
@@ -100,8 +114,9 @@ onBeforeUnmount(() => {
       <button type="button" aria-label="Close sharing" @click="emit('close')">×</button>
     </header>
 
-    <form v-if="owner" class="share__form" @submit.prevent="share">
+    <form v-if="owner" class="share__form" novalidate @submit.prevent="share">
       <input
+        ref="emailInput"
         v-model="email"
         type="email"
         required

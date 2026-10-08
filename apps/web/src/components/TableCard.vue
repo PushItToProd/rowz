@@ -56,6 +56,7 @@ const choicesPaneId: `choices:${string}` = `choices:${props.table.id}`;
 const conditionalPanel = ref<{ focus(): void }>();
 const importInput = ref<HTMLInputElement>();
 const appendInput = ref<HTMLInputElement>();
+const CSV_FORMULA_NOTICE = "Cells starting with = are stored as formulas.";
 
 /** The selected cell when it is in this table. Row and column actions apply to it. */
 const selected = computed(() =>
@@ -127,7 +128,7 @@ async function importCsv(event: Event): Promise<void> {
     replaces &&
     !(await dialog.confirm({
       title: "Replace table contents",
-      message: `Replace the contents of ${props.table.name} with ${file.name}?`,
+      message: `Replace the contents of ${props.table.name} with ${file.name}? ${CSV_FORMULA_NOTICE}`,
       confirmLabel: "Replace",
       danger: true,
     }))
@@ -175,7 +176,7 @@ async function appendCsv(event: Event): Promise<void> {
   if (
     !(await dialog.confirm({
       title: "Append CSV rows",
-      message: `Append ${String(prepared.dataRows)} ${rowNoun} to ${props.table.name}? ${details}`,
+      message: `Append ${String(prepared.dataRows)} ${rowNoun} to ${props.table.name}? ${details} ${CSV_FORMULA_NOTICE}`,
       confirmLabel: "Append",
     }))
   ) {
