@@ -287,7 +287,7 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
 - [ ] **P5** (GPT) Add comprehensive inline diagnostics to the shared formula editor. Deferred from [the initial implementation](plans/formula-editing.md). #formula-editing
 - [x] **P6** in the codemirror editors, let me hit cmd+D/ctrl+D when I have some text highlighted to select multiple instances of that text
 - [x] **P4** the formula editor shown in a cell doesn't completely fill the cell - the div with classes `session-formula-field grid__editor` has 6px of padding on left and right (maybe a Firefox quirk?) while the div with class `formula-editor` doesn't fill the full height of the cell either. -- note this is mostly an aesthetic thing. it doesn't necessarily have to fill the cell, it just needs to be less obvious that it doesn't
-- [x] **P7** when a spill error is caused by table dimensions, show a “Resize table to fit” button in its popover
+- [x] **P7** when a spill error is caused by table dimensions, show a “Resize to fit” button in its popover
 - [x] **P6** Clearly explain why an array result cannot spill: when the table is too small, say e.g. “The result needs 12 rows and 26 columns, but the table is only 11 rows and 15 columns”; when existing values block it, say e.g. “but one or more cells in A1:P26 already have values.” Do not name a target cell when the table dimensions are the reason it cannot fit.
 
 - [x] implement the handy tab+enter workflow from Excel and Sheets -- if you select a certain cell with the mouse or arrow keys, use tab to traverse multiple cells (optionally entering values into any or none of them), then input a value into a cell and submit that value by hitting enter, it'll drop to the next row in the column where you started
@@ -515,7 +515,7 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
 - [x] **P2** text in the document error listing should be selectable and copyable. Today clicking and dragging registers as a button click, so no text can be selected. The person wants to copy an error to a to-do list or to share it with an agent or a collaborator in chat #everyday
 - [x] (Claude) say "document" instead of "spreadsheet" in the UI and help page, as the README does
 - [ ] **P7** (Claude) review the existing interface text against [docs/design/writing.md](docs/design/writing.md) and fix what breaks it #everyday
-  - [ ] rename the "Resize table to fit" button in the cell error popover to "Resize to fit" (`CellError.vue`), and the mentions of it in the help page
+  - [x] use "Resize to fit" for the button in the cell error popover and its help page mentions (`CellError.vue`)
 - [ ] **P8** review more published style guides for interface text (Material Design, Apple's Human Interface Guidelines, the Microsoft Writing Style Guide) and extend [docs/design/writing.md](docs/design/writing.md) from them. The Atlassian error-message guidance and Microsoft's Windows writing style page are already used #everyday
 - [x] mobile friendly UI (layout, touch targets, tap twice to edit)
 - [ ] **P10** revamp the phone-width UI so it is less cramped. The editor header is the tightest part: it holds the back arrow, the spreadsheet's name, the saving indicator, Share, History, Export, and Help on one line. #everyday

@@ -148,7 +148,7 @@ const KEYS = [
   ["Arrow keys, outside an editor", "Move the selection."],
   ["Any character", "Start typing over the selected cell."],
   ["Enter or F2", "Edit the selected cell's current contents."],
-  ["Alt+Enter, on a table-size spill error", "Focus the Resize table to fit button."],
+  ["Alt+Enter, on a table-size spill error", "Focus the Resize to fit button."],
   [
     "Enter, while editing a cell",
     "Save and move down, unless accepting an arrow-selected suggestion.",

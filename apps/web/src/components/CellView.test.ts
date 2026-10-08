@@ -451,7 +451,7 @@ describe("CellView", () => {
     expect(description?.tagName).toBe("P");
     expect(description?.textContent).toContain("The table is too small.");
     expect(dialog?.textContent).toContain("The table is too small.");
-    expect(button?.textContent).toContain("Resize table to fit");
+    expect(button?.textContent).toContain("Resize to fit");
     button?.click();
     expect(wrapper.emitted("resizeTable")).toEqual([[size]]);
     wrapper.unmount();

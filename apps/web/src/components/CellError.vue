@@ -157,7 +157,7 @@ onBeforeUnmount(() => {
         @keyup="onActionKeyup"
         @blur="spacePressed = false"
       >
-        Resize table to fit
+        Resize to fit
       </button>
       <p v-if="resizeTo" class="cell-error-popover__hint">
         Alt+Enter focuses this button; Enter or Space resizes the table.
