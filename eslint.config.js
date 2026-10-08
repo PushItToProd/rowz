@@ -127,6 +127,9 @@ export default tseslint.config(
   {
     files: ["apps/web/**"],
     languageOptions: { globals: globals.browser },
+    rules: {
+      "no-alert": "error",
+    },
   },
   {
     files: ["apps/server/**", "e2e/**", "*.config.{js,ts}"],
