@@ -107,9 +107,17 @@ const draft = computed(() =>
   editingPosition.value ? (active.value?.state.doc.toString() ?? null) : null,
 );
 const cellField = ref<InstanceType<typeof SessionFormulaField> | null>();
+const columnNameEditors = new Map<number, InstanceType<typeof EditableName>>();
 const pendingOpeningNavigation: { key: "Enter" | "Tab"; backwards: boolean }[] = [];
 function captureField(field: Element | ComponentPublicInstance | null): void {
   cellField.value = field as InstanceType<typeof SessionFormulaField> | null;
+}
+function captureColumnNameEditor(
+  col: number,
+  editor: Element | ComponentPublicInstance | null,
+): void {
+  if (editor) columnNameEditors.set(col, editor as InstanceType<typeof EditableName>);
+  else columnNameEditors.delete(col);
 }
 function isEditing(place: number, col: number): boolean {
   const position = editingPosition.value;
@@ -531,6 +539,18 @@ function onColumnMousedown(event: MouseEvent, col: number): void {
   if (event.target instanceof HTMLInputElement) return;
   event.preventDefault();
   void onHeaderMousedown(event, "col", col);
+}
+
+/** Starts the existing name editor from the rest of a named column's header. */
+function onColumnDoubleClick(event: MouseEvent, col: number): void {
+  if (!(event.target instanceof Element)) return;
+  if (
+    event.target.closest(
+      ".editable-name, .grid__resize, button, a, input, select, textarea, [role='button'], [role='menuitem'], [aria-haspopup]",
+    )
+  )
+    return;
+  void columnNameEditors.get(col)?.start();
 }
 
 /**
@@ -1246,12 +1266,14 @@ function onGridKeydown(event: KeyboardEvent): void {
               data-pick-kind="col"
               :data-pick-index="col - 1"
               @mousedown.left="onColumnMousedown($event, col - 1)"
+              @dblclick="onColumnDoubleClick($event, col - 1)"
               @mouseenter="onHeaderMouseenter('col', col - 1)"
               @contextmenu="onHeaderContextMenu($event, 'col', col - 1)"
             >
               <template v-if="columnAt(col - 1)">
                 <span class="grid__column-letter">{{ columnLabel(col - 1) }}</span>
                 <EditableName
+                  :ref="(editor) => captureColumnNameEditor(col - 1, editor)"
                   :value="columnAt(col - 1)?.name ?? ''"
                   label="Column name"
                   :disabled="!store.canEdit"

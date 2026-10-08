@@ -32,6 +32,8 @@ async function start(): Promise<void> {
   input.value?.select();
 }
 
+defineExpose({ start });
+
 function commit(): void {
   const name = draft.value?.trim();
   draft.value = null;

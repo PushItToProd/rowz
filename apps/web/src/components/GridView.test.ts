@@ -2271,6 +2271,40 @@ describe("a data table", () => {
     });
   });
 
+  it("starts renaming from elsewhere in a column header", async () => {
+    await mountData();
+    server.updateColumn.mockResolvedValue(
+      changeWith({ table: DATA_TABLE, cells: [], views: [], tables: [] }),
+    );
+
+    await header("Item").get(".grid__column-letter").trigger("dblclick");
+    const input = header("Item").get<HTMLInputElement>("input");
+    expect(input.element.value).toBe("Item");
+    expect(document.activeElement).toBe(input.element);
+
+    await input.setValue("Thing");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", {
+      revision: expect.any(Number),
+      name: "Thing",
+    });
+  });
+
+  it("resets a named column's size instead of renaming on its resize handle", async () => {
+    await mountData();
+    server.resizeLines.mockResolvedValue(changeWith());
+
+    await header("Item").get(".grid__resize--col").trigger("dblclick");
+    await flushPromises();
+
+    expect(server.resizeLines).toHaveBeenCalledExactlyOnceWith("t1", {
+      axis: "col",
+      ids: ["c1"],
+      size: null,
+    });
+    expect(header("Item").find("input").exists()).toBe(false);
+  });
+
   it("still selects the column when its header is pressed", async () => {
     await mountData();
     await header("Done").trigger("mousedown");
