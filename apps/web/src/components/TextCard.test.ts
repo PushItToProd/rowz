@@ -259,6 +259,24 @@ describe("TextCard", () => {
     expect(useWorkbookStore().notice).toEqual({ kind: "success", text: "Done" });
   });
 
+  it.each(["Enter", " "])("leaves %s on a focused text-view button to the button", async (key) => {
+    await render(`{{ BUTTON("Run", EXECUTE(1, 'Table 1'!A1)) }}`);
+
+    const trigger = button("Run");
+    trigger.element.focus();
+    const event = new KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+    });
+    trigger.element.dispatchEvent(event);
+    await flushPromises();
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(wrapper.find(".text-view__source-editor").exists()).toBe(false);
+    expect(document.activeElement).toBe(trigger.element);
+  });
+
   it("waits for confirmation before sending a text-view button click", async () => {
     await render(`{{ BUTTON("Clear", CLEAR('Table 1'!A1), "Clear this value?") }}`);
     server.clickViewButton.mockResolvedValue(clickResult());

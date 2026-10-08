@@ -19,6 +19,7 @@ import EditableName from "./EditableName.vue";
 import ErrorWarning from "./ErrorWarning.vue";
 import ConfirmDialog from "./ConfirmDialog.vue";
 import { useDialog } from "../useDialog";
+import { isNativelyInteractiveTarget } from "../dom";
 import type { MenuItem } from "./menu";
 
 const props = withDefaults(defineProps<{ view: ViewRecord; collapsed?: boolean }>(), {
@@ -402,13 +403,14 @@ function rememberTextInput(event: Event): void {
 }
 
 async function commitTextInput(event: Event): Promise<void> {
+  const input = inputFrom(event);
   if (event.type === "keydown") {
     const key = event as KeyboardEvent;
     if (key.key !== "Enter") return;
+    if (isNativelyInteractiveTarget(key.target) && !input) return;
     key.preventDefault();
     key.stopPropagation();
   }
-  const input = inputFrom(event);
   if (!input || !props.view.id) return;
   if (input.type === "number" && input.validity.badInput) {
     if (event.type === "keydown") input.reportValidity();

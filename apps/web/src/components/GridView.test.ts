@@ -1713,6 +1713,20 @@ describe("formula suggestions", () => {
 describe("buttons", () => {
   const BUTTON = '=BUTTON("Add one", EXECUTE(A1+1, A1))';
 
+  it.each(["Enter", " "])("leaves %s on a focused cell button to the button", async (key) => {
+    await mountGrid({ A1: "1", B1: BUTTON });
+    await select("B1");
+
+    const trigger = cellAt("B1").get<HTMLButtonElement>("button");
+    trigger.element.focus();
+    const event = dispatchKey(trigger.element, key);
+    await flushPromises();
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(wrapper.find(".grid__editor").exists()).toBe(false);
+    expect(document.activeElement).toBe(trigger.element);
+  });
+
   it("runs the action when the button is clicked and shows the written value", async () => {
     await mountGrid({ A1: "1", B1: BUTTON });
     server.click.mockResolvedValue(clickResult({ cells: [{ ...at("A1"), input: "2" }] }));
@@ -1801,12 +1815,22 @@ describe("buttons", () => {
     expect(scrolled.at(-1)).toBe(cellAt("B3").element);
   });
 
-  it("opens the button's formula for editing with Enter", async () => {
-    await mountGrid({ B1: BUTTON });
-    await select("B1");
-    await press("Enter");
-    expect(editorView().state.doc.toString()).toBe(BUTTON);
-  });
+  it.each(["Enter", " "])(
+    "starts editing the selected cell on %s while the grid has focus",
+    async (key) => {
+      await mountGrid({ B1: BUTTON });
+      await select("B1");
+      const grid = wrapper.get<HTMLElement>(".grid").element;
+      grid.focus();
+
+      const event = dispatchKey(grid, key);
+      await flushPromises();
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(wrapper.find(".grid__editor").exists()).toBe(true);
+      expect(editorView().state.doc.toString()).toBe(key === " " ? " " : BUTTON);
+    },
+  );
 });
 
 describe("controls", () => {

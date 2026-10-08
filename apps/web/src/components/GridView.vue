@@ -31,6 +31,7 @@ import { cellEditingRequest, editingLabel } from "../formula/cells";
 import { referenceOutlines } from "../formula/references";
 import { useReferencePickingStore } from "../formula/picking";
 import { useGridPicking } from "../formula/useGridPicking";
+import { isNativelyInteractiveTarget } from "../dom";
 import SessionFormulaField from "./SessionFormulaField.vue";
 import CellView from "./CellView.vue";
 import EditableName from "./EditableName.vue";
@@ -1114,12 +1115,11 @@ const MOVES: Record<string, [rows: number, cols: number]> = {
 };
 
 function onGridKeydown(event: KeyboardEvent): void {
-  // While editing, keys belong to the editor input. An input control in a cell
-  // also keeps its own keys, such as the arrows that change a choice.
+  // The cell editor and native controls in cells keep their own keys.
   const inControl =
-    event.target instanceof Element &&
-    event.target.closest('input, select, textarea, [contenteditable="true"], [role="textbox"]') !==
-      null;
+    isNativelyInteractiveTarget(event.target) ||
+    (event.target instanceof Element &&
+      event.target.closest('[contenteditable="true"], [role="textbox"]') !== null);
   if (draft.value !== null) {
     if (document.activeElement !== grid.value || inControl) return;
     const { key } = event;
