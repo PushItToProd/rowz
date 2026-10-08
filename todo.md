@@ -45,46 +45,7 @@ A reference document is the acceptance test of a theme: the theme is done when i
 
 ## Inbox - to be categorized
 
-- [ ] **P10** explore Yjs + Hocuspocus for sync #sharing
-- [ ] **Author** **P2** entering a value like `$10,000` (verbatim) into a numeric data table column produces a `#VALUE!` error (`$10,000 is not a number`) #everyday
-  - (Claude) the cause is `parseNumber` in [values.ts](packages/engine/src/values.ts), which every typed cell and every conversion of text to a number uses. It also refuses `10%`, `1,234`, and `VALUE("$1,234.50")`, in plain tables as well as typed columns, so those entries become text. `=5%` is a syntax error because the formula language has no percent operator. Decide which of these to accept in one change
-- [x] **P4** make `CLAMP` eager again: it evaluates all three arguments, so `=CLAMP(-1, 0, 1/0)` is `#DIV/0!`. An agent made it lazy, like `IFS`, by reading the author's `IFS` equivalent literally. The equivalence describes the result for arguments that have values and nothing more. Update the help entry and the README sentence about `CLAMP` to match #formula-language
-- [ ] **P6** in data tables, conditional formatting should be a column property #formatting
-  - okay, I guess when I create rules covering a whole column of a data table it does intelligently set it to e.g. `F1:F` so it covers the whole thing, but that behavior doesn't feel obvious from the way it's presented
-- [x] **P6** create context menu item to add conditional formatting to the selected cell or range #formatting
-- [x] **P6** in the codemirror editors, let me hit cmd+D/ctrl+D when I have some text highlighted to select multiple instances of that text
-- [x] **P4** the formula editor shown in a cell doesn't completely fill the cell - the div with classes `session-formula-field grid__editor` has 6px of padding on left and right (maybe a Firefox quirk?) while the div with class `formula-editor` doesn't fill the full height of the cell either. -- note this is mostly an aesthetic thing. it doesn't necessarily have to fill the cell, it just needs to be less obvious that it doesn't
-- the text editing UX is really janky right now
-  - [ ] there's a "Pick reference" button(?) floating in the upper right but clicking on it unfocuses the editor and immediately closes it, so the button is unusable
-  - [ ] I'm finding the "double click to focus" and "single click to unfocus" actually very annoying. I keep wanting a single click to start editing (but it should also allow me to drag to select text without entering edit mode) and I sort of want to have to explicitly click the save button rather than going back to view mode as soon as I unfocus the text input
-  - [ ] I don't like how the block resizes between edit mode and view mode -- would rather they both stay the same size (ideally full width)
-  - [ ] I feel like the text preview should be on the right side instead of below the text being edited
-
-
-- [ ] **P4** open a block's name and a document's name for editing on one click, not a double-click (`EditableName.vue`). See [docs/design/ui.md](docs/design/ui.md) #everyday
-- [ ] **P5** (Claude) give a notice and an error dialog a place for the underlying error, shown word for word in monospace below the summary, and rewrite save and request failures to the form in [docs/design/writing.md](docs/design/writing.md): what could not be done and why, then what to do #everyday
-- [ ] **P7** tabs along the top of a context menu for the menus of the things that contain the clicked one: a right-click on a cell shows Cell, Row, Column, Table, and Page, and choosing one shows that thing's menu. Each menu then holds one thing's actions. Plan before implementing. The author will decide whether to keep it after seeing it in use. See [docs/design/ui.md](docs/design/ui.md) #everyday
-- [ ] **P5** make the `and` and `or` operators stop at the first operand that decides the answer, so `B1 <> 0 and A1 / B1 > 2` works as a guard. They call `AND` and `OR` today, which evaluate every argument (`packages/engine/src/evaluate.ts`) #formula-language
-  - [ ] **P6** make the `AND` and `OR` functions stop early too, and add `ALL` and `ANY`, which evaluate every argument and return an error found in any of them. Say in the help entries that `AND` and `OR` differ from Excel and Sheets here. See [docs/design/formula-language.md](docs/design/formula-language.md)
-- [ ] **P4** remove the row of action buttons from each block's header. The ellipsis menu and the right-click menu already list the same actions, so a table shows each of its nine three times. Keep the name and the ellipsis. See [DECISIONS.md](DECISIONS.md), "A menu's actions are not repeated as buttons" #small-apps
-- [ ] **P4** show a delete item in a context menu in the danger color #everyday
-- [ ] **P5** confirm a delete chosen from a menu in or beside the menu, not in a dialog in the middle of the screen: the item changes to "Confirm deletion?", or a small confirmation opens next to it. A second click counts only after a short delay, so an accidental double click does not confirm. Build both forms far enough for the author to choose. Keep the dialog where the confirmation explains what will be lost. See [DECISIONS.md](DECISIONS.md), "Removing a whole container is confirmed, beside the menu" #everyday
-  - [ ] confirm deleting a page, which is not confirmed today
-  - [ ] show a notice with Undo after a delete that is not confirmed, such as a row or a column
-- [ ] **P4** the text view's editor, as the author saw it on the `overnight-work` branch. See "Editing in place" in [docs/design/ui.md](docs/design/ui.md) #small-apps
-  - [ ] clicking "Pick references" takes focus from the editor, which ends the edit, so the button cannot be used. Treat the editor's own controls and popovers as part of the editor when deciding that focus has left
-  - [ ] the block changes size between showing and editing. Keep its place and size
-  - [ ] the editing state looks unstyled beside the rest of the block
-- [ ] **P8** investigate opening a script or text block for editing on one click without catching clicks meant for something else. Some apps wait briefly after the click and start editing only if the pointer stays put, so a click followed by scrolling or moving away does nothing. Find what the technique is called and how other apps tune it, then try it out. Double-click stays until then #small-apps
-- [ ] **P6** keep a history of recent messages and errors, so a notice that closed can be read again #everyday
-- [ ] **P5** a command palette that lists every action, and a form dialog for an action that needs parameters (Tab between fields, Enter submits, Escape cancels). These are how a feature becomes usable from the keyboard without a shortcut of its own. Plan before implementing #everyday
-- [ ] **P5** replace every native `<select>` with a shared in-app dropdown ([audit](docs/native-browser-ui-audit.md), priority 2), then add a lint rule that refuses `<select>` in `apps/web` #everyday
-- [ ] **P6** replace native `title` tooltips with an in-app tooltip ([audit](docs/native-browser-ui-audit.md), priority 3), then add a lint rule that refuses the `title` attribute in `apps/web` #everyday
-- [ ] **P4** (Claude) turn on ESLint's `no-alert` for `apps/web`, so `alert`, `confirm`, and `prompt` cannot come back #codebase
-- [ ] **P8** review more published style guides for interface text (Material Design, Apple's Human Interface Guidelines, the Microsoft Writing Style Guide) and extend [docs/design/writing.md](docs/design/writing.md) from them. The Atlassian error-message guidance and Microsoft's Windows writing style page are already used #everyday
-- [ ] **P7** (Claude) a key that moves focus between the regions of a page: the grid, a block's header, the next block, and an open side panel. Tab is taken inside the grid. See the keyboard section of [docs/design/ui.md](docs/design/ui.md) #everyday
-- [ ] **P7** (Claude) review the existing interface text against [docs/design/writing.md](docs/design/writing.md) and fix what breaks it #everyday
-- [ ] **P6** turn the guidance in [docs/design/](docs/design/README.md) into agent skills (interface work, interface text, formula language), linked into `.agents/skills` for Codex as `create-rowz-document` is #agents
+Items that have not been moved to a section yet. An agent adding an item puts it in the section it belongs to. It does not add it here or at the end of the file.
 
 ## Plans
 
@@ -95,9 +56,13 @@ A reference document is the acceptance test of a theme: the theme is done when i
   - [function-suite-design-review.md](plans/function-suite-design-review.md): where the current functions do not compose predictably, with recommendations, table query pipelines, explicit `@` intersection, and collections kept in one cell
   - [plain-text-file-format-proposal.md](plans/plain-text-file-format-proposal.md): a document as Markdown-like text that an ordinary editor and version control can work with, edited Obsidian-style, without a rowz server
 - [ ] **Author** (Claude) for the author: `AGENT_DECISIONS.md` has 47 entries and nothing marks which the author has reviewed. Its entries are out of date order and four headings have no date. Mark the reviewed ones, or move them to `DECISIONS.md` or delete them as they are reviewed
+- [ ] **P1** conduct a review of the codebase and find all the places that need updating to align with the design principles #codebase
+- [x] **P1** merge the changes from the design-principles branch #codebase
 
 ## Bugs
 
+- [ ] **Author** **P2** entering a value like `$10,000` (verbatim) into a numeric data table column produces a `#VALUE!` error (`$10,000 is not a number`) #everyday
+  - (Claude) the cause is `parseNumber` in [values.ts](packages/engine/src/values.ts), which every typed cell and every conversion of text to a number uses. It also refuses `10%`, `1,234`, and `VALUE("$1,234.50")`, in plain tables as well as typed columns, so those entries become text. `=5%` is a syntax error because the formula language has no percent operator. Decide which of these to accept in one change
 - [ ] **P8** `printNode` does not round-trip a column name with leading or trailing whitespace because the tokenizer trims whitespace inside brackets #formula-language
 - [ ] **P8** `CLAMP(A1:A3, 0, C1:C2)` with `A3` an error returns `#N/A` for the third cell, not the error: the array path fetches the cells of all three arguments before it checks any of them (`packages/engine/src/functions/math.ts`) #formula-language
 - [ ] **P6** A button cannot be pressed from the keyboard: in the grid, Enter on a selected cell starts editing and Space starts a space-prefixed edit, so the handler cancels the browser's activation of a focused `<button>`; in a text view, the delegated key handler prevents Enter for every descendant including buttons (`apps/web/src/components/GridView.vue`, `TextCard.vue`) #everyday
@@ -113,45 +78,55 @@ A reference document is the acceptance test of a theme: the theme is done when i
 - [ ] **P8** `QUERY` groups rows by `JSON.stringify`, which writes every `Map` as `{}`, so two buttons that differ only in their captured names (`QUERY(MAP(SEQUENCE(2), LAMBDA(x, BUTTON("go", EXECUTE(x, C1)))), "select Col1, count(*) group by Col1", 0)`) merge into one group #formula-language
 - [ ] **P8** Criteria `>""` and `<""` (quoted empty text) take the blank-criterion shortcut and match every non-empty cell; let an explicitly quoted empty operand reach comparison (`packages/engine/src/functions/criteria.ts`) #formula-language
 - [ ] **P10** A quoted criteria literal containing `*` or `?` still goes through `wildcard()`, so a 255-character quoted literal throws `#VALUE!` from the wildcard length limit even though quoted text is literal #formula-language
-- [x] **P3** A `NUMBERBOX` (cell and text view) sends an empty string when the browser reports an empty value for incomplete input such as `-` or `e` (`validity.badInput`), and an empty string clears the target; refuse the commit instead (`CellView.vue`, `TextCard.vue`) #small-apps
-- [x] **P3** `TEXTBOX`/`NUMBERBOX` do not check the target column's type: `abc` into a number column succeeds and leaves a `#VALUE!` cell, and `007` is stored as the number 7 despite the documented text-preserving behavior (`packages/engine/src/workbook.ts`) #small-apps
 - [ ] **P10** A `TEXTBOX` commit of exactly 8,192 formula-like or numeric-looking characters gains a leading apostrophe and exceeds the stored-cell limit, so the write fails; make the control's limit one less than the cell limit #small-apps
-- [x] **P0** (Claude) A `BUTTON` loses every local name when it is clicked. `=LET(x, A1, BUTTON("go", EXECUTE(x+1, A2)))` shows a button, and clicking it fails with `#NAME? Unknown name 'x'`. `call` in [evaluate.ts](packages/engine/src/evaluate.ts) builds the `ActionValue` with the action's arguments, origin, and page, and leaves out `context.names`. `LET` is the case that was run; a `LAMBDA` parameter, a script function's parameter, and a template `let` or loop variable are bound the same way. Keep the bindings in the `ActionValue`, as a `LAMBDA` value keeps its context, and plan the action with them #small-apps
-  - A text-view `BUTTON` inside a template loop is one case: an action body that uses the loop variable fails with `#NAME?`, so a button on each row of a loop cannot act on its row. Preserve the bindings for the selected occurrence
-- [x] **P6** (Claude) `ROUND(1.005, 2)` is 1, and Excel and Sheets give 1.01. 1.005 is stored as a binary fraction slightly below 1.005, and `ROUND` rounds that. Amounts of money land on such halves often. Round the shortest decimal form of the number instead #formula-language
-- [x] **P9** (Claude) `LEFT("😀a", 1)` returns half of the emoji, and `LEN("😀")` is 2. `LEFT`, `RIGHT`, `MID`, `LEN`, and `SLICE` count UTF-16 code units. Make every text function that counts or cuts characters work in grapheme clusters, using `Intl.Segmenter`, so that a flag or a family emoji is one character too. See [DECISIONS.md](DECISIONS.md), "Text functions never split a character" #formula-language
 - [ ] **Author** **P5** `FILTER_COLUMNS` and `FILTER` skip the error check on later conditions for a column that an earlier condition already rejected (`keep[col] &&= boolean(flag)` short-circuits), so a later `#DIV/0!` is hidden by an earlier `FALSE`. `AND` propagates it. Decide whether to check every condition cell, and test it. #formula-language
-- [x] **P2** conditional formatting criteria doesn't handle strings -- I made a conditional format with a condition like `="foobar"` but it didn't apply (maybe b/c it was a data table column with formula values)
 
-- [x] **P2** `QUERY` treats single quotes as delimiting string literals which contradicts the outer formula languge syntax. this isn't exactly a bug but I consider it a severe enough misfeature I'm classing it as one - we should probably have single quotes delimit identifiers in `QUERY` syntax instead so you can write queries like `=QUERY(People, "select 'Favorite food', count(*) group by 'Favorite food'")`. (as this is a pre-production app I don't care if this breaks anything) #formula-language
+### Not triaged
 
-- [x] Wildcard criteria can stall synchronous formula evaluation. [criteria.ts](packages/engine/src/functions/criteria.ts:28) turns `*` and `?` into a backtracking regular expression, then tests cell text at [line 56](packages/engine/src/functions/criteria.ts:56). A crafted criterion and long near-matching text can trigger catastrophic backtracking. Formula evaluation has no time limit, and the server evaluates workbook formulas while handling action clicks. Use a matcher with bounded runtime.
+These bugs have no priority yet, so they are not picked up.
 
-- [x] Combined array results can exhaust memory before spill limits apply. [arrays.ts](packages/engine/src/functions/arrays.ts:129) caps each `SEQUENCE` call at 100,000 cells, but `HSTACK`, `VSTACK`, and `FLATTEN` have no aggregate output cap ([lines 155–184](packages/engine/src/functions/arrays.ts:155)). [workbook.ts](packages/engine/src/workbook.ts:654) materializes the result before checking whether it can spill into the table. Preflight the combined result against a workbook-wide cell budget before allocating it.
+- [ ] When an action runs while a formula edit is active, the draft save can clear a pending save's error and the action is then skipped without notice (`stores/workbook/queue.ts` line 30 does not forward `clearPreviousError`) #everyday
+- [ ] In `SpreadsheetListView.vue`, an older successful request can clear a newer request's error, and cancelling a delete clears the error #everyday
+- [ ] Displayed-value search searches a Markdown cell's raw text (`**hello**`, link destinations) and not the rendered text (`apps/web/src/stores/workbook/search.ts`) #everyday
+- [ ] The Choices panel (`choosingFor` in `TableCard.vue`) is outside the one-open-side-pane state, so it can stay open beside Names or Conditional formats #everyday
+- [ ] Escape does not close the Names and Conditional formats panels #everyday
+- [ ] The origin-trace link in the cell error popover is not reachable by keyboard: the popover is teleported to the end of `<body>` and closes on focusout, so Tab leaves before reaching it (`CellError.vue`, `ErrorTrace.vue`). The errors list has the same link #everyday
+- [ ] After deleting a page from its context menu, keyboard focus falls to the body because the page tab that held it is removed; move focus to the neighboring tab (`PageTabs.vue`, `ContextMenu.vue`) #everyday
+- [ ] A right-click on a `<label>` inside a block (Import CSV, a chart's Data label) opens the block menu; `EditorView.vue` near line 512 should exclude labels #everyday
+- [ ] A failing assertion in a script name (`Positive = ASSERT(...)`) has no line, so revealing it focuses the script block but cannot scroll to the definition; scroll to the `data-script-line` of the definition (`apps/web/src/stores/workbook/values.ts` near line 69, `ScriptCard.vue` near line 122) #everyday
+- [ ] The failing-assertions panel drops the optional error trace, so an assertion propagated from a script function has no Open definition button (`apps/web/src/stores/workbook/values.ts` near line 32, `AssertionsPanel.vue`) #everyday
+- [ ] `useCopyFeedback.ts` creates its 2-second timer after the clipboard promise resolves, so a copy that completes after the panel unmounts leaves a timer running #everyday
+- [ ] When another session adds a table while this user's "Add chart" request is pending, the new-block focus step can focus the other session's table (`AddBlockRow.vue` captures block IDs before the request) #small-apps
+- [ ] On a narrow screen, frozen columns can cover every non-frozen column (three default-width columns are 360px, wider than a 320px viewport); cap the frozen width at part of the grid's width or ignore the freeze below a width (`GridView.vue` near line 367, `grid.css` near line 79) #small-apps
+- [ ] Collapsed-block preferences: a `getItem` failure replaces the in-memory set with an empty one, so navigating away and back can lose preferences while storage is unavailable (`apps/web/src/blockCollapse.ts` near lines 33 and 46) #small-apps
+- [ ] Collapsed-block preferences leave a localStorage key for each document, including deleted ones and ones with nothing collapsed; remove the key when a document is deleted or its set is empty (`blockCollapse.ts`, `SpreadsheetListView.vue` near line 307) #small-apps
+- [ ] An ambiguous-name message can recommend a qualified name (`Summary!Total`) that is itself still ambiguous, for a name and a table on one holder (`workbook.ts`, near line 961). Offer a spelling that resolves #formula-language
+- [ ] Renaming the first of two same-name definitions in one script leaves `renamedNames` seeing the name in the after-set, so formulas that used it are not rewritten and then resolve to the second definition (`apps/server/src/repo/spreadsheets/views.ts` near line 83) #formula-language
+- [ ] `SORTBY` treats error keys and blank keys as equal, so a blank key can stay ahead of an error key; Excel puts errors before blanks, and blanks last (`packages/engine/src/functions/arrays.ts` near line 192, `cellOrder`) #formula-language
+- [ ] In `router.ts`, a navigation guard that awaits the leave-document dialog can discard a formula draft after a newer navigation (browser Back) superseded it; check the navigation is still current after the dialog #formula-editing
+- [ ] Formula assist lists a duplicate script definition twice and qualifies it as if ambiguous (`apps/web/src/stores/workbook/values.ts` near line 67) #formula-editing
+- [ ] With several cursors from Ctrl+D in the formula editor, accepting an autocomplete suggestion updates only the primary cursor's token (`FormulaEditor.vue` near line 173) #formula-editing
+- [ ] With several cursors from Ctrl+D, picking a reference changes only the primary match and drops the other cursors (`apps/web/src/formula/picking.ts` near lines 24 and 286) #formula-editing
+- [ ] The bracket-pairing code (`apps/web/src/formula/closeBrackets.ts`) rescans the whole document on every edit (the state field) and on every bracket input (the language data provider), including in Markdown where the result is unused; keep the quote spans incremental or limit the scan to the nearby text #formula-editing
+- [ ] With several cursors from Ctrl+D, bracket pairing uses the main selection's rules for every cursor, so `(` can pair inside a string or comment at another cursor (`closeBrackets.ts` near line 148) #formula-editing
+- [ ] An unfinished quote in one script statement makes later statements look like string content, so bracket pairing stops there; script comment scanning already ends an open quote at the line end (`quoteSpans`, `closeBrackets.ts` near line 23) #formula-editing
+- [ ] Apostrophes can pair inside script comments, and apostrophe wrapping of a selected name depends on the selection direction (`closeBrackets.ts` near lines 168 and 169) #formula-editing
+- [ ] The escaped-quote handler in `closeBrackets.ts` (near line 178) can rewrite a skipped quote closer into doubled quotes while an IME composition is active #formula-editing
+- [ ] The column-type warning does not count text cells that become formulas with errors (a Text cell holding `=1/0` turns into `#DIV/0!` when the column changes to Anything or Choice): `inputFitsColumnType` in `packages/engine/src/workbook.ts` near line 148 treats any parsable formula as fitting #data-tables
+- [ ] The column-type warning counts cells before the dialog and does not recount after confirmation, so another session's edits can make the count stale (`TableCard.vue` near line 343) #data-tables
+- [ ] The Wrap text format does nothing for a choice-column value or a `TEXTBOX` cell, which render as native controls (`CellView.vue` near lines 213 and 346), so the toolbar shows it pressed while the value stays clipped #formatting
+- [ ] A chart legend with many or long series labels can be clipped by the chart card's maximum height (`charts-text-views.css` near line 69, `ChartView.vue` near line 211) #charts
+- [ ] Inline rename in the document list: a whitespace-only name does nothing and says nothing; a list refresh leaves a stale draft that can revert a newer rename made elsewhere (`SpreadsheetListView.vue` near lines 50 and 119) #documents
+- [ ] Numbering a copy's name ("Plan (2)") uses the client's document list, so two tabs with stale lists can pick the same name and the server permits both (`SpreadsheetListView.vue` near line 153, `files.ts` near line 241) #documents
+- [ ] The CSV append confirmation does not say that cells starting with `=` are stored as formulas (as in replace import), so a file can add a button; actions still run only when the button is clicked (`TableCard.vue` near line 151) #documents
+- [ ] The flaky export/import e2e test (`data-tables-and-formatting.spec.ts:5`) failed once more in a full run (20.2s) after the hardening commit and passed in 11 later full runs; capture its trace on the next failure (`pnpm e2e:remote` with Playwright trace retained) #codebase
 
-- [x] Queued writes are not reauthorized after acquiring the spreadsheet lock. `change` in [spreadsheets.ts](apps/server/src/repo/spreadsheets.ts) takes the lock and runs the work without checking access again, so a write that waited on the lock runs even when the caller was downgraded or removed while it waited. `changePage`, `changeTable`, and `changeView` already read their target again under the lock with `"write"`. The methods that call `change` directly (`createPage`, `reorderPages`, `restoreVersion`) and the public `lockSpreadsheet`, which button clicks use, check only before the lock.
-  - Fix it in one place: `change` calls `findSpreadsheet(spreadsheetId, "write")` on the transaction right after `lockSpreadsheet`, and the public `lockSpreadsheet` makes its check after taking the lock. The checks callers make before `change` stay, because they answer 403 or 404 without waiting for the lock.
-  - `share` and `unshare` stay outside the lock. A transaction at read committed sees a role change that committed before the check ran.
-  - Test: one connection holds the spreadsheet's lock while an editor's write waits, the owner downgrades the editor, the lock is released, and the write gets 403. This needs two connections. If the PGlite setup cannot make one wait on another, run the test only with `TEST_DATABASE_URL`.
-  - Update the `change` rule in `CLAUDE.md` to say `change` checks write access under the lock.
-  - The undo plan (`plans/implement-undo-that-survives-structural-changes.md`) builds on this and should start after it.
+### From the QA pass of 2026-10-05
 
-The next five came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review.md`). The first four are fixed, each with a test that failed before the fix. The last was found by reading the code and needs a failing test first. It is parked under Before sharing with others.
-
-- [x] (Claude) A whole column of another table, written as an operand, makes a false `#CYCLE!`. With `1` in `Table1!A1`, `=Other!A1+1` in `Table1!A2`, and `=Table1!A:A+1` in `Other!A1`, both formulas show `#CYCLE!`. They should show 3 and 2. `operand` in [evaluate.ts](packages/engine/src/evaluate.ts) reads only the formula's own row of `Table1!A:A`, but `Workbook.index` in [workbook.ts](packages/engine/src/workbook.ts) records the whole column as a precedent, so the dependency graph has an edge the evaluator never follows. Make the recorded precedent the cell the operand reads. The same applies to a whole row and to `Table[Column]` as an operand.
-
-- [x] (Claude) `QUERY` refuses an alias used in a clause written before the `select` that defines it. `=QUERY(A1:B2, "order by Total select A, sum(B) as Total group by A")` is `#VALUE!` ("The data has no column Total"), and the same query with `select` first works. `AGENT_DECISIONS.md` says clauses may come in any order. [query.ts](packages/engine/src/query.ts) resolves names as it parses each clause, so resolve them after every clause is read.
-
-- [x] (Claude) Reproduce, then fix: an undo can erase another person's edit. Ada types `x` in A1. Grace types `y` there and then `x`. Ada's undo finds A1 holding `x`, which is what her step left, and puts back what was there before her, erasing Grace's edit. `assertRecordedMatches` in [spreadsheets.ts](apps/server/src/repo/spreadsheets.ts) compares inputs by value, and `changeHistory` looks at later journal entries only to see whether they rewrote references. Refuse a step when a later entry that is still in effect touched one of its cells. Add the case to `undo.test.ts`.
-
-- [x] (Claude) Reproduce, then fix: a response that arrives after the editor has opened another document is applied to that document. `addPage` in the [workbook store](apps/web/src/stores/workbook.ts) appends the page and table the server made for document A to the lists of document B, and `renameSpreadsheet` puts back A's record. Other store functions that write after an `await` may do the same and need the same check. `runHistory` already compares the open document's id before applying its answer.
-
-- [x] when editing a script and unfocusing it, if a table cell is already selected that's above or below the fold, the UI will scroll the whole page up/down to show that cell, which is really annoying
-
-The next items came from a QA pass through the running app in a browser on 2026-10-05 (running commit b236b7f730cea29cd32823ea0c85a5e3357fdcbd). Each was seen in headless Chromium at 1440×900 against the Vite dev build, and none has a failing test yet. They are listed with the ones a single user is most likely to hit first. Screenshots are in `_scratch/qa/`.
+These items came from a QA pass through the running app in a browser on 2026-10-05 (running commit b236b7f730cea29cd32823ea0c85a5e3357fdcbd). Each was seen in headless Chromium at 1440×900 against the Vite dev build, and none has a failing test yet. They are listed with the ones a single user is most likely to hit first. Screenshots are in `_scratch/qa/`.
 
 - [x] **P4** (Claude) A chart draws at 300 by 150 pixels whatever its data, and its axis labels are about 6 pixels tall. That is the size a browser gives an SVG with no width or height, so the chart's SVG probably has a `viewBox` and no size. Fix it as part of the move to Apache ECharts, which sizes a chart to its block. Resizing a block is a separate item under Tables, pages, charts, and text views #charts
-- [x] **P2** (Claude) A cell shows the binary rounding error of its number. `=SUM(C2:C1000)` over 999 amounts with two decimals shows `51487.4899999999`. Excel and Sheets show 15 significant digits, which hides it. Round a number to 15 significant digits for display when the cell has no number format. The `ROUND` item above is about the value a function returns and does not cover this #everyday
+- [x] **P2** (Claude) A cell shows the binary rounding error of its number. `=SUM(C2:C1000)` over 999 amounts with two decimals shows `51487.4899999999`. Excel and Sheets show 15 significant digits, which hides it. Round a number to 15 significant digits for display when the cell has no number format. The `ROUND` item under Fixed is about the value a function returns and does not cover this #everyday
 - [x] **P1** (Claude) Rapid keystrokes after Enter or Tab were dropped while the shared formula editor opened or saved: the grid ignored keys once a session existed, and the read-only display field and saving editor consumed keys before focus or save completed. Preserve early characters and replay keys queued during a save. #formula-editing
 - [x] **P3** (Claude) A table or page name with a space, written without quotes, gives an error that does not mention quotes. `=SUM(Table 1[Qty])` shows `Expected )` and `=Table 1!B2` shows `Unexpected 1`. Every new table is named `Table 1`, `Table 2`, and so on, so a formula typed by hand meets this first. The document errors panel prints the unquoted form `Table 1!D5` as a cell's address. Clicking a cell to insert its reference writes the quotes. Say in the error that the name needs single quotes when the words before `!` or `[` are a table or page name, or name new tables without a space #formula-language
 - [x] **P5** (Claude) A name defined twice in one script was not marked in the script, and a formula that used it was told to do something it could not. With `QtyTotal = SUM(Sales[Qty])` and `QtyTotal = 5` in one script, the script card showed 227 beside both lines. `=QtyTotal` in a cell showed an ambiguity message with the same qualified name twice. Mark the later definition as an error, keep the first usable, and apply the same rule to function definitions. #formula-language
@@ -164,6 +139,41 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [x] **P3** (Claude) A click anywhere in a cell of a checkbox column ticks or clears it, so the mouse cannot select such a cell without changing it. Only the box itself should toggle #data-tables
 - [x] **P4** (Claude) "Save a copy" opens the copy at once, and the only sign is "(copy)" at the end of the name in the header. A later edit meant for the original goes to the copy. Show a message that the copy is now open, or keep the original open and link to the copy #documents
 - [ ] **Author** **P8** (Claude) After a reload the Undo button is disabled, though the server keeps the journal of changes. Decide whether undo should continue across a reload #everyday
+
+### From the review of 2026-10-01
+
+These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review.md`). Each is fixed, with a test that failed before the fix. A fifth finding was found by reading the code and needs a failing test first. It is parked under Before sharing with others.
+
+- [x] (Claude) A whole column of another table, written as an operand, makes a false `#CYCLE!`. With `1` in `Table1!A1`, `=Other!A1+1` in `Table1!A2`, and `=Table1!A:A+1` in `Other!A1`, both formulas show `#CYCLE!`. They should show 3 and 2. `operand` in [evaluate.ts](packages/engine/src/evaluate.ts) reads only the formula's own row of `Table1!A:A`, but `Workbook.index` in [workbook.ts](packages/engine/src/workbook.ts) records the whole column as a precedent, so the dependency graph has an edge the evaluator never follows. Make the recorded precedent the cell the operand reads. The same applies to a whole row and to `Table[Column]` as an operand.
+- [x] (Claude) `QUERY` refuses an alias used in a clause written before the `select` that defines it. `=QUERY(A1:B2, "order by Total select A, sum(B) as Total group by A")` is `#VALUE!` ("The data has no column Total"), and the same query with `select` first works. `AGENT_DECISIONS.md` says clauses may come in any order. [query.ts](packages/engine/src/query.ts) resolves names as it parses each clause, so resolve them after every clause is read.
+- [x] (Claude) Reproduce, then fix: an undo can erase another person's edit. Ada types `x` in A1. Grace types `y` there and then `x`. Ada's undo finds A1 holding `x`, which is what her step left, and puts back what was there before her, erasing Grace's edit. `assertRecordedMatches` in [spreadsheets.ts](apps/server/src/repo/spreadsheets.ts) compares inputs by value, and `changeHistory` looks at later journal entries only to see whether they rewrote references. Refuse a step when a later entry that is still in effect touched one of its cells. Add the case to `undo.test.ts`.
+- [x] (Claude) Reproduce, then fix: a response that arrives after the editor has opened another document is applied to that document. `addPage` in the [workbook store](apps/web/src/stores/workbook.ts) appends the page and table the server made for document A to the lists of document B, and `renameSpreadsheet` puts back A's record. Other store functions that write after an `await` may do the same and need the same check. `runHistory` already compares the open document's id before applying its answer.
+
+### Fixed
+
+- [x] **P3** A `NUMBERBOX` (cell and text view) sends an empty string when the browser reports an empty value for incomplete input such as `-` or `e` (`validity.badInput`), and an empty string clears the target; refuse the commit instead (`CellView.vue`, `TextCard.vue`) #small-apps
+- [x] **P3** `TEXTBOX`/`NUMBERBOX` do not check the target column's type: `abc` into a number column succeeds and leaves a `#VALUE!` cell, and `007` is stored as the number 7 despite the documented text-preserving behavior (`packages/engine/src/workbook.ts`) #small-apps
+- [x] **P0** (Claude) A `BUTTON` loses every local name when it is clicked. `=LET(x, A1, BUTTON("go", EXECUTE(x+1, A2)))` shows a button, and clicking it fails with `#NAME? Unknown name 'x'`. `call` in [evaluate.ts](packages/engine/src/evaluate.ts) builds the `ActionValue` with the action's arguments, origin, and page, and leaves out `context.names`. `LET` is the case that was run; a `LAMBDA` parameter, a script function's parameter, and a template `let` or loop variable are bound the same way. Keep the bindings in the `ActionValue`, as a `LAMBDA` value keeps its context, and plan the action with them #small-apps
+  - A text-view `BUTTON` inside a template loop is one case: an action body that uses the loop variable fails with `#NAME?`, so a button on each row of a loop cannot act on its row. Preserve the bindings for the selected occurrence
+- [x] **P6** (Claude) `ROUND(1.005, 2)` is 1, and Excel and Sheets give 1.01. 1.005 is stored as a binary fraction slightly below 1.005, and `ROUND` rounds that. Amounts of money land on such halves often. Round the shortest decimal form of the number instead #formula-language
+- [x] **P9** (Claude) `LEFT("😀a", 1)` returns half of the emoji, and `LEN("😀")` is 2. `LEFT`, `RIGHT`, `MID`, `LEN`, and `SLICE` count UTF-16 code units. Make every text function that counts or cuts characters work in grapheme clusters, using `Intl.Segmenter`, so that a flag or a family emoji is one character too. See [DECISIONS.md](DECISIONS.md), "Text functions never split a character" #formula-language
+- [x] **P2** conditional formatting criteria doesn't handle strings -- I made a conditional format with a condition like `="foobar"` but it didn't apply (maybe b/c it was a data table column with formula values)
+- [x] **P2** `QUERY` treats single quotes as delimiting string literals which contradicts the outer formula languge syntax. this isn't exactly a bug but I consider it a severe enough misfeature I'm classing it as one - we should probably have single quotes delimit identifiers in `QUERY` syntax instead so you can write queries like `=QUERY(People, "select 'Favorite food', count(*) group by 'Favorite food'")`. (as this is a pre-production app I don't care if this breaks anything) #formula-language
+- [x] Wildcard criteria can stall synchronous formula evaluation. [criteria.ts](packages/engine/src/functions/criteria.ts:28) turns `*` and `?` into a backtracking regular expression, then tests cell text at [line 56](packages/engine/src/functions/criteria.ts:56). A crafted criterion and long near-matching text can trigger catastrophic backtracking. Formula evaluation has no time limit, and the server evaluates workbook formulas while handling action clicks. Use a matcher with bounded runtime.
+- [x] Combined array results can exhaust memory before spill limits apply. [arrays.ts](packages/engine/src/functions/arrays.ts:129) caps each `SEQUENCE` call at 100,000 cells, but `HSTACK`, `VSTACK`, and `FLATTEN` have no aggregate output cap ([lines 155–184](packages/engine/src/functions/arrays.ts:155)). [workbook.ts](packages/engine/src/workbook.ts:654) materializes the result before checking whether it can spill into the table. Preflight the combined result against a workbook-wide cell budget before allocating it.
+- [x] Queued writes are not reauthorized after acquiring the spreadsheet lock. `change` in [spreadsheets.ts](apps/server/src/repo/spreadsheets.ts) takes the lock and runs the work without checking access again, so a write that waited on the lock runs even when the caller was downgraded or removed while it waited. `changePage`, `changeTable`, and `changeView` already read their target again under the lock with `"write"`. The methods that call `change` directly (`createPage`, `reorderPages`, `restoreVersion`) and the public `lockSpreadsheet`, which button clicks use, check only before the lock.
+  - Fix it in one place: `change` calls `findSpreadsheet(spreadsheetId, "write")` on the transaction right after `lockSpreadsheet`, and the public `lockSpreadsheet` makes its check after taking the lock. The checks callers make before `change` stay, because they answer 403 or 404 without waiting for the lock.
+  - `share` and `unshare` stay outside the lock. A transaction at read committed sees a role change that committed before the check ran.
+  - Test: one connection holds the spreadsheet's lock while an editor's write waits, the owner downgrades the editor, the lock is released, and the write gets 403. This needs two connections. If the PGlite setup cannot make one wait on another, run the test only with `TEST_DATABASE_URL`.
+  - Update the `change` rule in `CLAUDE.md` to say `change` checks write access under the lock.
+  - The undo plan (`plans/implement-undo-that-survives-structural-changes.md`) builds on this and should start after it.
+- [x] when editing a script and unfocusing it, if a table cell is already selected that's above or below the fold, the UI will scroll the whole page up/down to show that cell, which is really annoying
+- [x] In `TableCard.vue` (column type conversion), the handler sets `sessions.columnPopover` after the confirmation dialog without checking the card is still mounted #data-tables
+- [x] Documents made from one template get the same name, so copies are hard to tell apart in the document list; number them or ask for a name (`SpreadsheetListView.vue`) #documents
+- [x] The template picker's button has `aria-controls="document-templates"` while the panel is removed from the DOM when closed #documents
+- [x] **P2** right-clicking the lower part of a page tab shows the page tab context menu with its bottom part hidden behind a table on the page (other element types may do the same). Keep the menu above every block: stack it above blocks, or render it in a top-level layer, and keep it inside the viewport #everyday
+- [x] **P2** right-clicking the buttons that move a page left or right, or delete it, shows the browser's native context menu and not the page tab context menu. Show the tab menu from anywhere on the tab, including its buttons #everyday
+- [x] **P2** the page tab's delete button is a gray "x", which looks like "close this tab", a non-destructive action, and not "delete this tab", which it is. Make it a trash can icon, or at least a red "x", with a label and tooltip that say it deletes. Undo can bring a deleted page back, but if the person makes other changes before they notice, they must undo all of those changes first #everyday
 
 ## Formula language and functions
 
@@ -207,10 +217,15 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - [x] `!=` in addition to `<>`
 - [x] make the help page's navigation sticky so it stays visible as the user scrolls. update it to reflect the section they're currently looking at, too (e.g. by making the currently visible section bold)
 - [x] **P7** add `start` and `step` args to `SEQUENCE`
+- [ ] **P5** make the `and` and `or` operators stop at the first operand that decides the answer, so `B1 <> 0 and A1 / B1 > 2` works as a guard. They call `AND` and `OR` today, which evaluate every argument (`packages/engine/src/evaluate.ts`) #formula-language
+  - [ ] **P6** make the `AND` and `OR` functions stop early too, and add `ALL` and `ANY`, which evaluate every argument and return an error found in any of them. Say in the help entries that `AND` and `OR` differ from Excel and Sheets here. See [docs/design/formula-language.md](docs/design/formula-language.md)
+- [ ] **P15** consider how to support recursive lambdas, so that the `f(f, 5)` workaround documented in `/help` is not required #formula-language
+- [x] **P2** errors that come from a function are hard to trace. With a script function `PayoutByDuration(with_spa) = QUERY(Runs, "select Race, sum('Payout (40 hrs)') " & IF(with_spa, "", "where Race <> 'Spa' ") & "group by Race pivot Duration")` and a cell `=PayoutByDuration(FALSE)`, the cell shows `#VALUE!` with "The data has no column Spa", and the person has to hunt for the source. Let them go from the error back to where it arose (the function, the line, the call chain) #formula-language
 
 ### Additional formula functions
 
 - [x] add `CLAMP(val, min, max)`, equivalent to `IFS(val < min, min, val > max, max, 1=1, val)`
+- [x] **P4** make `CLAMP` eager again: it evaluates all three arguments, so `=CLAMP(-1, 0, 1/0)` is `#DIV/0!`. An agent made it lazy, like `IFS`, by reading the author's `IFS` equivalent literally. The equivalence describes the result for arguments that have values and nothing more. Update the help entry and the README sentence about `CLAMP` to match #formula-language
 
 - [/] (Claude) for the author: review the smaller candidates left in docs/rows-functions.md and determine which to include
 - [ ] **P6** the reference functions `OFFSET`, `INDIRECT`, `ADDRESS`, `ISFORMULA`, `ISREF` #formula-language (plan: plans/reference-functions.md)
@@ -223,7 +238,6 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] **Hold** consider having a rename qualify the bare words it would make ambiguous. Renaming the name `Y` to `X` while a table `X` exists would first rewrite each bare `X` to `'Page 1'!X` #formula-language
 - [ ] **Hold** (Claude) consider Excel's structured references for parts of a data table: `Sales[#Data]`, `Sales[#Headers]`, and `Sales[#All]`. The bare table name already means the data rows (see [plans/names-and-scripts.md](plans/names-and-scripts.md)) #formula-language
 - [ ] **P99** `FLOOKUP` #formula-language
-
 
 - [x] **P6** `CHOOSECOLS` #formula-language
 - [x] **P6** `SORTBY` #formula-language
@@ -264,6 +278,8 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [x] **P6** (GPT) Add automatic bracket insertion to the shared formula editor. Deferred from [the initial implementation](plans/formula-editing.md). #formula-editing
   - [x] **P5** (Claude) close open parentheses when a formula is committed. `=SUM(D2:D4` shows `#ERROR! Expected )` today, and Excel and Sheets add the missing parenthesis. The author decided that a commit closes them. Only parentheses left open at the end of the formula are closed #formula-editing
 - [ ] **P5** (GPT) Add comprehensive inline diagnostics to the shared formula editor. Deferred from [the initial implementation](plans/formula-editing.md). #formula-editing
+- [x] **P6** in the codemirror editors, let me hit cmd+D/ctrl+D when I have some text highlighted to select multiple instances of that text
+- [x] **P4** the formula editor shown in a cell doesn't completely fill the cell - the div with classes `session-formula-field grid__editor` has 6px of padding on left and right (maybe a Firefox quirk?) while the div with class `formula-editor` doesn't fill the full height of the cell either. -- note this is mostly an aesthetic thing. it doesn't necessarily have to fill the cell, it just needs to be less obvious that it doesn't
 - [x] **P7** when a spill error is caused by table dimensions, show a “Resize table to fit” button in its popover
 - [x] **P6** Clearly explain why an array result cannot spill: when the table is too small, say e.g. “The result needs 12 rows and 26 columns, but the table is only 11 rows and 15 columns”; when existing values block it, say e.g. “but one or more cells in A1:P26 already have values.” Do not name a target cell when the table dimensions are the reason it cannot fit.
 
@@ -303,6 +319,9 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] **P7** support hiding rows and columns #everyday
 - [ ] **P8** support hiding pages #everyday
 - [x] **P5** freeze header rows and columns so they stay in view while a table scrolls #everyday
+- [ ] **P7** (Claude) a key that moves focus between the regions of a page: the grid, a block's header, the next block, and an open side panel. Tab is taken inside the grid. See the keyboard section of [docs/design/ui.md](docs/design/ui.md) #everyday
+- [ ] **P10** a focus history: when focus changes between pages, blocks, and cells within a document, let the person go back to the previous selection. Do not push focus changes into the browser's navigation history (explicitly rejected: following a link to a document, clicking around, then pressing Back to leave becomes annoying). Keep a separate history inside the app, with back and forward buttons in the toolbar #everyday
+- [ ] **P20** add support for setting and navigating to vim-style named marks #everyday
 
 ## Tables, pages, charts, and text views
 
@@ -349,6 +368,9 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] **Author** **P9** (Claude) consider deleting a data table's row when its last cell is cleared. `plans/persistent-row-identity.md` keeps such a row, so that its id stays valid for a relation that points at it, and deletes empty rows only at the end of a table when its columns are named #data-tables
 - [ ] **P6** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable #charts
   - (Claude) a block's card is as wide as what it holds, so a chart's card changed from 364 px to 443 px to 521 px as its type went from bar to pie to scatter with an error message
+- [x] **P6** allow collapsing a block to just its header, so a long table is easy to scroll past #small-apps
+- [x] **P6** limit a block taller than a set height to that height and scroll its contents on their own #small-apps
+- [ ] **P8** make block heights customizable, following the maximum-height limit for long blocks #small-apps
 - [x] **P4** when updating a formula column's formula, use an in-page editor with proper formula support (modal or popover or maybe just hijack the formula bar), not a browser `input` popup
 - [ ] **P9** (Claude) pivot tables as a block or table feature (`QUERY` already has a `pivot` clause) #data-tables
 - [x] move a table, chart, or text view to another page, and reorder pages
@@ -384,12 +406,27 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] **P7** (Claude) the row of "Add table", "Add chart", "Add text", and "Add script" buttons between every two blocks takes a line of each gap on a page of five blocks. Consider showing the rows between blocks only when the pointer or the focus is in the gap, and keeping the first and last #small-apps
 - [x] **P5** (Claude) the label of a `TEXTBOX` or `NUMBERBOX` in a cell is cut to one letter at the default column width ("N…" for "Name"), because the input keeps a fixed width. Let the input shrink before the label does #small-apps
 - [ ] **P7** (Claude) a column's name is renamed by double-clicking its text. A double-click elsewhere in the header cell does nothing. Take the double-click anywhere in the header outside the resize handle #data-tables
+- [ ] **P4** open a block's name and a document's name for editing on one click, not a double-click (`EditableName.vue`). See [docs/design/ui.md](docs/design/ui.md) #everyday
+- [ ] **P4** remove the row of action buttons from each block's header. The ellipsis menu and the right-click menu already list the same actions, so a table shows each of its nine three times. Keep the name and the ellipsis. See [DECISIONS.md](DECISIONS.md), "A menu's actions are not repeated as buttons" #small-apps
+- [ ] **P4** the text view's editor, as the author saw it on the `overnight-work` branch. See "Editing in place" in [docs/design/ui.md](docs/design/ui.md) #small-apps
+  - [ ] clicking "Pick references" takes focus from the editor, which ends the edit, so the button cannot be used. Treat the editor's own controls and popovers as part of the editor when deciding that focus has left
+  - [ ] the block changes size between showing and editing. Keep its place and size
+  - [ ] the editing state looks unstyled beside the rest of the block
+- the text editing UX is really janky right now
+  - [ ] there's a "Pick reference" button(?) floating in the upper right but clicking on it unfocuses the editor and immediately closes it, so the button is unusable
+  - [ ] I'm finding the "double click to focus" and "single click to unfocus" actually very annoying. I keep wanting a single click to start editing (but it should also allow me to drag to select text without entering edit mode) and I sort of want to have to explicitly click the save button rather than going back to view mode as soon as I unfocus the text input
+  - [ ] I don't like how the block resizes between edit mode and view mode -- would rather they both stay the same size (ideally full width)
+  - [ ] I feel like the text preview should be on the right side instead of below the text being edited
+- [ ] **P8** investigate opening a script or text block for editing on one click without catching clicks meant for something else. Some apps wait briefly after the click and start editing only if the pointer stays put, so a click followed by scrolling or moving away does nothing. Find what the technique is called and how other apps tune it, then try it out. Double-click stays until then #small-apps
 
 ## Formatting
 
 - [x] cell formatting (bold, italic, alignment, colors, number formats)
 - [x] formula to render Markdown in cell (`MARKDOWN(text)`; inline formatting only, since a cell is one line)
 - [x] (Claude) number formatting for cells (text views and formulas can use `TEXT(value, format)`)
+- [x] **P6** create context menu item to add conditional formatting to the selected cell or range #formatting
+- [ ] **P6** in data tables, conditional formatting should be a column property #formatting
+  - okay, I guess when I create rules covering a whole column of a data table it does intelligently set it to e.g. `F1:F` so it covers the whole thing, but that behavior doesn't feel obvious from the way it's presented
 - [ ] more formatting: 
   - [ ] **P8** borders #formatting
   - [x] basic conditional formatting (`plans/data-tables.md`, stage 3)
@@ -428,6 +465,26 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - [x] (Claude) `runViewButton` and `runViewInput` repeat the same find, lock, find again, and render steps. Share them when this area is next changed
 - [x] **P3** (Claude) a button can ask for confirmation before it runs, for an action that clears cells or sends email #small-apps
 
+## Menus, dialogs, and messages
+
+- [ ] **P4** show a delete item in a context menu in the danger color #everyday
+- [ ] **P4** (Claude) turn on ESLint's `no-alert` for `apps/web`, so `alert`, `confirm`, and `prompt` cannot come back #codebase
+- [ ] **P5** confirm a delete chosen from a menu in or beside the menu, not in a dialog in the middle of the screen: the item changes to "Confirm deletion?", or a small confirmation opens next to it. A second click counts only after a short delay, so an accidental double click does not confirm. Build both forms far enough for the author to choose. Keep the dialog where the confirmation explains what will be lost. See [DECISIONS.md](DECISIONS.md), "Removing a whole container is confirmed, beside the menu" #everyday
+  - [ ] confirm deleting a page, which is not confirmed today
+  - [ ] show a notice with Undo after a delete that is not confirmed, such as a row or a column
+- [ ] **P5** (Claude) give a notice and an error dialog a place for the underlying error, shown word for word in monospace below the summary, and rewrite save and request failures to the form in [docs/design/writing.md](docs/design/writing.md): what could not be done and why, then what to do #everyday
+- [ ] **P5** a command palette that lists every action, and a form dialog for an action that needs parameters (Tab between fields, Enter submits, Escape cancels). These are how a feature becomes usable from the keyboard without a shortcut of its own. Plan before implementing #everyday
+- [ ] **P5** replace every native `<select>` with a shared in-app dropdown ([audit](docs/native-browser-ui-audit.md), priority 2), then add a lint rule that refuses `<select>` in `apps/web` #everyday
+- [ ] **P6** replace native `title` tooltips with an in-app tooltip ([audit](docs/native-browser-ui-audit.md), priority 3), then add a lint rule that refuses the `title` attribute in `apps/web` #everyday
+- [ ] **P6** keep a history of recent messages and errors, so a notice that closed can be read again #everyday
+- [ ] **P7** tabs along the top of a context menu for the menus of the things that contain the clicked one: a right-click on a cell shows Cell, Row, Column, Table, and Page, and choosing one shows that thing's menu. Each menu then holds one thing's actions. Plan before implementing. The author will decide whether to keep it after seeing it in use. See [docs/design/ui.md](docs/design/ui.md) #everyday
+- [x] identify where we should use in-app modals instead of browser-based `input` and alerts -- we have specific tasks for a couple of these already so this would just cover identifying anything I missed
+  - (Claude) [docs/native-browser-ui-audit.md](docs/native-browser-ui-audit.md) lists them with replacement options
+- [x] **P4** (Claude) replace the native `prompt`, `confirm`, and `alert` calls with in-app dialogs, following the audit. The 13 former confirmation call sites use the shared dialog host. #everyday
+  - [x] remove the prompts for reversible deletes: deleting a row, a column, or a page, including ranges, is undone with its formulas and formats. See [DECISIONS.md](DECISIONS.md), "An action that undo reverses asks for no confirmation"
+  - [x] (Claude) update end-to-end tests to interact with the in-app dialogs.
+- [x] **P3** opening a side pane should close the one already open. With History open, the Errors button opens the errors pane behind it, and it shows only after History closes #everyday
+
 ## Controls, mobile use, and templates
 
 - [x] rebrand the app as "rowz" instead of "Spreadsheet". don't change package names but just update the UI. make the name configurable via an env var as well so it's easy to update in the future.
@@ -447,7 +504,11 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - [x] show a button in the editor header whenever the document has errors, like the failing-assertions indicator; open a popup listing all errors with links to their locations
   - [x] show a warning triangle on blocks and pages that contain errors
   - [x] show a warning triangle on documents that contain errors in the document list
+- [x] **P1** on the document error reporting: clicking a specific error button should go to where the error manifested, since the "Raised in ..." link already says where it originates. Example: the error button reports `#VALUE!` in `'Payout by duration'!A1` but clicking it takes you to the "Formulas" script block, which shows the cause and not the effect, so the person has to notice that `'Payout by duration'!A1` is a different block that is off screen and scroll to find it. Repro: https://gmktec.zane.network:5173/s/c29f6ea5-4b22-4ed8-849f-1d792fbcf6a1/p/741937bc-f856-4dce-a94c-2e7f30e20b5f (shared with the claude@asahi.zane.cloud user) #everyday
+- [x] **P2** text in the document error listing should be selectable and copyable. Today clicking and dragging registers as a button click, so no text can be selected. The person wants to copy an error to a to-do list or to share it with an agent or a collaborator in chat #everyday
 - [x] (Claude) say "document" instead of "spreadsheet" in the UI and help page, as the README does
+- [ ] **P7** (Claude) review the existing interface text against [docs/design/writing.md](docs/design/writing.md) and fix what breaks it #everyday
+- [ ] **P8** review more published style guides for interface text (Material Design, Apple's Human Interface Guidelines, the Microsoft Writing Style Guide) and extend [docs/design/writing.md](docs/design/writing.md) from them. The Atlassian error-message guidance and Microsoft's Windows writing style page are already used #everyday
 - [x] mobile friendly UI (layout, touch targets, tap twice to edit)
 - [ ] **P10** revamp the phone-width UI so it is less cramped. The editor header is the tightest part: it holds the back arrow, the spreadsheet's name, the saving indicator, Share, History, Export, and Help on one line. #everyday
   - (Claude) at 390 px wide on 2026-10-05, the error count button covers the document's name, "Save a copy" and Help are cut off, the page scrolls sideways (475 px of content), the format toolbar runs off the right edge, and 73 of the editor's 134 controls are smaller than 24 px in one dimension. A table scrolls inside its card as intended. See `_scratch/qa/32-mobile-editor.png`
@@ -482,11 +543,6 @@ The next items came from a QA pass through the running app in a browser on 2026-
 - [ ] **P9** (Claude) the grid does not tell a screen reader which cell is selected: it has no `aria-activedescendant`, and a cell has no label naming its address. Every button and input checked has a label #everyday
 - [x] **P5** plan to add keyboard shortcuts #everyday
   - (Codex) completed on 2026-10-07: Ctrl/Cmd+Arrow jumps through the displayed data region; Home, End, Ctrl/Cmd+Home (A1), Ctrl/Cmd+End (bottom-right of the used range, or A1 when empty), PageUp, PageDown, Ctrl/Cmd+B, and Ctrl/Cmd+I are supported, with Shift extending navigation selections.
-- [x] identify where we should use in-app modals instead of browser-based `input` and alerts -- we have specific tasks for a couple of these already so this would just cover identifying anything I missed
-  - (Claude) [docs/native-browser-ui-audit.md](docs/native-browser-ui-audit.md) lists them with replacement options
-- [x] **P4** (Claude) replace the native `prompt`, `confirm`, and `alert` calls with in-app dialogs, following the audit. The 13 former confirmation call sites use the shared dialog host. #everyday
-  - [x] remove the prompts for reversible deletes: deleting a row, a column, or a page, including ranges, is undone with its formulas and formats. See [DECISIONS.md](DECISIONS.md), "An action that undo reverses asks for no confirmation"
-  - [x] (Claude) update end-to-end tests to interact with the in-app dialogs.
 - [x] **P5** allow renaming, deleting, and duplicating docs from the docs list view #documents
   - (Claude) the list also has no search and no choice of sort order, and it allows two documents with one name: importing an exported file makes a second "QA Sales Book"
 
@@ -530,10 +586,12 @@ The next items came from a QA pass through the running app in a browser on 2026-
 
 - [ ] **P8** provide a documented API for creating, reading, and editing documents, with an API explorer #agents
 - [ ] **P7** create a CLI tool and a skill for AI agents to create and work with rowz documents; document key features and when they are useful so agents use them effectively #agents
+- [ ] **P6** turn the guidance in [docs/design/](docs/design/README.md) into agent skills (interface work, interface text, formula language), linked into `.agents/skills` for Codex as `create-rowz-document` is #agents
 
 ## Server, performance, and reliability
 
 - [ ] **Author** **P8** investigate whether the previously flaky Postgres test still fails; identify the test and reproduce the failure before deciding on a fix #codebase
+- [ ] **Author** **P1** the Codex sandbox cannot run the project's checks: Vitest fails before collecting tests with `ENOENT` creating `/tmp/<random>/{ssr,client}` (and `site.test.ts` gets `EROFS` creating `/tmp/site-*`), and `pnpm e2e:remote:codex` fails with `EPERM` connecting to `127.0.0.1:3200` or with Docker socket access denied. Give the Codex sandbox a writable temp directory (for example `TMPDIR` inside the workspace, or a writable `/tmp`), loopback access to the Playwright container's port, and write access to `~/Code/ai_workdir/codex_papercuts.md`, so Codex can run `pnpm check` and the e2e suite itself instead of the orchestrator running them #codebase
 - [ ] **P6** replace UUIDs in document URLs with shorter unique IDs, targeting 14 characters from a URL-safe alphabet such as `[A-Za-z0-9._-]` #documents
   - That alphabet has 65 characters, so 14 characters allow about 24 septillion values. Example: `2WRhRE4C3O.EaQ` instead of `277690de-bc98-4310-9a84-ab5f27a02086`.
 
@@ -543,6 +601,7 @@ The next items came from a QA pass through the running app in a browser on 2026-
   - `applyChanged` also checks every stored input against its table's rows and columns on each change, with a search of the tables and of the column ids for each input. Do that only for the tables a change touched
 - [x] **P0** (Claude) investigate and fix timing-dependent undo in "cell drafts keep history across pages and save literal text before navigation" #codebase
   - (GPT) reproduced `1` → `=` → `=B2` restoring `1` with CodeMirror's default 500 ms grouping. Cell literal/formula transitions now use `isolateHistory("full")`; regression tests cover rapid and delayed edits across editor transfers, redo, and reverse transitions.
+- [x] **P0** Investigate a flaky e2e test: `e2e/data-tables-and-formatting.spec.ts:5` ("a spreadsheet is exported to a file and imported again, and a table to and from CSV") failed once in a full `pnpm e2e:remote` run (15.1s) and passed when the spec file ran alone. Added waits for chart editing to finish and saves to settle, and a reload to verify CSV persistence. Reproduction and browser validation remain blocked by sandbox `EPERM` connecting to `127.0.0.1:3200`; the original cause is unconfirmed #codebase
 - [x] **P2** (Claude) split the largest files by concern. The repository modules share the one access subquery and `change`, which keeps the rule that authorization lives in one place #codebase
   - (done) `repo/spreadsheets.ts` split by repository concern
   - (done) workbook store split by store concern
@@ -580,6 +639,9 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] **P10** The document list can omit a document when another tab deletes its folder between the assignment and folder queries in `apps/server/src/repo/spreadsheets.ts`; read both in one snapshot or treat assignments to missing folders as unfiled #sharing
 - [ ] **P10** (GPT) Notify the user during editing if the cell being edited has been edited or deleted elsewhere. The shared formula editor initially reports a deleted target only on submission, with a Vue error modal containing the draft in a read-only editor for copying. See [the formula-editing plan](plans/formula-editing.md). #sharing
 - [ ] **P10** (GPT) Add activity indicators showing other sessions' editing targets to help people coordinate parallel edits. Deferred from [the shared formula editor](plans/formula-editing.md). Follow the author's FAFO policy: indicators do not lock targets or block saves. #sharing
+- [ ] **P10** The CSV append confirmation previews the mapping from the table as it was when the dialog opened, and the server maps the rows against the current columns; a rename or a plain/named switch in another session can change the mapping after confirmation, and a table deleted while the request waits for the lock gets 404 and not 409 (`TableCard.vue` near line 128, `repo/spreadsheets/tables.ts` near line 148, `context.ts` near line 289) #documents
+- [ ] **P10** Copied deep links drop a reverse-proxy path prefix: `deepLinks.ts` builds root-relative `/s/...` paths and `clipboard.ts` resolves them from the origin root #small-apps
+- [ ] **P10** explore Yjs + Hocuspocus for sync #sharing
 
 - [ ] **P10** (Claude) `personalWorkspace()` in [spreadsheets.ts](apps/server/src/repo/spreadsheets.ts) puts a new spreadsheet, an import, and a copy into the caller's oldest workspace membership whatever the role. Once a user can belong to a shared workspace, a new spreadsheet or "Save a copy" can land in a workspace that other members read, and the caller may not own it. Choose a workspace where the caller is an owner, or one made for the caller. #sharing
 
@@ -646,87 +708,6 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 
 - allow table cells to contain structs/arrays/nested tables
 
-- [ ] An ambiguous-name message can recommend a qualified name (`Summary!Total`) that is itself still ambiguous, for a name and a table on one holder (`workbook.ts`, near line 961). Offer a spelling that resolves #formula-language
+---
 
-- [ ] When an action runs while a formula edit is active, the draft save can clear a pending save's error and the action is then skipped without notice (`stores/workbook/queue.ts` line 30 does not forward `clearPreviousError`) #everyday
-- [ ] In `SpreadsheetListView.vue`, an older successful request can clear a newer request's error, and cancelling a delete clears the error #everyday
-
-- [x] **P0** Investigate a flaky e2e test: `e2e/data-tables-and-formatting.spec.ts:5` ("a spreadsheet is exported to a file and imported again, and a table to and from CSV") failed once in a full `pnpm e2e:remote` run (15.1s) and passed when the spec file ran alone. Added waits for chart editing to finish and saves to settle, and a reload to verify CSV persistence. Reproduction and browser validation remain blocked by sandbox `EPERM` connecting to `127.0.0.1:3200`; the original cause is unconfirmed #codebase
-
-- [ ] When another session adds a table while this user's "Add chart" request is pending, the new-block focus step can focus the other session's table (`AddBlockRow.vue` captures block IDs before the request) #small-apps
-
-- [ ] In `router.ts`, a navigation guard that awaits the leave-document dialog can discard a formula draft after a newer navigation (browser Back) superseded it; check the navigation is still current after the dialog #formula-editing
-- [x] In `TableCard.vue` (column type conversion), the handler sets `sessions.columnPopover` after the confirmation dialog without checking the card is still mounted #data-tables
-
-- [x] **P2** errors that come from a function are hard to trace. With a script function `PayoutByDuration(with_spa) = QUERY(Runs, "select Race, sum('Payout (40 hrs)') " & IF(with_spa, "", "where Race <> 'Spa' ") & "group by Race pivot Duration")` and a cell `=PayoutByDuration(FALSE)`, the cell shows `#VALUE!` with "The data has no column Spa", and the person has to hunt for the source. Let them go from the error back to where it arose (the function, the line, the call chain) #formula-language
-- [x] **P3** opening a side pane should close the one already open. With History open, the Errors button opens the errors pane behind it, and it shows only after History closes #everyday
-- [x] **P6** allow collapsing a block to just its header, so a long table is easy to scroll past #small-apps
-- [x] **P6** limit a block taller than a set height to that height and scroll its contents on their own #small-apps
-- [ ] **P8** make block heights customizable, following the maximum-height limit for long blocks #small-apps
-- [ ] Displayed-value search searches a Markdown cell's raw text (`**hello**`, link destinations) and not the rendered text (`apps/web/src/stores/workbook/search.ts`) #everyday
-
-- [ ] The Choices panel (`choosingFor` in `TableCard.vue`) is outside the one-open-side-pane state, so it can stay open beside Names or Conditional formats #everyday
-- [ ] Escape does not close the Names and Conditional formats panels #everyday
-
-- [ ] The origin-trace link in the cell error popover is not reachable by keyboard: the popover is teleported to the end of `<body>` and closes on focusout, so Tab leaves before reaching it (`CellError.vue`, `ErrorTrace.vue`). The errors list has the same link #everyday
-
-- [x] Documents made from one template get the same name, so copies are hard to tell apart in the document list; number them or ask for a name (`SpreadsheetListView.vue`) #documents
-- [x] The template picker's button has `aria-controls="document-templates"` while the panel is removed from the DOM when closed #documents
-
-- [ ] Renaming the first of two same-name definitions in one script leaves `renamedNames` seeing the name in the after-set, so formulas that used it are not rewritten and then resolve to the second definition (`apps/server/src/repo/spreadsheets/views.ts` near line 83) #formula-language
-- [ ] Formula assist lists a duplicate script definition twice and qualifies it as if ambiguous (`apps/web/src/stores/workbook/values.ts` near line 67) #formula-editing
-
-- [ ] Inline rename in the document list: a whitespace-only name does nothing and says nothing; a list refresh leaves a stale draft that can revert a newer rename made elsewhere (`SpreadsheetListView.vue` near lines 50 and 119) #documents
-- [ ] The flaky export/import e2e test (`data-tables-and-formatting.spec.ts:5`) failed once more in a full run (20.2s) after the hardening commit and passed in 11 later full runs; capture its trace on the next failure (`pnpm e2e:remote` with Playwright trace retained) #codebase
-
-- [ ] After deleting a page from its context menu, keyboard focus falls to the body because the page tab that held it is removed; move focus to the neighboring tab (`PageTabs.vue`, `ContextMenu.vue`) #everyday
-- [ ] A right-click on a `<label>` inside a block (Import CSV, a chart's Data label) opens the block menu; `EditorView.vue` near line 512 should exclude labels #everyday
-
-- [ ] On a narrow screen, frozen columns can cover every non-frozen column (three default-width columns are 360px, wider than a 320px viewport); cap the frozen width at part of the grid's width or ignore the freeze below a width (`GridView.vue` near line 367, `grid.css` near line 79) #small-apps
-
-- [ ] The Wrap text format does nothing for a choice-column value or a `TEXTBOX` cell, which render as native controls (`CellView.vue` near lines 213 and 346), so the toolbar shows it pressed while the value stays clipped #formatting
-
-- [ ] Numbering a copy's name ("Plan (2)") uses the client's document list, so two tabs with stale lists can pick the same name and the server permits both (`SpreadsheetListView.vue` near line 153, `files.ts` near line 241) #documents
-
-- [x] **P1** on the document error reporting: clicking a specific error button should go to where the error manifested, since the "Raised in ..." link already says where it originates. Example: the error button reports `#VALUE!` in `'Payout by duration'!A1` but clicking it takes you to the "Formulas" script block, which shows the cause and not the effect, so the person has to notice that `'Payout by duration'!A1` is a different block that is off screen and scroll to find it. Repro: https://gmktec.zane.network:5173/s/c29f6ea5-4b22-4ed8-849f-1d792fbcf6a1/p/741937bc-f856-4dce-a94c-2e7f30e20b5f (shared with the claude@asahi.zane.cloud user) #everyday
-- [x] **P2** text in the document error listing should be selectable and copyable. Today clicking and dragging registers as a button click, so no text can be selected. The person wants to copy an error to a to-do list or to share it with an agent or a collaborator in chat #everyday
-- [ ] **P10** a focus history: when focus changes between pages, blocks, and cells within a document, let the person go back to the previous selection. Do not push focus changes into the browser's navigation history (explicitly rejected: following a link to a document, clicking around, then pressing Back to leave becomes annoying). Keep a separate history inside the app, with back and forward buttons in the toolbar #everyday
-- [ ] **P20** add support for setting and navigating to vim-style named marks #everyday
-- [ ] **P15** consider how to support recursive lambdas, so that the `f(f, 5)` workaround documented in `/help` is not required #formula-language
-
-- [ ] The column-type warning does not count text cells that become formulas with errors (a Text cell holding `=1/0` turns into `#DIV/0!` when the column changes to Anything or Choice): `inputFitsColumnType` in `packages/engine/src/workbook.ts` near line 148 treats any parsable formula as fitting #data-tables
-- [ ] The column-type warning counts cells before the dialog and does not recount after confirmation, so another session's edits can make the count stale (`TableCard.vue` near line 343) #data-tables
-
-- [ ] A failing assertion in a script name (`Positive = ASSERT(...)`) has no line, so revealing it focuses the script block but cannot scroll to the definition; scroll to the `data-script-line` of the definition (`apps/web/src/stores/workbook/values.ts` near line 69, `ScriptCard.vue` near line 122) #everyday
-
-- [ ] The failing-assertions panel drops the optional error trace, so an assertion propagated from a script function has no Open definition button (`apps/web/src/stores/workbook/values.ts` near line 32, `AssertionsPanel.vue`) #everyday
-- [ ] `useCopyFeedback.ts` creates its 2-second timer after the clipboard promise resolves, so a copy that completes after the panel unmounts leaves a timer running #everyday
-
-- [ ] `SORTBY` treats error keys and blank keys as equal, so a blank key can stay ahead of an error key; Excel puts errors before blanks, and blanks last (`packages/engine/src/functions/arrays.ts` near line 192, `cellOrder`) #formula-language
-
-- [ ] Collapsed-block preferences: a `getItem` failure replaces the in-memory set with an empty one, so navigating away and back can lose preferences while storage is unavailable (`apps/web/src/blockCollapse.ts` near lines 33 and 46) #small-apps
-- [ ] Collapsed-block preferences leave a localStorage key for each document, including deleted ones and ones with nothing collapsed; remove the key when a document is deleted or its set is empty (`blockCollapse.ts`, `SpreadsheetListView.vue` near line 307) #small-apps
-- [ ] A chart legend with many or long series labels can be clipped by the chart card's maximum height (`charts-text-views.css` near line 69, `ChartView.vue` near line 211) #charts
-
-- [ ] With several cursors from Ctrl+D in the formula editor, accepting an autocomplete suggestion updates only the primary cursor's token (`FormulaEditor.vue` near line 173) #formula-editing
-- [ ] With several cursors from Ctrl+D, picking a reference changes only the primary match and drops the other cursors (`apps/web/src/formula/picking.ts` near lines 24 and 286) #formula-editing
-
-- [x] **P2** right-clicking the lower part of a page tab shows the page tab context menu with its bottom part hidden behind a table on the page (other element types may do the same). Keep the menu above every block: stack it above blocks, or render it in a top-level layer, and keep it inside the viewport #everyday
-- [x] **P2** right-clicking the buttons that move a page left or right, or delete it, shows the browser's native context menu and not the page tab context menu. Show the tab menu from anywhere on the tab, including its buttons #everyday
-- [x] **P2** the page tab's delete button is a gray "x", which looks like "close this tab", a non-destructive action, and not "delete this tab", which it is. Make it a trash can icon, or at least a red "x", with a label and tooltip that say it deletes. Undo can bring a deleted page back, but if the person makes other changes before they notice, they must undo all of those changes first #everyday
-
-- [ ] **P10** The CSV append confirmation previews the mapping from the table as it was when the dialog opened, and the server maps the rows against the current columns; a rename or a plain/named switch in another session can change the mapping after confirmation, and a table deleted while the request waits for the lock gets 404 and not 409 (`TableCard.vue` near line 128, `repo/spreadsheets/tables.ts` near line 148, `context.ts` near line 289) #documents
-- [ ] The CSV append confirmation does not say that cells starting with `=` are stored as formulas (as in replace import), so a file can add a button; actions still run only when the button is clicked (`TableCard.vue` near line 151) #documents
-
-- [ ] **P10** Copied deep links drop a reverse-proxy path prefix: `deepLinks.ts` builds root-relative `/s/...` paths and `clipboard.ts` resolves them from the origin root #small-apps
-
-- [ ] The bracket-pairing code (`apps/web/src/formula/closeBrackets.ts`) rescans the whole document on every edit (the state field) and on every bracket input (the language data provider), including in Markdown where the result is unused; keep the quote spans incremental or limit the scan to the nearby text #formula-editing
-- [ ] With several cursors from Ctrl+D, bracket pairing uses the main selection's rules for every cursor, so `(` can pair inside a string or comment at another cursor (`closeBrackets.ts` near line 148) #formula-editing
-- [ ] An unfinished quote in one script statement makes later statements look like string content, so bracket pairing stops there; script comment scanning already ends an open quote at the line end (`quoteSpans`, `closeBrackets.ts` near line 23) #formula-editing
-- [ ] Apostrophes can pair inside script comments, and apostrophe wrapping of a selected name depends on the selection direction (`closeBrackets.ts` near lines 168 and 169) #formula-editing
-- [ ] The escaped-quote handler in `closeBrackets.ts` (near line 178) can rewrite a skipped quote closer into doubled quotes while an IME composition is active #formula-editing
-
-- [x] **P1** merge the changes from the design-principles branch #codebase
-- [ ] **P1** conduct a review of the codebase and find all the places that need updating to align with the design principles #codebase
-
-- [ ] **Author** **P1** the Codex sandbox cannot run the project's checks: Vitest fails before collecting tests with `ENOENT` creating `/tmp/<random>/{ssr,client}` (and `site.test.ts` gets `EROFS` creating `/tmp/site-*`), and `pnpm e2e:remote:codex` fails with `EPERM` connecting to `127.0.0.1:3200` or with Docker socket access denied. Give the Codex sandbox a writable temp directory (for example `TMPDIR` inside the workspace, or a writable `/tmp`), loopback access to the Playwright container's port, and write access to `~/Code/ai_workdir/codex_papercuts.md`, so Codex can run `pnpm check` and the e2e suite itself instead of the orchestrator running them #codebase
+(End of document. Don't add anything below this and don't remove this line. Any items below this line were added by an agent that naively appended to this file.)
