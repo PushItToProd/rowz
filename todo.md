@@ -726,7 +726,7 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] Apostrophes can pair inside script comments, and apostrophe wrapping of a selected name depends on the selection direction (`closeBrackets.ts` near lines 168 and 169) #formula-editing
 - [ ] The escaped-quote handler in `closeBrackets.ts` (near line 178) can rewrite a skipped quote closer into doubled quotes while an IME composition is active #formula-editing
 
-- [ ] **P1** merge the changes from the design-principles branch #codebase
+- [x] **P1** merge the changes from the design-principles branch #codebase
 - [ ] **P1** conduct a review of the codebase and find all the places that need updating to align with the design principles #codebase
 
 - [ ] **Author** **P1** the Codex sandbox cannot run the project's checks: Vitest fails before collecting tests with `ENOENT` creating `/tmp/<random>/{ssr,client}` (and `site.test.ts` gets `EROFS` creating `/tmp/site-*`), and `pnpm e2e:remote:codex` fails with `EPERM` connecting to `127.0.0.1:3200` or with Docker socket access denied. Give the Codex sandbox a writable temp directory (for example `TMPDIR` inside the workspace, or a writable `/tmp`), loopback access to the Playwright container's port, and write access to `~/Code/ai_workdir/codex_papercuts.md`, so Codex can run `pnpm check` and the e2e suite itself instead of the orchestrator running them #codebase
