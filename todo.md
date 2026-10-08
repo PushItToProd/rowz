@@ -97,7 +97,7 @@ Items that have not been moved to a section yet. An agent adding an item puts it
 - [ ] **P9** In `SpreadsheetListView.vue`, an older successful request can clear a newer request's error, and cancelling a delete clears the error #everyday
 - [ ] **P8** Displayed-value search searches a Markdown cell's raw text (`**hello**`, link destinations) and not the rendered text (`apps/web/src/stores/workbook/search.ts`) #everyday
 - [ ] **P6** The Choices panel (`choosingFor` in `TableCard.vue`) is outside the one-open-side-pane state, so it can stay open beside Names or Conditional formats #everyday
-- [ ] **P6** Escape does not close the Names and Conditional formats panels #everyday
+- [x] **P6** Escape does not close the Names and Conditional formats panels #everyday
 - [ ] **P8** The origin-trace link in the cell error popover is not reachable by keyboard: the popover is teleported to the end of `<body>` and closes on focusout, so Tab leaves before reaching it (`CellError.vue`, `ErrorTrace.vue`). The errors list has the same link #everyday
 - [ ] **P8** After deleting a page from its context menu, keyboard focus falls to the body because the page tab that held it is removed; move focus to the neighboring tab (`PageTabs.vue`, `ContextMenu.vue`) #everyday
 - [x] **P7** A right-click on a button, a `<select>`, or a link in a block's header shows the browser's menu, because `openBlockMenu` in `EditorView.vue` returns early for those targets. Open the block's menu there, as a page tab's buttons open the tab's menu. A text field or editor keeps the browser's menu. See "Menus" in [docs/design/ui.md](docs/design/ui.md) #everyday

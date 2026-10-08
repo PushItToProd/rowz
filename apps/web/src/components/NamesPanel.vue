@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableName } from "@spreadsheet-app/engine";
 import { LIMITS } from "@spreadsheet-app/shared";
-import { computed, nextTick, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
 import { EditorState } from "@codemirror/state";
@@ -32,6 +32,17 @@ const newFormula = computed(() => newState.value.doc.toString());
 const adding = ref(false);
 const newEditor = ref<{ focus(): void }>();
 const nameInput = ref<HTMLInputElement>();
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") emit("close");
+}
+
+onMounted(() => {
+  document.addEventListener("keydown", onKeydown);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("keydown", onKeydown);
+});
 
 // A range chosen from the menu starts a new name, whatever was being typed.
 watch(

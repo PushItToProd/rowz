@@ -1,5 +1,6 @@
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { completionStatus, startCompletion } from "@codemirror/autocomplete";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
@@ -83,6 +84,44 @@ describe("NamesPanel", () => {
     expect(wrapper.find(".script__reason").exists()).toBe(true);
   });
 
+  it("closes on Escape", async () => {
+    await render([]);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(wrapper.findComponent(NamesPanel).emitted("close")).toHaveLength(1);
+  });
+
+  it("keeps the panel open when Escape cancels a name edit", async () => {
+    await render([{ name: "Fee", formula: "3" }]);
+    await wrapper.get("th .editable-name").trigger("dblclick");
+    await flushPromises();
+
+    const input = wrapper.get('input[aria-label="Name"]');
+    await input.setValue("Draft");
+    await input.trigger("keydown", { key: "Escape" });
+    await flushPromises();
+
+    expect(wrapper.findComponent(NamesPanel).emitted("close")).toBeUndefined();
+    expect(wrapper.find('input[aria-label="Name"]').exists()).toBe(false);
+  });
+
+  it("leaves the panel open when Escape dismisses formula suggestions", async () => {
+    await render([{ name: "Fee", formula: "3" }]);
+    const view = await edit("Formula of the name", "=rou");
+    startCompletion(view);
+    await vi.waitFor(() => {
+      expect(completionStatus(view.state)).toBe("active");
+    });
+
+    await wrapper
+      .get('[aria-label="Formula of the name"]')
+      .trigger("keydown", { key: "Escape", keyCode: 27 });
+    await flushPromises();
+
+    expect(completionStatus(view.state)).toBeNull();
+    expect(useFormulaSessionStore().active?.state.doc.toString()).toBe("=rou");
+    expect(wrapper.findComponent(NamesPanel).emitted("close")).toBeUndefined();
+  });
+
   it("adds a name to the list the table holds", async () => {
     server.setTableNames.mockResolvedValue(changeWith());
     await render([{ name: "Fee", formula: "3" }], {}, "B2:B4");
@@ -145,6 +184,7 @@ describe("NamesPanel", () => {
     await wrapper.get('[aria-label="Formula of the name"]').trigger("keydown", { key: "Escape" });
     await flushPromises();
     expect(useFormulaSessionStore().active).toBeUndefined();
+    expect(wrapper.findComponent(NamesPanel).emitted("close")).toBeUndefined();
     expect(server.setTableNames).not.toHaveBeenCalled();
   });
 

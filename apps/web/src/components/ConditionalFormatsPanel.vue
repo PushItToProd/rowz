@@ -8,7 +8,7 @@ import {
   type FormatPatch,
 } from "@spreadsheet-app/engine";
 import { LIMITS, MAX_CONDITIONAL_RULES } from "@spreadsheet-app/shared";
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { TableRecord } from "../api/client";
 import { useWorkbookStore, type ConditionalAction } from "../stores/workbook";
 import { useDialog } from "../useDialog";
@@ -18,6 +18,17 @@ const emit = defineEmits<{ close: [] }>();
 const store = useWorkbookStore();
 const dialog = useDialog();
 const criterionInput = ref<HTMLInputElement>();
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") emit("close");
+}
+
+onMounted(() => {
+  document.addEventListener("keydown", onKeydown);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("keydown", onKeydown);
+});
 
 function focus(): void {
   criterionInput.value?.focus();

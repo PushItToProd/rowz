@@ -64,6 +64,12 @@ afterEach(() => {
 });
 
 describe("ConditionalFormatsPanel", () => {
+  it("closes on Escape", async () => {
+    await render();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(wrapper.emitted("close")).toHaveLength(1);
+  });
+
   it("lists the rules with the cells each covers and what it does", async () => {
     await render(RULES);
     const items = wrapper.findAll(".conditional-panel__rules li").map((item) => item.text());
@@ -228,6 +234,19 @@ describe("ConditionalFormatsPanel", () => {
     await respondToDialog("cancel");
     await flushPromises();
     expect(server.setConditionalFormats).not.toHaveBeenCalled();
+  });
+
+  it("lets the remove confirmation handle Escape without closing the panel", async () => {
+    await render(RULES);
+    await wrapper.get('button[aria-label="Remove the rule for B1:B"]').trigger("click");
+    const confirmation = appDialog();
+    expect(confirmation).not.toBeNull();
+
+    confirmation!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flushPromises();
+
+    expect(appDialog()).toBeNull();
+    expect(wrapper.emitted("close")).toBeUndefined();
   });
 
   it("changes a rule in place, keeping its cells and what the form does not show", async () => {
