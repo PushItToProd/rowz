@@ -281,4 +281,27 @@ describe("ContextMenu", () => {
     // The shared afterEach unmounts again, which is harmless.
     render([]);
   });
+
+  it("restores focus after an asynchronous menu action finishes", async () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    let finish!: () => void;
+    const action = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    render([{ label: "Delete", run: () => action }]);
+    await flushPromises();
+
+    await bodyGet('[role="menuitem"]').trigger("click");
+    expect(wrapper.emitted("close")).toHaveLength(1);
+    wrapper.unmount();
+    expect(document.activeElement).not.toBe(opener);
+
+    finish();
+    await flushPromises();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+    render([]);
+  });
 });

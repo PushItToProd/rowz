@@ -1,3 +1,5 @@
+type MaybePromise<T> = T | Promise<T>;
+
 /** One entry of a `ContextMenu`. */
 export interface MenuItem {
   label: string;
@@ -9,7 +11,7 @@ export interface MenuItem {
   keepDraft?: boolean;
   /** Draws a line above this item, to set a group apart. */
   separated?: boolean;
-  run(): void;
+  run(): MaybePromise<void>;
 }
 
 /**

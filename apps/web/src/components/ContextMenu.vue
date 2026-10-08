@@ -11,6 +11,8 @@ const props = defineProps<{
   y: number;
   label: string;
   items: readonly MenuItem[];
+  /** Focus target to use when the element that opened the menu was removed. */
+  restoreFocusTarget?: () => HTMLElement | null;
 }>();
 const emit = defineEmits<{ close: [] }>();
 const controlGuard = inject(contextMenuClickGuardKey);
@@ -24,6 +26,7 @@ let lifecycle = 0;
 let resizeObserver: ResizeObserver | undefined;
 let unregister: (() => void) | undefined;
 let closed = false;
+let focusRestoreAfter: Promise<unknown> | undefined;
 
 function buttons(): HTMLButtonElement[] {
   return [...(menu.value?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
@@ -84,7 +87,28 @@ function close(): void {
 
 function choose(item: MenuItem): void {
   if (!item.keepOpen) close();
-  item.run();
+  const result = item.run();
+  if (!item.keepOpen && result instanceof Promise) {
+    focusRestoreAfter = result;
+  }
+}
+
+function restoreFocus(): void {
+  const target =
+    opener instanceof HTMLElement && opener.isConnected ? opener : props.restoreFocusTarget?.();
+  target?.focus({ preventScroll: true });
+}
+
+function restoreFocusWhenReady(): void {
+  if (!focusRestoreAfter) {
+    restoreFocus();
+    return;
+  }
+  const afterAction = async (): Promise<void> => {
+    await nextTick();
+    restoreFocus();
+  };
+  void focusRestoreAfter.then(afterAction, afterAction);
 }
 
 function beforeMenuAction(event: MouseEvent): void {
@@ -161,7 +185,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("blur", close);
   window.visualViewport?.removeEventListener("scroll", reposition);
   window.visualViewport?.removeEventListener("resize", reposition);
-  if (opener instanceof HTMLElement) opener.focus({ preventScroll: true });
+  restoreFocusWhenReady();
 });
 </script>
 

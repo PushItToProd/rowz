@@ -15,7 +15,12 @@ import { isBlockCollapsed, setBlocksCollapsed } from "../blockCollapse";
 const props = defineProps<{ spreadsheetId: string; activePageId: string }>();
 const store = useWorkbookStore();
 const router = useRouter();
-const pageMenu = ref<{ x: number; y: number; pageId: string } | null>(null);
+const pageMenu = ref<{
+  x: number;
+  y: number;
+  pageId: string;
+  restoreFocusTarget: () => HTMLElement | null;
+} | null>(null);
 
 function route(pageId: string) {
   return { name: "editor", params: { spreadsheetId: props.spreadsheetId, pageId } };
@@ -43,12 +48,29 @@ function pageAt(pageId: string): PageRecord | undefined {
   return store.pages.find((page) => page.id === pageId);
 }
 
+function pageFocusTarget(index: number): HTMLElement | null {
+  const page = store.pages[Math.max(0, Math.min(index, store.pages.length - 1))];
+  return (
+    (page &&
+      document
+        .getElementById(`page-tab-${page.id}`)
+        ?.querySelector<HTMLElement>(".editable-name:not(input)")) ??
+    document.querySelector<HTMLElement>(".page-tabs__add")
+  );
+}
+
 function showPageMenu(page: PageRecord, x: number, y: number): void {
+  const pageIndex = store.pages.findIndex((candidate) => candidate.id === page.id);
   const name = document
     .getElementById(`page-tab-${page.id}`)
     ?.querySelector<HTMLElement>(".editable-name:not(input)");
   name?.focus({ preventScroll: true });
-  pageMenu.value = { x, y, pageId: page.id };
+  pageMenu.value = {
+    x,
+    y,
+    pageId: page.id,
+    restoreFocusTarget: () => pageFocusTarget(pageIndex),
+  };
 }
 
 function onPageContextMenu(event: MouseEvent, page: PageRecord): void {
@@ -114,9 +136,7 @@ const pageMenuItems = computed((): MenuItem[] => {
         renamePage(page.id);
       },
     },
-    ...(store.pages.length > 1
-      ? [{ label: "Delete", danger: true, run: () => void remove(page) }]
-      : []),
+    ...(store.pages.length > 1 ? [{ label: "Delete", danger: true, run: () => remove(page) }] : []),
     {
       label: "Move left",
       disabled: index === 0,
@@ -212,6 +232,7 @@ const pageMenuItems = computed((): MenuItem[] => {
     :y="pageMenu.y"
     :label="`Actions for ${pageAt(pageMenu.pageId)?.name ?? 'page'}`"
     :items="pageMenuItems"
+    :restore-focus-target="pageMenu.restoreFocusTarget"
     @close="pageMenu = null"
   />
 </template>

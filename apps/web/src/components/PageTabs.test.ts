@@ -227,6 +227,7 @@ describe("PageTabs", () => {
   });
 
   it("deletes the open page without asking and offers undo", async () => {
+    server.deletePage.mockResolvedValueOnce(changeWith({ pages: [{ id: "p1", page: null }] }));
     const wrapper = await render();
     await wrapper.get('[data-page-id="p1"]').trigger("contextmenu", { button: 2 });
     await flushPromises();
@@ -234,15 +235,35 @@ describe("PageTabs", () => {
       .find((item) => item.text() === "Delete")!
       .trigger("click");
     await flushPromises();
+    await wrapper.vm.$nextTick();
 
     expect(appDialog()).toBeNull();
     expect(server.deletePage).toHaveBeenCalledExactlyOnceWith("p1");
+    expect(useWorkbookStore().pages.map((page) => page.id)).toEqual(["p2"]);
     expect(router.currentRoute.value.params).toEqual({ spreadsheetId: "s1", pageId: "p2" });
+    expect(document.activeElement).toBe(wrapper.get('[data-page-id="p2"] .editable-name').element);
     expect(useWorkbookStore().notice).toMatchObject({
       kind: "success",
       text: "Deleted page Page 1",
       action: { label: "Undo" },
     });
+  });
+
+  it("restores focus to the previous tab after deleting a later page from its menu", async () => {
+    server.deletePage.mockResolvedValueOnce(changeWith({ pages: [{ id: "p2", page: null }] }));
+    const wrapper = await render("owner", "p1");
+    await wrapper.get('[data-page-id="p2"]').trigger("contextmenu", { button: 2 });
+    await flushPromises();
+    await bodyFindAll('[role="menuitem"]')
+      .find((item) => item.text() === "Delete")!
+      .trigger("click");
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    expect(server.deletePage).toHaveBeenCalledExactlyOnceWith("p2");
+    expect(useWorkbookStore().pages.map((page) => page.id)).toEqual(["p1"]);
+    expect(wrapper.find('[data-page-id="p2"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(wrapper.get('[data-page-id="p1"] .editable-name').element);
   });
 
   it("gives a viewer links, and no way to rename or delete", async () => {
