@@ -363,6 +363,52 @@ it("opens block actions from card margins and leaves grid cell menus to the tabl
   wrapper.unmount();
 });
 
+it("opens the block menu from header controls and keeps the browser menu on the name input", async () => {
+  const wrapper = await render("owner", false, false, {}, true);
+  const header = wrapper.get('[data-table="Table 1"] .table-card__header');
+  const menuSelector = '[role="menu"][aria-label="Actions for Table 1"]';
+  const openBlockMenu = async (target: Element): Promise<void> => {
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 90,
+      clientY: 110,
+    });
+    target.dispatchEvent(event);
+    await flushPromises();
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(bodyHas(menuSelector)).toBe(true);
+    await bodyGet(menuSelector).trigger("keydown", { key: "Escape" });
+    await flushPromises();
+  };
+
+  await openBlockMenu(header.get('button[aria-label="Collapse Table 1"]').element);
+
+  const select = document.createElement("select");
+  header.element.append(select);
+  await openBlockMenu(select);
+
+  const link = document.createElement("a");
+  link.href = "#block=t1";
+  header.element.append(link);
+  await openBlockMenu(link);
+
+  await header.get(".editable-name").trigger("dblclick");
+  await flushPromises();
+  const nameInput = header.get(".editable-name--editing");
+  const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 });
+  nameInput.element.dispatchEvent(event);
+  await flushPromises();
+
+  expect(event.defaultPrevented).toBe(false);
+  expect((nameInput.element as HTMLInputElement).selectionStart).toBe(0);
+  expect((nameInput.element as HTMLInputElement).selectionEnd).toBe("Table 1".length);
+  expect(bodyHas(menuSelector)).toBe(false);
+  wrapper.unmount();
+});
+
 it("saves an active formula draft before running a teleported block menu action", async () => {
   const wrapper = await render();
   const store = useWorkbookStore();

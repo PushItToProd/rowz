@@ -577,13 +577,38 @@ const blockMenuLabel = computed(() => {
 
 function openBlockMenu(event: MouseEvent, block: { id: string; name: string }): void {
   const target = event.target;
-  if (
-    target instanceof Element &&
-    target.closest(
-      'button, a[href], input, select, textarea, [contenteditable="true"], [role="button"]:not(.editable-name), [role="link"], .grid, .text-view, .cm-editor, .formula-editor',
+  if (target instanceof Element) {
+    const inHeader = target.closest(".table-card__header, .view-card__header");
+    const input = target.closest("input");
+    const inputKeepsBrowserMenu =
+      input !== null &&
+      ![
+        "button",
+        "submit",
+        "reset",
+        "image",
+        "file",
+        "checkbox",
+        "radio",
+        "range",
+        "color",
+        "hidden",
+      ].includes(input.type);
+    if (
+      inputKeepsBrowserMenu ||
+      target.closest(
+        'textarea, [contenteditable="true"], .cm-editor, .formula-editor, .grid, .text-view',
+      )
     )
-  )
-    return;
+      return;
+    if (
+      !inHeader &&
+      target.closest(
+        'button, a[href], input, select, [role="button"]:not(.editable-name), [role="link"], .grid, .text-view, .cm-editor, .formula-editor',
+      )
+    )
+      return;
+  }
   event.preventDefault();
   event.stopPropagation();
   const container = event.currentTarget as HTMLElement;
