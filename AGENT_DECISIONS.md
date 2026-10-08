@@ -772,16 +772,6 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 
 **Cost.** Content no longer expands a row automatically. Resize a row to reveal more content.
 
-## Work order of the autonomous run
-
-**Choice.** After the grapheme item, the run takes `_scratch/AFK_TODOS.md` in priority order from P0, because the author said so, which overrides the agent instructions to take the highest numbers first.
-
-- The flaky e2e test (`data-tables-and-formatting.spec.ts:5`) could not be reproduced: five full `pnpm e2e:remote` runs passed. The fix adds waits for the save to finish and a reload check; the root cause is unconfirmed. Skipped the adversarial review for this test-only change.
-
-- `IFS` takes a trailing default argument (odd argument count), like `SWITCH`. The `default=` named-argument form was not implemented because the parser has no named arguments; the item's example also had a missing comma.
-
-- Skipped the adversarial review for the `TEXTBOX`/`NUMBERBOX` label fix: it is a two-rule CSS change with an e2e assertion.
-
 ## 2026-10-07: Wrapped cell text keeps fixed row geometry
 
 **Choice.** Wrapped text is clipped to the cell's configured row height with a line-clamp ellipsis. Hovering the cell shows the full value. Wrapping does not change the windowed grid's row offsets.

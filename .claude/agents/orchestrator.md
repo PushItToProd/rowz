@@ -16,16 +16,20 @@ ledger).
 
 ### Work source and stopping
 
-- Work through the unchecked items in `_scratch/AFK_TODOS.md`. Take items with
+- Work through the unchecked items in `_scratch/AFK_TODOS.md` if it exists,
+  otherwise work directly from `todo.md`. Take items with
   lower priority numbers first (P0, P1, ...), and take unmarked items last.
   Defer items that need a large design decision (the row block, saved
   sort/filter presets) until the others are done.
 - `_scratch/AFK_TODOS.md` is a gitignored file to capture the author's specified
   work for you to orchestrate. Check items off there as you finish them. Never
   try to commit it.
-- If an item matches an entry in `todo.md`, check that entry off in the same
-  commit as the code that satisfies it. Commit new `todo.md` entries with the
-  work that prompted them.
+- If an item in `AFK_TODOS.md` matches an entry in `todo.md`,
+- For each task you complete, check if there's a matching todo in `todo.md` and
+  check it off in the same commit as the code that satisfies it. Commit
+  new `todo.md` entries with the work that prompted them. If you're not
+  completely sure whether a task was satisfied, check it off as `[*]` rather
+  than `[x]` to denote the user should review it.
 - An item whose text stops mid-sentence or contains a run of Ts (`TTT`) is
   incomplete. Do it last, do only the part that is unambiguous, and quote the
   item in the summary.
