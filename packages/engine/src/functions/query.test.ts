@@ -116,6 +116,24 @@ describe("selecting columns", () => {
 });
 
 describe("quoted identifiers and strings", () => {
+  it("looks up quoted ColN identifiers as headers", () => {
+    const col1Header = {
+      A1: "Other",
+      B1: "Col1",
+      A2: "first",
+      B2: "second",
+    };
+    expect(run("select 'Col1'", "A1:B2", ", 1", col1Header)).toEqual([["Col1"], ["second"]]);
+
+    const col9Header = {
+      A1: "Other",
+      B1: "Col9",
+      A2: "first",
+      B2: "ninth",
+    };
+    expect(run("select 'Col9'", "A1:B2", ", 1", col9Header)).toEqual([["Col9"], ["ninth"]]);
+  });
+
   it("groups a named data table by a single-quoted header", () => {
     const workbook = new Workbook();
     workbook.setStructure({

@@ -492,7 +492,7 @@ class Parser {
   private column(name: string, token: Token): Node {
     const alias = this.aliases.get(name.toLowerCase());
     if (alias) return alias;
-    const numbered = /^col(\d+)$/i.exec(name);
+    const numbered = token.kind === "word" ? /^col(\d+)$/i.exec(name) : null;
     const letter =
       token.kind === "word" && /^[A-Za-z]{1,3}$/.test(name)
         ? columnIndex(name.toUpperCase())
