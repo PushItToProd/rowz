@@ -18,7 +18,7 @@ import {
   type ErrorValue,
   type ScriptFunctionLocation,
 } from "./errors";
-import { array, element, limitCells, number, scalar } from "./functions/arguments";
+import { array, booleans, element, limitCells, number, scalar } from "./functions/arguments";
 import { logicFunctions } from "./functions/logic";
 import type { FunctionRegistry } from "./functions/registry";
 import {
@@ -555,6 +555,23 @@ function booleanOperation(
   );
 }
 
+/** Applies `and` and `or` to their operands, without evaluating an unneeded right operand. */
+function booleanOperator(
+  operator: "and" | "or",
+  left: Node,
+  right: Node,
+  context: EvaluationContext,
+): boolean {
+  const leftValues = booleans([evaluate(left, context)]);
+  if (operator === "and" && leftValues.includes(false)) return false;
+  if (operator === "or" && leftValues.includes(true)) return true;
+
+  const rightValues = booleans([evaluate(right, context)]);
+  return operator === "and"
+    ? leftValues.every(Boolean) && rightValues.every(Boolean)
+    : leftValues.some(Boolean) || rightValues.some(Boolean);
+}
+
 /** Evaluates a node. Throws `Failure` where `evaluate` would return an error. */
 function compute(node: Node, context: EvaluationContext): Evaluated {
   switch (node.type) {
@@ -600,7 +617,7 @@ function compute(node: Node, context: EvaluationContext): Evaluated {
     }
     case "binary": {
       if (node.operator === "and" || node.operator === "or")
-        return booleanOperation(node.operator.toUpperCase(), [node.left, node.right], context);
+        return booleanOperator(node.operator, node.left, node.right, context);
       const operator = node.operator;
       return elementwise(
         [operand(node.left, context), operand(node.right, context)],

@@ -219,7 +219,7 @@ Comparison operators ignore letter case when comparing text. A number and text w
 
 `LAMBDA` makes a function value for `MAP`, `REDUCE`, `BYROW`, or `BYCOL`. These functions also accept a pure built-in function name: `MAP(B1:B3, UPPER)` applies `UPPER` to each cell, and `BYROW(A1:C3, SUM)` sums each row. A `LET` binding or a document name with that spelling takes precedence.
 
-Boolean keywords ignore case: `=A1 > 1 and (not B1 or C1 < 2)`. Comparisons bind tighter than `not`, then `and`, then `or`. `and` and `or` associate left to right. These operators reuse `AND`, `OR`, and `NOT`, including their coercion, range handling, and errors; `and` and `or` evaluate both operands without short-circuiting.
+Boolean keywords ignore case: `=A1 > 1 and (not B1 or C1 < 2)`. Comparisons bind tighter than `not`, then `and`, then `or`. `and` and `or` associate left to right and use the coercion and range handling of `AND` and `OR`. The `and` operator skips its right operand when the left side is FALSE; `or` skips it when the left side is TRUE. Calls to the `AND` and `OR` functions still evaluate every argument and return errors found in any argument.
 
 `and` and `or` are operators between operands and names where an operand is expected. Prefix `not` needs whitespace before a token that begins an operand: `not A1` or `not (A1 or B1)`. A standalone `not`, or one followed by an arithmetic or comparison operator, remains a name: `LET(Not, 2, Not + 1)` returns 3, and `Not - 1` and `Not = 1` also read the name. Qualifiers and column names remain names, as in `and!A1`, `not[or]`, and `[and]`. Single quotes always force a name: `'not' + 1`. Rewriting and completion quote keyword names when writing them.
 

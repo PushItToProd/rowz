@@ -250,14 +250,16 @@ const ENTRIES: readonly FunctionDoc[] = [
     name: "AND",
     category: "Logic",
     syntax: "AND(value, ...)",
-    summary: "TRUE when every value is true.",
+    summary:
+      "TRUE when every value is true. This function evaluates every argument; the `and` operator skips its right operand when the left side is FALSE.",
     example: "AND(A1 > 0, A2 > 5)",
   },
   {
     name: "OR",
     category: "Logic",
     syntax: "OR(value, ...)",
-    summary: "TRUE when at least one value is true.",
+    summary:
+      "TRUE when at least one value is true. This function evaluates every argument; the `or` operator skips its right operand when the left side is TRUE.",
     example: "OR(A1 > 0, A2 > 5)",
   },
   {

@@ -25,8 +25,6 @@ describe("boolean operators", () => {
   });
 
   it.each([
-    ["FALSE and 1/0", "AND(FALSE, 1/0)"],
-    ["TRUE or 1/0", "OR(TRUE, 1/0)"],
     ['"text" and TRUE', 'AND("text", TRUE)'],
     ['"text" or FALSE', 'OR("text", FALSE)'],
     ['not "text"', 'NOT("text")'],
@@ -40,6 +38,22 @@ describe("boolean operators", () => {
     ["not #N/A", "NOT(#N/A)"],
   ])("matches built-in coercion and errors for %s", (expression, call) => {
     expect(evaluateFormula(`=${expression}`)).toEqual(evaluateFormula(`=${call}`));
+  });
+
+  it("short-circuits operators but leaves AND and OR functions eager", () => {
+    expect(evaluateFormula("=FALSE and 1/0")).toBe(false);
+    expect(evaluateFormula("=TRUE or 1/0")).toBe(true);
+    expect(evaluateFormula("=TRUE and 1/0")).toEqual(evaluateFormula("=1/0"));
+    expect(evaluateFormula("=FALSE or 1/0")).toEqual(evaluateFormula("=1/0"));
+    expect(evaluateFormula("=AND(FALSE, 1/0)")).toEqual(evaluateFormula("=1/0"));
+    expect(evaluateFormula("=OR(TRUE, 1/0)")).toEqual(evaluateFormula("=1/0"));
+
+    const workbook = workbookWith({
+      t1: { A1: "20", B1: "0", C1: "=B1 <> 0 and A1 / B1 > 2" },
+    });
+    expect(workbook.getValue(at("C1"))).toBe(false);
+    workbook.setCell(at("B1"), "5");
+    expect(workbook.getValue(at("C1"))).toBe(true);
   });
 
   it("reads whole ranges as AND and OR do, and tracks dependencies", () => {
