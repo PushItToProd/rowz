@@ -29,12 +29,16 @@ export function createWrites(context: WorkbookContext) {
   }
 
   /** Saves a draft to its current target, without a starting-revision restriction. */
-  function submitFormulaDraft(target: EditingTarget, text: string): Promise<"saved" | "deleted"> {
+  function submitFormulaDraft(
+    target: EditingTarget,
+    text: string,
+    clearPreviousError = true,
+  ): Promise<"saved" | "deleted"> {
     const committedText =
       target.kind === "script" || target.kind === "markdown"
         ? text
         : closeOpenFormulaParentheses(text);
-    return context.enqueueWrite(async () => {
+    const save = async () => {
       if (!context.canEdit.value) throw new Error("You cannot edit this document");
       const table =
         "tableId" in target
@@ -111,7 +115,8 @@ export function createWrites(context: WorkbookContext) {
           return "deleted";
         throw cause;
       }
-    }, true);
+    };
+    return context.enqueueWrite(save, true, clearPreviousError);
   }
 
   /**

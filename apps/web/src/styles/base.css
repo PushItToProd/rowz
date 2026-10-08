@@ -117,6 +117,22 @@ input {
   border-radius: var(--radius);
 }
 
+.notice__message {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.notice__message p {
+  margin: 0;
+}
+
+.notice__detail {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .notice--error {
   background: var(--danger-soft);
   color: var(--danger);

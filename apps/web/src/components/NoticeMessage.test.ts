@@ -24,6 +24,25 @@ it("dismisses errors after eight seconds", async () => {
   expect(wrapper.emitted("dismiss")).toHaveLength(1);
 });
 
+it("shows the underlying error below the notice summary", () => {
+  wrapper = mount(NoticeMessage, {
+    props: {
+      notice: {
+        kind: "error",
+        text: "The action could not be run because the formula could not be saved.",
+        detail: "TypeError: NetworkError when attempting to fetch resource.",
+      },
+    },
+  });
+
+  expect(wrapper.get(".notice__message > p").text()).toBe(
+    "The action could not be run because the formula could not be saved.",
+  );
+  expect(wrapper.get(".notice__detail").text()).toBe(
+    "TypeError: NetworkError when attempting to fetch resource.",
+  );
+});
+
 it("restarts the timer when the same message is shown again", async () => {
   vi.useFakeTimers();
   const notice: Notice = { kind: "error", text: "A folder named Work already exists" };

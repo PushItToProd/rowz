@@ -833,7 +833,11 @@ describe("click", () => {
     save.reject(new Error("A1 could not be saved"));
     await clicked;
     expect(server.click).not.toHaveBeenCalled();
-    expect(store.notice).toEqual({ kind: "error", text: "A1 could not be saved" });
+    expect(store.notice).toEqual({
+      kind: "error",
+      text: "The button at Page 1 · Table 1!B1 could not be run because the change to Page 1 · Table 1!A1 could not be saved. Fix the save error and try the action again.",
+      detail: "A1 could not be saved",
+    });
     expect(store.running.size).toBe(0);
 
     // The failed save is behind it now, so the button runs.

@@ -7,6 +7,7 @@ export type NoticeAction =
 export interface Notice {
   kind: "success" | "error";
   text: string;
+  detail?: string;
   action?: NoticeAction;
   dismissOnHistoryChange?: boolean;
 }

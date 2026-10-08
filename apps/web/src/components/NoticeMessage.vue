@@ -52,7 +52,11 @@ onUnmounted(() => {
     :class="`notice--${notice.kind}`"
     :role="notice.kind === 'error' ? 'alert' : 'status'"
   >
-    <span>{{ notice.text }}</span>
+    <div v-if="notice.detail" class="notice__message">
+      <p>{{ notice.text }}</p>
+      <pre class="notice__detail"><code>{{ notice.detail }}</code></pre>
+    </div>
+    <span v-else>{{ notice.text }}</span>
     <RouterLink
       v-if="notice.action && 'to' in notice.action"
       class="notice__action"

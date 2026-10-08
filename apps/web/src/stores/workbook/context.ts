@@ -99,5 +99,9 @@ export interface WorkbookContext {
   extendSelection: (address: CellAddress, kind?: "row" | "col") => void;
   hasTable: (tableId: string) => boolean;
   unansweredCount: Ref<number, number>;
-  submitFormulaDraft: (target: EditingTarget, text: string) => Promise<"saved" | "deleted">;
+  submitFormulaDraft: (
+    target: EditingTarget,
+    text: string,
+    clearPreviousError?: boolean,
+  ) => Promise<"saved" | "deleted">;
 }

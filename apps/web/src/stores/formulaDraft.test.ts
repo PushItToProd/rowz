@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../api/client";
+import { api, type Change } from "../api/client";
+import type { Notice } from "../notice";
 import {
   at,
   clickResult,
@@ -17,6 +18,21 @@ vi.mock("../api/client", async () => {
   return { api: testing.mockApi(), setJournaledHandler: testing.setJournaledHandler };
 });
 const server = api as unknown as MockedApi;
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(cause: Error): void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (cause: Error) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.clearAllMocks();
@@ -146,6 +162,87 @@ describe("draft submissions", () => {
     await store.click(at("A1"));
     expect(server.click).toHaveBeenCalledTimes(1);
     expect(store.isRunning(at("A1"))).toBe(false);
+  });
+
+  it("reports which action and formula could not be saved", async () => {
+    const store = await open();
+    const sessions = useFormulaSessionStore();
+    await sessions.start(
+      {
+        target: { kind: "name", tableId: "t1", name: "Total" },
+        context: { pageId: "p1", tableId: "t1" },
+        mode: "formula",
+        text: "draft",
+      },
+      store.submitFormulaDraft,
+    );
+    server.updateNamedFormula.mockRejectedValueOnce(new Error("Offline"));
+
+    await store.click(at("B1"));
+
+    expect(server.click).not.toHaveBeenCalled();
+    expect(store.notice).toEqual({
+      kind: "error",
+      text: "The button at Page 1 · Table 1!B1 could not be run because the formula for Total in Table 1 on Page 1 could not be saved. Resolve the draft error and try the action again.",
+      detail: "Offline",
+    });
+  });
+
+  it("keeps an unrelated error visible until the action succeeds", async () => {
+    const store = await open();
+    const sessions = useFormulaSessionStore();
+    const previousNotice = { kind: "error" as const, text: "A different request failed" };
+    store.notice = previousNotice;
+    await sessions.start(
+      {
+        target: { kind: "name", tableId: "t1", name: "Total" },
+        context: { pageId: "p1", tableId: "t1" },
+        mode: "formula",
+        text: "draft",
+      },
+      store.submitFormulaDraft,
+    );
+    server.updateNamedFormula.mockResolvedValueOnce(changeWith());
+    let noticeDuringAction: Notice | null = store.notice;
+    server.click.mockImplementationOnce(() => {
+      noticeDuringAction = store.notice;
+      return Promise.resolve(clickResult());
+    });
+
+    await store.click(at("B1"));
+
+    expect(noticeDuringAction).toEqual(previousNotice);
+    expect(store.notice).toEqual({ kind: "success", text: "Done" });
+  });
+
+  it("reports an action skipped after a pending cell save fails", async () => {
+    const store = await open();
+    const sessions = useFormulaSessionStore();
+    await sessions.start(
+      {
+        target: { kind: "name", tableId: "t1", name: "Total" },
+        context: { pageId: "p1", tableId: "t1" },
+        mode: "formula",
+        text: "draft",
+      },
+      store.submitFormulaDraft,
+    );
+    const saving = deferred<Change>();
+    server.setCells.mockReturnValueOnce(saving.promise);
+    server.updateNamedFormula.mockResolvedValueOnce(changeWith());
+
+    const save = store.setCell(at("A1"), "pending");
+    await Promise.resolve();
+    const action = store.click(at("B1"));
+    saving.reject(new Error("The cell save failed"));
+    await Promise.all([save, action]);
+
+    expect(server.click).not.toHaveBeenCalled();
+    expect(store.notice).toEqual({
+      kind: "error",
+      text: "The button at Page 1 · Table 1!B1 could not be run because the change to Page 1 · Table 1!A1 could not be saved. Fix the save error and try the action again.",
+      detail: "The cell save failed",
+    });
   });
 
   it("stops a workbook operation after a failed draft save and does not replay it on cancel", async () => {

@@ -2,6 +2,14 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-08: Keep blocked actions and save errors visible
+
+**Choice.** Pass an action's `clearPreviousError` choice through both the active formula draft save and the queued action. Capture pending cell locations when the action starts so a failed write can still be named after its pending state is removed. When a draft or a pending cell save blocks the action, show a notice naming the action and the failed edit, and show the underlying error beneath the summary.
+
+**Why.** The server runs actions against stored inputs. A failed save must keep the action from running, and that failure must stay visible after the app saves the formula draft.
+
+**To change.** Update the action preflight in `apps/web/src/stores/workbook/actions.ts`, the write queue in `apps/web/src/stores/workbook/queue.ts`, and error detail rendering in `apps/web/src/components/NoticeMessage.vue`.
+
 ## 2026-10-08: Text delimiter function behavior
 
 **Choice.** `TEXTBEFORE` and `TEXTAFTER` accept one scalar delimiter and broadcast over the text argument's array dimensions. `match_end` adds the text end as a delimiter for positive instances and the text start for negative instances, whether or not a real delimiter is at that endpoint. An empty delimiter matches at each grapheme boundary; positive instances count from the front and negative instances from the end. The instance limit uses grapheme length, consistent with `LEN`.

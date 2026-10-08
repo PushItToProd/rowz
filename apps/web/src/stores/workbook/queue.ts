@@ -28,13 +28,15 @@ export function createQueue(context: WorkbookContext) {
   ): Promise<T> {
     const sessions = useFormulaSessionStore();
     if (!draftWrite && sessions.active) {
-      return sessions.submit(context.submitFormulaDraft).then((saved) => {
-        if (!saved) {
-          sessions.focus();
-          throw new Error(sessions.active?.error ?? "The draft could not be saved");
-        }
-        return enqueueWrite(change, true);
-      });
+      return sessions
+        .submit((target, text) => context.submitFormulaDraft(target, text, clearPreviousError))
+        .then((saved) => {
+          if (!saved) {
+            sessions.focus();
+            throw new Error(sessions.active?.error ?? "The draft could not be saved");
+          }
+          return enqueueWrite(change, true, clearPreviousError);
+        });
     }
     const queued = mutations.then(async () => {
       const previousNotice = context.notice.value;
