@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { parseDate } from "../dates";
 import { Workbook } from "../workbook";
 import { at, workbookWith } from "../testing";
-import { formatValue, type CellValue } from "../values";
+import { formatValue, isButton, type CellValue } from "../values";
 
 const DATA = {
   A1: "Item",
@@ -51,6 +52,16 @@ function run(
           : formatValue(cell),
       ),
     );
+}
+
+function runValues(
+  query: string,
+  range = "A1:D7",
+  extra = "",
+  data: Record<string, string> = DATA,
+): CellValue[][] {
+  const formula = `=QUERY(Table1!${range}, "${query.replaceAll('"', '""')}"${extra})`;
+  return workbookWith({ t1: data, t2: { A1: formula } }).getArray(at("A1", "t2"));
 }
 
 function failure(query: string, range = "A1:D7", extra = ""): { code: string; message?: string } {
@@ -451,6 +462,63 @@ describe("pivoting", () => {
       ["Fruit sum Amount", "Fruit count(*)", "Vegetable sum Amount", "Vegetable count(*)"],
       [37, 3, 13, 2],
     ]);
+  });
+
+  it("keeps each single pivot value's type in the output heading", () => {
+    const numeric = runValues("select A, sum(C) group by A pivot B", "A1:C3", ", 1", {
+      A1: "Group",
+      B1: "Duration",
+      C1: "Amount",
+      A2: "Day",
+      B2: "6",
+      C2: "10",
+      A3: "Night",
+      B3: "12",
+      C3: "5",
+    });
+    expect(numeric[0]).toEqual(["Group", 6, 12]);
+
+    const dates = runValues("select A, sum(C) group by A pivot B", "A1:C3", ", 1", {
+      A1: "Group",
+      B1: "Date",
+      C1: "Amount",
+      A2: "Day",
+      B2: "2026-01-05",
+      C2: "10",
+      A3: "Night",
+      B3: "2026-02-03",
+      C3: "5",
+    });
+    expect(dates[0]).toEqual(["Group", parseDate("2026-01-05"), parseDate("2026-02-03")]);
+
+    const text = runValues("select A, sum(C) group by A pivot B", "A1:C3", ", 1", {
+      A1: "Group",
+      B1: "Kind",
+      C1: "Amount",
+      A2: "Day",
+      B2: "short",
+      C2: "10",
+      A3: "Night",
+      B3: "long",
+      C3: "5",
+    });
+    expect(text[0]).toEqual(["Group", "long", "short"]);
+    expect(typeof text[0]?.[1]).toBe("string");
+  });
+
+  it("keeps button values with different captured names in separate groups", () => {
+    const workbook = workbookWith({
+      t1: {
+        A1: '=QUERY(MAP(SEQUENCE(2), LAMBDA(x, BUTTON("go", EXECUTE(x, C1)))), "select Col1, count(*) group by Col1", 0)',
+      },
+    });
+    const rows = workbook.getArray(at("A1"));
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row[1])).toEqual([1, 1]);
+    expect(
+      rows.map((row) => (isButton(row[0]) ? row[0].action.names?.get("x") : undefined)),
+    ).toEqual([1, 2]);
   });
 });
 

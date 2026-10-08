@@ -118,7 +118,7 @@ describe("the Gran Turismo 7 grind comparison", () => {
     const sample = await importSample("gt7-grind-comparison.json");
     const pivot = sample.values("Payout (8*5 hours)", 11, 15);
 
-    expect(pivot[0]).toEqual(["Race", ...Array.from({ length: 14 }, (_, n) => String(21 + n))]);
+    expect(pivot[0]).toEqual(["Race", ...Array.from({ length: 14 }, (_, n) => 21 + n)]);
     expect(pivot.map((row) => row[0])).toEqual([
       "Race",
       "Le Mans",
@@ -204,7 +204,7 @@ describe("the Gran Turismo 7 grind comparison", () => {
       200,
     );
     const pivot = (await readSample(sample.id)).values("Payout (8*5 hours)", 12, 22);
-    expect(pivot[0]?.slice(15)).toEqual(["60", "61", "62", "63", "64", "65", "66"]);
+    expect(pivot[0]?.slice(15)).toEqual([60, 61, 62, 63, 64, 65, 66]);
     expect(pivot[3]?.[0]).toBe("Spa");
     expect(pivot[3]?.slice(15, 17)).toEqual([60_000_000, 52_500_000]);
   });

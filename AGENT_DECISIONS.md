@@ -2,6 +2,14 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-08: QUERY pivot headings and group keys
+
+**Choice.** A single pivot value with one aggregate keeps its cell value type in the heading. Composite pivot labels and labels combined with aggregate names remain text. Group keys use `identityOf` for scalar cells and a structural encoding for object values, including Map entries and the closure-specific parts of an evaluation context. The resolver, function registry, and clock callbacks shared by one query are omitted from that encoding.
+
+**Why.** Sheets keeps the type of a scalar pivot label. Composite labels need text to join multiple values or add an aggregate name. Structural keys separate buttons whose captured names differ in a Map without making each key depend on the workbook's shared callbacks.
+
+**To change.** Update pivot heading construction and `keyOf` in `packages/engine/src/functions/query.ts`.
+
 ## 2026-10-08: Keep blocked actions and save errors visible
 
 **Choice.** Pass an action's `clearPreviousError` choice through both the active formula draft save and the queued action. Capture pending cell locations when the action starts so a failed write can still be named after its pending state is removed. When a draft or a pending cell save blocks the action, show a notice naming the action and the failed edit, and show the underlying error beneath the summary.

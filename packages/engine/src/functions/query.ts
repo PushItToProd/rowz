@@ -15,6 +15,7 @@ import {
 import {
   cellOrder,
   formatValue,
+  identityOf,
   isError,
   isRange,
   isScalar,
@@ -56,9 +57,94 @@ function order(a: CellValue, b: CellValue): number {
 
 /** A key that is equal for two lists of cells exactly when the cells are equal, ignoring letter case. */
 function keyOf(cells: readonly CellValue[]): string {
-  return JSON.stringify(
-    cells.map((cell) => (typeof cell === "string" ? cell.toLowerCase() : (cell ?? "\u0000"))),
+  return tuple(
+    "cells",
+    cells.map((cell) => (isScalar(cell) ? tuple("scalar", [identityOf(cell)]) : valueKey(cell))),
   );
+}
+
+/** An unambiguous encoding for nested values, including the Maps in captured action names. */
+function valueKey(value: unknown, ancestors = new Map<object, number>()): string {
+  if (value === null) return tuple("null", []);
+  switch (typeof value) {
+    case "undefined":
+      return tuple("undefined", []);
+    case "string":
+      return tuple("string", [value]);
+    case "number":
+      return tuple("number", [String(value === 0 ? 0 : value)]);
+    case "boolean":
+      return tuple("boolean", [String(value)]);
+    case "bigint":
+      return tuple("bigint", [String(value)]);
+    case "symbol":
+      return tuple("symbol", [String(value)]);
+    case "function":
+      return tuple("function", [value.name, Function.prototype.toString.call(value)]);
+    case "object":
+      break;
+  }
+
+  const previous = ancestors.get(value);
+  if (previous !== undefined) return tuple("reference", [String(previous)]);
+  ancestors.set(value, ancestors.size);
+  try {
+    if (Array.isArray(value)) {
+      return tuple(
+        "array",
+        value.map((item) => valueKey(item, ancestors)),
+      );
+    }
+    if (value instanceof Map) {
+      const entries = [...(value as Map<unknown, unknown>)].map(([key, item]) => ({
+        key,
+        item,
+        order: valueKey(key),
+      }));
+      entries.sort((a, b) => compareText(a.order, b.order));
+      return tuple(
+        "map",
+        entries.map(({ item, order }) => tuple("entry", [order, valueKey(item, ancestors)])),
+      );
+    }
+    if (isEvaluationContext(value)) {
+      // The resolver, registry, and clock callbacks are shared by values from one query.
+      const context = value;
+      return tuple("context", [
+        valueKey(context.origin, ancestors),
+        valueKey(context.pageId, ancestors),
+        valueKey(context.homePageId, ancestors),
+        valueKey(context.names, ancestors),
+        valueKey(context.document, ancestors),
+        valueKey(context.depth, ancestors),
+        valueKey(context.traceSource, ancestors),
+        valueKey(context.traceCallSite, ancestors),
+      ]);
+    }
+    const fields = Object.keys(value)
+      .sort()
+      .map((key) => tuple("field", [key, valueKey(Reflect.get(value, key), ancestors)]));
+    return tuple("object", fields);
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+function isEvaluationContext(value: object): value is EvaluationContext {
+  return (
+    "origin" in value &&
+    "functions" in value &&
+    typeof Reflect.get(value, "resolve") === "function" &&
+    typeof Reflect.get(value, "read") === "function"
+  );
+}
+
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : Number(a > b);
+}
+
+function tuple(tag: string, fields: readonly string[]): string {
+  return `${String(tag.length)}:${tag}${String(fields.length)}:${fields.map((field) => `${String(field.length)}:${field}`).join("")}`;
 }
 
 function same(a: Node, b: Node): boolean {
@@ -157,11 +243,12 @@ class Runner {
     if (spread.length === 0) fail("#VALUE!", "PIVOT needs a function such as SUM in the SELECT");
 
     limitCells((groups.length + 1) * (fixed.length + columns.length * spread.length));
-    const header = [
+    const header: CellValue[] = [
       ...fixed.map((item) => this.title(item)),
       ...columns.flatMap(([, cells]) => {
         const name = cells.map(formatValue).join(", ");
-        return spread.map((item) => (spread.length === 1 ? name : `${name} ${this.title(item)}`));
+        const label = cells.length === 1 ? (cells[0] ?? null) : name;
+        return spread.map((item) => (spread.length === 1 ? label : `${name} ${this.title(item)}`));
       }),
     ];
     const body = groups.map((group) => [
