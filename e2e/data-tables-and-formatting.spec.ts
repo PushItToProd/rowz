@@ -55,7 +55,7 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await expect(cell(page, "B2")).toHaveText("10");
   await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
   await page.getByRole("link", { name: "← Documents" }).click();
-  await expect(page.getByRole("link", { name: "Untitled document" })).toHaveCount(2);
+  await expect(page.getByRole("link", { name: "Open Untitled document" })).toHaveCount(2);
 
   // A CSV file goes into a table from its first cell, and the table grows to fit.
   await page.getByRole("button", { name: "New document" }).click();
@@ -144,10 +144,14 @@ test("a table with named columns has typed columns, a formula column, and column
   await expect(cell(page, "E2")).toHaveText("15");
 
   // Renaming a column rewrites the formulas that name it.
-  await header("Column 1").getByText("Column 1").dblclick();
+  await cell(page, "A1").click();
+  await header("Column 1").getByText("Column 1").click();
+  await header("Column 1").getByText("Column 1").click();
   await page.getByLabel("Column name").fill("Total");
   await page.getByLabel("Column name").press("Enter");
-  await header("Price").getByText("Price").dblclick();
+  await cell(page, "A1").click();
+  await header("Price").getByText("Price").click();
+  await header("Price").getByText("Price").click();
   await page.getByLabel("Column name").fill("Unit price");
   await page.getByLabel("Column name").press("Enter");
   await cell(page, "E2").click();

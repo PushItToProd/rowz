@@ -209,7 +209,7 @@ test("a page shows a chart and a text view of its tables, and they follow change
   await expect(chart).toContainText("apples 75%");
 
   // Both follow a table rename.
-  await page.locator('[data-table="Table 1"] h2').getByText("Table 1").dblclick();
+  await page.locator('[data-table="Table 1"] h2').getByText("Table 1").click();
   await page.getByLabel("Table name").fill("Fruit");
   await page.getByLabel("Table name").press("Enter");
   await expect(chart.getByLabel("Chart data")).toHaveValue("Fruit!A1:B2");

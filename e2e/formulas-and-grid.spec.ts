@@ -195,7 +195,7 @@ test("renaming a table or page rewrites the formulas that name it", async ({ pag
   await enter(page, "A2", "='Page 1'!'Table 2'!A1*2");
   await expect(cell(page, "A1")).toHaveText("6");
 
-  await page.locator('[data-table="Table 2"]').getByText("Table 2").dblclick();
+  await page.locator('[data-table="Table 2"]').getByText("Table 2").click();
   await page.getByLabel("Table name").fill("Sales");
   await page.getByLabel("Table name").press("Enter");
   await expect(page.locator('[data-table="Sales"]')).toBeVisible();
@@ -203,13 +203,13 @@ test("renaming a table or page rewrites the formulas that name it", async ({ pag
   await cell(page, "A1").click();
   await expect(page.getByLabel("Formula")).toHaveValue("=Sales!A1+1");
 
-  await page.locator('[data-table="Sales"]').getByText("Sales").dblclick();
+  await page.locator('[data-table="Sales"]').getByText("Sales").click();
   await page.getByLabel("Table name").fill("Table 1");
   await page.getByLabel("Table name").press("Enter");
   await expect(page.getByRole("alert")).toHaveText(/A table named Table 1 already exists/);
 
   const pages = page.getByRole("navigation", { name: "Pages" });
-  await pages.getByText("Page 1").dblclick();
+  await pages.getByText("Page 1").click();
   await page.getByLabel("Page name").fill("Summary");
   await page.getByLabel("Page name").press("Enter");
   await expect(pages.locator('[aria-current="page"]')).toHaveText(/Summary/);

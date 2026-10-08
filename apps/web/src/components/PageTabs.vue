@@ -27,6 +27,7 @@ function route(pageId: string) {
 }
 
 function open(pageId: string): Promise<unknown> {
+  if (pageId === props.activePageId) return Promise.resolve();
   return router.push(route(pageId));
 }
 
@@ -172,6 +173,7 @@ const pageMenuItems = computed((): MenuItem[] => {
         :value="page.name"
         label="Page name"
         :href="router.resolve(route(page.id)).href"
+        :click-to-edit="page.id === activePageId"
         :disabled="!store.canEdit"
         @click.prevent
         @rename="store.renamePage(page.id, $event)"

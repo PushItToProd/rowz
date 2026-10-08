@@ -96,6 +96,15 @@
   text-decoration: none;
 }
 
+.list__items .editable-name-shell {
+  flex: 1;
+  min-width: 0;
+}
+
+.list__items .list__document-open {
+  flex: 0 0 auto;
+}
+
 /* Editor */
 
 /* The name, formula bar, and page tabs stay in view while tables scroll under them. */
@@ -158,6 +167,11 @@
 
 .editable-name:hover:not(.editable-name--locked) {
   border-color: var(--line);
+}
+
+.editable-name-shell {
+  display: inline-block;
+  max-width: 100%;
 }
 
 .editable-name--locked {

@@ -2,26 +2,39 @@
 import { LIMITS } from "@spreadsheet-app/shared";
 import { computed, nextTick, ref } from "vue";
 
-const props = defineProps<{
-  value: string;
-  /** What the name belongs to, for screen readers: "Table name". */
-  label: string;
-  disabled?: boolean;
-  /**
-   * Where the name leads, which makes it a link. Enter then follows the link,
-   * and F2 renames. Whoever gives it handles the click.
-   */
-  href?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    value: string;
+    /** What the name belongs to, for screen readers: "Table name". */
+    label: string;
+    disabled?: boolean;
+    /** Whether a primary click starts editing. A caller can leave clicks for selection or navigation. */
+    clickToEdit?: boolean;
+    /**
+     * Where the name leads, which makes it a link. Enter then follows the link,
+     * and F2 renames.
+     */
+    href?: string;
+  }>(),
+  { clickToEdit: true, href: undefined },
+);
 const emit = defineEmits<{ rename: [name: string] }>();
 
 const draft = ref<string | null>(null);
 const input = ref<HTMLInputElement>();
 const shown = ref<HTMLElement>();
+let clickCanEdit: boolean | null = null;
 
-const hint = computed(() => {
+const description = computed(() => {
   if (props.disabled) return undefined;
-  return `Double-click or press ${props.href === undefined ? "Enter" : "F2"} to rename`;
+  if (props.href !== undefined) {
+    return props.clickToEdit
+      ? "Click or press F2 to rename. Press Enter to open."
+      : "Click or press Enter to open. Press F2 to rename.";
+  }
+  return props.clickToEdit
+    ? "Click or press Enter or F2 to rename."
+    : "Click to select. Press Enter or F2 to rename.";
 });
 
 async function start(): Promise<void> {
@@ -34,15 +47,24 @@ async function start(): Promise<void> {
 
 defineExpose({ start });
 
-function commit(): void {
+function commit(keepEmptyDraft = false): void {
   const name = draft.value?.trim();
+  if (name === undefined) return;
+  if (name === "") {
+    if (!keepEmptyDraft) draft.value = null;
+    return;
+  }
   draft.value = null;
-  if (name !== undefined && name !== "" && name !== props.value) emit("rename", name);
+  if (name !== props.value) emit("rename", name);
 }
 
-/** Ends an edit made with the keyboard, and puts the keyboard back on the name. */
+function onBlur(): void {
+  commit();
+}
+
+/** Finishes a keyboard edit; Enter leaves an empty draft open for correction. */
 async function finish(keep: boolean): Promise<void> {
-  if (keep) commit();
+  if (keep) commit(true);
   else draft.value = null;
   await nextTick();
   shown.value?.focus();
@@ -56,6 +78,31 @@ function onKeydown(event: KeyboardEvent): void {
   event.stopPropagation();
   void start();
 }
+
+function onClick(event: MouseEvent): void {
+  if (event.detail === 0) {
+    clickCanEdit = null;
+    return;
+  }
+  const canEdit = clickCanEdit ?? props.clickToEdit;
+  clickCanEdit = null;
+  if (
+    event.button !== 0 ||
+    event.shiftKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    !canEdit ||
+    props.disabled
+  )
+    return;
+  event.preventDefault();
+  void start();
+}
+
+function rememberClickTrigger(): void {
+  clickCanEdit = props.clickToEdit;
+}
 </script>
 
 <template>
@@ -68,21 +115,24 @@ function onKeydown(event: KeyboardEvent): void {
     :maxlength="LIMITS.nameLength"
     @keydown.enter.stop="finish(true)"
     @keydown.esc.stop="finish(false)"
-    @blur="commit"
+    @blur="onBlur"
   />
-  <component
-    :is="href === undefined ? 'span' : 'a'"
-    v-else
-    ref="shown"
-    class="editable-name"
-    :class="{ 'editable-name--locked': disabled }"
-    :href="href"
-    :role="href === undefined && !disabled ? 'button' : undefined"
-    :tabindex="href === undefined && !disabled ? 0 : undefined"
-    :title="hint"
-    @dblclick="start"
-    @keydown="onKeydown"
-  >
-    {{ value }}
-  </component>
+  <span v-else class="editable-name-shell">
+    <component
+      :is="href === undefined ? 'span' : 'a'"
+      ref="shown"
+      class="editable-name"
+      :class="{ 'editable-name--locked': disabled }"
+      :href="href"
+      :role="href === undefined && !disabled ? 'button' : undefined"
+      :tabindex="href === undefined && !disabled ? 0 : undefined"
+      :aria-description="description"
+      :data-click-to-edit="clickToEdit ? '' : undefined"
+      @mousedown.left.capture="rememberClickTrigger"
+      @click="onClick"
+      @keydown="onKeydown"
+    >
+      {{ value }}
+    </component>
+  </span>
 </template>

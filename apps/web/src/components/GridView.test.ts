@@ -10,6 +10,7 @@ import {
   identifiedAt,
   notifyJournaled,
   positionalFormatRange,
+  clickWithDetail,
   sizedTable,
   snapshotWith,
   TABLE,
@@ -238,9 +239,15 @@ describe("windowed grids", () => {
         type: "any",
       })),
     });
-    await wrapper
-      .get('[data-pick-kind="col"][data-pick-index="0"] .editable-name')
-      .trigger("dblclick");
+    const name = wrapper.get('[data-pick-kind="col"][data-pick-index="0"] .editable-name');
+    await name.trigger("mousedown", { button: 0 });
+    await clickWithDetail(name.element);
+    await flushPromises();
+    expect(wrapper.get('[data-pick-kind="col"][data-pick-index="0"]').classes()).toContain(
+      "grid__header--selected",
+    );
+    await name.trigger("mousedown", { button: 0 });
+    await clickWithDetail(name.element);
     await flushPromises();
     const input = wrapper.get<HTMLInputElement>('input[aria-label="Column name"]');
     await input.setValue("Uncommitted name");
@@ -2253,22 +2260,52 @@ describe("a data table", () => {
     expect(part(".grid__column-type")).toEqual(["checkbox", "formula"]);
   });
 
-  it("renames a column from its header", async () => {
+  it("selects a column on its first header click and renames on the next click", async () => {
     await mountData();
     server.updateColumn.mockResolvedValue(
       changeWith({ table: DATA_TABLE, cells: [], views: [], tables: [] }),
     );
-    await header("Item").get(".editable-name").trigger("dblclick");
+
+    const name = header("Item").get(".editable-name");
+    await name.trigger("mousedown", { button: 0 });
+    await flushPromises();
+    expect(header("Item").classes()).toContain("grid__header--selected");
+    await clickWithDetail(name.element);
+    expect(header("Item").find("input").exists()).toBe(false);
+
+    await name.trigger("mousedown", { button: 0 });
+    await clickWithDetail(name.element);
     const input = header("Item").get("input");
     // A press inside the box places the caret and does not select the column.
+    const selectionBeforePress = useWorkbookStore().selection;
+    expect(selectionBeforePress).toEqual(at("A1"));
     await input.trigger("mousedown");
-    expect(useWorkbookStore().selection).toBeNull();
+    expect(useWorkbookStore().selection).toEqual(selectionBeforePress);
     await input.setValue("Thing");
     await input.trigger("keydown", { key: "Enter" });
     expect(server.updateColumn).toHaveBeenCalledExactlyOnceWith("t1", "c1", {
       revision: expect.any(Number),
       name: "Thing",
     });
+  });
+
+  it("selects one column before renaming from a multi-column selection", async () => {
+    await mountData();
+    const store = useWorkbookStore();
+    store.selection = at("A1");
+    store.extendSelection(at("B1"), "col");
+    expect(store.selectedRange).toMatchObject({ entireColumn: true, startCol: 0, endCol: 1 });
+
+    const name = header("Item").get(".editable-name");
+    await name.trigger("mousedown", { button: 0 });
+    await clickWithDetail(name.element);
+    expect(header("Item").find("input").exists()).toBe(false);
+    expect(store.selectedRange).toMatchObject({ entireColumn: true, startCol: 0, endCol: 0 });
+
+    const selectedName = header("Item").get(".editable-name");
+    await selectedName.trigger("mousedown", { button: 0 });
+    await clickWithDetail(selectedName.element);
+    expect(header("Item").find("input").exists()).toBe(true);
   });
 
   it("starts renaming from elsewhere in a column header", async () => {
@@ -2418,7 +2455,7 @@ describe("a data table", () => {
 
   it("gives a viewer the names without the means to change them", async () => {
     await mountData({ B1: "TRUE" }, "viewer");
-    await header("Item").get(".editable-name").trigger("dblclick");
+    await clickWithDetail(header("Item").get(".editable-name").element);
     expect(header("Item").find("input").exists()).toBe(false);
     expect(cellAt("B1").get("input").attributes("disabled")).toBeDefined();
   });

@@ -4,7 +4,13 @@ import { completionStatus, startCompletion } from "@codemirror/autocomplete";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { useWorkbookStore } from "../stores/workbook";
-import { changeWith, snapshotWith, wireSnapshot, type MockedApi } from "../testing";
+import {
+  changeWith,
+  clickWithDetail,
+  snapshotWith,
+  wireSnapshot,
+  type MockedApi,
+} from "../testing";
 import { EditorView } from "@codemirror/view";
 import { useFormulaSessionStore } from "../formula/session";
 import FormulaSessionHost from "./FormulaSessionHost.vue";
@@ -84,6 +90,21 @@ describe("NamesPanel", () => {
     expect(wrapper.find(".script__reason").exists()).toBe(true);
   });
 
+  it("opens a name for editing on one click", async () => {
+    server.setTableNames.mockResolvedValue(changeWith());
+    await render([{ name: "Fee", formula: "3" }]);
+    const name = wrapper.get("th .editable-name");
+
+    await name.trigger("mousedown", { button: 0 });
+    await clickWithDetail(name.element);
+    const input = wrapper.get<HTMLInputElement>('input[aria-label="Name"]');
+    await input.setValue("Charge");
+    await input.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+
+    expect(server.setTableNames).toHaveBeenCalledWith("t1", [{ name: "Charge", formula: "3" }]);
+  });
+
   it("closes on Escape", async () => {
     await render([]);
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
@@ -92,7 +113,9 @@ describe("NamesPanel", () => {
 
   it("keeps the panel open when Escape cancels a name edit", async () => {
     await render([{ name: "Fee", formula: "3" }]);
-    await wrapper.get("th .editable-name").trigger("dblclick");
+    const name = wrapper.get("th .editable-name");
+    await name.trigger("mousedown", { button: 0 });
+    await clickWithDetail(name.element);
     await flushPromises();
 
     const input = wrapper.get('input[aria-label="Name"]');

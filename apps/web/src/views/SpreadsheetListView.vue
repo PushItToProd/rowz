@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, nextTick, watch } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  nextTick,
+  watch,
+  type ComponentPublicInstance,
+} from "vue";
 import { useRouter } from "vue-router";
 import {
   LIMITS,
@@ -7,6 +15,7 @@ import {
   type DocumentSearchResponse,
 } from "@spreadsheet-app/shared";
 import ContextMenu from "../components/ContextMenu.vue";
+import EditableName from "../components/EditableName.vue";
 import ErrorWarning from "../components/ErrorWarning.vue";
 import NoticeMessage from "../components/NoticeMessage.vue";
 import { api, type FolderRecord, type ListedSpreadsheetItem } from "../api/client";
@@ -49,8 +58,6 @@ const importingExampleId = ref<string | null>(null);
 const newFolderName = ref("");
 const editingFolderId = ref<string | null>(null);
 const editingFolderName = ref("");
-const editingDocumentId = ref<string | null>(null);
-const editingDocumentName = ref("");
 const collapsed = ref(new Set<string>());
 const createFolderInput = ref<HTMLInputElement>();
 const galleryDialog = ref<HTMLElement>();
@@ -58,6 +65,7 @@ const galleryCloseButton = ref<HTMLButtonElement>();
 const galleryOpener = ref<HTMLElement | null>(null);
 const moveMenu = ref<{ document: ListedSpreadsheetItem; x: number; y: number } | null>(null);
 const actionMenu = ref<{ document: ListedSpreadsheetItem; x: number; y: number } | null>(null);
+const documentNameEditors = new Map<string, InstanceType<typeof EditableName>>();
 const searchActive = computed(() => searchQuery.value.length > 0);
 const localNameResults = computed<DocumentSearchResponse>(() => {
   const query = searchQuery.value.toLocaleLowerCase();
@@ -308,30 +316,23 @@ const remove = (document: ListedSpreadsheetItem): Promise<void> =>
     await refreshData();
   });
 
-async function beginRenameDocument(document: ListedSpreadsheetItem): Promise<void> {
+function captureDocumentNameEditor(
+  id: string,
+  editor: Element | ComponentPublicInstance | null,
+): void {
+  if (editor) documentNameEditors.set(id, editor as InstanceType<typeof EditableName>);
+  else documentNameEditors.delete(id);
+}
+
+function beginRenameDocument(document: ListedSpreadsheetItem): void {
   if (document.role !== "owner") return;
-  editingDocumentId.value = document.id;
-  editingDocumentName.value = document.name;
-  await nextTick();
-  const input = globalThis.document.getElementById(`document-name-${document.id}`);
-  if (input instanceof HTMLInputElement) {
-    input.focus();
-    input.select();
-  }
+  void documentNameEditors.get(document.id)?.start();
 }
 
-function cancelRenameDocument(): void {
-  editingDocumentId.value = null;
-  editingDocumentName.value = "";
-}
-
-const submitRenameDocument = (document: ListedSpreadsheetItem): Promise<void> =>
+const renameDocument = (document: ListedSpreadsheetItem, name: string): Promise<void> =>
   run(async () => {
     if (document.role !== "owner") return;
-    const name = editingDocumentName.value.trim();
-    if (!name) return;
     if (name !== document.name) await api.renameSpreadsheet(document.id, name);
-    cancelRenameDocument();
     await refreshData();
   });
 
@@ -461,7 +462,14 @@ const actionItems = computed<MenuItem[]>(() => {
   if (!target) return [];
   const items: MenuItem[] = [
     ...(target.role === "owner"
-      ? [{ label: "Rename", run: () => void beginRenameDocument(target) }]
+      ? [
+          {
+            label: "Rename",
+            run: () => {
+              beginRenameDocument(target);
+            },
+          },
+        ]
       : []),
     { label: "Duplicate", run: () => void duplicate(target) },
     ...(target.role === "owner"
@@ -673,26 +681,24 @@ onBeforeUnmount(() => {
 
         <ul v-show="!collapsed.has(group.id)" :id="groupId(group.id)" class="list__items">
           <li v-for="document in group.documents" :key="document.id">
-            <form
-              v-if="editingDocumentId === document.id"
-              class="list__document-rename"
-              :aria-label="`Rename document ${document.name}`"
-              @submit.prevent="submitRenameDocument(document)"
-            >
-              <input
-                :id="`document-name-${document.id}`"
-                v-model="editingDocumentName"
-                :aria-label="`Document name for ${document.name}`"
-                :maxlength="LIMITS.nameLength"
-                required
-                @keydown.esc.stop.prevent="cancelRenameDocument"
-              />
-              <button type="submit" class="primary">Save</button>
-              <button type="button" @click="cancelRenameDocument">Cancel</button>
-            </form>
+            <ErrorWarning v-if="document.hasErrors" :label="`${document.name} contains errors`" />
+            <EditableName
+              v-if="document.role === 'owner'"
+              :ref="(editor) => captureDocumentNameEditor(document.id, editor)"
+              :value="document.name"
+              :label="`Document name for ${document.name}`"
+              @rename="renameDocument(document, $event)"
+            />
             <RouterLink v-else :to="{ name: 'editor', params: { spreadsheetId: document.id } }">
-              <ErrorWarning v-if="document.hasErrors" :label="`${document.name} contains errors`" />
               {{ document.name }}
+            </RouterLink>
+            <RouterLink
+              v-if="document.role === 'owner'"
+              class="list__document-open"
+              :aria-label="`Open ${document.name}`"
+              :to="{ name: 'editor', params: { spreadsheetId: document.id } }"
+            >
+              Open
             </RouterLink>
             <span v-if="document.role !== 'owner'" class="badge">
               Shared with you · {{ document.role === "editor" ? "can edit" : "can view" }}

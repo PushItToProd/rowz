@@ -36,7 +36,7 @@ async function rename(
   from: Locator,
   to: string,
 ): Promise<void> {
-  await from.dblclick();
+  await from.click();
   await page.getByLabel(`${kind} name`).fill(to);
   await page.getByLabel(`${kind} name`).press("Enter");
 }
@@ -102,7 +102,9 @@ test("capture the README screenshots", async ({ page }) => {
   await choose("Column 1", "Column holds: A formula…");
   await page.getByLabel("Column formula").fill("=[Price] * [Qty]");
   await page.getByRole("button", { name: "Apply" }).click();
-  await header("Column 1").getByText("Column 1").dblclick();
+  await cell(page, "A1", "Orders").click();
+  await header("Column 1").getByText("Column 1").click();
+  await header("Column 1").getByText("Column 1").click();
   await page.getByLabel("Column name").fill("Total");
   await page.getByLabel("Column name").press("Enter");
   await expect(cell(page, "E1", "Orders")).toHaveText("180");

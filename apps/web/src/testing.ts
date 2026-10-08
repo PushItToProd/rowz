@@ -8,6 +8,7 @@ import { parseAddress, type CellId } from "@spreadsheet-app/engine";
 import { vi, expect, beforeEach, type Mock } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import DialogHost from "./components/DialogHost.vue";
+export { clickWithDetail } from "./testing/events";
 import type {
   api,
   Change,

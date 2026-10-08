@@ -1,4 +1,4 @@
-import { wireSnapshot, changeWith } from "../testing";
+import { wireSnapshot, changeWith, clickWithDetail } from "../testing";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -76,6 +76,38 @@ describe("PageTabs", () => {
     await wrapper.findAll("a")[1]!.trigger("click");
     await flushPromises();
     expect(router.currentRoute.value.params).toEqual({ spreadsheetId: "s1", pageId: "p2" });
+  });
+
+  it("switches to another page on its first click and renames it when clicked again", async () => {
+    const wrapper = await render();
+    const name = wrapper.get('[data-page-id="p2"] .editable-name');
+
+    await name.trigger("mousedown", { button: 0 });
+    await clickWithDetail(name.element);
+    await flushPromises();
+    expect(router.currentRoute.value.params).toEqual({ spreadsheetId: "s1", pageId: "p2" });
+    expect(wrapper.find('input[aria-label="Page name"]').exists()).toBe(false);
+
+    await wrapper.setProps({ activePageId: "p2" });
+    const activeName = wrapper.get('[data-page-id="p2"] .editable-name');
+    await activeName.trigger("mousedown", { button: 0 });
+    await clickWithDetail(activeName.element);
+    expect(wrapper.get<HTMLInputElement>('input[aria-label="Page name"]').element.value).toBe(
+      "Page 2",
+    );
+  });
+
+  it("renames the active page on one click", async () => {
+    const wrapper = await render();
+    const name = wrapper.get('[data-page-id="p1"] .editable-name');
+
+    await name.trigger("mousedown", { button: 0 });
+    await clickWithDetail(name.element);
+
+    expect(wrapper.get<HTMLInputElement>('input[aria-label="Page name"]').element.value).toBe(
+      "Page 1",
+    );
+    expect(router.currentRoute.value.path).toBe("/");
   });
 
   it("renames a page with F2", async () => {

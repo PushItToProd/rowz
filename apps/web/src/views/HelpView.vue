@@ -514,9 +514,11 @@ const OPERATORS = [
           <code>#REF!</code>.
         </li>
         <li>
-          Double-click the name of a document, page, or table to rename it. From the keyboard, move
-          to the name with Tab and press Enter. A page's name is also the link that opens the page,
-          so there Enter opens the page and F2 renames it.
+          On the Documents page, click an owned document's name to rename it; click
+          <strong>Open</strong> to open it. A shared document's name opens it. Click another page
+          tab to open it, or click the active page's name to rename it. Click a block's name to
+          rename it. In the Names panel, click a name to rename it. Press F2 when a name is focused
+          to rename it. Double-click the contents of a text view or script to edit its source.
         </li>
         <li>
           The arrows beside a block move it up or down its page, and the button under them moves it
@@ -564,8 +566,9 @@ const OPERATORS = [
       <p>
         Choose <strong>Use the first row as the names</strong> or
         <strong>Name them Column 1, Column 2, …</strong> in a plain table's block menu to give each
-        column a name in place of its letter. Using the first row removes it from the data.
-        Double-click a name to change it.
+        column a name in place of its letter. Using the first row removes it from the data. Click a
+        column header to select it, then click its name to rename it. Double-click another part of
+        the header, outside the resize handle, to open its name editor.
       </p>
       <ul>
         <li>
@@ -778,9 +781,10 @@ const OPERATORS = [
       <h2>Names and your own functions</h2>
       <p>
         Choose <strong>Names</strong> in a plain table's block menu to open the Names panel. The
-        new-name form creates a name only with <strong>Add name</strong> or Enter. Tab and clicking
-        outside retain the unfinished name and formula. Cancel or closing the form discards them.
-        Its formula supports the same completion and reference picking as other formula editors.
+        new-name form creates a name only with <strong>Add name</strong> or Enter. Click an existing
+        name to rename it. Tab and clicking outside retain the unfinished name and formula. Cancel
+        or closing the form discards them. Its formula supports the same completion and reference
+        picking as other formula editors.
       </p>
       <p>
         <code>LET</code> gives a name to a value so a formula can use it more than once:
@@ -1214,11 +1218,12 @@ const OPERATORS = [
           numbered name.
         </li>
         <li>
-          On the Documents page, open a document's <strong>⋯</strong> menu to rename or delete a
-          document you own, or to duplicate any document you can read. A duplicate is created in
-          your workspace, and the list stays open. Deleting a document asks for confirmation and
-          cannot be undone. The separate <strong>Move</strong> menu files a document into one of
-          your folders.
+          On the Documents page, click an owned document's name to rename it, or click
+          <strong>Open</strong> to open it. Its <strong>⋯</strong> menu also offers Rename and
+          Delete, and duplicates any document you can read. A duplicate is created in your
+          workspace, and the list stays open. Deleting a document asks for confirmation and cannot
+          be undone. The separate <strong>Move</strong> menu files a document into one of your
+          folders.
         </li>
         <li>
           <strong>Export CSV</strong> in a table's block menu saves the values its cells show as a

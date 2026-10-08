@@ -614,6 +614,12 @@ function isLineSelected(axis: Axis, index: number): boolean {
         contains(whole, { row: 0, col: index });
 }
 
+/** Whether this column is the only whole column in the selection. */
+function isColumnSelectedAlone(index: number): boolean {
+  const whole = range.value;
+  return whole?.entireColumn === true && whole.startCol === index && whole.endCol === index;
+}
+
 function selectAll(): void {
   store.resetTabTraversal();
   store.selection = cellAt(0, 0);
@@ -1276,6 +1282,7 @@ function onGridKeydown(event: KeyboardEvent): void {
                   :ref="(editor) => captureColumnNameEditor(col - 1, editor)"
                   :value="columnAt(col - 1)?.name ?? ''"
                   label="Column name"
+                  :click-to-edit="isColumnSelectedAlone(col - 1)"
                   :disabled="!store.canEdit"
                   @rename="store.updateColumn(table.id, col - 1, { name: $event })"
                 />

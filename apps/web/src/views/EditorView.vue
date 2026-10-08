@@ -78,6 +78,7 @@ function navigateInDocumentLink(event: MouseEvent): void {
   )
     return;
   const anchor = event.target.closest<HTMLAnchorElement>("a[href]");
+  if (anchor?.matches(".editable-name[data-click-to-edit]")) return;
   const href = anchor?.getAttribute("href");
   if (!href) return;
   const currentPageId =

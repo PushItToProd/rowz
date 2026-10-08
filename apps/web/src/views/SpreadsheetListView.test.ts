@@ -7,7 +7,13 @@ import type { DocumentSearchResponse } from "@spreadsheet-app/shared";
 import { api } from "../api/client";
 import { DOCUMENT_TEMPLATES } from "../files/templates";
 import { queueListNotice, takeQueuedListNotice } from "../notice";
-import { appDialog, mountDialogHost, respondToDialog, type MockedApi } from "../testing";
+import {
+  appDialog,
+  clickWithDetail,
+  mountDialogHost,
+  respondToDialog,
+  type MockedApi,
+} from "../testing";
 import { bodyFindAll, bodyGet, bodyHas } from "../testing/teleported";
 import SpreadsheetListView from "./SpreadsheetListView.vue";
 
@@ -266,7 +272,8 @@ it("shows folders as collapsible groups with their documents", async () => {
 
   const workGroup = view.findAll(".list__group")[0]!;
   expect(workGroup.find(".list__group-toggle").attributes("aria-expanded")).toBe("true");
-  expect(workGroup.find("a").text()).toBe("Plan");
+  expect(workGroup.find(".editable-name").text()).toBe("Plan");
+  expect(workGroup.get('a[aria-label="Open Plan"]').text()).toBe("Open");
   await workGroup.find(".list__group-toggle").trigger("click");
   await flushPromises();
   expect(workGroup.find(".list__group-toggle").attributes("aria-expanded")).toBe("false");
@@ -373,18 +380,41 @@ it("opens an accessible actions menu and renames an owned document inline", asyn
   const input = view.get('[aria-label="Document name for Plan"]');
   expect(globalThis.document.activeElement).toBe(input.element);
   await input.setValue(" Forecast ");
-  await view.get('form[aria-label="Rename document Plan"]').trigger("submit");
+  await input.trigger("keydown", { key: "Enter" });
   await flushPromises();
 
   expect(server.renameSpreadsheet).toHaveBeenCalledExactlyOnceWith("d1", "Forecast");
-  expect(view.get('a[href="/s/d1"]').text()).toBe("Forecast");
+  expect(view.get(".editable-name").text()).toBe("Forecast");
+  expect(view.get('a[aria-label="Open Forecast"]').text()).toBe("Open");
+});
+
+it("opens an owned document name for editing on one click and keeps an Open link", async () => {
+  const renamed = { ...document(null), name: "Forecast" };
+  server.listSpreadsheets
+    .mockResolvedValueOnce(listed([], [document(null)]))
+    .mockResolvedValueOnce(listed([], [renamed]));
+  server.renameSpreadsheet.mockResolvedValue(undefined);
+  const view = await render();
+
+  const name = view.get(".editable-name");
+  await name.trigger("mousedown", { button: 0 });
+  await clickWithDetail(name.element);
+  const input = view.get<HTMLInputElement>('[aria-label="Document name for Plan"]');
+  await input.setValue("Forecast");
+  await input.trigger("keydown", { key: "Enter" });
+  await flushPromises();
+
+  expect(server.renameSpreadsheet).toHaveBeenCalledExactlyOnceWith("d1", "Forecast");
+  expect(view.get(".editable-name").text()).toBe("Forecast");
+  expect(view.get('a[aria-label="Open Forecast"]').text()).toBe("Open");
 });
 
 it("refuses an empty document name and cancels inline rename with Escape", async () => {
-  server.listSpreadsheets.mockResolvedValue(listed([], [document(null)]));
+  // Clear a pending one-time response if the previous rename test stopped early.
+  server.listSpreadsheets.mockReset().mockResolvedValue(listed([], [document(null)]));
   const view = await render();
 
-  await view.get('button[aria-label="Actions for Plan"]').trigger("click", {
+  await view.get(".list__items > li").get('button[aria-haspopup="menu"]').trigger("click", {
     clientX: 40,
     clientY: 60,
   });
@@ -394,15 +424,14 @@ it("refuses an empty document name and cancels inline rename with Escape", async
 
   const input = view.get('[aria-label="Document name for Plan"]');
   await input.setValue("   ");
-  await view.get('form[aria-label="Rename document Plan"]').trigger("submit");
-  await flushPromises();
+  await input.trigger("keydown", { key: "Enter" });
   expect(server.renameSpreadsheet).not.toHaveBeenCalled();
-  expect(view.find('form[aria-label="Rename document Plan"]').exists()).toBe(true);
+  expect(view.find('[aria-label="Document name for Plan"]').exists()).toBe(true);
 
   await input.setValue("Unsaved name");
   await input.trigger("keydown", { key: "Escape" });
-  expect(view.find('form[aria-label="Rename document Plan"]').exists()).toBe(false);
-  expect(view.get('a[href="/s/d1"]').text()).toBe("Plan");
+  expect(view.find('[aria-label="Document name for Plan"]').exists()).toBe(false);
+  expect(view.get(".editable-name").text()).toBe("Plan");
 });
 
 it("shows only Duplicate for a shared document", async () => {

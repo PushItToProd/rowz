@@ -5,7 +5,13 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { api, type TableRecord, type ViewRecord } from "../api/client";
 import { bodyFindAll, bodyGet, bodyHas } from "../testing/teleported";
 import { takeQueuedListNotice } from "../notice";
-import { changeWith, snapshotWith, wireSnapshot, type MockedApi } from "../testing";
+import {
+  changeWith,
+  clickWithDetail,
+  snapshotWith,
+  wireSnapshot,
+  type MockedApi,
+} from "../testing";
 import EditorView from "./EditorView.vue";
 import { useWorkbookStore } from "../stores/workbook";
 import { useFormulaSessionStore } from "../formula/session";
@@ -417,9 +423,12 @@ it("opens the block menu from the header and keeps the browser menu on the name 
   await openBlockMenu(header.get('button[aria-label="Collapse Table 1"]').element);
   await openBlockMenu(header.get('button[aria-label="Block actions for Table 1"]').element);
 
-  await header.get(".editable-name").trigger("dblclick");
+  const blockName = header.get(".editable-name");
+  await blockName.trigger("mousedown", { button: 0 });
+  await clickWithDetail(blockName.element);
   await flushPromises();
-  const nameInput = header.get(".editable-name--editing");
+  const nameInput = header.get<HTMLInputElement>(".editable-name--editing");
+  expect(nameInput.element.value).toBe("Table 1");
   const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 });
   nameInput.element.dispatchEvent(event);
   await flushPromises();
