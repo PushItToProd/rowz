@@ -685,9 +685,11 @@ const OPERATORS = [
         Boolean keywords ignore case and use the coercion and range handling of
         <code>AND</code>, <code>OR</code>, and <code>NOT</code>. The <code>and</code> operator skips
         its right operand when its left side is <code>FALSE</code>, and <code>or</code> skips it
-        when its left side is <code>TRUE</code>. The <code>AND</code> and <code>OR</code> functions
-        still evaluate every argument. Comparisons bind tighter than <code>not</code>, then
-        <code>and</code>, then <code>or</code>: <code>=A1 > 1 and (not B1 or C1 &lt; 2)</code>.
+        when its left side is <code>TRUE</code>. The <code>AND</code> function also stops at its
+        first <code>FALSE</code>, and <code>OR</code> at its first <code>TRUE</code>.
+        <code>ALL</code> and <code>ANY</code> evaluate every argument and return an error found in
+        any of them. Comparisons bind tighter than <code>not</code>, then <code>and</code>, then
+        <code>or</code>: <code>=A1 > 1 and (not B1 or C1 &lt; 2)</code>.
       </p>
       <p>
         <code>and</code> and <code>or</code> are names where an operand is expected. Prefix

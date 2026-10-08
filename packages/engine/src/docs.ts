@@ -251,7 +251,7 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Logic",
     syntax: "AND(value, ...)",
     summary:
-      "TRUE when every value is true. This function evaluates every argument; the `and` operator skips its right operand when the left side is FALSE.",
+      "TRUE when every value is true. Stops at the first FALSE, unlike Excel and Sheets, which evaluate every argument.",
     example: "AND(A1 > 0, A2 > 5)",
   },
   {
@@ -259,8 +259,24 @@ const ENTRIES: readonly FunctionDoc[] = [
     category: "Logic",
     syntax: "OR(value, ...)",
     summary:
-      "TRUE when at least one value is true. This function evaluates every argument; the `or` operator skips its right operand when the left side is TRUE.",
+      "TRUE when at least one value is true. Stops at the first TRUE, unlike Excel and Sheets, which evaluate every argument.",
     example: "OR(A1 > 0, A2 > 5)",
+  },
+  {
+    name: "ALL",
+    category: "Logic",
+    syntax: "ALL(value, ...)",
+    summary:
+      "TRUE when every value is true. Evaluates every argument and returns an error found in any of them.",
+    example: "ALL(A1 > 0, A2 > 1)",
+  },
+  {
+    name: "ANY",
+    category: "Logic",
+    syntax: "ANY(value, ...)",
+    summary:
+      "TRUE when at least one value is true. Evaluates every argument and returns an error found in any of them.",
+    example: "ANY(A1 > 1, A2 > 1)",
   },
   {
     name: "NOT",

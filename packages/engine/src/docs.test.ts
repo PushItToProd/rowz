@@ -49,6 +49,8 @@ describe("functionDocs", () => {
     ["IFERROR", "no result"],
     ["AND", false],
     ["OR", true],
+    ["ALL", true],
+    ["ANY", true],
     ["CONCATENATE", "Total: 3"],
     ["TRIM", "two words"],
     ["COUNTIF", 2],

@@ -6,6 +6,17 @@ function combine(compute: (values: readonly boolean[]) => boolean): FunctionDefi
   return eager(1, Infinity, (...values) => compute(booleans(values)));
 }
 
+function shortCircuit(isAnd: boolean): FunctionDefinition {
+  const definition = lazy(1, Infinity, (args) => {
+    for (const arg of args) {
+      const values = booleans([arg()]);
+      if (isAnd ? values.includes(false) : values.includes(true)) return !isAnd;
+    }
+    return isAnd;
+  });
+  return { ...definition, callableAsValue: true };
+}
+
 export const logicFunctions: Record<string, FunctionDefinition> = {
   /** Evaluates only the branch it returns, so `IF(B1=0, 0, A1/B1)` does not divide by zero. */
   IF: lazy(2, 3, ([condition, whenTrue, whenFalse]): Evaluated => {
@@ -46,7 +57,9 @@ export const logicFunctions: Record<string, FunctionDefinition> = {
     const result = value?.() ?? null;
     return isError(result) && result.code === "#N/A" ? (fallback?.() ?? null) : result;
   }),
-  AND: combine((values) => values.every(Boolean)),
-  OR: combine((values) => values.some(Boolean)),
+  AND: shortCircuit(true),
+  OR: shortCircuit(false),
+  ALL: combine((values) => values.every(Boolean)),
+  ANY: combine((values) => values.some(Boolean)),
   NOT: eager(1, 1, (value) => !boolean(value)),
 };

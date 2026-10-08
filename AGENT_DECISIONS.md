@@ -2,6 +2,14 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-08: Lazy AND and OR functions
+
+**Choice.** Evaluate `AND` and `OR` arguments from left to right and stop when a collected Boolean decides the result. Treat each range or array as one evaluated argument: its existing collector processes every cell, including errors, before the function can continue. Keep `AND` and `OR` callable as built-in values; higher-order functions call them with already evaluated values. `ALL` and `ANY` use the old eager collection behavior. The dependency index continues to include references in skipped arguments.
+
+**Why.** This preserves the old coercion, range, array, and error behavior for every evaluated argument while allowing a later argument's formula to remain unevaluated. `referencesOf` already scans every non-action function argument, and the dependency test checks that a changed reference in a skipped argument invalidates the formula.
+
+**To change.** Update `shortCircuit` in `packages/engine/src/functions/logic.ts` and its tests in `packages/engine/src/boolean-operators.test.ts`.
+
 ## 2026-10-08: Consistent CSV formula warnings
 
 **Choice.** Use one warning sentence in both CSV replacement and append confirmations.

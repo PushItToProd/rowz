@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { at, evaluateFormula, workbookWith } from "./testing";
+import { defaultFunctions } from "./functions";
+import type { FunctionRegistry, PureFunction } from "./functions/registry";
+import { at, evaluateFormula, STRUCTURE, workbookWith } from "./testing";
+import { Workbook } from "./workbook";
+
+function evaluateArray(formula: string) {
+  const workbook = workbookWith({ t1: { Z99: formula } });
+  return workbook.getArray(at("Z99"));
+}
 
 describe("boolean operators", () => {
   it.each<[string, number | boolean]>([
@@ -40,20 +48,115 @@ describe("boolean operators", () => {
     expect(evaluateFormula(`=${expression}`)).toEqual(evaluateFormula(`=${call}`));
   });
 
-  it("short-circuits operators but leaves AND and OR functions eager", () => {
+  it("short-circuits the operators and AND and OR functions", () => {
     expect(evaluateFormula("=FALSE and 1/0")).toBe(false);
     expect(evaluateFormula("=TRUE or 1/0")).toBe(true);
     expect(evaluateFormula("=TRUE and 1/0")).toEqual(evaluateFormula("=1/0"));
     expect(evaluateFormula("=FALSE or 1/0")).toEqual(evaluateFormula("=1/0"));
-    expect(evaluateFormula("=AND(FALSE, 1/0)")).toEqual(evaluateFormula("=1/0"));
-    expect(evaluateFormula("=OR(TRUE, 1/0)")).toEqual(evaluateFormula("=1/0"));
+    expect(evaluateFormula("=AND(FALSE, 1/0)")).toBe(false);
+    expect(evaluateFormula("=OR(TRUE, 1/0)")).toBe(true);
+    expect(evaluateFormula("=AND(TRUE, 1/0)")).toEqual(evaluateFormula("=1/0"));
+    expect(evaluateFormula("=OR(FALSE, 1/0)")).toEqual(evaluateFormula("=1/0"));
+    expect(evaluateFormula("=ALL(FALSE, 1/0)")).toEqual(evaluateFormula("=1/0"));
+    expect(evaluateFormula("=ANY(TRUE, 1/0)")).toEqual(evaluateFormula("=1/0"));
 
     const workbook = workbookWith({
-      t1: { A1: "20", B1: "0", C1: "=B1 <> 0 and A1 / B1 > 2" },
+      t1: {
+        A1: "20",
+        B1: "0",
+        C1: "=B1 <> 0 and A1 / B1 > 2",
+        D1: "=AND(B1 <> 0, A1 / B1 > 2)",
+      },
     });
     expect(workbook.getValue(at("C1"))).toBe(false);
+    expect(workbook.getValue(at("D1"))).toBe(false);
     workbook.setCell(at("B1"), "5");
     expect(workbook.getValue(at("C1"))).toBe(true);
+    expect(workbook.getValue(at("D1"))).toBe(true);
+  });
+
+  it("does not call a later argument after AND or OR decides the result", () => {
+    let calls = 0;
+    const probe: PureFunction = {
+      kind: "pure",
+      minArgs: 0,
+      maxArgs: 0,
+      callableAsValue: true,
+      call() {
+        calls += 1;
+        return true;
+      },
+    };
+    const functions: FunctionRegistry = new Map([...defaultFunctions, ["PROBE", probe]]);
+    const workbook = new Workbook({ functions });
+    workbook.setStructure(STRUCTURE);
+    workbook.setCell(at("A1"), "=AND(FALSE, PROBE())");
+    workbook.setCell(at("A2"), "=OR(TRUE, PROBE())");
+
+    expect(workbook.getValue(at("A1"))).toBe(false);
+    expect(workbook.getValue(at("A2"))).toBe(true);
+    expect(calls).toBe(0);
+  });
+
+  it("uses AND and OR as built-in values and inside LAMBDAs", () => {
+    const matrix = "VSTACK(HSTACK(TRUE, FALSE), HSTACK(TRUE, TRUE))";
+    expect(evaluateArray(`=BYROW(${matrix}, AND)`)).toEqual([[false], [true]]);
+    expect(evaluateArray("=MAP(HSTACK(TRUE, FALSE), OR)")).toEqual([[true, false]]);
+    expect(evaluateArray(`=BYCOL(${matrix}, AND)`)).toEqual([[true, false]]);
+    expect(evaluateArray(`=BYCOL(${matrix}, OR)`)).toEqual([[true, true]]);
+    expect(evaluateArray("=REDUCE(TRUE, HSTACK(TRUE, FALSE), AND)")).toEqual([[false]]);
+    expect(evaluateArray("=REDUCE(FALSE, HSTACK(TRUE, FALSE), OR)")).toEqual([[true]]);
+    expect(evaluateArray(`=BYROW(${matrix}, LAMBDA(row, AND(row, FALSE, 1/0)))`)).toEqual([
+      [false],
+      [false],
+    ]);
+    expect(evaluateArray(`=MAP(${matrix}, LAMBDA(value, OR(value, TRUE, 1/0)))`)).toEqual([
+      [true, true],
+      [true, true],
+    ]);
+  });
+
+  it("keeps range and array handling for AND, OR, ALL, and ANY", () => {
+    const cells = { A1: "TRUE", A2: "FALSE", A3: "1" };
+    expect(evaluateFormula("=AND(A1:A3)", cells)).toBe(false);
+    expect(evaluateFormula("=OR(A1:A3)", cells)).toBe(true);
+    expect(evaluateFormula("=ALL(A1:A3)", cells)).toBe(false);
+    expect(evaluateFormula("=ANY(A2:A3)", cells)).toBe(false);
+
+    expect(evaluateFormula("=AND(HSTACK(TRUE, FALSE))")).toBe(false);
+    expect(evaluateFormula("=OR(HSTACK(FALSE, TRUE))")).toBe(true);
+    expect(evaluateFormula("=ALL(HSTACK(TRUE, FALSE))")).toBe(false);
+    expect(evaluateFormula("=ANY(HSTACK(FALSE, TRUE))")).toBe(true);
+    expect(evaluateFormula('=ALL("true", 1)')).toBe(true);
+    expect(evaluateFormula('=ANY("true", 0)')).toBe(true);
+
+    // An evaluated range or array still propagates errors anywhere inside it.
+    expect(evaluateFormula("=AND(HSTACK(FALSE, 1/0))")).toEqual(evaluateFormula("=1/0"));
+  });
+
+  it("tracks references in skipped arguments and recalculates when they change", () => {
+    let calls = 0;
+    const probe: PureFunction = {
+      kind: "pure",
+      minArgs: 0,
+      maxArgs: 0,
+      callableAsValue: true,
+      call() {
+        calls += 1;
+        return false;
+      },
+    };
+    const functions: FunctionRegistry = new Map([...defaultFunctions, ["PROBE", probe]]);
+    const workbook = new Workbook({ functions });
+    workbook.setStructure(STRUCTURE);
+    workbook.setCell(at("A1"), "TRUE");
+    workbook.setCell(at("B1"), "=AND(PROBE(), A1)");
+
+    expect(workbook.getValue(at("B1"))).toBe(false);
+    expect(calls).toBe(1);
+    workbook.setCell(at("A1"), "FALSE");
+    expect(workbook.getValue(at("B1"))).toBe(false);
+    expect(calls).toBe(2);
   });
 
   it("reads whole ranges as AND and OR do, and tracks dependencies", () => {
@@ -85,15 +188,24 @@ describe("boolean operators", () => {
         C1: "=A:A or FALSE",
         D1: "=AND(A:A, TRUE)",
         E1: "=OR(A:A, FALSE)",
+        F1: "=ALL(A:A, TRUE)",
+        G1: "=ANY(A:A, FALSE)",
       },
     });
     expect(workbook.getValue(at("B1"))).toEqual(workbook.getValue(at("D1")));
     expect(workbook.getValue(at("C1"))).toEqual(workbook.getValue(at("E1")));
+    expect(workbook.getValue(at("D1"))).toBe(false);
+    expect(workbook.getValue(at("E1"))).toBe(true);
+    expect(workbook.getValue(at("F1"))).toBe(false);
+    expect(workbook.getValue(at("G1"))).toBe(true);
     workbook.setCell(at("A1"), "FALSE");
     expect(workbook.getValue(at("C1"))).toBe(false);
     workbook.setCell(at("A2"), "TRUE");
     expect(workbook.getValue(at("C1"))).toBe(true);
     workbook.setCell(at("A1"), "TRUE");
     expect(workbook.getValue(at("B1"))).toBe(true);
+    expect(workbook.getValue(at("D1"))).toBe(true);
+    expect(workbook.getValue(at("F1"))).toBe(true);
+    expect(workbook.getValue(at("G1"))).toBe(true);
   });
 });
