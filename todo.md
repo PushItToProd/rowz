@@ -60,6 +60,10 @@ A reference document is the acceptance test of a theme: the theme is done when i
 
 Items that have not been moved to a section yet. An agent adding an item puts it in the section it belongs to. It does not add it here or at the end of the file.
 
+- [ ] **P0** the fact that clicking a document name in the document list triggers a rename and you have to explicitly click "Open" to open it is annoying. clicking a document should open it. renaming a document from the document list should be done from the ellipsis context menu that already exists.
+  - [ ] I assume some agent decided to do this based on some guidance in my design principles, so once you've fixed this, also review those and tell me what motivated doing this. actually, maybe run a `git blame` before you fix the issue and check what commit it happened in to see what that was intended to satisfy
+- [ ] add a trash bin for deleted docs instead of nuking them right away
+
 ## Plans
 
 - [x] **P1** implement [persistent row identity](plans/persistent-row-identity.md)
@@ -154,7 +158,7 @@ These items came from a QA pass through the running app in a browser on 2026-10-
 - [x] **P6** (Claude) Changing a column's type to Checkbox turns each cell that is not true or false into `#VALUE!` without a warning. In the test the document's error count went from 7 to 14. Say how many cells do not fit the new type before changing it #data-tables
 - [x] **P3** (Claude) A click anywhere in a cell of a checkbox column ticks or clears it, so the mouse cannot select such a cell without changing it. Only the box itself should toggle #data-tables
 - [x] **P4** (Claude) "Save a copy" opens the copy at once, and the only sign is "(copy)" at the end of the name in the header. A later edit meant for the original goes to the copy. Show a message that the copy is now open, or keep the original open and link to the copy #documents
-- [ ] **Author** **P8** (Claude) After a reload the Undo button is disabled, though the server keeps the journal of changes. Decide whether undo should continue across a reload #everyday
+- [ ] **P8** After a reload the Undo button is disabled, though the server keeps the journal of changes. Undo should continue across a reload #everyday
 
 ### From the review of 2026-10-01
 
