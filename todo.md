@@ -60,8 +60,6 @@ A reference document is the acceptance test of a theme: the theme is done when i
 
 Items that have not been moved to a section yet. An agent adding an item puts it in the section it belongs to. It does not add it here or at the end of the file.
 
-- [ ] **P0** the fact that clicking a document name in the document list triggers a rename and you have to explicitly click "Open" to open it is annoying. clicking a document should open it. renaming a document from the document list should be done from the ellipsis context menu that already exists.
-  - [ ] I assume some agent decided to do this based on some guidance in my design principles, so once you've fixed this, also review those and tell me what motivated doing this. actually, maybe run a `git blame` before you fix the issue and check what commit it happened in to see what that was intended to satisfy
 - [ ] add a trash bin for deleted docs instead of nuking them right away
 
 ## Plans
@@ -75,7 +73,6 @@ Items that have not been moved to a section yet. An agent adding an item puts it
 - [ ] **Author** (Claude) for the author: `AGENT_DECISIONS.md` has 63 entries (the overnight-work run added more dated 2026-10-07 and 2026-10-08: errors sort before blanks, `Notice.detail`, `TEXTBEFORE` and `TEXTAFTER`, QUERY pivot header types) and nothing marks which the author has reviewed. Its entries are out of date order and four headings have no date. Mark the reviewed ones, or move them to `DECISIONS.md` or delete them as they are reviewed
 - [ ] **Author** **P3** (Claude) for the author: bring `docs/design/` in line with the overnight-work commits. An agent run may not edit it
   - [formula-language.md](docs/design/formula-language.md) line 26 ("The engine does not do this yet...") is stale: the `and` and `or` operators and the `AND` and `OR` functions are lazy, and `ALL` and `ANY` exist. Delete the paragraph
-  - [ui.md](docs/design/ui.md) near line 166 says `EditableName.vue` opens on double-click. It opens on one click
   - [ui.md](docs/design/ui.md) still lists the missing danger color for context-menu delete items as an app gap. The color exists
   - [ui.md](docs/design/ui.md) could say that a click anywhere in a named column header, outside its controls and the resize handle, starts renaming
 - [ ] **Author** **P3** (Claude) for the author: regenerate `docs/screenshots/editor.png` with `pnpm screenshots`. It shows the removed block header buttons and the text view editor above its preview. The text view layout is checked at 1280x800 only, not at phone width, in the dark theme, or with long content
@@ -171,6 +168,8 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
 
 ### Fixed
 
+- [x] **P0** the fact that clicking a document name in the document list triggers a rename and you have to explicitly click "Open" to open it is annoying. clicking a document should open it. renaming a document from the document list should be done from the ellipsis context menu that already exists.
+  - [x] I assume some agent decided to do this based on some guidance in my design principles, so once you've fixed this, also review those and tell me what motivated doing this. actually, maybe run a `git blame` before you fix the issue and check what commit it happened in to see what that was intended to satisfy
 - [x] **P3** A `NUMBERBOX` (cell and text view) sends an empty string when the browser reports an empty value for incomplete input such as `-` or `e` (`validity.badInput`), and an empty string clears the target; refuse the commit instead (`CellView.vue`, `TextCard.vue`) #small-apps
 - [x] **P3** `TEXTBOX`/`NUMBERBOX` do not check the target column's type: `abc` into a number column succeeds and leaves a `#VALUE!` cell, and `007` is stored as the number 7 despite the documented text-preserving behavior (`packages/engine/src/workbook.ts`) #small-apps
 - [x] **P0** (Claude) A `BUTTON` loses every local name when it is clicked. `=LET(x, A1, BUTTON("go", EXECUTE(x+1, A2)))` shows a button, and clicking it fails with `#NAME? Unknown name 'x'`. `call` in [evaluate.ts](packages/engine/src/evaluate.ts) builds the `ActionValue` with the action's arguments, origin, and page, and leaves out `context.names`. `LET` is the case that was run; a `LAMBDA` parameter, a script function's parameter, and a template `let` or loop variable are bound the same way. Keep the bindings in the `ActionValue`, as a `LAMBDA` value keeps its context, and plan the action with them #small-apps

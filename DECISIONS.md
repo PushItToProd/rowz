@@ -2,6 +2,14 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-08: A click renames only where it has no more important job
+
+**Decision.** One click renames a name only where a click on it has nothing more important to do. This narrows the entry of 2026-10-07, "A name opens for editing on one click": the document's name there is the name shown in the editor, not the document's entry in the document list. In the document list, a click on a document opens it, and Rename is in the document's menu.
+
+**Why.** Nobody has a reason to click the name of the document they are viewing, the active page's tab, or a block's name, so renaming on that click adds behavior and takes none away. The document list exists so that a person can pick a document. One-click rename there took the click the page is for, and opening a document needed a separate Open link.
+
+**What would reopen it.** A list where renaming is done more often than choosing.
+
 ## 2026-10-07: Removing a whole container is confirmed, beside the menu
 
 **Decision.** An action is confirmed when undo cannot reverse it, or when it removes a whole container (a page, a block, a document) whose loss the person may not notice at once. Deleting a page is therefore confirmed, which changes the entry of 2026-10-05 below. A row or column delete is still not confirmed.

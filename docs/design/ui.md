@@ -55,7 +55,13 @@ Acting on the thing itself is the first way to do something: drag a header borde
 
 Keep an explicit control for the same action, so that a gesture is never the only way. The control may be a menu item. A text view opens for editing on double-click and also has Edit and Done buttons.
 
-A name that can be renamed in place opens for editing on one click: a document's, a page's, a block's, a column's, and a name in the Names panel. Where a click on the name already does something else, the first click does that and a click on the name of the thing already selected renames it. A click on another page's tab switches to that page, and a click on the active page's name renames it. A click on a column's header selects the column, and a click on a selected column's name renames it. A script or text block opens on double-click, because one click there would replace rendered text with its source on a click that may only be meant to select or scroll.
+A click on a name renames it only where the click has no more important job. The name of the document being viewed, the active page's name, a block's name, and a name in the Names panel have no other use for a click, so one click opens each for editing in place.
+
+A click that chooses, opens, or selects the thing keeps that meaning. A list whose purpose is choosing among things is the main case: in the document list, a click on a document opens it, and Rename is in the document's menu. A click on another page's tab switches to that page. A click on a column's header selects the column.
+
+Where the first click selects the thing and it stays in view, a click on the name of the thing already selected renames it. This covers the active page's name and a selected column's name. It does not cover the document list, where the first click leaves the list.
+
+A script or text block opens on double-click, because one click there would replace rendered text with its source on a click that may only be meant to select or scroll.
 
 Make the target of a frequent action large. The strip along the bottom and right edge of a table adds a row or column from a click anywhere on it.
 
@@ -163,7 +169,6 @@ New work follows these rules. The existing app falls short of them in the places
 - Deleting a page is not confirmed.
 - Closed messages are not kept in a history.
 - A notice holds one line of text and has no place for an underlying error, which [writing.md](writing.md) asks for.
-- `EditableName.vue` opens on double-click, for every name it edits.
 - Native `<select>` elements and `title` attributes remain, as the audit lists.
 
 ## Look

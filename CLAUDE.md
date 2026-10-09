@@ -28,6 +28,7 @@ The rules agents break most often:
 - **Reuse the shared component for a job.** One formula editor, one dialog host, one context menu, one open side panel.
 - **Anything with actions has a right-click menu and a visible button that opens the same menu.** Items describe the current selection and leave out what cannot apply.
 - **Confirm what undo cannot reverse and the removal of a whole page, block, or document.** Do not confirm a small edit in view that undo reverses. Confirm a delete beside the menu it was chosen from, not in a dialog across the screen.
+- **A click on a thing in a list that exists for choosing opens or selects it.** One click renames a name only where the click has no more important job, as on the name of the document being viewed. In the document list, Rename is in the document's menu.
 - **Do not repeat a menu's actions as buttons beside the thing.**
 - **An error says what could not be done and why in one sentence, with the actual names and numbers, then what to do.** It shows an underlying error word for word below the summary, and links to where it arose.
 - **A delete control looks destructive.** A plain "×" means close.
