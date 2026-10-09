@@ -77,7 +77,6 @@ Items that have not been moved to a section yet. An agent adding an item puts it
   - [ui.md](docs/design/ui.md) could say that a click anywhere in a named column header, outside its controls and the resize handle, starts renaming
 - [ ] **Author** **P3** (Claude) for the author: regenerate `docs/screenshots/editor.png` with `pnpm screenshots`. It shows the removed block header buttons and the text view editor above its preview. The text view layout is checked at 1280x800 only, not at phone width, in the dark theme, or with long content
 - [ ] **Author** **P3** (Claude) for the author: review these overnight-work commits closely: 453f7ac (block header buttons removed, five rounds), 75b0a94 (one-click rename), 74f3350 (lazy `AND` and `OR`), 43750ae (`Notice.detail`, which overlaps the open "underlying error" item under Menus, dialogs, and messages). Commit 4e9aa4f lacks the Co-Authored-By trailer
-- [ ] **P8** (Claude) a Vue warning appears during `pnpm e2e:remote`: injection "Symbol(contextMenuClickGuard)" not found, from `ContextMenu` rendered in `SpreadsheetListView`. Not investigated #codebase
 - [ ] **P1** conduct a review of the codebase and find all the places that need updating to align with the design principles #codebase
 - [x] **P1** merge the changes from the design-principles branch #codebase
 
@@ -168,6 +167,7 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
 
 ### Fixed
 
+- [x] **P8** (Claude) a Vue warning appears during `pnpm e2e:remote`: injection "Symbol(contextMenuClickGuard)" not found, from `ContextMenu` rendered in `SpreadsheetListView`. Not investigated #codebase
 - [x] **P0** the fact that clicking a document name in the document list triggers a rename and you have to explicitly click "Open" to open it is annoying. clicking a document should open it. renaming a document from the document list should be done from the ellipsis context menu that already exists.
   - [x] I assume some agent decided to do this based on some guidance in my design principles, so once you've fixed this, also review those and tell me what motivated doing this. actually, maybe run a `git blame` before you fix the issue and check what commit it happened in to see what that was intended to satisfy
 - [x] **P3** A `NUMBERBOX` (cell and text view) sends an empty string when the browser reports an empty value for incomplete input such as `-` or `e` (`validity.badInput`), and an empty string clears the target; refuse the commit instead (`CellView.vue`, `TextCard.vue`) #small-apps

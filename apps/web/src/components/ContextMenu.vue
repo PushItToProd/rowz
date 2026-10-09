@@ -15,7 +15,9 @@ const props = defineProps<{
   restoreFocusTarget?: () => HTMLElement | null;
 }>();
 const emit = defineEmits<{ close: [] }>();
-const controlGuard = inject(contextMenuClickGuardKey);
+// Only the editor provides a guard, which saves an open formula draft before an item runs.
+// The default says a menu outside the editor, such as one on the document list, needs none.
+const controlGuard = inject(contextMenuClickGuardKey, undefined);
 
 const menu = ref<HTMLElement>();
 const position = ref({ left: props.x, top: props.y });

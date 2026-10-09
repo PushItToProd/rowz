@@ -73,5 +73,5 @@ export function provideActiveSidePane(): ActiveSidePane {
 
 /** Components mounted outside an editor get their own isolated pane state. */
 export function useActiveSidePane(): ActiveSidePane {
-  return inject(activeSidePaneKey) ?? createActiveSidePane();
+  return inject(activeSidePaneKey, createActiveSidePane, true);
 }
