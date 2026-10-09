@@ -20,7 +20,12 @@ const props = withDefaults(
   }>(),
   { clickToEdit: true, href: undefined, emptyBehavior: "keep" },
 );
-const emit = defineEmits<{ rename: [name: string]; empty: [] }>();
+const emit = defineEmits<{
+  rename: [name: string];
+  empty: [];
+  /** The editor closed, whether the name was saved, left unchanged, or cancelled. */
+  close: [];
+}>();
 
 const draft = ref<string | null>(null);
 const input = ref<HTMLInputElement>();
@@ -36,6 +41,10 @@ watch(
     }
   },
 );
+
+watch(draft, (value, previous) => {
+  if (value === null && previous !== null) emit("close");
+});
 
 const description = computed(() => {
   if (props.disabled) return undefined;

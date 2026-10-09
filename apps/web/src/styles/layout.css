@@ -96,13 +96,9 @@
   text-decoration: none;
 }
 
-.list__items .editable-name-shell {
+.list__items .editable-name--editing {
   flex: 1;
   min-width: 0;
-}
-
-.list__items .list__document-open {
-  flex: 0 0 auto;
 }
 
 /* Editor */

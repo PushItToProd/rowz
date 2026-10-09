@@ -30,7 +30,7 @@ test("errors stay visible across pages and in the document list", async ({ page 
   await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
   await page.getByRole("link", { name: "← Documents" }).click();
   await expect(page.getByRole("img", { name: "Untitled document contains errors" })).toBeVisible();
-  const link = page.getByRole("link", { name: "Open Untitled document" });
+  const link = page.getByRole("link", { name: "Untitled document", exact: true });
   const href = await link.getAttribute("href");
   const spreadsheetId = href?.split("/")[2];
   if (!spreadsheetId) throw new Error("The document link has no document ID");

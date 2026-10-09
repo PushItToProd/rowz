@@ -7,13 +7,7 @@ import type { DocumentSearchResponse } from "@spreadsheet-app/shared";
 import { api } from "../api/client";
 import { DOCUMENT_TEMPLATES } from "../files/templates";
 import { queueListNotice, takeQueuedListNotice } from "../notice";
-import {
-  appDialog,
-  clickWithDetail,
-  mountDialogHost,
-  respondToDialog,
-  type MockedApi,
-} from "../testing";
+import { appDialog, mountDialogHost, respondToDialog, type MockedApi } from "../testing";
 import { bodyFindAll, bodyGet, bodyHas } from "../testing/teleported";
 import SpreadsheetListView from "./SpreadsheetListView.vue";
 
@@ -272,8 +266,7 @@ it("shows folders as collapsible groups with their documents", async () => {
 
   const workGroup = view.findAll(".list__group")[0]!;
   expect(workGroup.find(".list__group-toggle").attributes("aria-expanded")).toBe("true");
-  expect(workGroup.find(".editable-name").text()).toBe("Plan");
-  expect(workGroup.get('a[aria-label="Open Plan"]').text()).toBe("Open");
+  expect(workGroup.findAll(".list__items a").map((link) => link.text())).toEqual(["Plan"]);
   await workGroup.find(".list__group-toggle").trigger("click");
   await flushPromises();
   expect(workGroup.find(".list__group-toggle").attributes("aria-expanded")).toBe("false");
@@ -384,29 +377,22 @@ it("opens an accessible actions menu and renames an owned document inline", asyn
   await flushPromises();
 
   expect(server.renameSpreadsheet).toHaveBeenCalledExactlyOnceWith("d1", "Forecast");
-  expect(view.get(".editable-name").text()).toBe("Forecast");
-  expect(view.get('a[aria-label="Open Forecast"]').text()).toBe("Open");
+  const link = view.get(".list__items a");
+  expect(link.text()).toBe("Forecast");
+  expect(globalThis.document.activeElement).toBe(link.element);
 });
 
-it("opens an owned document name for editing on one click and keeps an Open link", async () => {
-  const renamed = { ...document(null), name: "Forecast" };
-  server.listSpreadsheets
-    .mockResolvedValueOnce(listed([], [document(null)]))
-    .mockResolvedValueOnce(listed([], [renamed]));
-  server.renameSpreadsheet.mockResolvedValue(undefined);
+it("opens an owned document on one click on its name, without starting a rename", async () => {
+  server.listSpreadsheets.mockReset().mockResolvedValue(listed([], [document(null)]));
   const view = await render();
 
-  const name = view.get(".editable-name");
-  await name.trigger("mousedown", { button: 0 });
-  await clickWithDetail(name.element);
-  const input = view.get<HTMLInputElement>('[aria-label="Document name for Plan"]');
-  await input.setValue("Forecast");
-  await input.trigger("keydown", { key: "Enter" });
+  const links = view.findAll(".list__items a");
+  expect(links.map((link) => link.text())).toEqual(["Plan"]);
+  await links[0]!.trigger("click", { button: 0 });
   await flushPromises();
 
-  expect(server.renameSpreadsheet).toHaveBeenCalledExactlyOnceWith("d1", "Forecast");
-  expect(view.get(".editable-name").text()).toBe("Forecast");
-  expect(view.get('a[aria-label="Open Forecast"]').text()).toBe("Open");
+  expect(view.find('[aria-label="Document name for Plan"]').exists()).toBe(false);
+  expect(router!.currentRoute.value.params.spreadsheetId).toBe("d1");
 });
 
 it("cancels an empty document name and explains why", async () => {
@@ -457,9 +443,13 @@ it("drops an open document-name draft when a list refresh brings a newer name", 
   await flushPromises();
   expect(server.copySpreadsheet).toHaveBeenCalledExactlyOnceWith("d1");
 
-  const name = view.get(".editable-name");
-  await name.trigger("mousedown", { button: 0 });
-  await clickWithDetail(name.element);
+  await view.get('button[aria-label="Actions for Plan"]').trigger("click", {
+    clientX: 40,
+    clientY: 60,
+  });
+  await flushPromises();
+  await bodyGet('[role="menuitem"]:nth-child(1)').trigger("click");
+  await flushPromises();
   const input = view.get<HTMLInputElement>('[aria-label="Document name for Plan"]');
   await input.setValue("Stale draft");
   completeCopy();
@@ -470,7 +460,7 @@ it("drops an open document-name draft when a list refresh brings a newer name", 
   const remoteName = view
     .findAll(".list__items > li")
     .find((item) => item.text().includes("Remote rename"))!
-    .get(".editable-name");
+    .get("a");
   expect(remoteName.text()).toBe("Remote rename");
   expect(globalThis.document.activeElement).toBe(remoteName.element);
   expect(server.renameSpreadsheet).not.toHaveBeenCalled();

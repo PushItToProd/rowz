@@ -8,7 +8,7 @@ import {
   watch,
   type ComponentPublicInstance,
 } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, type RouteLocationRaw } from "vue-router";
 import {
   LIMITS,
   type DocumentSearchMatch,
@@ -65,7 +65,8 @@ const galleryCloseButton = ref<HTMLButtonElement>();
 const galleryOpener = ref<HTMLElement | null>(null);
 const moveMenu = ref<{ document: ListedSpreadsheetItem; x: number; y: number } | null>(null);
 const actionMenu = ref<{ document: ListedSpreadsheetItem; x: number; y: number } | null>(null);
-const documentNameEditors = new Map<string, InstanceType<typeof EditableName>>();
+const renamingDocumentId = ref<string | null>(null);
+let renameEditor: InstanceType<typeof EditableName> | null = null;
 const searchActive = computed(() => searchQuery.value.length > 0);
 const localNameResults = computed<DocumentSearchResponse>(() => {
   const query = searchQuery.value.toLocaleLowerCase();
@@ -316,17 +317,33 @@ const remove = (document: ListedSpreadsheetItem): Promise<void> =>
     await refreshData();
   });
 
-function captureDocumentNameEditor(
-  id: string,
-  editor: Element | ComponentPublicInstance | null,
-): void {
-  if (editor) documentNameEditors.set(id, editor as InstanceType<typeof EditableName>);
-  else documentNameEditors.delete(id);
+function editorRoute(document: ListedSpreadsheetItem): RouteLocationRaw {
+  return { name: "editor", params: { spreadsheetId: document.id } };
 }
 
-function beginRenameDocument(document: ListedSpreadsheetItem): void {
+function captureRenameEditor(editor: Element | ComponentPublicInstance | null): void {
+  renameEditor = editor as InstanceType<typeof EditableName> | null;
+}
+
+async function beginRenameDocument(document: ListedSpreadsheetItem): Promise<void> {
   if (document.role !== "owner") return;
-  void documentNameEditors.get(document.id)?.start();
+  renamingDocumentId.value = document.id;
+  await nextTick();
+  await renameEditor?.start();
+}
+
+/** Puts the document's link back, and focus on it unless the person moved focus elsewhere. */
+async function endRenameDocument(document: ListedSpreadsheetItem): Promise<void> {
+  if (renamingDocumentId.value !== document.id) return;
+  renamingDocumentId.value = null;
+  await nextTick();
+  const active = globalThis.document.activeElement;
+  if (active && active !== globalThis.document.body) return;
+  globalThis.document.getElementById(documentLinkId(document.id))?.focus();
+}
+
+function documentLinkId(id: string): string {
+  return `document-link-${id}`;
 }
 
 function rejectEmptyDocumentName(): void {
@@ -469,9 +486,7 @@ const actionItems = computed<MenuItem[]>(() => {
       ? [
           {
             label: "Rename",
-            run: () => {
-              beginRenameDocument(target);
-            },
+            run: () => void beginRenameDocument(target),
           },
         ]
       : []),
@@ -687,24 +702,17 @@ onBeforeUnmount(() => {
           <li v-for="document in group.documents" :key="document.id">
             <ErrorWarning v-if="document.hasErrors" :label="`${document.name} contains errors`" />
             <EditableName
-              v-if="document.role === 'owner'"
-              :ref="(editor) => captureDocumentNameEditor(document.id, editor)"
+              v-if="renamingDocumentId === document.id"
+              :ref="captureRenameEditor"
               :value="document.name"
               :label="`Document name for ${document.name}`"
               empty-behavior="discard"
               @rename="renameDocument(document, $event)"
               @empty="rejectEmptyDocumentName"
+              @close="endRenameDocument(document)"
             />
-            <RouterLink v-else :to="{ name: 'editor', params: { spreadsheetId: document.id } }">
+            <RouterLink v-else :id="documentLinkId(document.id)" :to="editorRoute(document)">
               {{ document.name }}
-            </RouterLink>
-            <RouterLink
-              v-if="document.role === 'owner'"
-              class="list__document-open"
-              :aria-label="`Open ${document.name}`"
-              :to="{ name: 'editor', params: { spreadsheetId: document.id } }"
-            >
-              Open
             </RouterLink>
             <span v-if="document.role !== 'owner'" class="badge">
               Shared with you · {{ document.role === "editor" ? "can edit" : "can view" }}

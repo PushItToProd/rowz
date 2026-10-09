@@ -100,7 +100,7 @@ test("spreadsheets are private to the account that made them", async ({ page }) 
   const privateUrl = page.url();
 
   await page.getByRole("link", { name: "← Documents" }).click();
-  await expect(page.getByRole("link", { name: "Open Untitled document" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Untitled document", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
 
@@ -117,7 +117,7 @@ test("spreadsheets are private to the account that made them", async ({ page }) 
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("link", { name: "Open Untitled document" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Untitled document", exact: true })).toBeVisible();
 });
 
 test("explains missing document URLs and addresses with no route", async ({ page }) => {
@@ -159,14 +159,16 @@ test("folders organize documents in the list, and deleting one returns them to U
 
   await page.getByRole("button", { name: "Move Untitled document to a folder" }).click();
   await page.getByRole("menuitem", { name: "Move to Planning" }).click();
-  await expect(planning.getByRole("link", { name: "Open Untitled document" })).toBeVisible();
+  await expect(
+    planning.getByRole("link", { name: "Untitled document", exact: true }),
+  ).toBeVisible();
 
   await planning.getByRole("button", { name: "Delete folder Planning" }).click();
   await expect(page.getByRole("button", { name: /^Planning/ })).toHaveCount(0);
   const unfiled = page
     .locator(".list__group")
     .filter({ has: page.getByRole("button", { name: /^Unfiled/ }) });
-  await expect(unfiled.getByRole("link", { name: "Open Untitled document" })).toBeVisible();
+  await expect(unfiled.getByRole("link", { name: "Untitled document", exact: true })).toBeVisible();
 });
 
 test("searches document content and names from the Documents page", async ({ page }) => {
@@ -188,7 +190,7 @@ test("searches document content and names from the Documents page", async ({ pag
   await search.fill("no-document-has-this");
   await expect(page.getByText("No documents match")).toBeVisible();
   await page.getByRole("button", { name: "Clear search" }).click();
-  await expect(page.getByRole("link", { name: "Open Untitled document" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Untitled document", exact: true })).toBeVisible();
 });
 
 test("renames, duplicates, and deletes a document from the list", async ({ page }) => {
@@ -200,12 +202,12 @@ test("renames, duplicates, and deletes a document from the list", async ({ page 
   const name = page.getByRole("textbox", { name: "Document name for Untitled document" });
   await name.fill("Planning doc");
   await name.press("Enter");
-  await expect(page.getByRole("link", { name: "Open Planning doc" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Planning doc", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Actions for Planning doc" }).click();
   await page.getByRole("menuitem", { name: "Duplicate" }).click();
   await expect(page.getByRole("status")).toContainText('Created "Planning doc (copy)"');
-  const copy = page.getByRole("link", { name: "Open Planning doc (copy)" });
+  const copy = page.getByRole("link", { name: "Planning doc (copy)", exact: true });
   await expect(copy).toBeVisible();
 
   await page.getByRole("button", { name: "Actions for Planning doc (copy)" }).click();
@@ -215,24 +217,17 @@ test("renames, duplicates, and deletes a document from the list", async ({ page 
   await confirm.getByRole("button", { name: "Delete document" }).click();
 
   await expect(copy).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Open Planning doc" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Planning doc", exact: true })).toBeVisible();
 });
 
-test("renames an owned document from its name and opens it from the Open link", async ({
-  page,
-}) => {
+test("opens an owned document from a click on its name in the list", async ({ page }) => {
   await newSpreadsheet(page);
   await page.getByRole("link", { name: "← Documents" }).click();
 
-  const name = page.locator(".list__items .editable-name");
-  await name.click();
-  const input = page.getByRole("textbox", { name: "Document name for Untitled document" });
-  await input.fill("Plan");
-  await input.press("Enter");
-  await expect(page.getByText("Plan", { exact: true })).toBeVisible();
-
-  await page.getByRole("link", { name: "Open Plan" }).click();
-  await expect(page.getByRole("heading", { name: "Plan" })).toBeVisible();
+  await page.getByRole("link", { name: "Untitled document", exact: true }).click();
+  await expect(page).toHaveURL(/\/s\//);
+  await expect(page.getByRole("heading", { name: "Untitled document" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /^Document name/ })).toHaveCount(0);
 });
 
 test("duplicate-folder errors dismiss on Escape without moving the document list", async ({

@@ -55,7 +55,7 @@ test("a spreadsheet is exported to a file and imported again, and a table to and
   await expect(cell(page, "B2")).toHaveText("10");
   await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
   await page.getByRole("link", { name: "← Documents" }).click();
-  await expect(page.getByRole("link", { name: "Open Untitled document" })).toHaveCount(2);
+  await expect(page.getByRole("link", { name: "Untitled document", exact: true })).toHaveCount(2);
 
   // A CSV file goes into a table from its first cell, and the table grows to fit.
   await page.getByRole("button", { name: "New document" }).click();

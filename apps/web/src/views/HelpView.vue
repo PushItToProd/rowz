@@ -514,11 +514,11 @@ const OPERATORS = [
           <code>#REF!</code>.
         </li>
         <li>
-          On the Documents page, click an owned document's name to rename it; click
-          <strong>Open</strong> to open it. A shared document's name opens it. Click another page
-          tab to open it, or click the active page's name to rename it. Click a block's name to
-          rename it. In the Names panel, click a name to rename it. Press F2 when a name is focused
-          to rename it. Double-click the contents of a text view or script to edit its source.
+          On the Documents page, click a document's name to open it, and rename a document you own
+          from its <strong>⋯</strong> menu. Click another page tab to open it, or click the active
+          page's name to rename it. Click a block's name to rename it. In the Names panel, click a
+          name to rename it. Press F2 when a name is focused to rename it. Double-click the contents
+          of a text view or script to edit its source.
         </li>
         <li>
           The arrows beside a block move it up or down its page, and the button under them moves it
@@ -1220,12 +1220,11 @@ const OPERATORS = [
           numbered name.
         </li>
         <li>
-          On the Documents page, click an owned document's name to rename it, or click
-          <strong>Open</strong> to open it. Its <strong>⋯</strong> menu also offers Rename and
-          Delete, and duplicates any document you can read. A duplicate is created in your
-          workspace, and the list stays open. Deleting a document asks for confirmation and cannot
-          be undone. The separate <strong>Move</strong> menu files a document into one of your
-          folders.
+          On the Documents page, click a document's name to open it. Its <strong>⋯</strong> menu
+          renames or deletes a document you own, and duplicates any document you can read. A
+          duplicate is created in your workspace, and the list stays open. Deleting a document asks
+          for confirmation and cannot be undone. The separate <strong>Move</strong> menu files a
+          document into one of your folders.
         </li>
         <li>
           <strong>Export CSV</strong> in a table's block menu saves the values its cells show as a
