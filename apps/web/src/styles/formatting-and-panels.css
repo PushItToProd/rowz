@@ -53,6 +53,7 @@
   display: flex;
   gap: 8px;
   align-items: flex-start;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
 }
@@ -80,11 +81,13 @@
 }
 
 .editor__block > :first-child {
+  flex: 1;
   min-width: 0;
 }
 
 .editor__move {
   display: flex;
+  flex-shrink: 0;
   flex-direction: column;
   gap: 4px;
 }
@@ -107,6 +110,10 @@
   .editor__block {
     flex-direction: column-reverse;
     gap: 4px;
+  }
+
+  .editor__block > :first-child {
+    flex: auto;
     width: 100%;
   }
 

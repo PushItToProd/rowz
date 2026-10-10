@@ -59,15 +59,10 @@
 
 .view-card {
   width: 100%;
-  max-width: 760px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface);
-}
-
-.view-card[data-view-kind="text"] {
-  max-width: none;
 }
 
 .view-card[data-view-kind="chart"]:not([data-source-editing]) {
