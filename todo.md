@@ -60,9 +60,10 @@ A reference document is the acceptance test of a theme: the theme is done when i
 
 Items that have not been moved to a section yet. An agent adding an item puts it in the section it belongs to. It does not add it here or at the end of the file.
 
-- [ ] add a trash bin for deleted docs instead of nuking them right away
+- [ ] **P1** add a trash bin for deleted docs instead of nuking them right away
 - [ ] the single help page has gotten unwieldy. split it into multiple pages, at least one per section. provide strong navigation support - a sidebar listing the docs pages, floating table of contents, and full text search for ease of navigation.
 - [ ] the formula examples also are incomplete - "=XYLOOKUP(2, "apple", A1:C3) gives banana" doesn't show the inputs needed to achieve the result. split each formula grouping into its own page and show examples using embedded versions of the table/text/script/chart blocks
+- [ ] add a way to configure the heights of charts
 
 ## Plans
 
