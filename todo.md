@@ -82,6 +82,37 @@ Items that have not been moved to a section yet. An agent adding an item puts it
 - [ ] **P1** conduct a review of the codebase and find all the places that need updating to align with the design principles #codebase
 - [x] **P1** merge the changes from the design-principles branch #codebase
 
+- [ ] (Claude) commands, quick navigation, keybindings, and macros. The first three plans below need no change to the formula language. The memo and the cross-document plan do, and they wait for the author. The one format all five share: a keybinding or a palette entry targets a string, which is a command ID at first and may later be a qualified reference to a macro
+  - [ ] (Claude) plan a command registry, a keybinding table, and a command palette #everyday
+    - Start with a survey of the commands that exist. Keyboard commands are `if` chains in `onGridKeydown` in [GridView.vue](apps/web/src/components/GridView.vue) and `findKey` in [EditorView.vue](apps/web/src/views/EditorView.vue). Menu commands are `MenuItem[]` lists built in `TableCard.vue`, `EditorView.vue`, `PageTabs.vue`, and `SpreadsheetListView.vue`. Nothing lists them in one place
+    - Design a registry in the web app where each command has an ID, a title, short names, a `when` condition, and a `run` function. Decide how context menus, the keybinding dispatcher, and the shortcut list on the help page read from it
+    - Design one typed focus context that `when` reads: which view is open, the kind of the focused block, the selected cell and range, whether a formula or script editor is active, and whether the document is read-only. Built-in commands test it with a TypeScript predicate. Keep it the one definition of focus, so that a later `when` written as a formula, and a macro's focus input, expose the same fields
+    - Palette: Alt+P lists the commands whose `when` holds, typing filters them, Enter runs the chosen one, Escape closes. Short names are hardcoded at first, so that with a table cell focused `addrow` or `arow` inserts a row below the selected cell's row
+    - Check each proposed key against browser and operating system bindings: Alt+P, Ctrl/Cmd+O, Ctrl/Cmd+Shift+E. On macOS, Alt with a letter types a character
+    - Define the picker component (popover, filtering, arrow keys, Enter, Escape) so the quick switcher can share it
+  - [ ] (Claude) plan quick switcher navigation, in the style of VS Code's #everyday
+    - Two bindings. One searches all documents (Ctrl/Cmd+Shift+E if free). One searches the page titles, block titles, and user-defined names of the open document (Alt+O, or Ctrl/Cmd+O if possible). Each opens the shared picker listing recently viewed documents or recently focused pages and blocks. Typing filters and Enter navigates
+    - The input also accepts an address such as `'Table 1'!D5` or `'Page 1'!'Table 1'`
+    - Tab inserts the highlighted item's name as a prefix and narrows the list to what it holds. Typing `Sa` brings the "Sales Report" page to the top. Tab fills `'Sales Report'!` and lists that page's blocks. Typing `Sum` brings the "Summary Calculations" script to the top. Tab lists the names that script defines. Enter on `TotalTax` opens the script, focuses its editor, and puts the cursor at the start of the line that defines `TotalTax`
+    - Existing pieces: cross-document search, `goToMatch` in `EditorView.vue`, `focusBlock.ts`, and the `line` each `ScriptStatement` carries. Recents need storage, which the settings plan covers. The P10 focus history item under Grid editing and navigation overlaps
+  - [ ] (Claude) plan per-user settings: custom keybindings, custom short names for palette commands, and recents #everyday
+    - The schema has no table for per-user settings. Decide where they are stored and how the user edits them
+    - Store a binding's target as a string, so a setting can name a command ID now and a macro later without a change of format
+    - Out of scope until the macro memo and the cross-document plan are settled: macros configured per document, per folder, or per workspace, and settings kept in a rowz document
+  - [ ] **Author** (Claude) write a memo on macros, as an addendum to [formula-language-proposal.md](plans/formula-language-proposal.md). It is a separate file that says what it would change in the proposal and why, so the author can compare the two. The questions below need discussion with the author before the memo is drafted #formula-language
+    - Where a macro runs. A palette command runs in the browser and many never change the document (open find, go to a page, undo). An action formula is planned by the server into effects and journaled. Either the server plans a macro like a button and may return effects for the client to apply, such as selecting an inserted row, or the browser plans it. An `INVOKE_COMMAND("...")` function that calls a registered command by ID depends on the answer
+    - How a macro is invoked. The click endpoint names a cell and the server derives the action from that cell's stored input. A macro lives in a script and has no cell
+    - How a macro reads focus. Focus is client state, so it must stay out of recalculation. It fits as a value supplied when an action is planned. An action's write target must be a reference written in the formula, and the proposal keeps computed values separate from writable locations, so `TABLE.INSERT_ROW_BELOW(CURRENT_USER_FOCUS())` needs focus to be usable as a target
+    - `when` written as a pure formula over the focus context, with functions such as `IS_TABLE()` and `IS_BLOCK()`, in the manner of VS Code's `when` clauses. No action is allowed in it
+    - Naming. `TABLE.INSERT_ROW_ABOVE` as a name with a dot in it conflicts with the proposal's namespace lookup (`finance.presentValue`). The alternative `'Table 1'!INSERT_ROW_ABOVE(D7)` reuses `!`, which already qualifies a name by its block (`Summary!Total`)
+    - Macros with arguments in the palette. The author's sketch maps `addrow <position=below>` to `LAMBDA(position, IF(position="above", TABLE.INSERT_ROW_ABOVE, TABLE.INSERT_ROW_BELOW)(CURRENT_USER_FOCUS()))`. A first version may take no arguments and define one command per option
+    - Coverage. The core of what a user can do in the app should be reachable from a macro. Formatting can come later
+  - [ ] **Author** (Claude) plan cross-document references, after the macro memo #formula-language
+    - Uses: importing functions another document defines, and systems built from several documents. `Logs!Log("...")` would call a function the `Logs` document exports and append to a table in it. A keybinding could target `'My Macros'!'Main'!'Commands'!InsertRowBelowIfCurrentRowIsNotEmpty`, which names a document, a page, a script, and a function, and settings as a whole could be a rowz document
+    - `Logs!Log(...)` already means the name `Log` in the block `Logs` of the open document. A document qualifier adds a level to `!`, and document names are not unique
+    - A rename rewrites every formula that uses the name in one transaction under one spreadsheet's lock, and access is checked per spreadsheet. A reference to another document, and more so a write to one, needs a design for both
+    - The proposal covers modules inside a workbook and pinned external bundles, and defers library functions that produce actions. The "support referencing tables/etc. from other documents" and "programmatic construction of documents" ideas under Ambitious ideas overlap
+
 ## Bugs
 
 - [ ] **Author** **P2** entering a value like `$10,000` (verbatim) into a numeric data table column produces a `#VALUE!` error (`$10,000 is not a number`) #everyday
@@ -483,6 +514,7 @@ These came from the review of 2026-10-01 (`_scratch/2026-10-01-fresh-eyes-review
   - [ ] **P7** delete a row (or rows) that matches a condition #small-apps
   - [ ] **P7** targeted update of rows matching a condition as an alternative to the full replacement #small-apps
     - [ ] **P99** typed (or at least column-name-aware) updates of data tables: s.t. like `MUTATE(Products, [Category] = "GPU", [Price] = [Price] * 2)` (i.e. double the value of `Price` for all rows in `Products` where `Category` == "GPU") #small-apps
+  - [ ] (Claude) insert rows at a position: an empty row, or one with values, above or below a given row of a table. `Effect` in [effects.ts](packages/engine/src/effects.ts) has `setCell`, `ensureRows`, `deleteRows`, and `sendEmail`, so a formula can add a row only at the end of a range, and placing one elsewhere means rewriting the rows after it. The web app's `editTable` already inserts a row before a given row. Useful to buttons now, and the first of the structural actions a macro needs #small-apps
   - [ ] **P7** fetch CSV/JSON/etc. from a URL #small-apps
   - [ ] **P10** call a webhook #small-apps
     - (Claude) needs the outbox under Before sharing with others, and a rule for which addresses a server may call, so a formula cannot reach the server's own network
