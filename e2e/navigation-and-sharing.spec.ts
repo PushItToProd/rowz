@@ -311,11 +311,48 @@ test("a spreadsheet is shared with another account, which can edit it until the 
 test("the help page documents formulas, with or without an account", async ({ page, context }) => {
   await page.goto("/help");
   await expect(page.getByRole("heading", { name: "Help", exact: true })).toBeVisible();
-  const contents = page.getByRole("navigation", { name: "Help topics" });
+  const contents = page.getByRole("navigation", { name: "Help topics", exact: true });
   await contents.getByText("Function reference", { exact: true }).click();
   await expect(page).toHaveURL(/\/help\/functions$/);
   await expect(page.locator('[data-function="SUM"]')).toContainText("gives 16");
   await expect(page.getByRole("heading", { name: "Typing into cells" })).toHaveCount(0);
+
+  const viewport = page.viewportSize();
+  await page.setViewportSize({ width: 900, height: 720 });
+  const sectionContents = page.getByRole("navigation", { name: "Contents", exact: true });
+  const topicButton = page.getByRole("button", { name: "Help topics", exact: true });
+  await expect(contents).toBeHidden();
+  await expect(topicButton).toBeVisible();
+
+  await sectionContents.getByRole("link").last().click();
+  const scrolled = await page.evaluate(() => window.scrollY);
+  expect(scrolled).toBeGreaterThan(0);
+  const horizontal = await sectionContents.evaluate((element) => element.scrollLeft);
+  expect(horizontal).toBeGreaterThan(0);
+  await sectionContents.hover();
+  await page.mouse.wheel(0, -150);
+  await expect
+    .poll(() => sectionContents.evaluate((element) => element.scrollLeft))
+    .toBeLessThan(horizontal);
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrolled);
+  await topicButton.click();
+  const topicMenu = page.getByRole("menu", { name: "Help topics" });
+  await expect(topicMenu.getByRole("menuitem", { name: "Queries", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(topicMenu).toHaveCount(0);
+  await expect(topicButton).toBeFocused();
+  await page.getByRole("link", { name: "Back to top" }).click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await topicButton.click();
+  await page
+    .getByRole("menu", { name: "Help topics" })
+    .getByRole("menuitem", { name: "Queries", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/help\/queries$/);
+  await expect(page.getByRole("menu", { name: "Help topics" })).toHaveCount(0);
+  if (viewport) await page.setViewportSize(viewport);
+  await expect(topicButton).toBeHidden();
+  await expect(contents).toBeVisible();
 
   // Existing section links open the topic containing the heading.
   await page.goto("/help#errors");
@@ -333,7 +370,7 @@ test("the help page documents formulas, with or without an account", async ({ pa
   await page.getByRole("link", { name: "Help" }).click();
   const help = await opened;
   await help
-    .getByRole("navigation", { name: "Help topics" })
+    .getByRole("navigation", { name: "Help topics", exact: true })
     .getByText("Buttons and controls")
     .click();
   await expect(help.getByRole("heading", { name: "Buttons and actions" })).toBeVisible();

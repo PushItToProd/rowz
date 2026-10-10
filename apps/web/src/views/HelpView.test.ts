@@ -1,12 +1,23 @@
 import { defaultFunctions, errorDocs } from "@spreadsheet-app/engine";
 import { flushPromises, mount, RouterLinkStub, type VueWrapper } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { APP_NAME } from "../appName";
 import HelpView from "./HelpView.vue";
 import { HELP_PAGES } from "./help/pages";
 
 function render(topic = "functions"): VueWrapper {
-  return mount(HelpView, { props: { topic }, global: { stubs: { RouterLink: RouterLinkStub } } });
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: "/help/:topic?", name: "help", component: HelpView },
+      { path: "/", name: "spreadsheets", component: { template: "<div />" } },
+    ],
+  });
+  return mount(HelpView, {
+    props: { topic },
+    global: { plugins: [router], stubs: { RouterLink: RouterLinkStub } },
+  });
 }
 
 describe("HelpView", () => {
