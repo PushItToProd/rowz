@@ -1,0 +1,10 @@
+FROM node:24-bookworm-slim
+
+RUN npm install --global pnpm@11.11.0
+RUN mkdir /workspace && chown node:node /workspace
+WORKDIR /workspace
+COPY --chown=node:node . .
+USER node
+RUN pnpm install --frozen-lockfile
+
+CMD ["pnpm", "dev"]

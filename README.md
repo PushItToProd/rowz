@@ -79,6 +79,29 @@ BASE_URL=https://devbox.example.com:5173
 
 Use an `https` URL. The app calls `crypto.randomUUID`, which browsers provide over plain HTTP only on localhost. With an `https` URL the dev server presents a self-signed certificate, which the browser asks you to accept on the first visit.
 
+### Development behind Caddy
+
+For this host, `.env.local` uses `BASE_URL=https://rowz-dev.zane.cloud`, `DEV_PORT=5777`, and `DEV_HTTPS=false`. Caddy terminates TLS and proxies to the HTTP dev server. These settings also apply to `pnpm dev` outside Docker.
+
+Stop any existing host dev server before starting the container: only one process may open the existing PGlite database.
+
+```sh
+docker compose --profile dev up --build -d dev
+docker compose logs -f dev
+```
+
+Open https://rowz-dev.zane.cloud. The `dev` service runs both the API and Vite, mounts the repository for live reload, and bind-mounts `apps/server/.data/` to keep the existing database. It runs as UID/GID 1000, matching this host's repository owner. Dependencies use separate container volumes. After changing dependencies, rebuild and replace those volumes with `docker compose --profile dev up --build --renew-anon-volumes -d dev`.
+
+Caddy on the host should use:
+
+```caddyfile
+rowz-dev.zane.cloud {
+    reverse_proxy 127.0.0.1:5777
+}
+```
+
+Stop the service with `docker compose stop dev`. The database remains in `apps/server/.data/` when the container is removed.
+
 ## Pages and blocks
 
 A document holds pages, and a page holds blocks: tables, charts, text views, and scripts. Click another page tab to open it; click the active page's name to rename it. Click a block's name to rename it, or double-click the contents of a text view or script to edit its source. Click a name in the Names panel to rename it. F2 renames a focused name. Right-click anywhere on a page tab, including its move and delete buttons, to rename or delete it, move it left or right among the tabs, or collapse or expand every block on that page. The open page's tab has arrows to move it and a trash button to delete it; deleting a page offers an Undo notice.

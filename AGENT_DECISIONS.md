@@ -849,3 +849,9 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 **Choice.** Keep collapsed block IDs as per-viewer UI preferences in browser local storage, grouped by spreadsheet ID. Load them against the document's current block IDs and discard IDs for deleted blocks. Do not include collapse state in document content or API requests. Keep collapsed card bodies mounted and hide them with `v-show` and `inert`, preserving editor state while removing body controls from view and keyboard navigation.
 
 **Choice.** Define `--block-max-height` once in `layout.css` and use it for table grids, text output, and script content. Make text and script overflow areas keyboard-focusable and labeled only when their contents exceed the available height. Keep charts sized to their block without a nested scroll area.
+
+## 2026-10-10: Docker development behind Caddy
+
+**Choice.** Add `DEV_PORT` and `DEV_HTTPS` overrides so the public HTTPS origin can differ from Vite's HTTP listener. Keep the dev service behind a Compose profile, bind the existing PGlite directory, and isolate container dependencies in anonymous volumes. Run as UID/GID 1000 to preserve the host owner of database files.
+
+**Cost.** Dependency changes require rebuilding the image and renewing the anonymous volumes. The host dev server and container cannot use the same PGlite directory simultaneously.

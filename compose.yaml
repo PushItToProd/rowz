@@ -1,4 +1,43 @@
 services:
+  dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    init: true
+    user: "1000:1000"
+    working_dir: /workspace
+    command: pnpm dev
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file:
+      - .env.local
+    environment:
+      BASE_URL: https://rowz-dev.zane.cloud
+      DEV_PORT: "5777"
+      DEV_HTTPS: "false"
+      API_SERVER: http://127.0.0.1:3000
+      PORT: "3000"
+      DATABASE_URL: /workspace/apps/server/.data/pglite
+    ports:
+      # have to bind to 172.17.0.1 to enable Caddy proxying. see
+      # docs/proxying-host-services.md in homelab project.
+      - "0.0.0.0:5777:5777"
+    volumes:
+      - .:/workspace
+      # Container dependencies stay separate from the host's installation.
+      - /workspace/node_modules
+      - /workspace/apps/server/node_modules
+      - /workspace/apps/web/node_modules
+      - /workspace/packages/engine/node_modules
+      - /workspace/packages/shared/node_modules
+      # Bind the existing database; do not create a new database volume.
+      - type: bind
+        source: ./apps/server/.data
+        target: /workspace/apps/server/.data
+        bind:
+          create_host_path: false
+
   # A Postgres server for running the server tests as CI does: `pnpm test:postgres`.
   # Each test file creates and drops its own database, so nothing here needs to
   # outlive the container, and the data sits in memory.

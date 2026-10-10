@@ -13,6 +13,9 @@ export default defineConfig(({ mode }) => {
   const apiServer = env.API_SERVER ?? "http://localhost:3000";
   const baseUrl = new URL(env.BASE_URL ?? "http://localhost:5173");
   const remote = !LOCAL_HOSTS.has(baseUrl.hostname);
+  const https =
+    env.DEV_HTTPS === undefined ? baseUrl.protocol === "https:" : env.DEV_HTTPS === "true";
+  const port = Number(env.DEV_PORT ?? (baseUrl.port || "5173"));
 
   return {
     // `APP_NAME` has no `VITE_` prefix because the API server reads it too, so Vite
@@ -22,14 +25,14 @@ export default defineConfig(({ mode }) => {
       vue(),
       // A self-signed certificate. Browsers offer `crypto.randomUUID` and other
       // secure-context APIs over plain HTTP only on localhost.
-      ...(baseUrl.protocol === "https:" ? [basicSsl({ domains: [baseUrl.hostname] })] : []),
+      ...(https ? [basicSsl({ domains: [baseUrl.hostname] })] : []),
     ],
     server: {
       // Vite listens on localhost alone and refuses other Host headers unless told otherwise.
       ...(remote ? { host: true, allowedHosts: [baseUrl.hostname] } : {}),
       // The samples and their manifest live outside apps/web and are imported by the gallery.
       fs: { allow: [REPOSITORY_ROOT] },
-      ...(baseUrl.port === "" ? {} : { port: Number(baseUrl.port) }),
+      port,
       // The API server trusts requests from `BASE_URL` alone, so the next free port would not work.
       strictPort: true,
       // The browser sees one origin, so the session cookie needs no cross-site setup.
