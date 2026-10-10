@@ -1,31 +1,13 @@
 import { defaultFunctions, errorDocs } from "@spreadsheet-app/engine";
 import { mount, RouterLinkStub, type VueWrapper } from "@vue/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { APP_NAME } from "../appName";
 import HelpView from "./HelpView.vue";
+import { HELP_PAGES } from "./help/pages";
 
-function render(): VueWrapper {
-  return mount(HelpView, { global: { stubs: { RouterLink: RouterLinkStub } } });
+function render(topic = "functions"): VueWrapper {
+  return mount(HelpView, { props: { topic }, global: { stubs: { RouterLink: RouterLinkStub } } });
 }
-
-/** Lays the sections out 500 pixels apart, with the window scrolled down by `scrolled`. */
-function scrollTo(wrapper: VueWrapper, scrolled: number): Promise<void> {
-  wrapper.findAll("section").forEach((section, index) => {
-    vi.spyOn(section.element, "getBoundingClientRect").mockReturnValue({
-      top: index * 500 - scrolled,
-    } as DOMRect);
-  });
-  window.dispatchEvent(new Event("scroll"));
-  return wrapper.vm.$nextTick();
-}
-
-function reading(wrapper: VueWrapper): string[] {
-  return wrapper.findAll('.help__contents [aria-current="true"]').map((link) => link.text());
-}
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
 
 describe("HelpView", () => {
   it("lists every function the engine has, each with its syntax", () => {
@@ -37,7 +19,7 @@ describe("HelpView", () => {
 
   it("titles the browser tab", () => {
     render();
-    expect(document.title).toBe(`Help | ${APP_NAME}`);
+    expect(document.title).toBe(`Function reference · Help | ${APP_NAME}`);
   });
 
   it("shows the result the engine computes for an example", () => {
@@ -81,52 +63,40 @@ describe("HelpView", () => {
     expect(wrapper.get('[data-function="BAR_CHART"]').text()).toContain(
       "a bar chart titled “Fruit”",
     );
-    expect(wrapper.get("#text-views").text()).toContain("{% for name, amount in Sales!A2:B9 %}");
-    expect(wrapper.get("#text-views pre").text()).toContain("{{ total }}");
-    expect(wrapper.get("#text-views").text()).toContain(
+    expect(render("presentation").get("#text-views").text()).toContain(
+      "{% for name, amount in Sales!A2:B9 %}",
+    );
+    expect(render("presentation").get("#text-views pre").text()).toContain("{{ total }}");
+    expect(render("presentation").get("#text-views").text()).toContain(
       "A formula that gives BUTTON shows a clickable button",
     );
-    expect(wrapper.get("#text-views").text()).toContain("TEXTBOX or NUMBERBOX");
-    expect(wrapper.get("#controls").text()).toContain("Enter or by leaving the input");
+    expect(render("presentation").get("#text-views").text()).toContain("TEXTBOX or NUMBERBOX");
+    expect(render("actions").get("#controls").text()).toContain("Enter or by leaving the input");
   });
 
   it("explains every error code", () => {
-    const wrapper = render();
+    const wrapper = render("documents");
     for (const [code, explanation] of Object.entries(errorDocs)) {
       expect(wrapper.get(`[data-error="${code}"]`).text()).toBe(code + explanation);
     }
   });
 
-  it("links each contents entry to a section on the page", () => {
-    const wrapper = render();
-    const targets = wrapper.findAll(".help__contents a").map((link) => link.attributes("href"));
-    expect(targets).toHaveLength(21);
-    for (const target of targets)
-      expect(wrapper.find(`section${target ?? ""}`).exists()).toBe(true);
+  it("shows only the sections for the selected topic", async () => {
+    const wrapper = render("editing");
+    for (const page of HELP_PAGES) {
+      await wrapper.setProps({ topic: page.id });
+      expect(wrapper.findAll("section").map((section) => section.attributes("id"))).toEqual(
+        page.sections,
+      );
+      const current = wrapper.get('.help__contents [aria-current="page"]');
+      expect(current.text()).toBe(page.title);
+      expect(wrapper.findAll(".help__contents a")).toHaveLength(HELP_PAGES.length);
+    }
   });
 
-  it("marks the section being read in the contents, and follows the scrolling", async () => {
-    const wrapper = mount(HelpView, {
-      global: { stubs: { RouterLink: RouterLinkStub } },
-      attachTo: document.body,
-    });
-    expect(reading(wrapper)).toEqual(["Typing into cells"]);
-
-    await scrollTo(wrapper, 1000);
-    expect(reading(wrapper)).toEqual(["Find and replace"]);
-    // A section counts once its heading nears the top of the window.
-    await scrollTo(wrapper, 1400);
-    expect(reading(wrapper)).toEqual(["Pages and tables"]);
-    await scrollTo(wrapper, 1900);
-    expect(reading(wrapper)).toEqual(["Tables with named columns"]);
-    await scrollTo(wrapper, 0);
-    expect(reading(wrapper)).toEqual(["Typing into cells"]);
-
-    // The end of the page is the last section, which is too short to reach the top.
-    vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(9000);
-    vi.spyOn(window, "scrollY", "get").mockReturnValue(9000 - window.innerHeight);
-    await scrollTo(wrapper, 8000);
-    expect(reading(wrapper)).toEqual(["Errors"]);
-    wrapper.unmount();
+  it("links to the preceding and following topics", () => {
+    expect(render("editing").get(".help__pagination").text()).toBe("Pages and tables →");
+    expect(render("tables").get(".help__pagination").text()).toContain("← Editing cells");
+    expect(render("documents").get(".help__pagination").text()).toBe("← Formats, charts, and text");
   });
 });

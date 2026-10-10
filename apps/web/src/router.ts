@@ -8,6 +8,7 @@ import { parseDeepLinkFragment } from "./deepLinks";
 import AuthView from "./views/AuthView.vue";
 import EditorView from "./views/EditorView.vue";
 import HelpView from "./views/HelpView.vue";
+import { HELP_PAGES } from "./views/help/pages";
 import SpreadsheetListView from "./views/SpreadsheetListView.vue";
 
 export function createAppRouter(history: RouterHistory = createWebHistory()): Router {
@@ -24,7 +25,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
         component: EditorView,
         props: true,
       },
-      { path: "/help", name: "help", component: HelpView },
+      { path: "/help/:topic?", name: "help", component: HelpView, props: true },
       { path: "/:unknown(.*)*", name: "not-found", component: SpreadsheetListView },
     ],
     // Help links point at headings; editor location links use the shared reveal helper.
@@ -89,6 +90,26 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
       return { name: "spreadsheets", replace: true };
     }
     const name = typeof to.name === "string" ? to.name : "";
+    if (name === "help") {
+      const section = to.hash.slice(1);
+      const page = HELP_PAGES.find(({ sections }) =>
+        sections.some(
+          (id) => id === section || (id === "functions" && section.startsWith("functions-")),
+        ),
+      );
+      if (page && to.params.topic !== page.id) {
+        return {
+          name: "help",
+          params: { topic: page.id },
+          hash: to.hash,
+          query: to.query,
+          replace: true,
+        };
+      }
+      if (to.params.topic && !HELP_PAGES.some(({ id }) => id === to.params.topic)) {
+        return { name: "help", replace: true };
+      }
+    }
     if (OPEN.has(name)) return true;
     const user = await useSessionStore().load();
     if (!isCurrentNavigation()) return;

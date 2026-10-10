@@ -855,3 +855,7 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 **Choice.** Add `DEV_PORT` and `DEV_HTTPS` overrides so the public HTTPS origin can differ from Vite's HTTP listener. Keep the dev service behind a Compose profile, bind the existing PGlite directory, and isolate container dependencies in anonymous volumes. Run as UID/GID 1000 to preserve the host owner of database files.
 
 **Cost.** Dependency changes require rebuilding the image and renewing the anonymous volumes. The host dev server and container cannot use the same PGlite directory simultaneously.
+
+## 2026-10-10: Help topic pages
+
+**Choice.** Group the existing help sections into eight topic pages, each with a stable `/help/:topic` URL, shared navigation, and previous/next links. `/help` opens Editing cells. Existing section fragments redirect to the topic containing that section, including function category fragments. Keep the help text and computed function examples intact.

@@ -311,27 +311,31 @@ test("a spreadsheet is shared with another account, which can edit it until the 
 test("the help page documents formulas, with or without an account", async ({ page, context }) => {
   await page.goto("/help");
   await expect(page.getByRole("heading", { name: "Help", exact: true })).toBeVisible();
+  const contents = page.getByRole("navigation", { name: "Help topics" });
+  await contents.getByText("Function reference", { exact: true }).click();
+  await expect(page).toHaveURL(/\/help\/functions$/);
   await expect(page.locator('[data-function="SUM"]')).toContainText("gives 16");
+  await expect(page.getByRole("heading", { name: "Typing into cells" })).toHaveCount(0);
 
-  await page.getByRole("navigation", { name: "Contents" }).getByText("Errors").click();
-  await expect(page).toHaveURL(/\/help#errors$/);
+  // Existing section links open the topic containing the heading.
+  await page.goto("/help#errors");
+  await expect(page).toHaveURL(/\/help\/documents#errors$/);
   await expect(page.locator('[data-error="#CYCLE!"]')).toBeInViewport();
-
-  // The contents stay on screen and mark the section being read.
-  const contents = page.getByRole("navigation", { name: "Contents" });
-  await expect(contents.locator('[aria-current="true"]')).toHaveText("Errors");
-  await contents.getByText("Queries").click();
-  await expect(contents.locator('[aria-current="true"]')).toHaveText("Queries");
-  await expect(contents.getByText("Queries")).toBeInViewport();
-  await page.getByRole("heading", { name: "Sharing" }).scrollIntoViewIfNeeded();
-  await page.mouse.wheel(0, 300);
-  await expect(contents.locator('[aria-current="true"]')).not.toHaveText("Queries");
-  await expect(contents.locator('[aria-current="true"]')).toBeInViewport();
+  await expect(contents.locator('[aria-current="page"]')).toHaveText(
+    "Managing documents and errors",
+  );
+  await contents.getByText("Queries", { exact: true }).click();
+  await expect(contents.locator('[aria-current="page"]')).toHaveText("Queries");
+  await expect(page.getByRole("heading", { name: "Sharing", exact: true })).toHaveCount(0);
 
   await newSpreadsheet(page);
   const opened = context.waitForEvent("page");
   await page.getByRole("link", { name: "Help" }).click();
   const help = await opened;
+  await help
+    .getByRole("navigation", { name: "Help topics" })
+    .getByText("Buttons and controls")
+    .click();
   await expect(help.getByRole("heading", { name: "Buttons and actions" })).toBeVisible();
   // The editor is still open in the first tab.
   await expect(cell(page, "A1")).toBeVisible();
@@ -339,7 +343,7 @@ test("the help page documents formulas, with or without an account", async ({ pa
 
 test("the browser tab names what is open, then the app", async ({ page }) => {
   await page.goto("/help");
-  await expect(page).toHaveTitle(`Help | ${APP_NAME}`);
+  await expect(page).toHaveTitle(`Editing cells · Help | ${APP_NAME}`);
 
   await signUp(page);
   await expect(page).toHaveTitle(`Documents | ${APP_NAME}`);

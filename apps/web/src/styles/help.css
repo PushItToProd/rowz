@@ -37,7 +37,7 @@
   text-decoration: none;
 }
 
-.help__contents [aria-current="true"] {
+.help__contents [aria-current="page"] {
   color: var(--ink);
   font-weight: 700;
 }
@@ -145,4 +145,13 @@
 
 .help li + li {
   margin-top: 4px;
+}
+
+.help__pagination {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
