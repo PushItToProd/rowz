@@ -18,7 +18,8 @@
 }
 
 /* The contents stay in view while the page scrolls: one line across the top that scrolls sideways. */
-.help__contents {
+.help__contents,
+.help__sections {
   position: sticky;
   top: 0;
   z-index: var(--z-content-raised);
@@ -33,16 +34,23 @@
   white-space: nowrap;
 }
 
-.help__contents a {
+.help__contents a,
+.help__sections a {
   text-decoration: none;
 }
 
-.help__contents [aria-current="page"] {
+.help__contents [aria-current="page"],
+.help__sections [aria-current="location"] {
   color: var(--ink);
   font-weight: 700;
 }
 
-.help section {
+.help__contents {
+  position: static;
+}
+
+.help section,
+.help h3[id] {
   /* Space above a section reached by a contents link, clear of the contents. */
   scroll-margin-top: 60px;
 }
@@ -56,6 +64,7 @@
 
   /* Floated into the padding, so the sections take the full width of the text column. */
   .help__contents {
+    position: sticky;
     top: 16px;
     float: left;
     flex-direction: column;
@@ -64,10 +73,6 @@
     margin: 8px 0 0 -240px;
     overflow: hidden auto;
     white-space: normal;
-  }
-
-  .help section {
-    scroll-margin-top: 12px;
   }
 }
 

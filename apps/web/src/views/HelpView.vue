@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { usePageTitle } from "../pageTitle";
 import { HELP_PAGES } from "./help/pages";
 import Editing from "./help/HelpEditing.vue";
@@ -23,6 +23,52 @@ const components = {
   presentation: Presentation,
   documents: Documents,
 };
+const content = ref<HTMLElement>();
+const sectionContents = ref<HTMLElement>();
+const sections = ref<{ id: string; title: string }[]>([]);
+const reading = ref("");
+
+function trackSection(): void {
+  const line = (sectionContents.value?.getBoundingClientRect().bottom ?? 0) + 24;
+  const passed = sections.value.filter(({ id }) => {
+    const heading = document.getElementById(id);
+    return heading && heading.getBoundingClientRect().top <= line;
+  });
+  const atEnd =
+    window.scrollY > 0 &&
+    window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+  reading.value =
+    (atEnd ? sections.value.at(-1) : passed.at(-1))?.id ?? sections.value[0]?.id ?? "";
+}
+
+async function collectSections(): Promise<void> {
+  await nextTick();
+  sections.value = Array.from(
+    content.value?.querySelectorAll<HTMLElement>("section > h2, h3[id]") ?? [],
+  ).map((heading) => ({
+    id: heading.id || (heading.parentElement?.id ?? ""),
+    title: heading.textContent.trim(),
+  }));
+  trackSection();
+}
+
+watch(() => page.value.id, collectSections);
+watch(reading, async () => {
+  await nextTick();
+  const list = sectionContents.value;
+  const link = list?.querySelector<HTMLElement>('[aria-current="location"]');
+  if (list && link) list.scrollLeft = link.offsetLeft - (list.clientWidth - link.offsetWidth) / 2;
+});
+onMounted(() => {
+  void collectSections();
+  window.addEventListener("scroll", trackSection, { passive: true });
+  window.addEventListener("resize", trackSection);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("scroll", trackSection);
+  window.removeEventListener("resize", trackSection);
+});
+
 usePageTitle(() => `${page.value.title} · Help`);
 </script>
 
@@ -41,7 +87,16 @@ usePageTitle(() => `${page.value.title} · Help`);
         >{{ item.title }}</RouterLink
       >
     </nav>
-    <component :is="components[page.id]" />
+    <nav ref="sectionContents" class="help__sections" aria-label="Contents">
+      <a
+        v-for="section in sections"
+        :key="section.id"
+        :href="`#${section.id}`"
+        :aria-current="section.id === reading ? 'location' : undefined"
+        >{{ section.title }}</a
+      >
+    </nav>
+    <div ref="content"><component :is="components[page.id]" /></div>
     <nav class="help__pagination" aria-label="More help topics">
       <RouterLink
         v-if="HELP_PAGES.indexOf(page) > 0"

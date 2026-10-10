@@ -1,5 +1,5 @@
 import { defaultFunctions, errorDocs } from "@spreadsheet-app/engine";
-import { mount, RouterLinkStub, type VueWrapper } from "@vue/test-utils";
+import { flushPromises, mount, RouterLinkStub, type VueWrapper } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import { APP_NAME } from "../appName";
 import HelpView from "./HelpView.vue";
@@ -88,6 +88,15 @@ describe("HelpView", () => {
       expect(wrapper.findAll("section").map((section) => section.attributes("id"))).toEqual(
         page.sections,
       );
+      await flushPromises();
+      const headings = wrapper.findAll("section > h2, h3[id]");
+      const contents = wrapper.findAll(".help__sections a");
+      expect(contents.map((link) => link.text())).toEqual(
+        headings.map((heading) => heading.text()),
+      );
+      for (const link of contents) {
+        expect(wrapper.find(link.attributes("href")!).exists()).toBe(true);
+      }
       const current = wrapper.get('.help__contents [aria-current="page"]');
       expect(current.text()).toBe(page.title);
       expect(wrapper.findAll(".help__contents a")).toHaveLength(HELP_PAGES.length);
