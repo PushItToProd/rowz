@@ -1,6 +1,8 @@
 # Agent decisions
 
-Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
+Choices by agents that the author has not seen. Each entry says what was decided, why, and what to change if you disagree. Newest first. An entry moves to [DECISIONS.md](DECISIONS.md) when the author has seen it.
+
+Every entry here is safe to build on. Its `**Standing.**` line says Default or Stopgap, and an entry without the line is a Default. [CLAUDE.md](CLAUDE.md), "Decision records", defines them.
 
 ## 2026-10-08: Consistent CSV formula warnings
 

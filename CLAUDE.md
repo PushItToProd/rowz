@@ -16,7 +16,25 @@ The author sets priorities. When the author gives a task that is hardening work,
 
 ## Decision records
 
-[DECISIONS.md](DECISIONS.md) holds decisions the author made or approved. Add an entry only for a decision the author stated or confirmed. [AGENT_DECISIONS.md](AGENT_DECISIONS.md) holds choices an agent made while working on its own, for the author to review.
+The decision records say why rowz works the way it does, so that later work does not undo a choice by accident or reargue it. They are not a list of permissions. Which file an entry is in says who has looked at it. Its standing says how firmly it holds.
+
+[AGENT_DECISIONS.md](AGENT_DECISIONS.md) holds choices an agent made that the author has not seen. It is where the author looks to learn what agents decided. [DECISIONS.md](DECISIONS.md) holds decisions the author made, and agent choices the author has seen. Add an entry to it only for a decision the author stated or confirmed.
+
+Each entry has a line `**Standing.**` with one of three values:
+
+| Standing | Meaning                                                                                | What an agent does                                                                                |
+| -------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Rule     | The author is committed to it. It is part of what rowz is.                             | Follows it. When a task conflicts with it, stops and says so before changing anything.            |
+| Default  | How rowz works now. The author finds it acceptable, or has not looked.                 | Builds on it. Changes it when a task gives a reason, without asking first, and updates the entry. |
+| Stopgap  | Known to be thin or wrong, and kept to move on. Its entry says what should replace it. | Builds on it, and avoids work that would make it harder to replace.                               |
+
+An entry with no standing is a Default.
+
+- **An agent's choice is a Default,** or a Stopgap when the agent knows it is one. It is safe to build on. Only the author makes a Rule.
+- **The author's review moves an entry to `DECISIONS.md` and keeps its standing** unless the author names another. "That seems fine" is a Default the author has seen, and is not an endorsement. Move the entry whole, and change only its standing and the sentence that says who decided.
+- **A decision by the author is also a Default** unless the author says it is a Rule. The author often decides something to keep the first version simple.
+- **Ask for a review only when a choice is expensive to undo:** a database schema, the file format, what a formula means, or the contract of a route. Add an `Author` item to `todo.md` for such a choice. A label, a layout, or the wording of a menu gets an entry and no item.
+- **A Rule also appears where the rules are stated:** under "Design rules" below, or in [docs/design/](docs/design/README.md). The entry in `DECISIONS.md` holds the reasoning.
 
 ## Design guidance
 

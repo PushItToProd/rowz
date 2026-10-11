@@ -1,6 +1,8 @@
 # Decisions
 
-Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
+Decisions the author made, and choices by agents that the author has seen. Each entry says what was decided, why, and what would reopen it. Newest first. Choices by agents that the author has not seen are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
+
+An entry's `**Standing.**` line says how firmly it holds: Rule, Default, or Stopgap. An entry without the line is a Default, which an agent may change when a task gives a reason. [CLAUDE.md](CLAUDE.md), "Decision records", defines the three.
 
 ## 2026-10-11: Blocks and rows of blocks are dragged by their headers
 
