@@ -5,9 +5,10 @@ import { focusBlock } from "./focusBlock";
 
 /**
  * `position` is the place a new block takes on the page. With `blockRowId`,
- * the block goes in that row of blocks, and `position` is its place in the row.
+ * the block goes at the end of that row of blocks. The server finds the end,
+ * so a second click made before the first block arrives still adds after it.
  */
-const props = defineProps<{ pageId: string; position: number; blockRowId?: string }>();
+const props = defineProps<{ pageId: string; position?: number; blockRowId?: string }>();
 const store = useWorkbookStore();
 
 async function addBlock(event: MouseEvent, add: () => Promise<boolean>): Promise<void> {
@@ -46,7 +47,9 @@ async function addBlock(event: MouseEvent, add: () => Promise<boolean>): Promise
     v-if="store.canEdit"
     class="editor__add"
     role="group"
-    :aria-label="blockRowId ? 'Add block to this row' : `Insert block at position ${position + 1}`"
+    :aria-label="
+      position === undefined ? 'Add block to this row' : `Insert block at position ${position + 1}`
+    "
     :data-insert-position="position"
   >
     <button

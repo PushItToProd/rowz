@@ -128,6 +128,10 @@ import {
         of it.
       </p>
       <p>
+        Drag a block or a row by its header to move it on its page. A bar shows where it will go.
+        Released over the blocks of a row, a block goes into that row. Escape cancels the drag.
+      </p>
+      <p>
         In a row's menu, <strong>Ungroup</strong> removes the row and leaves its blocks on the page.
         <strong>Delete row and its blocks</strong> deletes them with it.
       </p>

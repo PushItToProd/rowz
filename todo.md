@@ -143,7 +143,10 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
 - [ ] support reordering things by dragging and dropping
   - [ ] **P7** pages #small-apps
   - [ ] **P6** rows and cols by dragging and dropping their headers (including when a range of them is selected) (but no need to handle dragging and dropping a selected range of cells - only do it if the user has specifically selected full rows or columns) #everyday
-  - [ ] **P7** blocks #small-apps
+  - [x] **P7** blocks #small-apps
+    - [x] **Author** **P5** (Claude) review how dragging a block behaves: [AGENT_DECISIONS.md](AGENT_DECISIONS.md), "Blocks and rows of blocks are dragged by their headers"
+    - [ ] allow drag-and-drop on mobile by using the ellipsis menu as a grip. this should not replace the current behavior that allows dragging blocks by their whole header on desktop
+    - [ ] **P7** drag a block to another page by holding it over the page's tab #small-apps
 - [ ] **P7** data tables - allow choices to be drawn from a formula's result (when the formula value changes, keep the raw underlying value in the cell but flag it visibly as invalid) #data-tables
 - [ ] **P7** (Claude) the editor for a formula column's formula looks unfinished beside the other panels: its heading is small, "Pick reference" is smaller than the other buttons, and Apply and Cancel touch. See `_scratch/qa/15-formula-col.png` #formula-editing
 - [ ] **P7** double clicking a cell in a formula column should open the formula column formula editor instead of editing in the cell
@@ -219,8 +222,10 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
 - [ ] **P6** (Claude) make the warning triangle on a page tab, a block, and a document in the list a control: clicking it goes to the error, or opens the errors list showing only that page's, block's, or document's errors. They are plain icons today (`ErrorWarning.vue`). See "Errors are always visible, and an error leads to its origin" in [docs/design/README.md](docs/design/README.md) #everyday
 - [ ] **P7** (Claude) review the existing interface text against [docs/design/writing.md](docs/design/writing.md) and fix what breaks it #everyday
 - [ ] **P8** review more published style guides for interface text (Material Design, Apple's Human Interface Guidelines, the Microsoft Writing Style Guide) and extend [docs/design/writing.md](docs/design/writing.md) from them. The Atlassian error-message guidance and Microsoft's Windows writing style page are already used #everyday
-- [ ] **P10** revamp the phone-width UI so it is less cramped. The editor header is the tightest part: it holds the back arrow, the spreadsheet's name, the saving indicator, Share, History, Export, and Help on one line. #everyday
+- [ ] **P5** revamp the phone-width UI so it is less cramped. The editor header is the tightest part: it holds the back arrow, the spreadsheet's name, the saving indicator, Share, History, Export, and Help on one line. #everyday
   - (Claude) at 390 px wide on 2026-10-05, the error count button covers the document's name, "Save a copy" and Help are cut off, the page scrolls sideways (475 px of content), the format toolbar runs off the right edge, and 73 of the editor's 134 controls are smaller than 24 px in one dimension. A table scrolls inside its card as intended. See `_scratch/qa/32-mobile-editor.png`
+  - Author's suggestion: make the top bar horizontally scrollable on mobile
+- [ ] **P6** on my Fold 4 front screen (measures 437x977px according to a random "how big is my browser" site I found) the ellipsis menu on the upper-right corner of blocks get wrapped to a second line below the title instead of staying in the upper right, causing it to take up more vertical space than it should
 - [ ] **P6** allow checkboxes, inputs, and other controls to target a named range; require the target to contain exactly one cell #small-apps
 - [ ] more controls:
   - [ ] **P8** a date picker #small-apps
@@ -230,7 +235,7 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
   - [ ] **P8** a numeric value input roughly like (don't use this as a literal template; make it nicer) "<button>-</button> <input value="100"> <button>+</button>" where you can increment and decrement the value using the -/+ buttons (but also still support editing the number directly) #small-apps
 - [ ] **P7** a cell of a typed column that holds an entry of the wrong kind shows `#VALUE!` in place of the entry. Show what was typed or pasted and mark the cell as an error, so the wrong value can be read and corrected. #data-tables
 - [ ] **P6** cell validation - require the value to match a pattern, regex, or custom formula #data-tables
-- [ ] **P6** touch: select a range, fill by dragging, and a long-press menu on Android+iOS #everyday
+- [ ] **P6** touch: select a range, fill by dragging, drag a block to another place, and a long-press menu on Android+iOS #everyday
 - [ ] **P8** allow users to create and reuse their own document templates #documents
 - build reference documents in rowz as far as its features allow, at the end of each theme
   - [ ] **Author** **P3** a video game quest tracker, after https://docs.google.com/spreadsheets/d/1cwsRONdpXMJAvjpamauZ391NrTXX1gEdeTrx1Rf324o #small-apps
@@ -300,6 +305,7 @@ These items harden rowz for several users, hostile input, or a deployed server. 
 - [ ] **P10** `ContextMenu.vue` moves focus to the menu only on mount. If the focused item becomes disabled while the menu stays open (for example another tab uses the last row capacity), focus can leave the menu and Escape stops working. Keep focus on the menu when its focused item is disabled, and test it. #sharing
 - [ ] **P10** `REGEXREPLACE` replacement expansion appends a part per `$n` reference even when it expands to empty, so a huge replacement cell (`"$1"` repeated millions of times) bypasses the step and output limits; count replacement parts against the step budget (packages/engine/src/functions/regex.ts) #sharing
 - [ ] **P8** A folder named "Unfiled" is indistinguishable from the root group in the document list and Move menu; label the root group differently or reserve the name #sharing
+- [ ] **P5** Collapse folders other than "Unfiled" by default
 - [ ] **P10** The document list can omit a document when another tab deletes its folder between the assignment and folder queries in `apps/server/src/repo/spreadsheets.ts`; read both in one snapshot or treat assignments to missing folders as unfiled #sharing
 - [ ] **P10** (GPT) Notify the user during editing if the cell being edited has been edited or deleted elsewhere. The shared formula editor initially reports a deleted target only on submission, with a Vue error modal containing the draft in a read-only editor for copying. See [the formula-editing plan](plans/formula-editing.md). #sharing
 - [ ] **P10** (GPT) Add activity indicators showing other sessions' editing targets to help people coordinate parallel edits. Deferred from [the shared formula editor](plans/formula-editing.md). Follow the author's FAFO policy: indicators do not lock targets or block saves. #sharing

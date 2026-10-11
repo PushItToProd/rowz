@@ -36,6 +36,7 @@ import ScriptCard from "../components/ScriptCard.vue";
 import TextCard from "../components/TextCard.vue";
 import { useWorkbookStore } from "../stores/workbook";
 import { useDialog } from "../useDialog";
+import { useBlockDrag, type DragLine } from "../blockDrag";
 import { SIDE_PANES, provideActiveSidePane, tableIdOfSidePane, type SidePaneId } from "../sidePane";
 import { useLocationReveal } from "../locationReveal";
 import { copyLinkToClipboard } from "../clipboard";
@@ -424,6 +425,37 @@ const lines = computed(() => {
     const alone = found([id]);
     return alone.length > 0 ? [{ id, row: null, blocks: alone }] : [];
   });
+});
+
+const chrome = ref<HTMLElement>();
+/** The headers a block and a row of blocks are dragged by. */
+const BLOCK_HANDLE = ".table-card__header, .view-card__header";
+const BLOCK_ROW_HANDLE = ".block-row__header";
+const drag = useBlockDrag({
+  enabled: () => store.canEdit,
+  lines: () =>
+    lines.value.flatMap((line): DragLine[] => {
+      const shown = (id: string) => document.getElementById(`block-${id}`);
+      const element = shown(line.id);
+      if (!element) return [];
+      const area = line.row && element.querySelector(".editor__line-blocks");
+      return [
+        {
+          id: line.id,
+          box: element.getBoundingClientRect(),
+          row: area
+            ? {
+                area: area.getBoundingClientRect(),
+                blocks: line.blocks.flatMap(
+                  (block) => shown(block.record.id)?.getBoundingClientRect() ?? [],
+                ),
+              }
+            : null,
+        },
+      ];
+    }),
+  visibleTop: () => chrome.value?.getBoundingClientRect().bottom ?? 0,
+  drop: (id, place) => void store.placeBlock(props.pageId ?? "", id, place.blockRowId, place.index),
 });
 
 const handledDeepLink = ref<string>();
@@ -886,7 +918,7 @@ watch(
     @keydown.capture="findKey"
     @focusin="rememberBlock"
   >
-    <div class="editor__chrome">
+    <div ref="chrome" class="editor__chrome">
       <header class="editor__header">
         <RouterLink :to="{ name: 'spreadsheets' }" class="editor__back" aria-label="← Documents">
           ← <span class="editor__back-label">Documents</span>
@@ -962,21 +994,29 @@ watch(
 
     <p v-if="loadError" class="notice notice--error" role="alert">{{ loadError }}</p>
     <p v-else-if="!loaded" class="editor__loading">Loading…</p>
-    <main v-else-if="page" class="editor__page">
+    <main
+      v-else-if="page"
+      class="editor__page"
+      :class="{ 'editor__page--editable': store.canEdit }"
+    >
       <template v-for="(line, index) in lines" :key="line.id">
         <AddBlockRow :page-id="page.id" :position="index" />
         <!-- A line holds one block, or a row of blocks with its header. Alone, it adds no box of its own. -->
         <div
           :id="line.row ? `block-${line.row.id}` : undefined"
           class="editor__line"
-          :class="{ 'block-row': line.row }"
+          :class="{ 'block-row': line.row, editor__dragged: line.row?.id === drag.dragged.value }"
           :tabindex="line.row ? 0 : undefined"
           :role="line.row ? 'region' : undefined"
           :aria-label="line.row?.name"
           @contextmenu="line.row && openBlockMenu($event, line.row)"
           @keydown="line.row && onBlockKeydown($event, line.row)"
         >
-          <header v-if="line.row" class="block-row__header">
+          <header
+            v-if="line.row"
+            class="block-row__header"
+            @pointerdown="drag.press($event, line.row.id, true, BLOCK_ROW_HANDLE)"
+          >
             <h2>
               <EditableName
                 :value="line.row.name"
@@ -985,11 +1025,7 @@ watch(
                 @rename="store.renameBlockRow(line.row.id, $event)"
               />
             </h2>
-            <AddBlockRow
-              :page-id="page.id"
-              :block-row-id="line.row.id"
-              :position="line.blocks.length"
-            />
+            <AddBlockRow :page-id="page.id" :block-row-id="line.row.id" />
             <button
               v-if="store.canEdit"
               type="button"
@@ -1009,6 +1045,8 @@ watch(
                 role="region"
                 :aria-label="block.record.name"
                 class="editor__block"
+                :class="{ editor__dragged: block.record.id === drag.dragged.value }"
+                @pointerdown="drag.press($event, block.record.id, false, BLOCK_HANDLE)"
                 @contextmenu="openBlockMenu($event, block.record)"
                 @keydown="onBlockKeydown($event, block.record)"
               >
@@ -1095,6 +1133,17 @@ watch(
       </template>
       <p v-if="lines.length === 0" class="editor__empty">This page is empty.</p>
       <AddBlockRow :page-id="page.id" :position="lines.length" />
+      <!-- Where the block being dragged will go. -->
+      <div
+        v-if="drag.mark.value"
+        class="editor__drop"
+        :style="{
+          left: `${drag.mark.value.left}px`,
+          top: `${drag.mark.value.top}px`,
+          width: `${drag.mark.value.right - drag.mark.value.left}px`,
+          height: `${drag.mark.value.bottom - drag.mark.value.top}px`,
+        }"
+      />
     </main>
 
     <ContextMenu

@@ -364,3 +364,26 @@
     flex-wrap: wrap;
   }
 }
+
+/* A block and a row of blocks are dragged by their headers to another place on the page. */
+.editor__page--editable :is(.table-card__header, .view-card__header, .block-row__header) {
+  cursor: grab;
+}
+
+.dragging-block,
+.dragging-block * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.editor__dragged {
+  opacity: 0.45;
+}
+
+.editor__drop {
+  position: fixed;
+  z-index: var(--z-editor-chrome);
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}

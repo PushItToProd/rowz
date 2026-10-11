@@ -207,6 +207,41 @@ export function createStructure(context: WorkbookContext) {
     return arrange(pageId, withBlocks(layout, blockRowId, order));
   }
 
+  /**
+   * Moves a block to a gap on its page: before the block at `index` among
+   * those on the page itself, or among those of a row of blocks. `index`
+   * counts the blocks as they are now, the moved one included. A row of
+   * blocks moves on the page only.
+   */
+  function placeBlock(
+    pageId: string,
+    blockId: string,
+    blockRowId: string | null,
+    index: number,
+  ): Promise<boolean> {
+    const layout = layoutOf(pageId);
+    const blocksOf = (from: PageLayout, rowId: string | null): string[] | undefined =>
+      rowId === null ? from.blocks : from.rows.find((row) => row.id === rowId)?.blocks;
+    const from = blockRowOf(layout, blockId);
+    const was = blocksOf(layout, from)?.indexOf(blockId) ?? -1;
+    const isRow = layout.rows.some((row) => row.id === blockId);
+    if (was === -1 || (isRow && blockRowId !== null)) return Promise.resolve(false);
+    const without: PageLayout = {
+      blocks: layout.blocks.filter((id) => id !== blockId),
+      rows: layout.rows.map((row) => ({
+        id: row.id,
+        blocks: row.blocks.filter((id) => id !== blockId),
+      })),
+    };
+    const beside = blocksOf(without, blockRowId);
+    if (!beside) return Promise.resolve(false);
+    // Taking the block out of its place shifts the gaps after it by one.
+    const gap = from === blockRowId && was < index ? index - 1 : index;
+    const at = Math.max(0, Math.min(beside.length, gap));
+    if (from === blockRowId && at === was) return Promise.resolve(false);
+    return arrange(pageId, withBlocks(without, blockRowId, beside.toSpliced(at, 0, blockId)));
+  }
+
   /** Moves a table or view to the end of a row of blocks on its page. */
   function moveBlockIntoRow(pageId: string, blockId: string, blockRowId: string): Promise<boolean> {
     const layout = layoutOf(pageId);
@@ -557,6 +592,7 @@ export function createStructure(context: WorkbookContext) {
     moveBlock,
     moveBlockIntoRow,
     moveBlockOutOfRow,
+    placeBlock,
     addBlockRow,
     renameBlockRow,
     ungroupBlockRow,

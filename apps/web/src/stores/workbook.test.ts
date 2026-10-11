@@ -1734,6 +1734,53 @@ describe("rows of blocks", () => {
     });
   });
 
+  it.each<[string, string, string | null, number, object | null]>([
+    ["a block to another gap on the page", "v3", null, 0, { blocks: ["v3", "t1", "br1"] }],
+    [
+      "a block on the page into a row",
+      "t1",
+      "br1",
+      1,
+      {
+        blocks: ["br1", "v3"],
+        rows: [{ id: "br1", blocks: ["v1", "t1", "v2"] }],
+      },
+    ],
+    [
+      "a block out of its row to the page",
+      "v2",
+      null,
+      3,
+      {
+        blocks: ["t1", "br1", "v3", "v2"],
+        rows: [{ id: "br1", blocks: ["v1"] }],
+      },
+    ],
+    [
+      "a block past the one after it in its row",
+      "v1",
+      "br1",
+      2,
+      {
+        rows: [{ id: "br1", blocks: ["v2", "v1"] }],
+      },
+    ],
+    ["a row past the block after it", "br1", null, 3, { blocks: ["t1", "v3", "br1"] }],
+    ["nothing for the gap before the block itself", "v3", null, 2, null],
+    ["nothing for the gap after the block itself", "v1", "br1", 1, null],
+    ["nothing for a row dropped in a row", "br1", "br1", 0, null],
+  ])("place %s", async (_, blockId, blockRowId, index, expected) => {
+    const store = await openPage();
+    expect(await store.placeBlock("p1", blockId, blockRowId, index)).toBe(expected !== null);
+    if (expected === null) expect(server.reorderPage).not.toHaveBeenCalled();
+    else
+      expect(server.reorderPage).toHaveBeenLastCalledWith("p1", {
+        blocks: ["t1", "br1", "v3"],
+        rows: [{ id: "br1", blocks: ["v1", "v2"] }],
+        ...expected,
+      });
+  });
+
   it("move a block within the row it is in, and a row among the page's blocks", async () => {
     const store = await openPage();
     expect(await store.moveBlock("p1", "v1", 1)).toBe(true);

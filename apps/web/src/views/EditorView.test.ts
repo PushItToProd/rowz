@@ -772,8 +772,8 @@ describe("a row of blocks", () => {
     await controls.get('[data-add-block-type="table"]').trigger("click");
     await controls.get('[data-add-block-type="text"]').trigger("click");
     await flushPromises();
-    expect(server.createTable).toHaveBeenCalledWith("p1", 2, "br1");
-    expect(server.createView).toHaveBeenCalledWith("p1", "text", 2, "br1");
+    expect(server.createTable).toHaveBeenCalledWith("p1", undefined, "br1");
+    expect(server.createView).toHaveBeenCalledWith("p1", "text", undefined, "br1");
     wrapper.unmount();
   });
 

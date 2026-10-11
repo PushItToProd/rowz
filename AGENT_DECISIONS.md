@@ -2,6 +2,23 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
+## 2026-10-11: Blocks and rows of blocks are dragged by their headers
+
+The author asked for blocks and rows of blocks to be rearranged by dragging. An agent chose how.
+
+**Choices.**
+
+- **The header is the handle.** A press anywhere on a block's or a row's header that is not a button starts a drag once the pointer has moved 6px. A press that does not move stays a click, so a click on the name still renames it. The pointer over a header is a grab hand.
+- **A bar shows the gap the block will go to,** and the block being dragged dims in place. Nothing moves until the release.
+- **Over the blocks of a row, a block goes into that row,** at the gap nearest the pointer. Anywhere else, including a row's header, it goes between the lines of the page. A row dragged over another row stays on the page, since a row holds no rows.
+- **Escape cancels.** Holding the pointer near the top or bottom of the window scrolls the page.
+- **A finger does not drag,** because a finger on a header scrolls the page.
+- **A drag stays on its page.** Moving a block to another page is still in its menu.
+
+**Why.** [docs/design/ui.md](docs/design/ui.md) puts acting on the thing itself first, and the author found separate move buttons too costly in width. A handle of its own would cost the same width in every block of a row. Each drop is one request to `PUT /pages/:pageId/order`, so it is one undo step.
+
+**If you disagree.** A visible grip in the header would make the gesture easier to find. Blocks could also shift to open the gap while the pointer moves, as some editors do. The 6px threshold is `SLOP` in `apps/web/src/blockDrag.ts`.
+
 ## 2026-10-10: How a row of blocks behaves
 
 The author chose the storage ([DECISIONS.md](DECISIONS.md), "A row of blocks is stored in its own table"). An agent chose the rest while building it.
