@@ -47,7 +47,7 @@
   }
 }
 
-/* A table, chart, or text view on a page, with the buttons that move it beside it. */
+/* A table, chart, text view, or script on a page. */
 
 .editor__block {
   display: flex;
@@ -85,18 +85,6 @@
   min-width: 0;
 }
 
-.editor__move {
-  display: flex;
-  flex-shrink: 0;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.editor__move button {
-  padding: 2px 8px;
-  color: var(--muted);
-}
-
 .table-card__menu-trigger,
 .view-card__menu-trigger {
   min-width: 30px;
@@ -104,23 +92,6 @@
   color: var(--muted);
   font-size: 1.25rem;
   line-height: 1;
-}
-
-@media (max-width: 640px) {
-  .editor__block {
-    flex-direction: column-reverse;
-    gap: 4px;
-  }
-
-  .editor__block > :first-child {
-    flex: auto;
-    width: 100%;
-  }
-
-  .editor__move {
-    flex-direction: row;
-    align-self: flex-end;
-  }
 }
 
 /* A panel that slides over the right of the editor: History and Share */

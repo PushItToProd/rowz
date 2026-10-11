@@ -130,3 +130,37 @@ test("dragging a header moves a block into a row, within it, and out, and moves 
   expect((await box(page, ".block-row")).y).toBeLessThan((await box(page, TABLE)).y);
   await expect(row.locator(CHART)).toBeVisible();
 });
+
+test("Escape cancels a drag, and the release that follows renames nothing", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 2000 });
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add text", exact: true }).last().click();
+  const TABLE = '.table-card[data-table="Table 1"]';
+  const TEXT = '[data-view="Text 1"]';
+  await expect(page.locator(TEXT)).toBeVisible();
+  await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
+
+  // The press is on the table's name, which a click opens for renaming.
+  const name = await box(page, `${TABLE} .editable-name`);
+  const text = await box(page, TEXT);
+  await page.mouse.move(name.x + name.width / 2, name.y + name.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(text.x + 200, text.y + text.height + 30, { steps: 8 });
+  await expect(page.locator(".editor__drop")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".editor__drop")).toHaveCount(0);
+  // Back over the name, where the release makes a click.
+  await page.mouse.move(name.x + name.width / 2, name.y + name.height / 2, { steps: 4 });
+  await page.mouse.up();
+
+  await expect(page.getByLabel("Table name")).toHaveCount(0);
+  expect((await box(page, TABLE)).y).toBeLessThan((await box(page, TEXT)).y);
+  await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
+
+  // A plain click on the name still renames.
+  await page.mouse.click(name.x + name.width / 2, name.y + name.height / 2);
+  await expect(page.getByLabel("Table name")).toBeVisible();
+});

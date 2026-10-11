@@ -118,17 +118,3 @@ export async function reload(page: Page): Promise<void> {
   await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
   await page.reload();
 }
-
-/**
- * Opens the menu of pages a block can move to. A menu closes when the page
- * scrolls, and the scroll that brings the button into view can end after the
- * click, so the click is made again until the menu stays open.
- */
-export async function openPageMenu(page: Page, block: string): Promise<void> {
-  const button = page.getByRole("button", { name: `Move ${block} to another page` });
-  await button.scrollIntoViewIfNeeded();
-  await expect(async () => {
-    await button.click();
-    await expect(page.getByRole("menu")).toBeVisible({ timeout: 500 });
-  }).toPass();
-}

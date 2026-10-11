@@ -47,7 +47,7 @@ import { LIMITS } from "@spreadsheet-app/shared";
           of a text view or script to edit its source.
         </li>
         <li>
-          The arrows beside a block move it up or down its page, and the button under them moves it
+          Drag a block by its header to move it on its page. Its menu also moves it up or down, and
           to another page. Formulas that read a moved table are rewritten to name its new page, so
           they keep reading it. A page cannot take a table with the name of one it already has.
         </li>

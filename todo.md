@@ -116,7 +116,7 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
 - [ ] (Claude) plan quick switcher navigation; see [planning notes](plans/commands-navigation-and-macros.md) #everyday
 - [ ] (Claude) plan per-user settings for custom keybindings, command short names, and recents; see [planning notes](plans/commands-navigation-and-macros.md) #everyday
 
-## Tables, pages, charts, and text views
+## Tables, pages, charts, text views, and rows
 
 - [ ] **P8** export variables declared in Markdown templates as named values, like script declarations and named ranges in tables #small-apps
 - [ ] **P3** add a way to save multiple sort and filter view presets for each data table #data-tables
@@ -160,6 +160,9 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
     - [ ] **Author** **P4** the "Pick references" item may be resolved: the fix was made from reading the code (a disabled button was the likely cause) and passed the unit and e2e suites, but nobody confirmed it in a browser. Check that clicking the button keeps the text view edit open. Latest commit when written: 39d83d7
   - [ ] **Author** try leaving the editor only on an explicit Save, not when focus leaves the text. The author finds the return to the rendered view on a single click outside annoying. This changes the focus-change saving that "Editing in place" describes, so update [docs/design/ui.md](docs/design/ui.md) if the author keeps it
 - [ ] **P8** investigate opening a script or text block for editing on one click without catching clicks meant for something else. The author wants one click to start editing, and a drag that selects rendered text must not start it. Some apps wait briefly after the click and start editing only if the pointer stays put, so a click followed by scrolling or moving away does nothing. Find what the technique is called and how other apps tune it, then try it out. Double-click stays until then #small-apps
+- [ ] **P6** on desktop, a doc with many pages has its tabs shrink and eventually spill off the page. the mobile version already has the better behavior: scrolling when there are too many tabs to comfortably display
+- [ ] **P7** when hovering over the title of a page that isn't the currently-visible page, the border that appears around editable items still appears. this border should only appear for the active page, when clicking on the item would actually allow you to edit it.
+- [ ] **P4** when the screen width is narrow enough that rows are being shown vertically instead of horizontally, change "Move left" and "Move right" to "Move up in row" and "Move down in row"
 
 - [ ] Block sizing:
   - [ ] **P6** allow adjusting block display widths and heights to make them larger or smaller -- tables should just be scrollable if they're larger than their block, charts should resize to fit, text should word wrap and be vertically scrollable #charts

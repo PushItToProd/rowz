@@ -17,6 +17,7 @@ const PAGE: DragLine[] = [
     row: {
       area: box(10, 160, 790, 310),
       blocks: [box(10, 160, 394, 310), box(406, 160, 790, 310)],
+      across: true,
     },
   },
   { id: "c1", box: box(0, 340, 800, 440), row: null },
@@ -57,6 +58,7 @@ describe("dropPlace", () => {
         row: {
           area: box(10, 40, 290, 390),
           blocks: [box(10, 40, 290, 200), box(10, 212, 290, 390)],
+          across: false,
         },
       },
     ];
@@ -66,9 +68,31 @@ describe("dropPlace", () => {
     });
   });
 
+  it("orders by height in a stacked row that holds one block", () => {
+    const one: DragLine[] = [
+      {
+        id: "br1",
+        box: box(0, 0, 300, 250),
+        row: { area: box(10, 40, 290, 240), blocks: [box(10, 40, 290, 240)], across: false },
+      },
+    ];
+    expect(dropPlace({ x: 280, y: 60 }, one, false)?.place).toEqual({
+      blockRowId: "br1",
+      index: 0,
+    });
+    expect(dropPlace({ x: 20, y: 200 }, one, false)).toEqual({
+      place: { blockRowId: "br1", index: 1 },
+      mark: box(10, 244, 290, 248),
+    });
+  });
+
   it("puts a block into an empty row", () => {
     const empty: DragLine[] = [
-      { id: "br1", box: box(0, 0, 800, 100), row: { area: box(10, 40, 790, 90), blocks: [] } },
+      {
+        id: "br1",
+        box: box(0, 0, 800, 100),
+        row: { area: box(10, 40, 790, 90), blocks: [], across: true },
+      },
     ];
     expect(dropPlace({ x: 400, y: 60 }, empty, false)?.place).toEqual({
       blockRowId: "br1",

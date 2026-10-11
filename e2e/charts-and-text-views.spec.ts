@@ -230,13 +230,15 @@ test("a page shows a chart and a text view of its tables, and they follow change
         ),
       );
   await expect.poll(order).toEqual(["Fruit", "Text 1", "Chart 1"]);
-  await page.getByRole("button", { name: "Move Text 1 down" }).click();
+  await chooseBlockAction(page, "Text 1", "Move down");
   await expect.poll(order).toEqual(["Fruit", "Chart 1", "Text 1"]);
-  await expect(page.getByRole("button", { name: "Move Text 1 down" })).toBeDisabled();
-  await page.getByRole("button", { name: "Move Text 1 up" }).click();
+  await expect(
+    (await openBlockMenu(page, "Text 1")).getByRole("menuitem", { name: "Move down", exact: true }),
+  ).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await chooseBlockAction(page, "Text 1", "Move up");
   await expect.poll(order).toEqual(["Fruit", "Text 1", "Chart 1"]);
-  await page.getByRole("button", { name: "Move Text 1 up" }).click();
-  await expect(page.getByRole("button", { name: "Move Text 1 up" })).toBeDisabled();
+  await chooseBlockAction(page, "Text 1", "Move up");
   await expect.poll(order).toEqual(["Text 1", "Fruit", "Chart 1"]);
   await reload(page);
   await expect(text).toBeVisible();

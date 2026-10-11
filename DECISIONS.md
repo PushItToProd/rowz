@@ -2,14 +2,14 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
-## 2026-10-11: A row of blocks is added with "Add row" and has no arrow buttons
+## 2026-10-11: A row of blocks is added with "Add row", and no block has move buttons
 
 The author reviewed the first build of rows of blocks and changed two things.
 
 - **The button that adds a row of blocks reads "Add row".** It sits with **Add table** and **Add chart**, which settles what kind of row it adds.
-- **A block in a row has no left and right arrow buttons.** Its menu has **Move left** and **Move right**.
+- **A block has no move buttons beside it.** A drag by its header moves it on its page. Its menu has **Move up** and **Move down**, or **Move left** and **Move right** in a row, and moves it to another page.
 
-**Why.** The menu already moves the block, and the buttons took width from blocks that share one line.
+**Why.** The drag and the menu already move the block, and the buttons took width from the blocks.
 
 **What would reopen it.** People mistaking the button for the one that adds a row to a table.
 

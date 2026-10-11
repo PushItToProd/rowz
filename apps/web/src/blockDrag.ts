@@ -12,7 +12,8 @@ export interface Box {
 export interface DragLine {
   id: string;
   box: Box;
-  row: { area: Box; blocks: Box[] } | null;
+  /** `across` says whether the blocks run left to right, as they do unless the screen is narrow. */
+  row: { area: Box; blocks: Box[]; across: boolean } | null;
 }
 
 /** A gap a block can be dropped in: before the block at `index` on the page, or in a row of blocks. */
@@ -74,7 +75,7 @@ export function dropPlace(
   if (!draggingRow) {
     for (const line of lines) {
       if (!line.row) continue;
-      const { area, blocks } = line.row;
+      const { area, blocks, across } = line.row;
       if (
         point.x < area.left ||
         point.x > area.right ||
@@ -82,9 +83,6 @@ export function dropPlace(
         point.y > area.bottom
       )
         continue;
-      // On a narrow screen the blocks of a row stack.
-      const [one, two] = blocks;
-      const across = !(one && two && two.top >= one.bottom - 1);
       const index = blocks.filter(
         (box) => middle(box, across) < (across ? point.x : point.y),
       ).length;
@@ -168,7 +166,16 @@ export function useBlockDrag(options: {
     event.stopPropagation();
   };
 
-  function finish(commit: boolean): void {
+  /** Keeps the click that a release makes from reaching the header: it ended a drag, and must not rename or open anything. */
+  function guardClick(): void {
+    window.addEventListener("click", swallowClick, { capture: true, once: true });
+    setTimeout(() => {
+      window.removeEventListener("click", swallowClick, true);
+    });
+  }
+
+  /** Ends the drag. `released` is false when Escape ends it with the button still down. */
+  function finish(commit: boolean, released = true): void {
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onCancel);
@@ -177,16 +184,24 @@ export function useBlockDrag(options: {
     document.documentElement.classList.remove("dragging-block");
     const id = dragged.value;
     const target = place;
+    const pointerId = pressed?.pointerId;
     pressed = null;
     place = null;
     dragged.value = null;
     mark.value = null;
     if (id === null) return;
-    // The release ends a drag, so the click it also makes must not rename or open anything.
-    window.addEventListener("click", swallowClick, { capture: true, once: true });
-    setTimeout(() => {
-      window.removeEventListener("click", swallowClick, true);
-    });
+    if (released) guardClick();
+    else {
+      // The click comes when the button that began the drag goes up, however long that takes.
+      const onRelease = (event: PointerEvent): void => {
+        if (event.pointerId !== pointerId) return;
+        window.removeEventListener("pointerup", onRelease, true);
+        window.removeEventListener("pointercancel", onRelease, true);
+        if (event.type === "pointerup") guardClick();
+      };
+      window.addEventListener("pointerup", onRelease, true);
+      window.addEventListener("pointercancel", onRelease, true);
+    }
     if (commit && target) options.drop(id, target);
   }
 
@@ -194,15 +209,15 @@ export function useBlockDrag(options: {
     if (event.pointerId === pressed?.pointerId) finish(true);
   }
 
-  function onCancel(): void {
-    finish(false);
+  function onCancel(event: PointerEvent): void {
+    if (event.pointerId === pressed?.pointerId) finish(false);
   }
 
   function onKeydown(event: KeyboardEvent): void {
     if (event.key !== "Escape" || !dragged.value) return;
     event.preventDefault();
     event.stopPropagation();
-    finish(false);
+    finish(false, false);
   }
 
   /**

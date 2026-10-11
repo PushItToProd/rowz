@@ -446,6 +446,7 @@ const drag = useBlockDrag({
           row: area
             ? {
                 area: area.getBoundingClientRect(),
+                across: getComputedStyle(area).gridAutoFlow.startsWith("column"),
                 blocks: line.blocks.flatMap(
                   (block) => shown(block.record.id)?.getBoundingClientRect() ?? [],
                 ),
@@ -499,28 +500,6 @@ watch(
   },
   { flush: "post" },
 );
-
-/** The block whose menu of pages to move it to is open, and where the menu is. */
-const pageMenu = ref<{ x: number; y: number; block: { id: string; name: string } } | null>(null);
-
-function openPageMenu(event: MouseEvent, block: { id: string; name: string }): void {
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  pageMenu.value = { x: box.left, y: box.bottom + 4, block };
-}
-
-/** The other pages, each as a place to move the block to. */
-const pageMenuItems = computed((): MenuItem[] => {
-  const block = pageMenu.value?.block;
-  if (!block) return [];
-  return store.pages
-    .filter((candidate) => candidate.id !== props.pageId)
-    .map((target) => ({
-      label: `Move to ${target.name}`,
-      run: () => {
-        void store.moveBlockToPage(block.id, target.id);
-      },
-    }));
-});
 
 /** The actions for a block, opened from its ellipsis or by right-clicking its header. */
 const blockMenu = ref<{ x: number; y: number; blockId: string; directActions?: MenuItem[] } | null>(
@@ -1083,46 +1062,6 @@ watch(
                   @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
                   @toggle-collapse="toggleBlockCollapse(block.record.id)"
                 />
-                <div
-                  v-if="
-                    !isBlockCollapsed(spreadsheetId, block.record.id) &&
-                    store.canEdit &&
-                    ((!line.row && lines.length > 1) || store.pages.length > 1)
-                  "
-                  class="editor__move"
-                >
-                  <!-- A block in a row moves left and right from its menu, which leaves the width to the blocks. -->
-                  <template v-if="!line.row && lines.length > 1">
-                    <button
-                      type="button"
-                      title="Move up"
-                      :aria-label="`Move ${block.record.name} up`"
-                      :disabled="index === 0"
-                      @click="store.moveBlock(page.id, block.record.id, -1)"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      title="Move down"
-                      :aria-label="`Move ${block.record.name} down`"
-                      :disabled="index === lines.length - 1"
-                      @click="store.moveBlock(page.id, block.record.id, 1)"
-                    >
-                      ↓
-                    </button>
-                  </template>
-                  <button
-                    v-if="store.pages.length > 1"
-                    type="button"
-                    title="Move to another page"
-                    aria-haspopup="menu"
-                    :aria-label="`Move ${block.record.name} to another page`"
-                    @click="openPageMenu($event, block.record)"
-                  >
-                    ⇄
-                  </button>
-                </div>
               </div>
             </template>
             <p v-if="line.row && line.blocks.length === 0" class="block-row__empty">
@@ -1146,14 +1085,6 @@ watch(
       />
     </main>
 
-    <ContextMenu
-      v-if="pageMenu"
-      :x="pageMenu.x"
-      :y="pageMenu.y"
-      :label="`Move ${pageMenu.block.name} to another page`"
-      :items="pageMenuItems"
-      @close="pageMenu = null"
-    />
     <ContextMenu
       v-if="blockMenu"
       :key="blockMenu.blockId"
