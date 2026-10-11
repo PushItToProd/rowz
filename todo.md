@@ -134,18 +134,18 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
   - [ ] stacked bars
   - [ ] colors
 - [ ] **P7** support conditional formatting and sorting when rendering a data table in Markdown, or allow embedding an existing table/sheet in a Markdown view so its conditional formatting is applied #data-tables
-- [x] **P3** add a new type of block (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side #charts
-  - [ ] **Author** review how a row of blocks behaves. See [AGENT_DECISIONS.md](AGENT_DECISIONS.md), "How a row of blocks behaves"
-  - [ ] **P7** (Claude) let the blocks of a row have different widths, set by dragging the edge between two of them and by a number in a form #small-apps
-  - [ ] **P7** (Claude) collapse a row of blocks, copy a link to it, and move it with its blocks to another page, as other blocks can #small-apps
-  - [ ] **P8** (Claude) describe the `row` block in the `create-rowz-document` skill, and use a row in a sample where two blocks read better side by side #small-apps
+- [x] **P3** add a new type of block (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side #charts #row-blocks
+  - [ ] **Author** review how a row of blocks behaves. See [AGENT_DECISIONS.md](AGENT_DECISIONS.md), "How a row of blocks behaves" #row-blocks
+  - [ ] **P7** (Claude) let the blocks of a row have different widths, set by dragging the edge between two of them and by a number in a form #small-apps #row-blocks
+  - [ ] **P7** (Claude) collapse a row of blocks, copy a link to it, and move it with its blocks to another page, as other blocks can #small-apps #row-blocks
+  - [ ] **P8** (Claude) describe the `row` block in the `create-rowz-document` skill, and use a row in a sample where two blocks read better side by side #small-apps #row-blocks
 - [ ] **P10** support nested pages #small-apps
 - [ ] support reordering things by dragging and dropping
   - [ ] **P7** pages #small-apps
   - [ ] **P6** rows and cols by dragging and dropping their headers (including when a range of them is selected) (but no need to handle dragging and dropping a selected range of cells - only do it if the user has specifically selected full rows or columns) #everyday
   - [x] **P7** blocks #small-apps
     - [x] **Author** **P5** (Claude) review how dragging a block behaves: [AGENT_DECISIONS.md](AGENT_DECISIONS.md), "Blocks and rows of blocks are dragged by their headers"
-    - [ ] allow drag-and-drop on mobile by using the ellipsis menu as a grip. this should not replace the current behavior that allows dragging blocks by their whole header on desktop
+    - [ ] **P6** allow drag-and-drop on mobile by using the ellipsis menu as a grip. this should not replace the current behavior that allows dragging blocks by their whole header on desktop #row-blocks
     - [ ] **P7** drag a block to another page by holding it over the page's tab #small-apps
 - [ ] **P7** data tables - allow choices to be drawn from a formula's result (when the formula value changes, keep the raw underlying value in the cell but flag it visibly as invalid) #data-tables
 - [ ] **P7** (Claude) the editor for a formula column's formula looks unfinished beside the other panels: its heading is small, "Pick reference" is smaller than the other buttons, and Apply and Cancel touch. See `_scratch/qa/15-formula-col.png` #formula-editing
@@ -211,7 +211,7 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
 - [ ] **P5** submenus currently are subject to the diagonal submenu hover problem (if the user moves their cursor diagonally and crosses another menu item, the submenu they're moving toward disappears) -- use the safe triangle trick to fix this
 - [ ] **P5** a delete chosen from a menu should be confirmed in or beside the menu, not in a dialog in the middle of the screen: the item changes to "Confirm deletion?", or a small confirmation opens next to it. A second click counts only after a short delay, so an accidental double click does not confirm. Build both forms far enough for the author to choose. Keep the dialog where the confirmation explains what will be lost. See [DECISIONS.md](DECISIONS.md), "Removing a whole container is confirmed, beside the menu" #everyday
   - [ ] confirm deleting a page, which is not confirmed today
-  - [ ] replace the centered dialogs that confirm deleting a block (a table, chart, text view, or script) and a row of blocks with a popup beside the menu (`apps/web/src/views/EditorView.vue`)
+  - [ ] replace the centered dialogs that confirm deleting a block (a table, chart, text view, or script) and a row of blocks with a popup beside the menu (`apps/web/src/views/EditorView.vue`) #row-blocks
   - [ ] show a notice with Undo after a delete that is not confirmed, such as a row or a column
 - [ ] **P5** (Claude) give a notice and an error dialog a place for the underlying error, shown word for word in monospace below the summary, and rewrite save and request failures to the form in [docs/design/writing.md](docs/design/writing.md): what could not be done and why, then what to do #everyday
 - [ ] **P5** a command palette that lists every action, and a form dialog for an action that needs parameters (Tab between fields, Enter submits, Escape cancels). These are how a feature becomes usable from the keyboard without a shortcut of its own. Plan a shared command registry and keybinding table as part of this work; see [planning notes](plans/commands-navigation-and-macros.md). (Claude) #everyday
@@ -239,7 +239,7 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
   - [ ] **P8** a numeric value input roughly like (don't use this as a literal template; make it nicer) "<button>-</button> <input value="100"> <button>+</button>" where you can increment and decrement the value using the -/+ buttons (but also still support editing the number directly) #small-apps
 - [ ] **P7** a cell of a typed column that holds an entry of the wrong kind shows `#VALUE!` in place of the entry. Show what was typed or pasted and mark the cell as an error, so the wrong value can be read and corrected. #data-tables
 - [ ] **P6** cell validation - require the value to match a pattern, regex, or custom formula #data-tables
-- [ ] **P6** touch: select a range, fill by dragging, drag a block to another place, and a long-press menu on Android+iOS #everyday
+- [ ] **P6** touch: select a range, fill by dragging, and a long-press menu on Android+iOS #everyday
 - [ ] **P8** allow users to create and reuse their own document templates #documents
 - build reference documents in rowz as far as its features allow, at the end of each theme
   - [ ] **Author** **P3** a video game quest tracker, after https://docs.google.com/spreadsheets/d/1cwsRONdpXMJAvjpamauZ391NrTXX1gEdeTrx1Rf324o #small-apps

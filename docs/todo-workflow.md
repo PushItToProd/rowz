@@ -38,7 +38,7 @@ An agent that marks an item `[*]` keeps the item's priority prefix and adds a su
 
 rowz is a proof of concept that one person uses on their own machine. Features that make it more useful come before correctness under several users, hostile input, or deployment. The exceptions are serious bugs that one person would hit in ordinary use, and design flaws that would make much later work harder.
 
-A hashtag at the end of an item names its theme. A theme's standing informs the priority its items are given, and the number on the item is what orders the work.
+A hashtag at the end of an item names its theme. A second hashtag may name a feature whose items are hard to find by a word search: `#row-blocks` marks the items about rows of blocks, because "row" also matches every item about a table's rows. A theme's standing informs the priority its items are given, and the number on the item is what orders the work.
 
 | Theme               | Standing | What it covers                                                                                                  |
 | ------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
