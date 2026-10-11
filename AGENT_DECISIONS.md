@@ -8,7 +8,7 @@ The author chose the storage ([DECISIONS.md](DECISIONS.md), "A row of blocks is 
 
 **Choices.**
 
-- **The interface says "row of blocks" where "row" could mean a table's row:** the **Add row of blocks** button and error messages. A row's own name (`Row 1`) and its menu say "row", because the thing in view settles the meaning.
+- **Error messages and the undo label say "row of blocks",** because "row" alone could mean a table's row there. A row's own name (`Row 1`) and its menu say "row", because the thing in view settles the meaning.
 - **A row has a name and a header.** The header holds the name, the buttons that add a block to the row, and the ellipsis for its menu. A row needs a visible button for its menu, and the name is what the menus of other blocks call it ("Move into Row 1").
 - **The blocks of a row share its width equally,** and stack on a screen 640px wide or narrower.
 - **A row holds tables, charts, text views, and scripts, and no rows.**

@@ -2,6 +2,17 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-11: A row of blocks is added with "Add row" and has no arrow buttons
+
+The author reviewed the first build of rows of blocks and changed two things.
+
+- **The button that adds a row of blocks reads "Add row".** It sits with **Add table** and **Add chart**, which settles what kind of row it adds.
+- **A block in a row has no left and right arrow buttons.** Its menu has **Move left** and **Move right**.
+
+**Why.** The menu already moves the block, and the buttons took width from blocks that share one line.
+
+**What would reopen it.** People mistaking the button for the one that adds a row to a table.
+
 ## 2026-10-10: A row of blocks is stored in its own table
 
 Asked how to store a row of side-by-side blocks, the author chose a `block_rows` table over two alternatives: a row as another kind of view, and a flag on each block that puts it beside the one before.

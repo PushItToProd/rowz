@@ -13,7 +13,7 @@ test("a row of blocks shows its blocks side by side, and ungrouping stacks them 
 }) => {
   await newSpreadsheet(page);
   await enter(page, "A1", "kept");
-  await page.getByRole("button", { name: "Add row of blocks" }).last().click();
+  await page.locator('[data-add-block-type="row"]').last().click();
   const row = page.getByRole("region", { name: "Row 1" });
   await expect(row.getByText("This row is empty.")).toBeVisible();
 
@@ -47,7 +47,7 @@ test("deleting a row of blocks names what goes with it, and undo brings it back"
   page,
 }) => {
   await newSpreadsheet(page);
-  await page.getByRole("button", { name: "Add row of blocks" }).last().click();
+  await page.locator('[data-add-block-type="row"]').last().click();
   const row = page.getByRole("region", { name: "Row 1" });
   await row.getByRole("button", { name: "Add text", exact: true }).click();
   await expect(row.locator('[data-view="Text 1"]')).toBeVisible();

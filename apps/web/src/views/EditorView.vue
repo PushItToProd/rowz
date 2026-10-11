@@ -1002,7 +1002,7 @@ watch(
             </button>
           </header>
           <div class="editor__line-blocks">
-            <template v-for="(block, place) in line.blocks" :key="block.record.id">
+            <template v-for="block in line.blocks" :key="block.record.id">
               <div
                 :id="`block-${block.record.id}`"
                 tabindex="0"
@@ -1049,31 +1049,29 @@ watch(
                   v-if="
                     !isBlockCollapsed(spreadsheetId, block.record.id) &&
                     store.canEdit &&
-                    (line.blocks.length > 1 || lines.length > 1 || store.pages.length > 1)
+                    ((!line.row && lines.length > 1) || store.pages.length > 1)
                   "
                   class="editor__move"
                 >
-                  <!-- A block in a row moves among the blocks beside it, and one on the page among the lines. -->
-                  <template v-if="(line.row ? line.blocks : lines).length > 1">
+                  <!-- A block in a row moves left and right from its menu, which leaves the width to the blocks. -->
+                  <template v-if="!line.row && lines.length > 1">
                     <button
                       type="button"
-                      :title="line.row ? 'Move left' : 'Move up'"
-                      :aria-label="`Move ${block.record.name} ${line.row ? 'left' : 'up'}`"
-                      :disabled="(line.row ? place : index) === 0"
+                      title="Move up"
+                      :aria-label="`Move ${block.record.name} up`"
+                      :disabled="index === 0"
                       @click="store.moveBlock(page.id, block.record.id, -1)"
                     >
-                      {{ line.row ? "←" : "↑" }}
+                      ↑
                     </button>
                     <button
                       type="button"
-                      :title="line.row ? 'Move right' : 'Move down'"
-                      :aria-label="`Move ${block.record.name} ${line.row ? 'right' : 'down'}`"
-                      :disabled="
-                        (line.row ? place : index) === (line.row ? line.blocks : lines).length - 1
-                      "
+                      title="Move down"
+                      :aria-label="`Move ${block.record.name} down`"
+                      :disabled="index === lines.length - 1"
                       @click="store.moveBlock(page.id, block.record.id, 1)"
                     >
-                      {{ line.row ? "→" : "↓" }}
+                      ↓
                     </button>
                   </template>
                   <button

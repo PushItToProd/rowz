@@ -23,7 +23,7 @@ test("undo reverses a format, a row insertion, and a cell edit", async ({ page }
 test("the row and column growth menus add a batch in one undo step", async ({ page }) => {
   await newSpreadsheet(page);
   const table = page.locator('[data-table="Table 1"]');
-  const rowStrip = page.getByRole("button", { name: "Add row", exact: true });
+  const rowStrip = table.getByRole("button", { name: "Add row", exact: true });
   // The menu closes when the page scrolls, so let Playwright's scroll finish first.
   await rowStrip.scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);

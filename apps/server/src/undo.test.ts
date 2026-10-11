@@ -927,6 +927,53 @@ describe("journal identity and grouping", () => {
     expect((await snapshot(owner, fixture.id)).cells).toEqual([]);
   });
 
+  it("undoes and redoes an entry written before rows of blocks existed", async () => {
+    const fixture = await fresh();
+    const client = withClientId(owner);
+    const view = await addView(client, fixture.pageId, "chart");
+    const before = content(await snapshot(client, fixture.id));
+    await client.json("PUT", `/pages/${fixture.pageId}/order`, {
+      blocks: [view.id, fixture.tableId],
+    });
+    const after = content(await snapshot(client, fixture.id));
+    expect(after).not.toEqual(before);
+
+    // Such an entry has no list of rows of blocks, and its tables and views name no row.
+    const [entry] = await server.db
+      .select({ seq: journal.seq, data: journal.data })
+      .from(journal)
+      .where(eq(journal.spreadsheetId, fixture.id))
+      .orderBy(desc(journal.seq))
+      .limit(1);
+    const withoutBlockRow = <T extends object>(record: T | null) =>
+      record &&
+      (Object.fromEntries(Object.entries(record).filter(([key]) => key !== "blockRowId")) as T);
+    const data = entry!.data!;
+    expect(data.tables.length + data.views.length).toBe(2);
+    const old = {
+      ...data,
+      blockRows: undefined,
+      tables: data.tables.map((change) => ({
+        ...change,
+        before: withoutBlockRow(change.before),
+        after: withoutBlockRow(change.after),
+      })),
+      views: data.views.map((change) => ({
+        ...change,
+        before: withoutBlockRow(change.before),
+        after: withoutBlockRow(change.after),
+      })),
+    };
+    await server.db.update(journal).set({ data: old }).where(eq(journal.seq, entry!.seq));
+
+    const undone = await client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/undo`);
+    expect(undone).toMatchObject({ outcome: "done", error: null });
+    expect(content(await snapshot(client, fixture.id))).toEqual(before);
+    const redone = await client.json<UndoResult>("POST", `/spreadsheets/${fixture.id}/redo`);
+    expect(redone).toMatchObject({ outcome: "done", error: null });
+    expect(content(await snapshot(client, fixture.id))).toEqual(after);
+  });
+
   it("does not put requests without a client id on an undo stack", async () => {
     const fixture = await fresh();
     await owner.request("PUT", `/tables/${fixture.tableId}/cells`, cellsBody({ A1: "saved" }));
