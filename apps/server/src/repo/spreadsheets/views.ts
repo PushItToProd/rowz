@@ -29,19 +29,28 @@ export const STARTER_TEMPLATE = `## New text view
 Write Markdown here. A formula in double braces puts its value into the text: {{ 1 + 1 }}
 `;
 
-/** Adds a view at an index, defaulting to the end of a page. */
+/** Adds a view at an index, defaulting to the end of a page or of one of its rows of blocks. */
 export async function createView(
   ctx: RepositoryContext,
   pageId: string,
   kind: ViewKind,
   insertAt?: number,
+  inBlockRow?: string,
 ): Promise<Created<{ view: ViewRecord }>> {
   const { result, change } = await ctx.changePage(pageId, async (_page, tx, writer) => {
     writer.setLabel(VIEW_LABELS[kind]);
-    const position = await ctx.within(tx).insertPosition(pageId, writer, insertAt);
+    const position = await ctx.within(tx).insertPosition(pageId, writer, insertAt, inBlockRow);
+    const blockRowId = inBlockRow ?? null;
     if (kind === "script") {
       const name = nextName("Script", await ctx.holderNames(tx, pageId));
-      return writer.insertView({ pageId, kind, position, name, source: STARTER_SCRIPT });
+      return writer.insertView({
+        pageId,
+        kind,
+        blockRowId,
+        position,
+        name,
+        source: STARTER_SCRIPT,
+      });
     }
     const siblings = await tx
       .select({ name: views.name })
@@ -51,6 +60,7 @@ export async function createView(
     return writer.insertView({
       pageId,
       kind,
+      blockRowId,
       position,
       ...(kind === "chart"
         ? { name: nextName("Chart", names), source: "", chartType: "bar" as const }

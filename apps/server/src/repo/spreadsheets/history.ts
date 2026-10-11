@@ -10,14 +10,16 @@ import {
   type ChangedContent,
   type JournalData,
   readInputs,
+  tableFromJournal,
   touchSame,
   UndoRefusal,
+  viewFromJournal,
   writesFormulas,
 } from "../journal";
-import { cells, journal, pages, tables, tableRows, views } from "../../db/schema";
+import { blockRows, cells, journal, pages, tables, tableRows, views } from "../../db/schema";
 import { isForeignKeyViolation, isUniqueViolation } from "../../errors";
 import { type UndoResult } from "./records";
-import { pageColumns, tableColumns, viewColumns } from "./context";
+import { blockRowColumns, pageColumns, tableColumns, viewColumns } from "./context";
 import { INSERT_BATCH } from "./files";
 
 import type { RepositoryContext } from "./context";
@@ -27,7 +29,7 @@ export function sameRecord(left: unknown, right: unknown): boolean {
 }
 
 export function emptyChanged(): ChangedContent {
-  return { pages: [], tables: [], views: [], rows: [], cells: [] };
+  return { pages: [], blockRows: [], tables: [], views: [], rows: [], cells: [] };
 }
 
 /**
@@ -50,6 +52,7 @@ export function mergeChanged(
   if (cellsWritten.length > MAX_ANNOUNCED_CELLS) return null;
   return {
     pages: latest([...earlier.pages, ...later.pages], ({ id }) => id),
+    blockRows: latest([...earlier.blockRows, ...later.blockRows], ({ id }) => id),
     tables: latest([...earlier.tables, ...later.tables], ({ id }) => id),
     views: latest([...earlier.views, ...later.views], ({ id }) => id),
     rows: latest([...earlier.rows, ...later.rows], ({ id }) => id),
@@ -136,12 +139,12 @@ export async function changeHistory(
       const { data } = entry;
       const createsOrDeletes =
         data !== null &&
-        [...data.pages, ...data.tables, ...data.views].some(
+        [...data.pages, ...(data.blockRows ?? []), ...data.tables, ...data.views].some(
           ({ before, after }) => before === null || after === null,
         );
       if (createsOrDeletes && later.length > 0) {
         throw new UndoRefusal(
-          `A later change prevents ${direction}ing the adding or deleting of a page, table, or view`,
+          `A later change prevents ${direction}ing the adding or deleting of a page, row of blocks, table, or view`,
         );
       }
       // Ids fix which cell an entry means, and not what a formula's text
@@ -307,20 +310,27 @@ export async function assertRecordedMatches(
       throw new UndoRefusal("This page has changed since this step");
     }
   }
+  for (const { id, before, after } of data.blockRows ?? []) {
+    const [current] = await db
+      .select(blockRowColumns)
+      .from(blockRows)
+      .where(eq(blockRows.id, id))
+      .limit(1);
+    if (!sameRecord(current ?? null, expected(before, after))) {
+      throw new UndoRefusal("This row of blocks has changed since this step");
+    }
+  }
   for (const { id, before, after } of data.tables) {
     const [current] = await db.select(tableColumns).from(tables).where(eq(tables.id, id)).limit(1);
     const recorded = expected(before, after);
-    const normalized = recorded && {
-      ...recorded,
-      gridSizes: recorded.gridSizes ?? { rows: {}, columns: {} },
-    };
-    if (!sameRecord(current ?? null, normalized)) {
+    if (!sameRecord(current ?? null, recorded && tableFromJournal(recorded))) {
       throw new UndoRefusal("This table has changed since this step");
     }
   }
   for (const { id, before, after } of data.views) {
     const [current] = await db.select(viewColumns).from(views).where(eq(views.id, id)).limit(1);
-    if (!sameRecord(current ?? null, expected(before, after))) {
+    const recorded = expected(before, after);
+    if (!sameRecord(current ?? null, recorded && viewFromJournal(recorded))) {
       throw new UndoRefusal("This view has changed since this step");
     }
   }
@@ -472,8 +482,13 @@ export async function checkRestoredState(
       .from(views)
       .innerJoin(pages, eq(pages.id, views.pageId))
       .where(inSpreadsheet),
+    db
+      .select({ pageId: blockRows.pageId })
+      .from(blockRows)
+      .innerJoin(pages, eq(pages.id, blockRows.pageId))
+      .where(inSpreadsheet),
   ]);
-  for (const { pageId } of [...blocks[0], ...blocks[1]]) {
+  for (const { pageId } of blocks.flat()) {
     blockCounts.set(pageId, (blockCounts.get(pageId) ?? 0) + 1);
   }
   if ([...blockCounts.values()].some((total) => total > FILE_LIMITS.blocksPerPage)) {

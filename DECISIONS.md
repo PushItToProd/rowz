@@ -2,6 +2,17 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-10: A row of blocks is stored in its own table
+
+Asked how to store a row of side-by-side blocks, the author chose a `block_rows` table over two alternatives: a row as another kind of view, and a flag on each block that puts it beside the one before.
+
+- **A row of blocks is its own record,** with a name and a place on its page. A table or view in a row names the row and takes its position within it.
+- **"View" keeps meaning a chart, a text view, or a script.** A row shows no data of its own.
+
+**Why.** A row with its own record has a name and a menu, can be empty, and can hold settings such as the widths of its blocks later. Keeping it out of `views` leaves every place that reads a view's source or kind unchanged. The cost is a record type of its own in the journal and in the changes sent to open sessions.
+
+**What would reopen it.** A layout that a single level of rows cannot express, such as a row inside a row or a grid of blocks.
+
 ## 2026-10-10: How data tables, column references, and column types work for now
 
 The author reviewed the choices an agent made when data tables were built, and accepted them as how rowz works today. Three of them are expected to change.

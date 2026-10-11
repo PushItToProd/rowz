@@ -29,6 +29,7 @@ const CHART: ViewRecord = {
   pageId: "p1",
   kind: "chart",
   name: "Chart 1",
+  blockRowId: null,
   position: 1,
   source: "'Table 1'!A1:B3",
   chartType: "bar",

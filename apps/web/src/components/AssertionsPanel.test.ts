@@ -104,6 +104,7 @@ it("shows, copies, and opens the definition from an assertion's error trace", as
       pageId: "p1",
       kind: "script",
       name: "Summary",
+      blockRowId: null,
       position: 1,
       source: ['Broken() = ASSERT(FALSE, "The check failed")', "Result = Broken()"].join("\n"),
       chartType: null,

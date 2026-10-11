@@ -68,6 +68,10 @@
     {
       "tag": "0016_square_warhawk",
       "sha256": "090932a5c5be7e9a133f7d23f3c92a3555ab7110968c5d54d7eda5198c152ba9"
+    },
+    {
+      "tag": "0017_groovy_dreadnoughts",
+      "sha256": "ed94a9be24572147a9ba67b4b0ee4aef99547b90b61c9dde487d5328ff94cfd2"
     }
   ]
 }

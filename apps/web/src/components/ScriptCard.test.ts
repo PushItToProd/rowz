@@ -19,6 +19,7 @@ const SCRIPT: ViewRecord = {
   pageId: "p1",
   kind: "script",
   name: "Summary",
+  blockRowId: null,
   position: 1,
   source: "",
   chartType: null,

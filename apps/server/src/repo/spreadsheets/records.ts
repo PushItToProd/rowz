@@ -62,10 +62,20 @@ export interface PageRecord {
  * count keeps one person's added row from making the table another person
  * recorded look changed.
  */
+/** A row of blocks: a block that lays the tables and views in it out side by side. */
+export interface BlockRowRecord {
+  id: string;
+  pageId: string;
+  name: string;
+  position: number;
+}
+
 export interface TableRecord {
   id: string;
   pageId: string;
   name: string;
+  /** The row of blocks the table sits in, where `position` is its place in the row. */
+  blockRowId: string | null;
   position: number;
   /** The ids of the table's columns, in order. */
   colIds: string[];
@@ -87,6 +97,8 @@ export interface ViewRecord {
   pageId: string;
   kind: ViewKind;
   name: string;
+  /** The row of blocks the view sits in, where `position` is its place in the row. */
+  blockRowId: string | null;
   position: number;
   source: string;
   /** `null` for a text view. */
@@ -143,6 +155,7 @@ export interface Snapshot {
   /** How many changes have been made to what the spreadsheet holds. A change carries the revision it made. */
   revision: number;
   pages: PageRecord[];
+  blockRows: BlockRowRecord[];
   tables: TableRecord[];
   /** The rows of every table. Their order within a table is the order of their keys. */
   rows: RowRecord[];

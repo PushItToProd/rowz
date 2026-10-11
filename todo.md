@@ -134,7 +134,11 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
   - [ ] stacked bars
   - [ ] colors
 - [ ] **P7** support conditional formatting and sorting when rendering a data table in Markdown, or allow embedding an existing table/sheet in a Markdown view so its conditional formatting is applied #data-tables
-- [ ] **P3** add a new type of block (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side #charts
+- [x] **P3** add a new type of block (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side #charts
+  - [ ] **Author** review how a row of blocks behaves. See [AGENT_DECISIONS.md](AGENT_DECISIONS.md), "How a row of blocks behaves"
+  - [ ] **P7** (Claude) let the blocks of a row have different widths, set by dragging the edge between two of them and by a number in a form #small-apps
+  - [ ] **P7** (Claude) collapse a row of blocks, copy a link to it, and move it with its blocks to another page, as other blocks can #small-apps
+  - [ ] **P8** (Claude) describe the `row` block in the `create-rowz-document` skill, and use a row in a sample where two blocks read better side by side #small-apps
 - [ ] **P10** support nested pages #small-apps
 - [ ] support reordering things by dragging and dropping
   - [ ] **P7** pages #small-apps

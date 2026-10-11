@@ -37,6 +37,7 @@ export const TABLE: TableRecord = {
   position: 0,
   rowCount: 4,
   colCount: 3,
+  blockRowId: null,
   colIds: ["c1", "c2", "c3"],
   gridSizes: { rows: {}, columns: {} },
   rows: Array.from({ length: 4 }, (_, row) => ({
@@ -62,6 +63,7 @@ export function snapshotWith(
     name: "Budget",
     role: role as Snapshot["role"],
     pages: [{ id: "p1", name: "Page 1", position: 0 }],
+    blockRows: [],
     tables: [TABLE],
     views: [],
     cells: Object.entries(inputs).map(([address, input]) => ({ ...identifiedAt(address), input })),
@@ -160,6 +162,7 @@ type CellFixture = (CellId | IdentifiedCell) & { input: string };
 interface ContentFixture {
   cells?: CellFixture[];
   pages?: ChangedContent["pages"];
+  blockRows?: ChangedContent["blockRows"];
   tables?: (TableRecord | ChangedContent["tables"][number])[];
   views?: ((Partial<ViewRecord> & { id: string }) | ChangedContent["views"][number])[];
   rows?: ChangedContent["rows"];
@@ -186,6 +189,7 @@ export function changeWith(
             pageId: "p1",
             kind: "text" as const,
             name: "View",
+            blockRowId: null,
             position: 1,
             chartType: null,
             source: "",
@@ -211,6 +215,7 @@ export function changeWith(
     },
     changed: {
       pages: content.pages ?? [],
+      blockRows: content.blockRows ?? [],
       tables,
       views,
       rows,
@@ -319,6 +324,10 @@ export function mockApi(): MockedApi {
         Promise.resolve(changeWith({ pages: [{ id, page: { id, name, position: 0 } }] })),
       ),
     createView: vi.fn(),
+    createBlockRow: vi.fn(),
+    renameBlockRow: vi.fn(),
+    ungroupBlockRow: vi.fn(),
+    deleteBlockRow: vi.fn(),
     updateView: vi.fn(),
     deleteView: vi
       .fn()

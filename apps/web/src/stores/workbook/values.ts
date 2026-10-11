@@ -245,6 +245,7 @@ export function createValues(context: WorkbookContext) {
       context.tables.value,
       context.views.value,
       filledCells,
+      context.blockRows.value,
     );
   }
   return {

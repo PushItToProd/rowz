@@ -117,6 +117,21 @@ import {
       </ul>
     </section>
 
+    <section id="rows-of-blocks">
+      <h2>Rows of blocks</h2>
+      <p>
+        <strong>Add row of blocks</strong> puts a row on a page. A row shows the tables, charts,
+        text views, and scripts in it side by side, each with an equal share of the width. The
+        buttons in the row's header add a block at its right end. To put an existing block in a row,
+        choose <strong>Move into</strong> and the row's name in the block's menu. The same menu
+        moves a block left or right in its row, or out of it.
+      </p>
+      <p>
+        In a row's menu, <strong>Ungroup</strong> removes the row and leaves its blocks on the page.
+        <strong>Delete row and its blocks</strong> deletes them with it.
+      </p>
+    </section>
+
     <section id="text-views">
       <h2>Text views</h2>
       <p>

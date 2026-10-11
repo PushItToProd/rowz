@@ -39,10 +39,11 @@ export async function createTable(
   pageId: string,
   name?: string,
   position?: number,
+  blockRowId?: string,
 ): Promise<Created<{ table: TableRecord }>> {
   const { result, change } = await ctx.changePage(pageId, async (_page, tx, writer) => {
     writer.setLabel("Add table");
-    return ctx.insertTable(tx, pageId, name, writer, position);
+    return ctx.insertTable(tx, pageId, name, writer, position, blockRowId);
   });
   return { table: result, change };
 }

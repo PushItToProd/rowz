@@ -30,6 +30,7 @@ const TEXT: ViewRecord = {
   pageId: "p1",
   kind: "text",
   name: "Text 1",
+  blockRowId: null,
   position: 1,
   source: "",
   chartType: null,

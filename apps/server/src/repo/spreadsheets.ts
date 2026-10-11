@@ -15,6 +15,7 @@ import {
   type ResizeLinesBody,
   type SpreadsheetFile,
   type UpdateTableBody,
+  type ReorderBody,
 } from "@spreadsheet-app/shared";
 import type { Database } from "../db/client";
 import { type Contents } from "./contents";
@@ -26,6 +27,7 @@ import {
   type SpreadsheetSummary,
   type FolderRecord,
   type DocumentList,
+  type BlockRowRecord,
   type PageRecord,
   type TableRecord,
   type ViewRecord,
@@ -48,6 +50,7 @@ export type {
   ListedSpreadsheet,
   FolderRecord,
   DocumentList,
+  BlockRowRecord,
   PageRecord,
   TableRecord,
   ViewRecord,
@@ -207,12 +210,39 @@ export class SpreadsheetRepository {
   }
 
   /**
-   * Puts the blocks of a page in the order given. The
-   * list must name every one of them once, so that a stale client cannot
-   * leave two blocks in one place.
+   * Puts everything on a page where the request says: what sits on the page
+   * itself, and what sits in each row of blocks. The request must name every
+   * table, view, and row of blocks of the page once, so that a stale client
+   * cannot leave two blocks in one place or drop one.
    */
-  async reorderPage(pageId: string, blocks: readonly string[]): Promise<Change> {
-    return this.context.reorderPage(pageId, blocks);
+  async reorderPage(pageId: string, layout: ReorderBody): Promise<Change> {
+    return this.context.reorderPage(pageId, layout);
+  }
+
+  /** Adds an empty row of blocks at an index, defaulting to the end of a page. */
+  async createBlockRow(
+    pageId: string,
+    position?: number,
+  ): Promise<Created<{ blockRow: BlockRowRecord }>> {
+    return this.context.createBlockRow(pageId, position);
+  }
+
+  async renameBlockRow(blockRowId: string, name: string): Promise<Change> {
+    return this.context.renameBlockRow(blockRowId, name);
+  }
+
+  /** Removes a row of blocks and leaves its tables and views in its place on the page. */
+  async ungroupBlockRow(blockRowId: string): Promise<Change> {
+    return this.context.ungroupBlockRow(blockRowId);
+  }
+
+  /** Deletes a row of blocks and the tables and views in it. */
+  async deleteBlockRow(blockRowId: string): Promise<Change> {
+    return this.context.deleteBlockRow(blockRowId);
+  }
+
+  async findBlockRow(blockRowId: string, access: Access): Promise<Found<BlockRowRecord>> {
+    return this.context.findBlockRow(blockRowId, access);
   }
 
   /**
@@ -251,8 +281,9 @@ export class SpreadsheetRepository {
     pageId: string,
     name?: string,
     position?: number,
+    blockRowId?: string,
   ): Promise<Created<{ table: TableRecord }>> {
-    return this.context.createTable(pageId, name, position);
+    return this.context.createTable(pageId, name, position, blockRowId);
   }
 
   /**
@@ -360,13 +391,14 @@ export class SpreadsheetRepository {
     return this.context.updateColumn(tableId, colId, changes);
   }
 
-  /** Adds a view at an index, defaulting to the end of a page. */
+  /** Adds a view at an index, defaulting to the end of a page or of one of its rows of blocks. */
   async createView(
     pageId: string,
     kind: ViewKind,
     insertAt?: number,
+    blockRowId?: string,
   ): Promise<Created<{ view: ViewRecord }>> {
-    return this.context.createView(pageId, kind, insertAt);
+    return this.context.createView(pageId, kind, insertAt, blockRowId);
   }
 
   async updateView(

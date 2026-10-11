@@ -84,6 +84,7 @@ describe("draft submissions", () => {
         name: "Chart",
         source: "A1",
         chartType: "bar",
+        blockRowId: null,
         position: 0,
       },
       {
@@ -93,6 +94,7 @@ describe("draft submissions", () => {
         name: "Script",
         source: "",
         chartType: null,
+        blockRowId: null,
         position: 1,
       },
       {
@@ -102,6 +104,7 @@ describe("draft submissions", () => {
         name: "Text",
         source: "",
         chartType: null,
+        blockRowId: null,
         position: 2,
       },
     ];
@@ -255,6 +258,7 @@ describe("draft submissions", () => {
         name: "Chart",
         source: "1",
         chartType: "bar",
+        blockRowId: null,
         position: 1,
       },
     ];

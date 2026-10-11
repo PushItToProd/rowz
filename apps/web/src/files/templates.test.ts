@@ -7,7 +7,7 @@ import {
   type TableDefinition,
   type ViewSource,
 } from "@spreadsheet-app/engine";
-import type { SpreadsheetFile } from "@spreadsheet-app/shared";
+import { fileLeafBlocks, type SpreadsheetFile } from "@spreadsheet-app/shared";
 import { describe, expect, it } from "vitest";
 import { readSpreadsheetFile } from "./spreadsheetFile";
 import { DOCUMENT_TEMPLATES } from "./templates";
@@ -26,7 +26,7 @@ function load(file: SpreadsheetFile): {
 
   file.pages.forEach((page, pageIndex) => {
     const pageId = `p${String(pageIndex)}`;
-    page.blocks.forEach((block, blockIndex) => {
+    fileLeafBlocks(page).forEach((block, blockIndex) => {
       const id = `b${String(pageIndex)}-${String(blockIndex)}`;
       if (block.type === "table") {
         tables.push({

@@ -148,6 +148,7 @@ describe("the stream of changes", () => {
     const [added] = rowIds(after, table.id);
     expect(inserted.changed).toEqual({
       pages: [],
+      blockRows: [],
       tables: [],
       views: [],
       rows: [{ id: added, tableId: table.id, orderKey: expect.any(String) }],

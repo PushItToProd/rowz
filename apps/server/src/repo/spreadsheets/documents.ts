@@ -3,6 +3,7 @@ import { noteChange } from "../../changes";
 import { Contents } from "../contents";
 import {
   actionRuns,
+  blockRows,
   cells,
   pages,
   spreadsheets,
@@ -15,7 +16,7 @@ import {
 } from "../../db/schema";
 import { notFound } from "../../errors";
 import { type Snapshot } from "./records";
-import { pageColumns, tableColumns, viewColumns } from "./context";
+import { blockRowColumns, pageColumns, tableColumns, viewColumns } from "./context";
 import type { RepositoryContext } from "./context";
 
 /**
@@ -49,6 +50,12 @@ export async function getSnapshot(
         .from(pages)
         .where(eq(pages.spreadsheetId, spreadsheetId))
         .orderBy(asc(pages.position));
+      const blockRowRecords = await tx
+        .select(blockRowColumns)
+        .from(blockRows)
+        .innerJoin(pages, eq(pages.id, blockRows.pageId))
+        .where(eq(pages.spreadsheetId, spreadsheetId))
+        .orderBy(asc(blockRows.position));
       const tableRecords = await tx
         .select(tableColumns)
         .from(tables)
@@ -83,6 +90,7 @@ export async function getSnapshot(
         ...spreadsheet,
         revision: counted?.revision ?? 0,
         pages: pageRows,
+        blockRows: blockRowRecords,
         tables: tableRecords,
         rows: rowRecords,
         views: viewRows,

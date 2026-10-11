@@ -6,6 +6,7 @@ import type { Database } from "../../db/client";
 import type { SpreadsheetRepository } from "../spreadsheets";
 import { ContentWriter } from "../journal";
 import {
+  blockRows,
   deletedRows,
   journal,
   pages,
@@ -20,6 +21,7 @@ import {
 import { conflict, forbidden, notFound, ownerOnly } from "../../errors";
 import {
   type Access,
+  type BlockRowRecord,
   type PageRecord,
   type TableRecord,
   type ViewRecord,
@@ -34,6 +36,7 @@ import * as sharingOperations from "./sharing";
 import * as filesOperations from "./files";
 import * as versionsOperations from "./versions";
 import * as pagesOperations from "./pages";
+import * as blockRowsOperations from "./blockRows";
 import * as tablesOperations from "./tables";
 import * as formatsOperations from "./formats";
 import * as columnsOperations from "./columns";
@@ -47,10 +50,18 @@ import * as searchOperations from "./search";
 
 export const pageColumns = { id: pages.id, name: pages.name, position: pages.position };
 
+export const blockRowColumns = {
+  id: blockRows.id,
+  pageId: blockRows.pageId,
+  name: blockRows.name,
+  position: blockRows.position,
+};
+
 export const tableColumns = {
   id: tables.id,
   pageId: tables.pageId,
   name: tables.name,
+  blockRowId: tables.blockRowId,
   position: tables.position,
   colIds: tables.colIds,
   gridSizes: tables.gridSizes,
@@ -66,6 +77,7 @@ export const viewColumns = {
   pageId: views.pageId,
   kind: views.kind,
   name: views.name,
+  blockRowId: views.blockRowId,
   position: views.position,
   source: views.source,
   chartType: views.chartType,
@@ -290,6 +302,17 @@ export class RepositoryContext {
     );
   }
 
+  /** Runs a change to a row of blocks, giving `work` the row as it is under the lock. */
+  async changeBlockRow<T>(
+    blockRowId: string,
+    work: (blockRow: Found<BlockRowRecord>, tx: Database, writer: ContentWriter) => Promise<T>,
+  ): Promise<Outcome<T>> {
+    const { spreadsheetId } = await this.repository.findBlockRow(blockRowId, "write");
+    return this.change(spreadsheetId, async (tx, writer) =>
+      work(await this.within(tx).repository.findBlockRow(blockRowId, "write"), tx, writer),
+    );
+  }
+
   /** Runs a change to a chart or text view, giving `work` the view as it is under the lock. */
   async changeView<T>(
     viewId: string,
@@ -401,6 +424,14 @@ export class RepositoryContext {
 
   readonly deletePage = pagesOperations.deletePage.bind(null, this);
 
+  readonly createBlockRow = blockRowsOperations.createBlockRow.bind(null, this);
+
+  readonly renameBlockRow = blockRowsOperations.renameBlockRow.bind(null, this);
+
+  readonly ungroupBlockRow = blockRowsOperations.ungroupBlockRow.bind(null, this);
+
+  readonly deleteBlockRow = blockRowsOperations.deleteBlockRow.bind(null, this);
+
   readonly createTable = tablesOperations.createTable.bind(null, this);
 
   readonly updateTable = tablesOperations.updateTable.bind(null, this);
@@ -501,6 +532,17 @@ export class RepositoryContext {
     return authorize(row, access, "Page");
   }
 
+  async findBlockRow(blockRowId: string, access: Access): Promise<Found<BlockRowRecord>> {
+    const [row] = await this.db
+      .select({ ...blockRowColumns, spreadsheetId: spreadsheets.id, role: this.access.role })
+      .from(blockRows)
+      .innerJoin(pages, eq(pages.id, blockRows.pageId))
+      .innerJoin(spreadsheets, eq(spreadsheets.id, pages.spreadsheetId))
+      .innerJoin(this.access, this.granted())
+      .where(eq(blockRows.id, blockRowId));
+    return authorize(row, access, "Row of blocks");
+  }
+
   async findTable(tableId: string, access: Access): Promise<Found<TableRecord>> {
     const [row] = await this.db
       .select({ ...tableColumns, spreadsheetId: spreadsheets.id, role: this.access.role })
@@ -524,6 +566,8 @@ export class RepositoryContext {
   readonly storeColumnFormulas = rewritesOperations.storeColumnFormulas.bind(null, this);
 
   readonly storeViewSources = rewritesOperations.storeViewSources.bind(null, this);
+
+  readonly placedBlocks = pagesOperations.placedBlocks.bind(null, this);
 
   readonly insertPosition = pagesOperations.insertPosition.bind(null, this);
 

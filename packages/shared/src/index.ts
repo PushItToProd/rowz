@@ -379,15 +379,32 @@ export const controlInputBody = z.object({
   value: z.union([z.string().max(LIMITS.inputLength), z.number(), z.boolean(), z.null()]),
 });
 
-/** The blocks of a page (its tables, charts, and text views), by id, in the order they are to sit on it. */
-export const reorderBody = z.object({ blocks: z.array(z.uuid()).min(1).max(1000) });
+/**
+ * Where everything on a page is to sit. `blocks` lists what sits on the page
+ * directly (tables, views, and rows of blocks) by id, in order. `rows` lists,
+ * for each row of blocks that holds any, the tables and views in it, in order.
+ */
+export const reorderBody = z.object({
+  blocks: z.array(z.uuid()).min(1).max(1000),
+  rows: z
+    .array(z.object({ id: z.uuid(), blocks: z.array(z.uuid()).max(1000) }))
+    .max(1000)
+    .default([]),
+});
+export type ReorderBody = z.infer<typeof reorderBody>;
 
 const insertPosition = z.number().int().nonnegative().optional();
-export const createTableBody = optionalNameBody.extend({ position: insertPosition });
+/** `blockRowId` puts the new block in a row of blocks, where `position` is its place in the row. */
+export const createTableBody = optionalNameBody.extend({
+  position: insertPosition,
+  blockRowId: z.uuid().optional(),
+});
 export const createViewBody = z.object({
   kind: z.enum(["chart", "text", "script"]),
   position: insertPosition,
+  blockRowId: z.uuid().optional(),
 });
+export const createBlockRowBody = z.object({ position: insertPosition });
 
 export const updateViewBody = z
   .object({
@@ -401,6 +418,7 @@ export const updateViewBody = z
   });
 
 export const viewParam = z.object({ viewId: z.uuid() });
+export const blockRowParam = z.object({ blockRowId: z.uuid() });
 /** Names a rendered BUTTON occurrence in a text view. */
 export const viewButtonParam = z.object({
   viewId: z.uuid(),
@@ -544,6 +562,16 @@ const fileScript = z.object({
   source: z.string().max(LIMITS.viewSourceLength),
 });
 
+const LEAF_BLOCKS = [fileTable, fileChart, fileText, fileScript] as const;
+const fileLeafBlock = z.discriminatedUnion("type", LEAF_BLOCKS);
+
+/** A row of blocks: tables, charts, text views, and scripts laid out side by side, left to right. */
+const fileRow = z.object({
+  type: z.literal("row"),
+  name,
+  blocks: z.array(fileLeafBlock).max(FILE_LIMITS.blocksPerPage),
+});
+
 /**
  * A whole spreadsheet as a file: what an export writes and an import reads.
  * Things are identified by name and order, as formulas identify them, so a
@@ -557,10 +585,22 @@ export const spreadsheetFile = z.object({
     .array(
       z.object({
         name,
-        /** The page's blocks: its tables, charts, text views, and scripts, in their order on the page. */
+        /**
+         * The page's blocks: its tables, charts, text views, scripts, and rows
+         * of those, in their order on the page. A row and each block in it
+         * count toward the most a page can hold.
+         */
         blocks: z
-          .array(z.discriminatedUnion("type", [fileTable, fileChart, fileText, fileScript]))
-          .max(FILE_LIMITS.blocksPerPage),
+          .array(z.discriminatedUnion("type", [...LEAF_BLOCKS, fileRow]))
+          .max(FILE_LIMITS.blocksPerPage)
+          .refine(
+            (blocks) =>
+              blocks.reduce(
+                (total, block) => total + 1 + (block.type === "row" ? block.blocks.length : 0),
+                0,
+              ) <= FILE_LIMITS.blocksPerPage,
+            `A page can have at most ${String(FILE_LIMITS.blocksPerPage)} blocks`,
+          ),
       }),
     )
     .min(1)
@@ -568,11 +608,27 @@ export const spreadsheetFile = z.object({
 });
 export type SpreadsheetFile = z.infer<typeof spreadsheetFile>;
 
-type FileBlock = SpreadsheetFile["pages"][number]["blocks"][number];
+type FilePage = SpreadsheetFile["pages"][number];
+type FileBlock = FilePage["blocks"][number];
+/** A block that holds content: anything but a row of blocks. */
+export type FileLeafBlock = Exclude<FileBlock, { type: "row" }>;
 type FileTable = Extract<FileBlock, { type: "table" }>;
+
+/** The tables, charts, text views, and scripts of a file's page, including those inside rows of blocks. */
+export function fileLeafBlocks(page: Pick<FilePage, "blocks">): FileLeafBlock[] {
+  return page.blocks.flatMap((block) => (block.type === "row" ? block.blocks : [block]));
+}
 
 /** What `toSpreadsheetFile` needs to know of a table or a view: where it sits, and what it holds. */
 interface Placed {
+  pageId: string;
+  name: string;
+  position: number;
+  /** The row of blocks it sits in, where `position` is its place in the row. */
+  blockRowId?: string | null | undefined;
+}
+interface PlacedRow {
+  id: string;
   pageId: string;
   name: string;
   position: number;
@@ -659,6 +715,7 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
   tables: readonly Table[],
   views: readonly PlacedView[],
   cellsOf: (table: Table) => CellInput[],
+  blockRows: readonly PlacedRow[] = [],
 ): SpreadsheetFile {
   /** The file's form of a column, which names the source of a choice column as formulas name a column. */
   function fileColumnOf({ choicesFrom, ...column }: StoredColumn): z.infer<typeof fileColumn> {
@@ -680,43 +737,68 @@ export function toSpreadsheetFile<Table extends PlacedTable>(
     };
   }
 
+  const leaves: {
+    pageId: string;
+    blockRowId: string | null;
+    position: number;
+    block: FileLeafBlock;
+  }[] = [
+    ...tables.map((table) => ({
+      pageId: table.pageId,
+      blockRowId: table.blockRowId ?? null,
+      position: table.position,
+      block: {
+        type: "table",
+        name: table.name,
+        rowCount: table.rowCount,
+        colCount: table.colCount,
+        ...fileGridSizesOf(table),
+        ...(table.columns ? { columns: table.columns.map(fileColumnOf) } : {}),
+        ...(table.formats.length > 0 ? { formats: table.formats } : {}),
+        ...(table.names.length > 0 ? { names: table.names } : {}),
+        ...(table.conditionalFormats.length > 0
+          ? { conditionalFormats: table.conditionalFormats }
+          : {}),
+        ...fileDisplayOf(table),
+        cells: cellsOf(table),
+      } satisfies FileLeafBlock,
+    })),
+    ...views.map((view) => ({
+      pageId: view.pageId,
+      blockRowId: view.blockRowId ?? null,
+      position: view.position,
+      block: (view.kind === "chart"
+        ? {
+            type: "chart",
+            name: view.name,
+            source: view.source,
+            chartType: view.chartType ?? "bar",
+          }
+        : { type: view.kind, name: view.name, source: view.source }) satisfies FileLeafBlock,
+    })),
+  ];
+  const inOrder = <Block extends FileBlock>(
+    entries: { position: number; block: Block }[],
+  ): Block[] => entries.sort((a, b) => a.position - b.position).map(({ block }) => block);
+  const known = new Set(blockRows.map((row) => row.id));
   const blocksOf = (pageId: string): FileBlock[] =>
-    [
-      ...tables.map((table) => ({
-        pageId: table.pageId,
-        position: table.position,
-        block: {
-          type: "table",
-          name: table.name,
-          rowCount: table.rowCount,
-          colCount: table.colCount,
-          ...fileGridSizesOf(table),
-          ...(table.columns ? { columns: table.columns.map(fileColumnOf) } : {}),
-          ...(table.formats.length > 0 ? { formats: table.formats } : {}),
-          ...(table.names.length > 0 ? { names: table.names } : {}),
-          ...(table.conditionalFormats.length > 0
-            ? { conditionalFormats: table.conditionalFormats }
-            : {}),
-          ...fileDisplayOf(table),
-          cells: cellsOf(table),
-        } satisfies FileBlock,
-      })),
-      ...views.map((view) => ({
-        pageId: view.pageId,
-        position: view.position,
-        block: (view.kind === "chart"
-          ? {
-              type: "chart",
-              name: view.name,
-              source: view.source,
-              chartType: view.chartType ?? "bar",
-            }
-          : { type: view.kind, name: view.name, source: view.source }) satisfies FileBlock,
-      })),
-    ]
-      .filter((entry) => entry.pageId === pageId)
-      .sort((a, b) => a.position - b.position)
-      .map(({ block }) => block);
+    inOrder<FileBlock>([
+      // A block whose row is not among those given sits on the page itself.
+      ...leaves.filter(
+        (leaf) =>
+          leaf.pageId === pageId && (leaf.blockRowId === null || !known.has(leaf.blockRowId)),
+      ),
+      ...blockRows
+        .filter((row) => row.pageId === pageId)
+        .map((row) => ({
+          position: row.position,
+          block: {
+            type: "row" as const,
+            name: row.name,
+            blocks: inOrder(leaves.filter((leaf) => leaf.blockRowId === row.id)),
+          },
+        })),
+    ]);
 
   return {
     format: FILE_FORMAT,

@@ -9,6 +9,7 @@ import { expect } from "vitest";
 import type { CellInput } from "@spreadsheet-app/shared";
 import {
   createApp,
+  type BlockRowRecord,
   type Change,
   type Created,
   type SnapshotWithHistory,
@@ -183,6 +184,17 @@ export async function addTable(
     201,
   );
   return created.table;
+}
+
+/** Adds an empty row of blocks to the end of a page and returns it. */
+export async function addBlockRow(user: TestClient, pageId: string): Promise<BlockRowRecord> {
+  const created = await user.json<Created<{ blockRow: BlockRowRecord }>>(
+    "POST",
+    `/pages/${pageId}/block-rows`,
+    {},
+    201,
+  );
+  return created.blockRow;
 }
 
 /** Adds a chart, text view, or script to a page and returns it. */

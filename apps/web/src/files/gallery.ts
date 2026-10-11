@@ -1,5 +1,5 @@
 import sampleManifest from "../../../../samples/index.json";
-import type { SpreadsheetFile } from "@spreadsheet-app/shared";
+import { fileLeafBlocks, type SpreadsheetFile } from "@spreadsheet-app/shared";
 import { readSpreadsheetFile } from "./spreadsheetFile";
 import { DOCUMENT_TEMPLATES } from "./templates";
 
@@ -29,7 +29,7 @@ const sampleLoaders = import.meta.glob<string>(
 );
 
 function featureBadges(document: SpreadsheetFile): string[] {
-  const blocks = document.pages.flatMap((page) => page.blocks);
+  const blocks = document.pages.flatMap(fileLeafBlocks);
   const tables = blocks.filter((block) => block.type === "table");
   const contents = blocks
     .map((block) =>

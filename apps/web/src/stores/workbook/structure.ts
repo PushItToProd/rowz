@@ -11,7 +11,7 @@ import {
   type UpdateTableBody,
 } from "@spreadsheet-app/shared";
 import { api, type PageRecord, type ViewRecord } from "../../api/client";
-import type { WorkbookContext } from "./context";
+import type { PageLayout, WorkbookContext } from "./context";
 
 export function createStructure(context: WorkbookContext) {
   const pendingPageReorders = new Map<string, number>();
@@ -76,18 +76,40 @@ export function createStructure(context: WorkbookContext) {
     }, "The page could not be renamed");
   }
 
-  /** The ids of the blocks of a page, in the order they sit on it. */
+  /**
+   * The ids of what sits on a page itself, in order: its rows of blocks, and
+   * the tables and views that are in no row.
+   */
   function blocksOn(pageId: string): string[] {
-    return [...context.tables.value, ...context.views.value]
-      .filter((block) => block.pageId === pageId)
-      .sort((a, b) => a.position - b.position)
-      .map((block) => block.id);
+    return layoutOf(pageId).blocks;
+  }
+
+  /** Where everything on a page sits: on the page itself, or in one of its rows of blocks. */
+  function layoutOf(pageId: string): PageLayout {
+    const inOrder = (blocks: { id: string; position: number }[]): string[] =>
+      blocks.sort((a, b) => a.position - b.position).map((block) => block.id);
+    const leaves = [...context.tables.value, ...context.views.value].filter(
+      (block) => block.pageId === pageId,
+    );
+    const rows = context.blockRows.value.filter((row) => row.pageId === pageId);
+    const held = new Set(rows.map((row) => row.id));
+    return {
+      // A block whose row is gone sits on the page.
+      blocks: inOrder([
+        ...leaves.filter((leaf) => leaf.blockRowId === null || !held.has(leaf.blockRowId)),
+        ...rows,
+      ]),
+      rows: rows.map((row) => ({
+        id: row.id,
+        blocks: inOrder(leaves.filter((leaf) => leaf.blockRowId === row.id)),
+      })),
+    };
   }
 
   function rememberOrders(): void {
     context.acceptedPageOrder = context.pages.value.map((page) => page.id);
     for (const page of context.pages.value)
-      context.acceptedBlockOrders.set(page.id, blocksOn(page.id));
+      context.acceptedBlockOrders.set(page.id, layoutOf(page.id));
     for (const pageId of context.acceptedBlockOrders.keys()) {
       if (!context.pages.value.some((page) => page.id === pageId))
         context.acceptedBlockOrders.delete(pageId);
@@ -96,55 +118,156 @@ export function createStructure(context: WorkbookContext) {
 
   function showPendingOrders(): void {
     if (context.optimisticPageOrder) showPageOrder(context.optimisticPageOrder);
-    for (const order of context.optimisticBlockOrders.values()) showOrder(order);
+    for (const layout of context.optimisticBlockOrders.values()) showLayout(layout);
   }
 
-  /** Shows the blocks of a page in the order of their ids. */
-  function showOrder(order: readonly string[]): void {
-    const position = new Map(order.map((id, index) => [id, index]));
-    const placed = <T extends { id: string; position: number }>(block: T): T => ({
+  /** Shows the blocks of a page where a layout puts them. A block the layout leaves out stays put. */
+  function showLayout(layout: PageLayout): void {
+    const places = new Map<string, { position: number; blockRowId: string | null }>();
+    for (const [position, id] of layout.blocks.entries())
+      places.set(id, { position, blockRowId: null });
+    for (const row of layout.rows) {
+      for (const [position, id] of row.blocks.entries())
+        places.set(id, { position, blockRowId: row.id });
+    }
+    const placed = <T extends { id: string }>(block: T): T => ({
       ...block,
-      position: position.get(block.id) ?? block.position,
+      ...places.get(block.id),
     });
     context.tables.value = context.tables.value.map(placed);
     context.views.value = context.views.value.map(placed);
+    context.blockRows.value = context.blockRows.value.map((row) => ({
+      ...row,
+      position: places.get(row.id)?.position ?? row.position,
+    }));
   }
 
   /**
-   * Moves a block one place up or down its page. The
-   * move shows at once, so a second click moves on from where the first left
-   * the block, and it is undone if the server refuses.
+   * Puts the blocks of a page where a layout says. The layout shows at once,
+   * so a second click moves on from where the first left a block, and it is
+   * undone if the server refuses.
    */
-  function moveBlock(pageId: string, blockId: string, by: -1 | 1): Promise<boolean> {
-    const before = blocksOn(pageId);
-    const from = before.indexOf(blockId);
-    const to = from + by;
-    if (from === -1 || to < 0 || to >= before.length) return Promise.resolve(false);
-    const order = before.with(from, before[to] ?? blockId).with(to, blockId);
-    showOrder(order);
-    context.optimisticBlockOrders.set(pageId, order);
+  function arrange(pageId: string, layout: PageLayout): Promise<boolean> {
+    const before = layoutOf(pageId);
+    showLayout(layout);
+    context.optimisticBlockOrders.set(pageId, layout);
     const previous = reorders;
     pendingBlockReorders.set(pageId, (pendingBlockReorders.get(pageId) ?? 0) + 1);
     const sent = context
       .attempt(async () => {
         await previous;
-        const change = await api.reorderPage(pageId, order);
+        const change = await api.reorderPage(pageId, layout);
         await context.receiveChange(change);
         if (context.revision.value === change.revision)
-          context.acceptedBlockOrders.set(pageId, order);
+          context.acceptedBlockOrders.set(pageId, layout);
       }, "The page could not be rearranged")
       .then((succeeded) => {
         const pending = (pendingBlockReorders.get(pageId) ?? 1) - 1;
         if (pending === 0) {
           pendingBlockReorders.delete(pageId);
           context.optimisticBlockOrders.delete(pageId);
-          showOrder(context.acceptedBlockOrders.get(pageId) ?? before);
+          showLayout(context.acceptedBlockOrders.get(pageId) ?? before);
         } else pendingBlockReorders.set(pageId, pending);
         return succeeded;
       });
-    // One request at a time, so the server ends on the order of the last click.
+    // One request at a time, so the server ends on the arrangement of the last click.
     reorders = sent.then(() => undefined);
     return sent;
+  }
+
+  /** A layout with the blocks of one row, or of the page itself for `null`, replaced. */
+  function withBlocks(layout: PageLayout, blockRowId: string | null, blocks: string[]): PageLayout {
+    if (blockRowId === null) return { ...layout, blocks };
+    return {
+      ...layout,
+      rows: layout.rows.map((row) => (row.id === blockRowId ? { ...row, blocks } : row)),
+    };
+  }
+
+  /** The row of blocks a block sits in, or `null` for one that sits on its page. */
+  function blockRowOf(layout: PageLayout, blockId: string): string | null {
+    return layout.rows.find((row) => row.blocks.includes(blockId))?.id ?? null;
+  }
+
+  /**
+   * Moves a block one place among the blocks beside it: up or down its page,
+   * or left or right in its row of blocks.
+   */
+  function moveBlock(pageId: string, blockId: string, by: -1 | 1): Promise<boolean> {
+    const layout = layoutOf(pageId);
+    const blockRowId = blockRowOf(layout, blockId);
+    const beside =
+      blockRowId === null
+        ? layout.blocks
+        : (layout.rows.find((row) => row.id === blockRowId)?.blocks ?? []);
+    const from = beside.indexOf(blockId);
+    const to = from + by;
+    if (from === -1 || to < 0 || to >= beside.length) return Promise.resolve(false);
+    const order = beside.with(from, beside[to] ?? blockId).with(to, blockId);
+    return arrange(pageId, withBlocks(layout, blockRowId, order));
+  }
+
+  /** Moves a table or view to the end of a row of blocks on its page. */
+  function moveBlockIntoRow(pageId: string, blockId: string, blockRowId: string): Promise<boolean> {
+    const layout = layoutOf(pageId);
+    const from = blockRowOf(layout, blockId);
+    const target = layout.rows.find((row) => row.id === blockRowId);
+    const placed = [...layout.blocks, ...layout.rows.flatMap((row) => row.blocks)];
+    const isRow = layout.rows.some((row) => row.id === blockId);
+    if (!target || from === blockRowId || isRow || !placed.includes(blockId))
+      return Promise.resolve(false);
+    const without = (blocks: string[]): string[] => blocks.filter((id) => id !== blockId);
+    return arrange(pageId, {
+      blocks: without(layout.blocks),
+      rows: layout.rows.map((row) => ({
+        id: row.id,
+        blocks: row.id === blockRowId ? [...row.blocks, blockId] : without(row.blocks),
+      })),
+    });
+  }
+
+  /** Moves a table or view out of its row of blocks, to the place on the page just after the row. */
+  function moveBlockOutOfRow(pageId: string, blockId: string): Promise<boolean> {
+    const layout = layoutOf(pageId);
+    const blockRowId = blockRowOf(layout, blockId);
+    if (blockRowId === null) return Promise.resolve(false);
+    const after = layout.blocks.indexOf(blockRowId) + 1;
+    return arrange(pageId, {
+      blocks: layout.blocks.toSpliced(after, 0, blockId),
+      rows: layout.rows.map((row) => ({
+        id: row.id,
+        blocks: row.blocks.filter((id) => id !== blockId),
+      })),
+    });
+  }
+
+  function addBlockRow(pageId: string, position?: number): Promise<boolean> {
+    return context.attempt(async () => {
+      await context.receiveChange((await api.createBlockRow(pageId, position)).change);
+    }, "The row of blocks could not be added");
+  }
+
+  function renameBlockRow(blockRowId: string, name: string): Promise<boolean> {
+    return context.attempt(async () => {
+      await context.receiveChange(await api.renameBlockRow(blockRowId, name));
+    }, "The row of blocks could not be renamed");
+  }
+
+  /** Removes a row of blocks and leaves what it held in its place on the page. */
+  function ungroupBlockRow(blockRowId: string): Promise<boolean> {
+    return context.attempt(async () => {
+      await context.receiveChange(await api.ungroupBlockRow(blockRowId));
+    }, "The row of blocks could not be ungrouped");
+  }
+
+  /** Deletes a row of blocks and the tables and views in it. */
+  function deleteBlockRow(blockRowId: string): Promise<boolean> {
+    const queuedSaves = context.saves;
+    return context.attempt(async () => {
+      // The row's tables go with it, so pending edits to them must be stored first.
+      await queuedSaves;
+      await context.receiveChange(await api.deleteBlockRow(blockRowId));
+    }, "The row of blocks could not be deleted");
   }
 
   /** Shows the pages in the order of their ids. */
@@ -223,9 +346,10 @@ export function createStructure(context: WorkbookContext) {
     }, "The page could not be deleted");
   }
 
-  function addTable(pageId: string, position?: number): Promise<boolean> {
+  /** Adds a table at a place on a page, or in one of its rows of blocks. */
+  function addTable(pageId: string, position?: number, blockRowId?: string): Promise<boolean> {
     return context.attempt(async () => {
-      await context.receiveChange((await api.createTable(pageId, position)).change);
+      await context.receiveChange((await api.createTable(pageId, position, blockRowId)).change);
     }, "The table could not be added");
   }
 
@@ -367,9 +491,17 @@ export function createStructure(context: WorkbookContext) {
     }, "The table could not be changed");
   }
 
-  function addView(pageId: string, kind: ViewRecord["kind"], position?: number): Promise<boolean> {
+  /** Adds a view at a place on a page, or in one of its rows of blocks. */
+  function addView(
+    pageId: string,
+    kind: ViewRecord["kind"],
+    position?: number,
+    blockRowId?: string,
+  ): Promise<boolean> {
     return context.attempt(async () => {
-      await context.receiveChange((await api.createView(pageId, kind, position)).change);
+      await context.receiveChange(
+        (await api.createView(pageId, kind, position, blockRowId)).change,
+      );
     }, "The view could not be added");
   }
 
@@ -418,10 +550,17 @@ export function createStructure(context: WorkbookContext) {
     addPage,
     renamePage,
     blocksOn,
+    layoutOf,
     rememberOrders,
     showPendingOrders,
-    showOrder,
+    showLayout,
     moveBlock,
+    moveBlockIntoRow,
+    moveBlockOutOfRow,
+    addBlockRow,
+    renameBlockRow,
+    ungroupBlockRow,
+    deleteBlockRow,
     showPageOrder,
     movePage,
     moveBlockToPage,

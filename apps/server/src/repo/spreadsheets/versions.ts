@@ -49,7 +49,7 @@ export async function restoreVersion(
     const version = await ctx.findVersion(tx, spreadsheetId, versionId);
     await ctx.keepVersion(tx, spreadsheetId, "Before restoring an earlier version");
     await tx.delete(journal).where(eq(journal.spreadsheetId, spreadsheetId));
-    // Pages take their tables, rows, cells, and views with them.
+    // Pages take their rows of blocks, tables, rows, cells, and views with them.
     await tx.delete(pages).where(eq(pages.spreadsheetId, spreadsheetId));
     await tx
       .update(spreadsheets)
@@ -132,6 +132,7 @@ export async function saveVersion(
     data.tables,
     snapshot.views,
     (table) => cellsOf.get(table.id) ?? [],
+    snapshot.blockRows,
   );
   await db.insert(versions).values({ spreadsheetId, createdBy: ctx.userId, reason, data: file });
 

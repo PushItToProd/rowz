@@ -111,6 +111,7 @@ it("lists a repeated script definition and links to its line", async () => {
       pageId: "p1",
       kind: "script",
       name: "Summary",
+      blockRowId: null,
       position: 1,
       source: "QtyTotal = 3\nQtyTotal = 5",
       chartType: null,
@@ -147,6 +148,7 @@ it("opens a cell error's manifestation and keeps the function trace target separ
     id: "t2",
     pageId: "p2",
     name: "Payout by duration",
+    blockRowId: null,
     position: 0,
   };
   snapshot.tables = [TABLE, formulaTable];
@@ -157,6 +159,7 @@ it("opens a cell error's manifestation and keeps the function trace target separ
       pageId: "p1",
       kind: "script",
       name: "Script 1",
+      blockRowId: null,
       position: 1,
       source: "PayoutByDuration() = QUERY('Table 1', \"select Spa\")",
       chartType: null,

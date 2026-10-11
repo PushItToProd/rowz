@@ -1,6 +1,6 @@
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { api, type TableRecord, type ViewRecord } from "../api/client";
 import { bodyFindAll, bodyGet, bodyHas } from "../testing/teleported";
@@ -8,6 +8,7 @@ import { takeQueuedListNotice } from "../notice";
 import {
   changeWith,
   clickWithDetail,
+  mountDialogHost,
   snapshotWith,
   wireSnapshot,
   type MockedApi,
@@ -74,6 +75,7 @@ async function render(
               pageId: "p1",
               kind: "text",
               name: "Text",
+              blockRowId: null,
               position: 2,
               source: "",
               chartType: null,
@@ -89,6 +91,7 @@ async function render(
       pageId: "p1",
       kind: "text",
       name: "Text",
+      blockRowId: null,
       position: 1,
       source: "",
       chartType: null,
@@ -323,6 +326,7 @@ it.each([true, false])(
           pageId: "p1",
           kind: "script",
           name: "Script 1",
+          blockRowId: null,
           position: 3,
           source: [
             "PayoutByDuration() = 1/0",
@@ -464,6 +468,7 @@ it("saves an active formula draft before running a teleported block menu action"
       kind: "chart",
       source: "1",
       chartType: "bar",
+      blockRowId: null,
       position: 1,
     },
   ];
@@ -620,6 +625,7 @@ it("blocks page-control clicks on save failure, and cancel does not replay them"
       kind: "chart",
       source: "1",
       chartType: "bar",
+      blockRowId: null,
       position: 1,
     },
   ];
@@ -692,20 +698,166 @@ it("places insertion controls before, between, and after blocks and sends their 
   expect(wrapper.get("main").element.children.length).toBe(5);
   expect(
     Array.from(wrapper.get("main").element.children).map((element) => element.className),
-  ).toEqual(["editor__add", "editor__block", "editor__add", "editor__block", "editor__add"]);
+  ).toEqual(["editor__add", "editor__line", "editor__add", "editor__line", "editor__add"]);
   const rows = wrapper.findAll("[data-insert-position]");
   expect(rows.map((row) => row.attributes("data-insert-position"))).toEqual(["0", "1", "2"]);
   await rows[0]!.findAll("button")[0]!.trigger("click");
   await rows[1]!.findAll("button")[1]!.trigger("click");
   await rows[2]!.findAll("button")[2]!.trigger("click");
   await flushPromises();
-  expect(server.createTable).toHaveBeenCalledWith("p1", 0);
-  expect(server.createView).toHaveBeenCalledWith("p1", "chart", 1);
-  expect(server.createView).toHaveBeenCalledWith("p1", "text", 2);
+  expect(server.createTable).toHaveBeenCalledWith("p1", 0, undefined);
+  expect(server.createView).toHaveBeenCalledWith("p1", "chart", 1, undefined);
+  expect(server.createView).toHaveBeenCalledWith("p1", "text", 2, undefined);
   expect(rows[0]!.findAll("button").every((button) => button.attributes("tabindex") !== "-1")).toBe(
     true,
   );
   wrapper.unmount();
+});
+
+describe("a row of blocks", () => {
+  /** The page with Row 1 between the table and the text view, holding a chart and a script. */
+  async function renderRow(held = true) {
+    const wrapper = await render();
+    const store = useWorkbookStore();
+    store.blockRows = [{ id: "br1", pageId: "p1", name: "Row 1", position: 1 }];
+    if (held) {
+      const inRow = { pageId: "p1", blockRowId: "br1", source: "" };
+      store.views = [
+        ...store.views,
+        { ...inRow, id: "chart", kind: "chart", name: "Chart 1", position: 0, chartType: "bar" },
+        { ...inRow, id: "script", kind: "script", name: "Script 1", position: 1, chartType: null },
+      ];
+    }
+    await flushPromises();
+    return { wrapper, store };
+  }
+
+  /** Opens a menu from the row's ellipsis, or by right-clicking a block, whose card is a stub here. */
+  async function menuLabels(wrapper: Awaited<ReturnType<typeof render>>, name: string) {
+    const trigger = wrapper.find(`button[aria-label="Block actions for ${name}"]`);
+    if (trigger.exists()) await trigger.trigger("click");
+    else await wrapper.get(`.editor__block[aria-label="${name}"]`).trigger("contextmenu");
+    await flushPromises();
+    return bodyGet(`[role="menu"][aria-label="Actions for ${name}"]`)
+      .findAll('[role="menuitem"]')
+      .map((item) => item.text());
+  }
+
+  it("shows its blocks side by side under its name, in their order", async () => {
+    const { wrapper } = await renderRow();
+    expect(
+      Array.from(wrapper.get("main").element.children)
+        .filter((element) => element.classList.contains("editor__line"))
+        .map((element) => element.id),
+    ).toEqual(["", "block-br1", ""]);
+    const row = wrapper.get("#block-br1");
+    expect(row.classes()).toContain("block-row");
+    expect(row.get(".block-row__header h2").text()).toBe("Row 1");
+    expect(row.findAll(".editor__block").map((block) => block.attributes("id"))).toEqual([
+      "block-chart",
+      "block-script",
+    ]);
+    wrapper.unmount();
+  });
+
+  it("adds a block to its end from its own controls, which offer no row", async () => {
+    const { wrapper } = await renderRow();
+    const controls = wrapper.get("#block-br1 .block-row__header .editor__add");
+    expect(controls.findAll("button").map((button) => button.text())).toEqual([
+      "Add table",
+      "Add chart",
+      "Add text",
+      "Add script",
+    ]);
+    await controls.get('[data-add-block-type="table"]').trigger("click");
+    await controls.get('[data-add-block-type="text"]').trigger("click");
+    await flushPromises();
+    expect(server.createTable).toHaveBeenCalledWith("p1", 2, "br1");
+    expect(server.createView).toHaveBeenCalledWith("p1", "text", 2, "br1");
+    wrapper.unmount();
+  });
+
+  it("is added from the controls between blocks", async () => {
+    const wrapper = await render();
+    server.createBlockRow.mockResolvedValue({
+      blockRow: { id: "br1", pageId: "p1", name: "Row 1", position: 1 },
+      change: changeWith(),
+    });
+    const between = wrapper.findAll("main > [data-insert-position]")[1]!;
+    await between.get('[data-add-block-type="row"]').trigger("click");
+    await flushPromises();
+    expect(server.createBlockRow).toHaveBeenCalledExactlyOnceWith("p1", 1);
+    wrapper.unmount();
+  });
+
+  it("says it is empty, and then offers only what applies in its menu", async () => {
+    const { wrapper } = await renderRow(false);
+    expect(wrapper.get("#block-br1 .block-row__empty").text()).toBe("This row is empty.");
+    expect(await menuLabels(wrapper, "Row 1")).toEqual([
+      "Rename",
+      "Move up",
+      "Move down",
+      "Delete row",
+    ]);
+    wrapper.unmount();
+  });
+
+  it("moves, ungroups, and deletes from its menu, and names what a delete takes", async () => {
+    const { wrapper } = await renderRow();
+    expect(await menuLabels(wrapper, "Row 1")).toEqual([
+      "Rename",
+      "Move up",
+      "Move down",
+      "Ungroup",
+      "Delete row and its blocks",
+    ]);
+    server.ungroupBlockRow.mockResolvedValue(changeWith());
+    await bodyFindAll('[role="menuitem"]')
+      .find((item) => item.text() === "Ungroup")!
+      .trigger("click");
+    await flushPromises();
+    expect(server.ungroupBlockRow).toHaveBeenCalledExactlyOnceWith("br1");
+
+    const dialogHost = mountDialogHost();
+    await menuLabels(wrapper, "Row 1");
+    await bodyFindAll('[role="menuitem"]')
+      .find((item) => item.text() === "Delete row and its blocks")!
+      .trigger("click");
+    await flushPromises();
+    expect(document.body.textContent).toContain(
+      "Delete Row 1 and the 2 blocks in it (Chart 1, Script 1)?",
+    );
+    expect(server.deleteBlockRow).not.toHaveBeenCalled();
+    dialogHost.unmount();
+    wrapper.unmount();
+  });
+
+  it("gives a block in it moves along the row and out of it, and one outside a way in", async () => {
+    const { wrapper } = await renderRow();
+    const inside = await menuLabels(wrapper, "Chart 1");
+    expect(inside).toEqual(
+      expect.arrayContaining(["Move left", "Move right", "Move out of Row 1"]),
+    );
+    expect(inside).not.toContain("Move up");
+    expect(inside).not.toContain("Add table below");
+    await bodyFindAll('[role="menuitem"]')
+      .find((item) => item.text() === "Move out of Row 1")!
+      .trigger("click");
+    await flushPromises();
+    expect(server.reorderPage).toHaveBeenLastCalledWith("p1", {
+      blocks: ["t1", "br1", "chart", "v1"],
+      rows: [{ id: "br1", blocks: ["script"] }],
+    });
+
+    const outside = await menuLabels(wrapper, "Text");
+    expect(outside).toEqual(expect.arrayContaining(["Move up", "Move down", "Move into Row 1"]));
+    await bodyFindAll('[role="menuitem"]')
+      .find((item) => item.text() === "Move into Row 1")!
+      .trigger("click");
+    await flushPromises();
+    expect(server.reorderPage.mock.lastCall?.[1].rows[0]?.blocks.at(-1)).toBe("v1");
+    wrapper.unmount();
+  });
 });
 
 it("scrolls to and focuses each kind of block after it is added", async () => {
@@ -722,6 +874,7 @@ it("scrolls to and focuses each kind of block after it is added", async () => {
       id: "added-table",
       pageId,
       name: "Added Table",
+      blockRowId: null,
       position: position ?? 0,
     });
     return Promise.resolve(true);
@@ -734,6 +887,7 @@ it("scrolls to and focuses each kind of block after it is added", async () => {
       kind,
       source: "",
       chartType: kind === "chart" ? "bar" : null,
+      blockRowId: null,
       position: position ?? 0,
     });
     return Promise.resolve(true);
@@ -773,6 +927,7 @@ it("does not take focus back when the user moves while a block is being added", 
             id: "pending-table",
             pageId,
             name: "Pending Table",
+            blockRowId: null,
             position: position ?? 0,
           });
         resolve(success);

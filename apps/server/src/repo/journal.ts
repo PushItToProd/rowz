@@ -12,15 +12,40 @@ import {
 } from "@spreadsheet-app/shared";
 import { and, asc, eq, gt, inArray, or, sql, type SQL } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { cells, deletedRows, pages, tables, tableRows, journal, views } from "../db/schema";
+import {
+  blockRows,
+  cells,
+  deletedRows,
+  pages,
+  tables,
+  tableRows,
+  journal,
+  views,
+} from "../db/schema";
 import { notFound, unprocessable } from "../errors";
-import type { PageRecord, TableRecord, ViewRecord } from "./spreadsheets";
+import type { BlockRowRecord, PageRecord, TableRecord, ViewRecord } from "./spreadsheets";
 
 /** A row as a change left it or found it: its id, with its order key or `null` for no row. */
 type RowChange = [rowId: string, before: string | null, after: string | null];
 type CellChange = [rowId: string, colId: string, before: string, after: string];
-/** Entries written before grid sizes existed omit that property. */
-type JournalTable = Omit<TableRecord, "gridSizes"> & Partial<Pick<TableRecord, "gridSizes">>;
+/** Entries written before grid sizes or rows of blocks existed omit those properties. */
+type JournalTable = Omit<TableRecord, "gridSizes" | "blockRowId"> &
+  Partial<Pick<TableRecord, "gridSizes" | "blockRowId">>;
+type JournalView = Omit<ViewRecord, "blockRowId"> & Partial<Pick<ViewRecord, "blockRowId">>;
+
+/** A table as it is now, from one as a journal entry of any age recorded it. */
+export function tableFromJournal(table: JournalTable): TableRecord {
+  return {
+    ...table,
+    gridSizes: table.gridSizes ?? { rows: {}, columns: {} },
+    blockRowId: table.blockRowId ?? null,
+  };
+}
+
+/** A view as it is now, from one as a journal entry of any age recorded it. */
+export function viewFromJournal(view: JournalView): ViewRecord {
+  return { ...view, blockRowId: view.blockRowId ?? null };
+}
 
 /**
  * What one change wrote, as it was before and after. Rows, columns, and cells
@@ -30,14 +55,17 @@ type JournalTable = Omit<TableRecord, "gridSizes"> & Partial<Pick<TableRecord, "
 export interface JournalData {
   rows: { tableId: string; changes: RowChange[] }[];
   pages: { id: string; before: PageRecord | null; after: PageRecord | null }[];
+  /** Entries written before rows of blocks existed omit this. */
+  blockRows?: { id: string; before: BlockRowRecord | null; after: BlockRowRecord | null }[];
   tables: { id: string; before: JournalTable | null; after: JournalTable | null }[];
-  views: { id: string; before: ViewRecord | null; after: ViewRecord | null }[];
+  views: { id: string; before: JournalView | null; after: JournalView | null }[];
   cells: { tableId: string; changes: CellChange[] }[];
 }
 
 /** The state a change left each thing it wrote in. `null` marks something deleted. */
 export interface ChangedContent {
   pages: { id: string; page: PageRecord | null }[];
+  blockRows: { id: string; blockRow: BlockRowRecord | null }[];
   tables: { id: string; table: TableRecord | null }[];
   views: { id: string; view: ViewRecord | null }[];
   rows: { id: string; tableId: string; orderKey: string | null }[];
@@ -83,10 +111,17 @@ interface CellState extends StoredCell {
 }
 
 const pageColumns = { id: pages.id, name: pages.name, position: pages.position };
+const blockRowColumns = {
+  id: blockRows.id,
+  pageId: blockRows.pageId,
+  name: blockRows.name,
+  position: blockRows.position,
+};
 const tableColumns = {
   id: tables.id,
   pageId: tables.pageId,
   name: tables.name,
+  blockRowId: tables.blockRowId,
   position: tables.position,
   colIds: tables.colIds,
   gridSizes: tables.gridSizes,
@@ -101,6 +136,7 @@ const viewColumns = {
   pageId: views.pageId,
   kind: views.kind,
   name: views.name,
+  blockRowId: views.blockRowId,
   position: views.position,
   source: views.source,
   chartType: views.chartType,
@@ -225,6 +261,7 @@ type NewTable = Omit<typeof tables.$inferInsert, "colIds">;
 export class ContentWriter {
   private readonly rowChanges = new Map<string, RowState>();
   private readonly pageChanges = new Map<string, RecordedItem<PageRecord>>();
+  private readonly blockRowChanges = new Map<string, RecordedItem<BlockRowRecord>>();
   private readonly tableChanges = new Map<string, RecordedItem<TableRecord>>();
   private readonly viewChanges = new Map<string, RecordedItem<ViewRecord>>();
   private readonly cellChanges = new Map<string, CellState>();
@@ -272,6 +309,7 @@ export class ContentWriter {
       this.tooLarge ||
       this.rowChanges.size +
         this.pageChanges.size +
+        this.blockRowChanges.size +
         this.tableChanges.size +
         this.viewChanges.size +
         this.cellChanges.size >
@@ -320,6 +358,10 @@ export class ContentWriter {
     if (written.length > MAX_ANNOUNCED_CELLS) return null;
     return {
       pages: [...this.pageChanges.values()].map(({ id, after }) => ({ id, page: after })),
+      blockRows: [...this.blockRowChanges.values()].map(({ id, after }) => ({
+        id,
+        blockRow: after,
+      })),
       tables: [...this.tableChanges.values()].map(({ id, after }) => ({ id, table: after })),
       views: [...this.viewChanges.values()].map(({ id, after }) => ({ id, view: after })),
       rows: [...this.rowChanges.values()]
@@ -361,10 +403,50 @@ export class ContentWriter {
       .select({ id: views.id })
       .from(views)
       .where(eq(views.pageId, pageId));
+    const pageBlockRows = await this.db
+      .select({ id: blockRows.id })
+      .from(blockRows)
+      .where(eq(blockRows.pageId, pageId));
     for (const table of pageTables) await this.deleteTable(table.id);
     for (const view of pageViews) await this.deleteView(view.id);
+    for (const blockRow of pageBlockRows) await this.deleteBlockRow(blockRow.id);
     await this.db.delete(pages).where(eq(pages.id, pageId));
     this.recordItem(this.pageChanges, pageId, before, null);
+  }
+
+  async insertBlockRow(values: typeof blockRows.$inferInsert): Promise<BlockRowRecord> {
+    const [inserted] = await this.db.insert(blockRows).values(values).returning(blockRowColumns);
+    if (!inserted) throw new Error("Insert returned no row of blocks");
+    this.recordItem(this.blockRowChanges, inserted.id, null, inserted);
+    return inserted;
+  }
+
+  async updateBlockRow(
+    blockRowId: string,
+    changes: Partial<typeof blockRows.$inferInsert>,
+  ): Promise<BlockRowRecord> {
+    const before = await this.findBlockRow(blockRowId);
+    const [updated] = await this.db
+      .update(blockRows)
+      .set(changes)
+      .where(eq(blockRows.id, blockRowId))
+      .returning(blockRowColumns);
+    if (!updated) throw notFound("Row of blocks");
+    this.recordItem(this.blockRowChanges, blockRowId, before, updated);
+    return updated;
+  }
+
+  /** Deletes a row of blocks, and the tables and views still in it. */
+  async deleteBlockRow(blockRowId: string): Promise<void> {
+    const before = await this.findBlockRow(blockRowId);
+    const held = await Promise.all([
+      this.db.select({ id: tables.id }).from(tables).where(eq(tables.blockRowId, blockRowId)),
+      this.db.select({ id: views.id }).from(views).where(eq(views.blockRowId, blockRowId)),
+    ]);
+    for (const table of held[0]) await this.deleteTable(table.id);
+    for (const view of held[1]) await this.deleteView(view.id);
+    await this.db.delete(blockRows).where(eq(blockRows.id, blockRowId));
+    this.recordItem(this.blockRowChanges, blockRowId, before, null);
   }
 
   /** Creates a table of a size. Its rows and columns get new ids. */
@@ -612,6 +694,16 @@ export class ContentWriter {
     return found;
   }
 
+  private async findBlockRow(blockRowId: string): Promise<BlockRowRecord> {
+    const [found] = await this.db
+      .select(blockRowColumns)
+      .from(blockRows)
+      .where(eq(blockRows.id, blockRowId))
+      .limit(1);
+    if (!found) throw notFound("Row of blocks");
+    return found;
+  }
+
   private async findTable(tableId: string): Promise<TableRecord> {
     const [found] = await this.db
       .select(tableColumns)
@@ -718,6 +810,7 @@ export class ContentWriter {
     this.tooLarge = true;
     this.rowChanges.clear();
     this.pageChanges.clear();
+    this.blockRowChanges.clear();
     this.tableChanges.clear();
     this.viewChanges.clear();
     this.cellChanges.clear();
@@ -763,6 +856,7 @@ export class ContentWriter {
         changes: changes.map(({ id, before, after }): RowChange => [id, before, after]),
       })),
       pages: [...this.pageChanges.values()],
+      blockRows: [...this.blockRowChanges.values()],
       tables: [...this.tableChanges.values()],
       views: [...this.viewChanges.values()],
       cells: [...written].map(([tableId, changes]) => ({
@@ -810,8 +904,8 @@ export function writesFormulas(data: JournalData, side: "before" | "after"): boo
 }
 
 /**
- * Whether two recorded changes wrote the same page, table, view, row, or
- * cell. `step` is the smaller of the two: its items are indexed and the
+ * Whether two recorded changes wrote the same page, row of blocks, table,
+ * view, row, or cell. `step` is the smaller of the two: its items are indexed and the
  * other's are looked up among them.
  */
 export function touchSame(step: JournalData, other: JournalData): boolean {
@@ -819,13 +913,12 @@ export function touchSame(step: JournalData, other: JournalData): boolean {
     data.rows.flatMap(({ changes }) => changes.map(([id]) => id));
   const cellsOf = (data: JournalData): string[] =>
     data.cells.flatMap(({ changes }) => changes.map(([rowId, colId]) => `${rowId}:${colId}`));
-  const items = new Set([
-    ...[...step.pages, ...step.tables, ...step.views].map(({ id }) => id),
-    ...rowsOf(step),
-  ]);
+  const itemsOf = (data: JournalData): string[] =>
+    [...data.pages, ...(data.blockRows ?? []), ...data.tables, ...data.views].map(({ id }) => id);
+  const items = new Set([...itemsOf(step), ...rowsOf(step)]);
   const written = new Set(cellsOf(step));
   return (
-    [...other.pages, ...other.tables, ...other.views].some(({ id }) => items.has(id)) ||
+    itemsOf(other).some((id) => items.has(id)) ||
     rowsOf(other).some((id) => items.has(id)) ||
     cellsOf(other).some((key) => written.has(key))
   );
@@ -853,14 +946,18 @@ export async function applyRecorded(
   const target = <T>(before: T, after: T): T => (direction === "undo" ? before : after);
   const changed: ChangedContent = {
     pages: data.pages.map(({ id, before, after }) => ({ id, page: target(before, after) })),
+    blockRows: (data.blockRows ?? []).map(({ id, before, after }) => ({
+      id,
+      blockRow: target(before, after),
+    })),
     tables: data.tables.map(({ id, before, after }) => {
       const table = target(before, after);
-      return {
-        id,
-        table: table && { ...table, gridSizes: table.gridSizes ?? { rows: {}, columns: {} } },
-      };
+      return { id, table: table && tableFromJournal(table) };
     }),
-    views: data.views.map(({ id, before, after }) => ({ id, view: target(before, after) })),
+    views: data.views.map(({ id, before, after }) => {
+      const view = target(before, after);
+      return { id, view: view && viewFromJournal(view) };
+    }),
     rows: [],
     cells: data.cells.flatMap(({ tableId, changes }) =>
       changes.map(([rowId, colId, before, after]) => ({
@@ -876,6 +973,13 @@ export async function applyRecorded(
   if (removedViews.length > 0) await db.delete(views).where(inArray(views.id, removedViews));
   const removedTables = changed.tables.filter(({ table }) => table === null).map(({ id }) => id);
   if (removedTables.length > 0) await db.delete(tables).where(inArray(tables.id, removedTables));
+  // The blocks a removed row held are gone by now, or are put on the page below.
+  const removedBlockRows = changed.blockRows
+    .filter(({ blockRow }) => blockRow === null)
+    .map(({ id }) => id);
+  if (removedBlockRows.length > 0) {
+    await db.delete(blockRows).where(inArray(blockRows.id, removedBlockRows));
+  }
   const removedPages = changed.pages.filter(({ page }) => page === null).map(({ id }) => id);
   if (removedPages.length > 0) await db.delete(pages).where(inArray(pages.id, removedPages));
 
@@ -889,6 +993,17 @@ export async function applyRecorded(
         set: { spreadsheetId, name: page.name, position: page.position },
       });
   }
+  // Before the tables and views, which name the row they sit in.
+  for (const { blockRow } of changed.blockRows) {
+    if (!blockRow) continue;
+    await db
+      .insert(blockRows)
+      .values(blockRow)
+      .onConflictDoUpdate({
+        target: blockRows.id,
+        set: { pageId: blockRow.pageId, name: blockRow.name, position: blockRow.position },
+      });
+  }
   for (const { table } of changed.tables) {
     if (!table) continue;
     await db
@@ -899,6 +1014,7 @@ export async function applyRecorded(
         set: {
           pageId: table.pageId,
           name: table.name,
+          blockRowId: table.blockRowId,
           position: table.position,
           colIds: table.colIds,
           gridSizes: table.gridSizes,
@@ -921,6 +1037,7 @@ export async function applyRecorded(
           pageId: view.pageId,
           kind: view.kind,
           name: view.name,
+          blockRowId: view.blockRowId,
           position: view.position,
           source: view.source,
           chartType: view.chartType,

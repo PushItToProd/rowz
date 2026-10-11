@@ -5,6 +5,7 @@ import {
   api,
   type Change,
   type ChangedContent,
+  type BlockRowRecord,
   type PageRecord,
   type Snapshot,
   type ViewRecord,
@@ -199,6 +200,7 @@ export function createSync(context: WorkbookContext) {
       colCount: table.colIds.length,
     }));
     context.views.value = snapshot.views;
+    context.blockRows.value = snapshot.blockRows;
     context.undoable.value = snapshot.undoable;
     context.redoable.value = snapshot.redoable;
     syncStructure();
@@ -312,12 +314,20 @@ export function createSync(context: WorkbookContext) {
     if (context.optimisticPageOrder && context.acceptedPageOrder)
       context.showPageOrder(context.acceptedPageOrder);
     for (const pageId of context.optimisticBlockOrders.keys())
-      context.showOrder(context.acceptedBlockOrders.get(pageId) ?? []);
+      context.showLayout(context.acceptedBlockOrders.get(pageId) ?? { blocks: [], rows: [] });
     const pageRecords = new Map(changed.pages.map(({ id, page }) => [id, page]));
     context.pages.value = [
       ...context.pages.value.filter((page) => !pageRecords.has(page.id)),
       ...[...pageRecords.values()].filter((page): page is PageRecord => page !== null),
     ].sort((left, right) => left.position - right.position);
+
+    const blockRowRecords = new Map(changed.blockRows.map(({ id, blockRow }) => [id, blockRow]));
+    context.blockRows.value = [
+      ...context.blockRows.value.filter((row) => !blockRowRecords.has(row.id)),
+      ...[...blockRowRecords.values()].filter((row): row is BlockRowRecord => row !== null),
+    ].sort(
+      (left, right) => left.pageId.localeCompare(right.pageId) || left.position - right.position,
+    );
 
     const tableRecords = new Map(changed.tables.map(({ id, table }) => [id, table]));
     context.tables.value = [

@@ -13,6 +13,7 @@ import type {
 } from "@spreadsheet-app/shared";
 import type { ComputedRef, Ref, ShallowRef } from "vue";
 import {
+  type BlockRowRecord,
   type Change,
   type PageRecord,
   type Snapshot,
@@ -22,6 +23,16 @@ import {
 import { type GridRange } from "../../formula/fill";
 import { type EditingTarget } from "../../formula/session";
 import type { Notice, RowView } from "../workbook";
+/**
+ * Where everything on a page sits. `blocks` lists what sits on the page itself
+ * (tables, views, and rows of blocks) by id, in order. `rows` lists the tables
+ * and views in each row of blocks, in order.
+ */
+export interface PageLayout {
+  blocks: string[];
+  rows: { id: string; blocks: string[] }[];
+}
+
 /** Private store dependencies. Mutable queue state is accessed through getters and setters. */
 export interface WorkbookContext {
   selection: Ref<CellId | null>;
@@ -60,6 +71,7 @@ export interface WorkbookContext {
   stored: (queue?: Promise<void>, before?: number) => Promise<boolean>;
   fail: (cause: unknown, fallback: string) => void;
   views: Ref<ViewRecord[]>;
+  blockRows: Ref<BlockRowRecord[]>;
   rows: Map<string, Snapshot["rows"][number]>;
   pendingRows: Map<string, { tableId: string; ids: string[] }>;
   inputs: Map<string, Snapshot["cells"][number]>;
@@ -75,9 +87,9 @@ export interface WorkbookContext {
   optimisticPageOrder: string[] | undefined;
   acceptedPageOrder: string[] | undefined;
   showPageOrder: (order: readonly string[]) => void;
-  optimisticBlockOrders: Map<string, string[]>;
-  showOrder: (order: readonly string[]) => void;
-  acceptedBlockOrders: Map<string, string[]>;
+  optimisticBlockOrders: Map<string, PageLayout>;
+  showLayout: (layout: PageLayout) => void;
+  acceptedBlockOrders: Map<string, PageLayout>;
   inputOf: (id: CellId) => string;
   columnOf: (id: CellId) => ColumnDefinition | undefined;
   updateColumn: (

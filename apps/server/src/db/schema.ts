@@ -169,6 +169,29 @@ export const pages = pgTable(
   (table) => [uniqueIndex("pages_name").on(table.spreadsheetId, sql`lower(${table.name})`)],
 );
 
+/**
+ * Rows of blocks: a block that holds tables and views and lays them out side
+ * by side. A row shares one ordering with the tables and views that sit on
+ * its page outside any row.
+ */
+export const blockRows = pgTable("block_rows", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  pageId: uuid("page_id")
+    .notNull()
+    .references(() => pages.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  position: integer("position").notNull(),
+});
+
+/**
+ * The row of blocks a table or view sits in, or null when it sits on its page
+ * directly. Inside a row, `position` is the block's place in the row. Deleting
+ * a row record leaves its blocks on the page: the repository deletes them
+ * itself when the row's contents are to go too, so that undo can bring them back.
+ */
+const blockRowId = () =>
+  uuid("block_row_id").references(() => blockRows.id, { onDelete: "set null" });
+
 export const tables = pgTable(
   "tables",
   {
@@ -177,6 +200,7 @@ export const tables = pgTable(
       .notNull()
       .references(() => pages.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    blockRowId: blockRowId(),
     position: integer("position").notNull(),
     /** The ids of the table's columns, in order. Its rows are in `table_rows`. */
     colIds: jsonb("col_ids").$type<string[]>().notNull().default([]),
@@ -228,7 +252,7 @@ export type ViewKind = "chart" | "text" | "script";
 /**
  * Things on a page that show data without being tables. A chart's source is
  * the formula for its data, and a text view's source is its Markdown
- * template. Views share one ordering with the page's tables.
+ * template. Views share one ordering with the page's tables and rows of blocks.
  */
 export const views = pgTable("views", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -237,6 +261,7 @@ export const views = pgTable("views", {
     .references(() => pages.id, { onDelete: "cascade" }),
   kind: text("kind").$type<ViewKind>().notNull(),
   name: text("name").notNull(),
+  blockRowId: blockRowId(),
   position: integer("position").notNull(),
   source: text("source").notNull(),
   /** Set for charts only. */

@@ -14,6 +14,7 @@ import { searchRoutes } from "./routes/search";
 import { folderRoutes } from "./routes/folders";
 import { spreadsheetRoutes } from "./routes/spreadsheets";
 import { tableRoutes } from "./routes/tables";
+import { blockRowRoutes } from "./routes/blockRows";
 import { viewRoutes } from "./routes/views";
 
 export type { ClickResult } from "./actions/run";
@@ -24,6 +25,7 @@ export type {
   Created,
   DocumentList,
   FolderRecord,
+  BlockRowRecord,
   ListedSpreadsheet,
   MemberRecord,
   PageRecord,
@@ -59,6 +61,7 @@ export function createApp(dependencies: AppDependencies) {
     .route("/search", searchRoutes())
     .route("/spreadsheets", spreadsheetRoutes(changes, dependencies.shutdown))
     .route("/pages", pageRoutes())
+    .route("/block-rows", blockRowRoutes())
     .route("/tables", tableRoutes(dependencies))
     .route("/views", viewRoutes(dependencies));
 

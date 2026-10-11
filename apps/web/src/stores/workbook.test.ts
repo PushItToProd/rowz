@@ -1232,6 +1232,7 @@ describe("views", () => {
     pageId: "p1",
     kind: "chart",
     name: "Chart 1",
+    blockRowId: null,
     position: 1,
     source: "'Table 1'!A1:B2",
     chartType: "bar",
@@ -1268,7 +1269,7 @@ describe("views", () => {
     const store = await openWith([]);
     server.createView.mockResolvedValue(createdView(CHART));
     expect(await store.addView("p1", "chart")).toBe(true);
-    expect(server.createView).toHaveBeenCalledWith("p1", "chart", undefined);
+    expect(server.createView).toHaveBeenCalledWith("p1", "chart", undefined, undefined);
     expect(store.views).toEqual([CHART]);
   });
 
@@ -1570,6 +1571,7 @@ describe("the order of a page", () => {
     id,
     pageId: "p1",
     kind: "text",
+    blockRowId: null,
     name: id,
     position,
     source: "",
@@ -1596,7 +1598,10 @@ describe("the order of a page", () => {
   it("moves a block up or down, and stores the new order", async () => {
     const store = await openPage();
     expect(await store.moveBlock("p1", "v2", -1)).toBe(true);
-    expect(server.reorderPage).toHaveBeenCalledExactlyOnceWith("p1", ["t1", "v2", "v1"]);
+    expect(server.reorderPage).toHaveBeenCalledExactlyOnceWith("p1", {
+      blocks: ["t1", "v2", "v1"],
+      rows: [],
+    });
     expect(store.blocksOn("p1")).toEqual(["t1", "v2", "v1"]);
     await store.moveBlock("p1", "t1", 1);
     expect(store.blocksOn("p1")).toEqual(["v2", "t1", "v1"]);
@@ -1676,7 +1681,7 @@ describe("the order of a page", () => {
     const second = store.moveBlock("p1", "t1", 1);
     expect(await Promise.all([first, second])).toEqual([false, true]);
     expect(store.blocksOn("p1")).toEqual(["v1", "v2", "t1"]);
-    expect(server.reorderPage.mock.calls.map(([, blocks]) => blocks)).toEqual([
+    expect(server.reorderPage.mock.calls.map(([, layout]) => layout.blocks)).toEqual([
       ["v1", "t1", "v2"],
       ["v1", "v2", "t1"],
     ]);
@@ -1694,6 +1699,132 @@ describe("the order of a page", () => {
   });
 });
 
+describe("rows of blocks", () => {
+  const view = (id: string, position: number, blockRowId: string | null = null): ViewRecord => ({
+    id,
+    pageId: "p1",
+    kind: "text",
+    name: id,
+    blockRowId,
+    position,
+    source: "",
+    chartType: null,
+  });
+
+  /** The table, then a row holding v1 and v2, then v3. */
+  async function openPage() {
+    server.getSnapshot.mockResolvedValue(
+      wireSnapshot({
+        ...snapshotWith(),
+        blockRows: [{ id: "br1", pageId: "p1", name: "Row 1", position: 1 }],
+        views: [view("v2", 1, "br1"), view("v1", 0, "br1"), view("v3", 2)],
+      }),
+    );
+    const store = useWorkbookStore();
+    await store.load("s1");
+    return store;
+  }
+
+  it("sit on the page among its blocks, and hold their own in order", async () => {
+    const store = await openPage();
+    expect(store.blocksOn("p1")).toEqual(["t1", "br1", "v3"]);
+    expect(store.layoutOf("p1")).toEqual({
+      blocks: ["t1", "br1", "v3"],
+      rows: [{ id: "br1", blocks: ["v1", "v2"] }],
+    });
+  });
+
+  it("move a block within the row it is in, and a row among the page's blocks", async () => {
+    const store = await openPage();
+    expect(await store.moveBlock("p1", "v1", 1)).toBe(true);
+    expect(server.reorderPage).toHaveBeenLastCalledWith("p1", {
+      blocks: ["t1", "br1", "v3"],
+      rows: [{ id: "br1", blocks: ["v2", "v1"] }],
+    });
+    expect(await store.moveBlock("p1", "v1", 1)).toBe(false);
+    expect(await store.moveBlock("p1", "br1", -1)).toBe(true);
+    expect(store.layoutOf("p1")).toEqual({
+      blocks: ["br1", "t1", "v3"],
+      rows: [{ id: "br1", blocks: ["v2", "v1"] }],
+    });
+  });
+
+  it("take a block at their end, and give one up to the place after them", async () => {
+    const store = await openPage();
+    expect(await store.moveBlockIntoRow("p1", "t1", "br1")).toBe(true);
+    expect(store.layoutOf("p1")).toEqual({
+      blocks: ["br1", "v3"],
+      rows: [{ id: "br1", blocks: ["v1", "v2", "t1"] }],
+    });
+    expect(await store.moveBlockOutOfRow("p1", "v1")).toBe(true);
+    expect(server.reorderPage).toHaveBeenLastCalledWith("p1", {
+      blocks: ["br1", "v1", "v3"],
+      rows: [{ id: "br1", blocks: ["v2", "t1"] }],
+    });
+    // A block already there, a row, and a block in no row are left alone.
+    expect(await store.moveBlockIntoRow("p1", "v2", "br1")).toBe(false);
+    expect(await store.moveBlockIntoRow("p1", "br1", "br1")).toBe(false);
+    expect(await store.moveBlockOutOfRow("p1", "v3")).toBe(false);
+  });
+
+  it("put a block back where it was when the server refuses the move", async () => {
+    const store = await openPage();
+    server.reorderPage.mockRejectedValueOnce(new Error("no"));
+    expect(await store.moveBlockOutOfRow("p1", "v1")).toBe(false);
+    expect(store.layoutOf("p1")).toEqual({
+      blocks: ["t1", "br1", "v3"],
+      rows: [{ id: "br1", blocks: ["v1", "v2"] }],
+    });
+  });
+
+  it("follow a change that adds, renames, or removes one", async () => {
+    const store = await openPage();
+    const added = { id: "br2", pageId: "p1", name: "Row 2", position: 3 };
+    server.createBlockRow.mockResolvedValue({
+      blockRow: added,
+      change: changeWith({ blockRows: [{ id: "br2", blockRow: added }] }),
+    });
+    expect(await store.addBlockRow("p1")).toBe(true);
+    expect(store.blocksOn("p1")).toEqual(["t1", "br1", "v3", "br2"]);
+
+    server.renameBlockRow.mockResolvedValue(
+      changeWith({ blockRows: [{ id: "br2", blockRow: { ...added, name: "Totals" } }] }),
+    );
+    await store.renameBlockRow("br2", "Totals");
+    expect(store.blockRows.find((row) => row.id === "br2")?.name).toBe("Totals");
+
+    // Ungrouping leaves the row's blocks on the page where the row was.
+    server.ungroupBlockRow.mockResolvedValue(
+      changeWith({
+        blockRows: [{ id: "br1", blockRow: null }],
+        views: [view("v1", 1), view("v2", 2), view("v3", 3)],
+      }),
+    );
+    await store.ungroupBlockRow("br1");
+    expect(store.layoutOf("p1")).toEqual({
+      blocks: ["t1", "v1", "v2", "v3", "br2"],
+      rows: [{ id: "br2", blocks: [] }],
+    });
+  });
+
+  it("are written to a file with what they hold", async () => {
+    const store = await openPage();
+    expect(store.toFile()?.pages[0]?.blocks.map((block) => block.type)).toEqual([
+      "table",
+      "row",
+      "text",
+    ]);
+    expect(store.toFile()?.pages[0]?.blocks[1]).toEqual({
+      type: "row",
+      name: "Row 1",
+      blocks: [
+        { type: "text", name: "v1", source: "" },
+        { type: "text", name: "v2", source: "" },
+      ],
+    });
+  });
+});
+
 describe("the order of the pages, and moving a block between them", () => {
   const PAGES = [
     { id: "p1", name: "Page 1", position: 0 },
@@ -1705,6 +1836,7 @@ describe("the order of the pages, and moving a block between them", () => {
     pageId: "p1",
     kind: "text",
     name: "Text 1",
+    blockRowId: null,
     position: 1,
     source: "{{ 'Table 1'!A1 }}",
     chartType: null,
@@ -1823,7 +1955,7 @@ describe("the order of the pages, and moving a block between them", () => {
     store.selection = at("A1");
     server.moveTable.mockResolvedValue(
       changeWith({
-        table: { ...TABLE, pageId: "p2", position: 0 },
+        table: { ...TABLE, pageId: "p2", blockRowId: null, position: 0 },
         cells: [],
         views: [{ id: "v1", source: "{{ 'Page 2'!'Table 1'!A1 }}" }],
         tables: [],
@@ -1841,7 +1973,13 @@ describe("the order of the pages, and moving a block between them", () => {
 
   it("moves a view to another page, as the server now has it", async () => {
     const store = await openPages();
-    const moved = { ...TEXT, pageId: "p3", position: 0, source: "{{ 'Page 1'!'Table 1'!A1 }}" };
+    const moved = {
+      ...TEXT,
+      pageId: "p3",
+      blockRowId: null,
+      position: 0,
+      source: "{{ 'Page 1'!'Table 1'!A1 }}",
+    };
     server.moveView.mockResolvedValue(
       changeWith({ view: moved, cells: [], views: [], tables: [] }),
     );
@@ -2025,6 +2163,7 @@ describe("undo and redo", () => {
       pageId: "p1",
       kind: "text",
       name: "Text 1",
+      blockRowId: null,
       position: 1,
       source: "before",
       chartType: null,
@@ -2132,6 +2271,7 @@ describe("refreshing after a change made elsewhere", () => {
             pageId: "p1",
             kind: "text",
             name: "Text 1",
+            blockRowId: null,
             position: 1,
             source: "hi",
             chartType: null,

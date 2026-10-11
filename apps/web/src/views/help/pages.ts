@@ -12,7 +12,7 @@ export const HELP_PAGES = [
   {
     id: "presentation",
     title: "Formats, charts, and text",
-    sections: ["formats", "conditional", "charts", "text-views"],
+    sections: ["formats", "conditional", "charts", "rows-of-blocks", "text-views"],
   },
   {
     id: "documents",

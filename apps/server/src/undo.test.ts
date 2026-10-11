@@ -17,6 +17,7 @@ import {
   createSpreadsheet,
   readSnapshot,
   routeOf,
+  addBlockRow,
   rowIds,
   storedInputs,
   startTestServer,
@@ -688,6 +689,49 @@ const routeCases: Route[] = [
     },
   },
   {
+    name: "create a row of blocks",
+    prepare({ pageId }) {
+      return { method: "POST", path: `/pages/${pageId}/block-rows`, body: {}, status: 201 };
+    },
+  },
+  {
+    name: "rename a row of blocks",
+    async prepare({ pageId }) {
+      const blockRow = await addBlockRow(owner, pageId);
+      return {
+        method: "PATCH",
+        path: `/block-rows/${blockRow.id}`,
+        body: { name: "Summary" },
+        status: 200,
+      };
+    },
+  },
+  {
+    name: "ungroup a row of blocks",
+    async prepare({ pageId, tableId }) {
+      const blockRow = await addBlockRow(owner, pageId);
+      const view = await createView(owner, pageId);
+      await owner.json("PUT", `/pages/${pageId}/order`, {
+        blocks: [blockRow.id],
+        rows: [{ id: blockRow.id, blocks: [view.id, tableId] }],
+      });
+      return { method: "POST", path: `/block-rows/${blockRow.id}/ungroup`, status: 200 };
+    },
+  },
+  {
+    name: "delete a row of blocks and what it holds",
+    async prepare({ pageId, tableId }) {
+      const blockRow = await addBlockRow(owner, pageId);
+      const view = await createView(owner, pageId);
+      await owner.json("PUT", `/tables/${tableId}/cells`, cellsBody({ A1: "kept", B2: "=A1" }));
+      await owner.json("PUT", `/pages/${pageId}/order`, {
+        blocks: [blockRow.id],
+        rows: [{ id: blockRow.id, blocks: [tableId, view.id] }],
+      });
+      return { method: "DELETE", path: `/block-rows/${blockRow.id}`, status: 200 };
+    },
+  },
+  {
     name: "delete a table",
     prepare({ tableId }) {
       return { method: "DELETE", path: `/tables/${tableId}`, status: 200 };
@@ -709,6 +753,7 @@ function content(snapshot: TestSnapshot) {
     role: snapshot.role,
     rows: [...snapshot.rows].sort((left, right) => left.id.localeCompare(right.id)),
     pages: [...snapshot.pages].sort((left, right) => left.id.localeCompare(right.id)),
+    blockRows: [...snapshot.blockRows].sort((left, right) => left.id.localeCompare(right.id)),
     tables: [...snapshot.tables].sort((left, right) => left.id.localeCompare(right.id)),
     views: [...snapshot.views].sort((left, right) => left.id.localeCompare(right.id)),
     cells: [...snapshot.cells].sort(

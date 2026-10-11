@@ -10,16 +10,18 @@ import {
   FILE_FORMAT,
   FILE_LIMITS,
   LIMITS,
+  fileLeafBlocks,
   keysAfter,
   TableLayout,
   type CellInput,
+  type FileLeafBlock,
   type SpreadsheetFile,
   toSpreadsheetFile,
 } from "@spreadsheet-app/shared";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Database } from "../../db/client";
-import { cells, pages, spreadsheets, tables, tableRows, views } from "../../db/schema";
+import { blockRows, cells, pages, spreadsheets, tables, tableRows, views } from "../../db/schema";
 import { unprocessable } from "../../errors";
 import { type SpreadsheetSummary } from "./records";
 import { filterFormula, normalized } from "./helpers";
@@ -53,7 +55,10 @@ export function checkFile(file: SpreadsheetFile): void {
 
   let total = 0;
   let totalRows = 0;
-  for (const { name: pageName, blocks } of file.pages) {
+  for (const filePage of file.pages) {
+    const pageName = filePage.name;
+    // Names are unique on a page whether or not a block sits in a row of blocks.
+    const blocks = fileLeafBlocks(filePage);
     const fileTables = blocks.filter((block) => block.type === "table");
     const table = repeated(fileTables.map(({ name }) => name));
     if (table !== undefined) invalid(`Two tables on ${pageName} are named ${table}`);
@@ -86,12 +91,13 @@ export function checkFile(file: SpreadsheetFile): void {
           }
           const from = column.choicesFrom;
           if (!from) continue;
-          const source = file.pages
-            .find((candidate) => candidate.name.toLowerCase() === from.page.toLowerCase())
-            ?.blocks.find(
-              (block) =>
-                block.type === "table" && block.name.toLowerCase() === from.table.toLowerCase(),
-            );
+          const sourcePage = file.pages.find(
+            (candidate) => candidate.name.toLowerCase() === from.page.toLowerCase(),
+          );
+          const source = (sourcePage ? fileLeafBlocks(sourcePage) : []).find(
+            (block) =>
+              block.type === "table" && block.name.toLowerCase() === from.table.toLowerCase(),
+          );
           const sourceColumns = source?.type === "table" ? source.columns : undefined;
           if (source === fileTable) {
             invalid(`The choices of ${column.name} in ${name} cannot come from ${name} itself`);
@@ -154,15 +160,13 @@ export interface InsertedTable {
   id: string;
   colIds: readonly string[];
   page: string;
-  block: Extract<SpreadsheetFile["pages"][number]["blocks"][number], { type: "table" }>;
+  block: Extract<FileLeafBlock, { type: "table" }>;
   columns: ColumnDefinition[] | null;
 }
 
 /** A file's sort and filter as they are stored: sort keys name column ids, which are new. */
 export function displayFromFile(
-  display: NonNullable<
-    SpreadsheetFile["pages"][number]["blocks"][number] & { type: "table" }
-  >["display"],
+  display: Extract<FileLeafBlock, { type: "table" }>["display"],
   colIds: readonly string[],
 ): TableDisplay {
   if (!display) return { sort: [] };
@@ -225,6 +229,7 @@ export async function copySpreadsheet(
     data.tables,
     snapshot.views,
     (table) => cellsOf.get(table.id) ?? [],
+    snapshot.blockRows,
   );
   return ctx.createFromFile(file, false);
 }
@@ -261,7 +266,7 @@ export async function insertContents(
 ): Promise<void> {
   // A file kept as a version of a spreadsheet that had more rows than the limit is refused too.
   const fileTables = file.pages.flatMap((page) =>
-    page.blocks.filter((block) => block.type === "table"),
+    fileLeafBlocks(page).filter((block) => block.type === "table"),
   );
   if (fileTables.reduce((total, table) => total + table.rowCount, 0) > LIMITS.spreadsheetRows) {
     throw unprocessable(
@@ -276,8 +281,24 @@ export async function insertContents(
       .values({ spreadsheetId, name: page.name, position: pagePosition })
       .returning({ id: pages.id });
     if (!created) throw new Error("Insert returned no page");
+    // Each block with where it goes: on the page, or in a row of blocks made just before it.
+    const placements: { block: FileLeafBlock; blockRowId: string | null; position: number }[] = [];
     for (const [position, block] of page.blocks.entries()) {
-      const placed = { pageId: created.id, name: block.name, position };
+      if (block.type !== "row") {
+        placements.push({ block, blockRowId: null, position });
+        continue;
+      }
+      const [row] = await tx
+        .insert(blockRows)
+        .values({ pageId: created.id, name: block.name, position })
+        .returning({ id: blockRows.id });
+      if (!row) throw new Error("Insert returned no row of blocks");
+      for (const [place, held] of block.blocks.entries()) {
+        placements.push({ block: held, blockRowId: row.id, position: place });
+      }
+    }
+    for (const { block, blockRowId, position } of placements) {
+      const placed = { pageId: created.id, name: block.name, blockRowId, position };
       if (block.type !== "table") {
         await tx.insert(views).values({
           ...placed,

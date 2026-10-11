@@ -47,6 +47,7 @@ describe("spreadsheets", () => {
         id: expect.any(String),
         pageId: snapshot.pages[0]!.id,
         name: "Table 1",
+        blockRowId: null,
         position: 0,
         ...DEFAULT_TABLE_SIZE,
         colIds: expect.any(Array),
@@ -232,6 +233,7 @@ describe("pages", () => {
       revision: expect.any(Number),
       changed: {
         pages: [{ id: page.id, page: { ...page, name: "Archive" } }],
+        blockRows: [],
         tables: [],
         views: [],
         rows: [],

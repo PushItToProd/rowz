@@ -11,6 +11,7 @@ import { computed, reactive, ref, shallowRef, watch } from "vue";
 import type { Notice } from "../notice";
 import {
   setJournaledHandler,
+  type BlockRowRecord,
   type PageRecord,
   type Snapshot,
   type TableRecord,
@@ -18,7 +19,7 @@ import {
 } from "../api/client";
 import { type StoredRow } from "../formula/fill";
 import { createActions } from "./workbook/actions";
-import type { WorkbookContext } from "./workbook/context";
+import type { PageLayout, WorkbookContext } from "./workbook/context";
 import { createFormats } from "./workbook/formats";
 import { createQueue } from "./workbook/queue";
 import { createSelection } from "./workbook/selection";
@@ -157,6 +158,9 @@ export const useWorkbookStore = defineStore("workbook", () => {
     get views() {
       return views;
     },
+    get blockRows() {
+      return blockRows;
+    },
     get rows() {
       return rows;
     },
@@ -214,8 +218,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
     get optimisticBlockOrders() {
       return optimisticBlockOrders;
     },
-    get showOrder() {
-      return showOrder;
+    get showLayout() {
+      return showLayout;
     },
     get acceptedBlockOrders() {
       return acceptedBlockOrders;
@@ -315,10 +319,17 @@ export const useWorkbookStore = defineStore("workbook", () => {
     addPage,
     renamePage,
     blocksOn,
+    layoutOf,
     rememberOrders,
     showPendingOrders,
-    showOrder,
+    showLayout,
     moveBlock,
+    moveBlockIntoRow,
+    moveBlockOutOfRow,
+    addBlockRow,
+    renameBlockRow,
+    ungroupBlockRow,
+    deleteBlockRow,
     showPageOrder,
     movePage,
     moveBlockToPage,
@@ -379,6 +390,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
   );
   /** Charts and text views: the things on a page that are not tables. */
   const views = ref<ViewRecord[]>([]);
+  /** Rows of blocks: the blocks that lay tables and views out side by side. */
+  const blockRows = ref<BlockRowRecord[]>([]);
   /** The selected cell: the one the keyboard edits and the formula bar shows. */
   const selection = ref<CellId | null>(null);
   /** Whether the selected range came from a row or column header. */
@@ -441,8 +454,8 @@ export const useWorkbookStore = defineStore("workbook", () => {
   /** How many saves have failed, which `stored` compares across a wait. */
   let failedSaves = 0;
   let acceptedPageOrder: string[] | undefined;
-  const acceptedBlockOrders = new Map<string, string[]>();
-  const optimisticBlockOrders = new Map<string, string[]>();
+  const acceptedBlockOrders = new Map<string, PageLayout>();
+  const optimisticBlockOrders = new Map<string, PageLayout>();
   let optimisticPageOrder: string[] | undefined;
 
   /** The changes, undos, and redos the server has not answered yet. */
@@ -485,6 +498,7 @@ export const useWorkbookStore = defineStore("workbook", () => {
     pages,
     tables,
     views,
+    blockRows,
     importRows,
     appendCsvRows,
     shownRows,
@@ -544,7 +558,14 @@ export const useWorkbookStore = defineStore("workbook", () => {
     deleteTable,
     refresh,
     blocksOn,
+    layoutOf,
     moveBlock,
+    moveBlockIntoRow,
+    moveBlockOutOfRow,
+    addBlockRow,
+    renameBlockRow,
+    ungroupBlockRow,
+    deleteBlockRow,
     movePage,
     moveBlockToPage,
     canUndo,

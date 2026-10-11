@@ -7,6 +7,7 @@ import {
   type ScriptDefinition,
   type TableDefinition,
 } from "@spreadsheet-app/engine";
+import { fileLeafBlocks } from "@spreadsheet-app/shared";
 import { describe, expect, it } from "vitest";
 import { readSpreadsheetFile } from "./spreadsheetFile";
 
@@ -26,7 +27,7 @@ describe("monthly budget reference file", () => {
     file.pages.forEach((page, pageIndex) => {
       const pageId = `p${String(pageIndex)}`;
       if (page.name === "Reports") reportsPageId = pageId;
-      page.blocks.forEach((block, blockIndex) => {
+      fileLeafBlocks(page).forEach((block, blockIndex) => {
         if (block.type === "table") {
           const id = `t${String(pageIndex)}-${String(blockIndex)}`;
           tables.push({

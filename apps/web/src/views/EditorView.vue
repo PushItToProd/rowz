@@ -27,7 +27,7 @@ import { queueListNotice } from "../notice";
 import SharePanel from "../components/SharePanel.vue";
 import { useSessionStore } from "../stores/session";
 import { watchSpreadsheet } from "../api/live";
-import { api } from "../api/client";
+import { api, type BlockRowRecord } from "../api/client";
 import { download, fileName } from "../files/download";
 import { fitsImport } from "../files/spreadsheetFile";
 import { usePageTitle } from "../pageTitle";
@@ -35,6 +35,7 @@ import TableCard from "../components/TableCard.vue";
 import ScriptCard from "../components/ScriptCard.vue";
 import TextCard from "../components/TextCard.vue";
 import { useWorkbookStore } from "../stores/workbook";
+import { useDialog } from "../useDialog";
 import { SIDE_PANES, provideActiveSidePane, tableIdOfSidePane, type SidePaneId } from "../sidePane";
 import { useLocationReveal } from "../locationReveal";
 import { copyLinkToClipboard } from "../clipboard";
@@ -58,6 +59,7 @@ const { revealLocation } = useLocationReveal(
   activeSidePane,
 );
 const formulas = useFormulaSessionStore();
+const dialog = useDialog();
 const picking = useReferencePickingStore();
 const replayed = new WeakSet<Event>();
 
@@ -379,15 +381,50 @@ function toggleBlockCollapse(blockId: string): void {
 // The store may still hold the spreadsheet that was open before this one.
 usePageTitle(() => (loaded.value ? store.spreadsheet?.name : undefined));
 const page = computed(() => store.pages.find((candidate) => candidate.id === props.pageId));
-/** The blocks of the page, in the order they sit on it. */
-const blocks = computed(() =>
-  [
-    ...store.tables.map((table) => ({ table, view: null, record: table })),
-    ...store.views.map((view) => ({ table: null, view, record: view })),
-  ]
-    .filter((block) => block.record.pageId === props.pageId)
-    .sort((a, b) => a.record.position - b.record.position),
+/** The tables and views of the page, by id. */
+const blocks = computed(
+  () =>
+    new Map(
+      [
+        ...store.tables.map((table) => ({ table, view: null, record: table })),
+        ...store.views.map((view) => ({ table: null, view, record: view })),
+      ]
+        .filter((block) => block.record.pageId === props.pageId)
+        .map((block) => [block.record.id, block]),
+    ),
 );
+/** The rows of blocks of the page, by id. */
+const blockRows = computed(
+  () =>
+    new Map(
+      store.blockRows.filter((row) => row.pageId === props.pageId).map((row) => [row.id, row]),
+    ),
+);
+type PageBlock = typeof blocks.value extends Map<string, infer Block> ? Block : never;
+/** A row of blocks with the tables and views in it, left to right, or one table or view on its own. */
+interface Line {
+  id: string;
+  row: BlockRowRecord | null;
+  blocks: PageBlock[];
+}
+/** What the page shows from top to bottom. */
+const lines = computed(() => {
+  const layout = props.pageId ? store.layoutOf(props.pageId) : { blocks: [], rows: [] };
+  const found = (ids: readonly string[]) =>
+    ids.flatMap((id) => {
+      const block = blocks.value.get(id);
+      return block ? [block] : [];
+    });
+  return layout.blocks.flatMap((id): Line[] => {
+    const row = blockRows.value.get(id);
+    if (row) {
+      const held = layout.rows.find((candidate) => candidate.id === id)?.blocks ?? [];
+      return [{ id, row, blocks: found(held) }];
+    }
+    const alone = found([id]);
+    return alone.length > 0 ? [{ id, row: null, blocks: alone }] : [];
+  });
+});
 
 const handledDeepLink = ref<string>();
 watch(
@@ -493,16 +530,104 @@ function addBlockBelow(blockId: string, kind: string): void {
   void nextTick(() => {
     const trigger = document
       .getElementById(`block-${blockId}`)
+      ?.closest(".editor__line")
       ?.nextElementSibling?.querySelector<HTMLButtonElement>(`[data-add-block-type="${kind}"]`);
     trigger?.focus({ preventScroll: true });
     trigger?.click();
   });
 }
 
+/** Shows each group of menu items below a line that sets it apart from the group before. */
+function grouped(groups: MenuItem[][]): MenuItem[] {
+  return groups
+    .filter((group) => group.length > 0)
+    .flatMap((group, index) =>
+      group.map((item, position) => ({ ...item, separated: index > 0 && position === 0 })),
+    );
+}
+
+/** Moving a block one place among those beside it, named by the way the blocks run. */
+function moveItems(blockId: string, beside: readonly string[], along: "page" | "row"): MenuItem[] {
+  if (beside.length < 2) return [];
+  const index = beside.indexOf(blockId);
+  const [back, forward] = along === "page" ? ["Move up", "Move down"] : ["Move left", "Move right"];
+  return [
+    {
+      label: back,
+      disabled: index === 0,
+      run: () => void store.moveBlock(props.pageId ?? "", blockId, -1),
+    },
+    {
+      label: forward,
+      disabled: index === beside.length - 1,
+      run: () => void store.moveBlock(props.pageId ?? "", blockId, 1),
+    },
+  ];
+}
+
+async function deleteBlockRow(row: { id: string; name: string }): Promise<void> {
+  if (formulas.active && !(await formulas.submit(store.submitFormulaDraft))) {
+    formulas.focus();
+    return;
+  }
+  const held = lines.value.find((line) => line.id === row.id)?.blocks ?? [];
+  const names = held.map((block) => block.record.name).join(", ");
+  const confirmed = await dialog.confirm({
+    title: "Delete row",
+    message:
+      held.length === 0
+        ? `Delete ${row.name}?`
+        : `Delete ${row.name} and the ${held.length === 1 ? "block" : `${String(held.length)} blocks`} in it (${names})?`,
+    confirmLabel: "Delete row",
+    danger: true,
+  });
+  if (confirmed) await store.deleteBlockRow(row.id);
+}
+
+/** The actions for a row of blocks. Those of a block in it are in that block's own menu. */
+function blockRowMenuItems(row: { id: string; name: string }): MenuItem[] {
+  if (!store.canEdit) return [];
+  const held = lines.value.find((line) => line.id === row.id)?.blocks.length ?? 0;
+  return grouped([
+    [
+      {
+        label: "Rename",
+        run: () => {
+          renameBlock(row.id);
+        },
+      },
+    ],
+    moveItems(
+      row.id,
+      lines.value.map((line) => line.id),
+      "page",
+    ),
+    [
+      // An empty row has nothing to keep, so Delete is all that applies.
+      ...(held > 0
+        ? [
+            {
+              label: "Ungroup",
+              run: () => void store.ungroupBlockRow(row.id),
+            },
+          ]
+        : []),
+      {
+        label: held === 0 ? "Delete row" : "Delete row and its blocks",
+        danger: true,
+        run: () => deleteBlockRow(row),
+      },
+    ],
+  ]);
+}
+
 const blockMenuItems = computed((): MenuItem[] => {
   const menu = blockMenu.value;
-  const block = menu && blocks.value.find((candidate) => candidate.record.id === menu.blockId);
-  if (!menu || !block) return [];
+  if (!menu) return [];
+  const row = blockRows.value.get(menu.blockId);
+  if (row) return blockRowMenuItems(row);
+  const block = blocks.value.get(menu.blockId);
+  if (!block) return [];
   const directActions = menu.directActions ?? blockActionProviders.get(block.record.id)?.() ?? [];
   const availableActions = directActions.map((action) => ({
     ...action,
@@ -535,63 +660,64 @@ const blockMenuItems = computed((): MenuItem[] => {
       },
       ...availableActions,
     ]);
-    if (blocks.value.length > 1) {
-      const index = blocks.value.findIndex((candidate) => candidate.record.id === block.record.id);
-      groups.push([
-        {
-          label: "Move up",
-          disabled: index === 0,
-          run: () => void store.moveBlock(props.pageId ?? "", block.record.id, -1),
-        },
-        {
-          label: "Move down",
-          disabled: index === blocks.value.length - 1,
-          run: () => void store.moveBlock(props.pageId ?? "", block.record.id, 1),
-        },
-        ...store.pages
-          .filter((candidate) => candidate.id !== props.pageId)
-          .map((target) => ({
-            label: `Move to ${target.name}`,
-            run: () => void store.moveBlockToPage(block.record.id, target.id),
-          })),
-      ]);
-    } else if (store.pages.some((candidate) => candidate.id !== props.pageId)) {
+    const pageId = props.pageId ?? "";
+    const line = lines.value.find((candidate) =>
+      candidate.blocks.some((held) => held.record.id === block.record.id),
+    );
+    const within = line?.row ?? null;
+    groups.push([
+      ...(within
+        ? [
+            ...moveItems(block.record.id, line?.blocks.map((held) => held.record.id) ?? [], "row"),
+            {
+              label: `Move out of ${within.name}`,
+              run: () => void store.moveBlockOutOfRow(pageId, block.record.id),
+            },
+          ]
+        : [
+            ...moveItems(
+              block.record.id,
+              lines.value.map((candidate) => candidate.id),
+              "page",
+            ),
+            ...[...blockRows.value.values()].map((target) => ({
+              label: `Move into ${target.name}`,
+              run: () => void store.moveBlockIntoRow(pageId, block.record.id, target.id),
+            })),
+          ]),
+      ...store.pages
+        .filter((candidate) => candidate.id !== props.pageId)
+        .map((target) => ({
+          label: `Move to ${target.name}`,
+          run: () => void store.moveBlockToPage(block.record.id, target.id),
+        })),
+    ]);
+    // A row of blocks has its own controls for adding to it.
+    if (!within) {
       groups.push(
-        store.pages
-          .filter((candidate) => candidate.id !== props.pageId)
-          .map((target) => ({
-            label: `Move to ${target.name}`,
-            run: () => void store.moveBlockToPage(block.record.id, target.id),
-          })),
+        (["table", "chart", "text", "script"] as const).map((kind) => ({
+          label: `Add ${kind} below`,
+          run: () => {
+            addBlockBelow(block.record.id, kind);
+          },
+        })),
       );
     }
-    groups.push(
-      (["table", "chart", "text", "script"] as const).map((kind) => ({
-        label: `Add ${kind} below`,
-        run: () => {
-          addBlockBelow(block.record.id, kind);
-        },
-      })),
-    );
   } else if (availableActions.length > 0) {
     groups.push(availableActions);
   }
-  return groups
-    .filter((group) => group.length > 0)
-    .flatMap((group, index) =>
-      group.map((item, position) => ({ ...item, separated: index > 0 && position === 0 })),
-    );
+  return grouped(groups);
 });
 const blockMenuLabel = computed(() => {
-  const id = blockMenu.value?.blockId;
-  const block = blocks.value.find((candidate) => candidate.record.id === id);
-  return `Actions for ${block?.record.name ?? "block"}`;
+  const id = blockMenu.value?.blockId ?? "";
+  const name = blocks.value.get(id)?.record.name ?? blockRows.value.get(id)?.name;
+  return `Actions for ${name ?? "block"}`;
 });
 
 function openBlockMenu(event: MouseEvent, block: { id: string; name: string }): void {
   const target = event.target;
   if (target instanceof Element) {
-    const inHeader = target.closest(".table-card__header, .view-card__header");
+    const inHeader = target.closest(".table-card__header, .view-card__header, .block-row__header");
     const input = target.closest("input");
     const inputKeepsBrowserMenu =
       input !== null &&
@@ -637,6 +763,12 @@ function openBlockActionMenu(
   const trigger = event.currentTarget as HTMLElement;
   const box = trigger.getBoundingClientRect();
   blockMenu.value = { x: box.right, y: box.bottom, blockId: block.id, directActions };
+}
+
+/** Opens a row of blocks' menu from the ellipsis in its header. */
+function openBlockRowMenu(event: MouseEvent, row: { id: string }): void {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  blockMenu.value = { x: box.right, y: box.bottom, blockId: row.id };
 }
 
 function onBlockKeydown(event: KeyboardEvent, block: { id: string; name: string }): void {
@@ -831,93 +963,140 @@ watch(
     <p v-if="loadError" class="notice notice--error" role="alert">{{ loadError }}</p>
     <p v-else-if="!loaded" class="editor__loading">Loading…</p>
     <main v-else-if="page" class="editor__page">
-      <template v-for="(block, index) in blocks" :key="block.record.id">
+      <template v-for="(line, index) in lines" :key="line.id">
         <AddBlockRow :page-id="page.id" :position="index" />
+        <!-- A line holds one block, or a row of blocks with its header. Alone, it adds no box of its own. -->
         <div
-          :id="`block-${block.record.id}`"
-          tabindex="0"
-          role="region"
-          :aria-label="block.record.name"
-          class="editor__block"
-          @contextmenu="openBlockMenu($event, block.record)"
-          @keydown="onBlockKeydown($event, block.record)"
+          :id="line.row ? `block-${line.row.id}` : undefined"
+          class="editor__line"
+          :class="{ 'block-row': line.row }"
+          :tabindex="line.row ? 0 : undefined"
+          :role="line.row ? 'region' : undefined"
+          :aria-label="line.row?.name"
+          @contextmenu="line.row && openBlockMenu($event, line.row)"
+          @keydown="line.row && onBlockKeydown($event, line.row)"
         >
-          <TableCard
-            v-if="block.table"
-            :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
-            :table="block.table"
-            :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
-            @trace="goToTrace"
-            @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
-            @toggle-collapse="toggleBlockCollapse(block.record.id)"
-          />
-          <ChartCard
-            v-else-if="block.view.kind === 'chart'"
-            :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
-            :view="block.view"
-            :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
-            @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
-            @toggle-collapse="toggleBlockCollapse(block.record.id)"
-          />
-          <ScriptCard
-            v-else-if="block.view.kind === 'script'"
-            :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
-            :view="block.view"
-            :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
-            @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
-            @toggle-collapse="toggleBlockCollapse(block.record.id)"
-          />
-          <TextCard
-            v-else
-            :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
-            :view="block.view"
-            :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
-            @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
-            @toggle-collapse="toggleBlockCollapse(block.record.id)"
-          />
-          <div
-            v-if="
-              !isBlockCollapsed(spreadsheetId, block.record.id) &&
-              store.canEdit &&
-              (blocks.length > 1 || store.pages.length > 1)
-            "
-            class="editor__move"
-          >
-            <template v-if="blocks.length > 1">
-              <button
-                type="button"
-                title="Move up"
-                :aria-label="`Move ${block.record.name} up`"
-                :disabled="index === 0"
-                @click="store.moveBlock(page.id, block.record.id, -1)"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                title="Move down"
-                :aria-label="`Move ${block.record.name} down`"
-                :disabled="index === blocks.length - 1"
-                @click="store.moveBlock(page.id, block.record.id, 1)"
-              >
-                ↓
-              </button>
-            </template>
+          <header v-if="line.row" class="block-row__header">
+            <h2>
+              <EditableName
+                :value="line.row.name"
+                label="Row name"
+                :disabled="!store.canEdit"
+                @rename="store.renameBlockRow(line.row.id, $event)"
+              />
+            </h2>
+            <AddBlockRow
+              :page-id="page.id"
+              :block-row-id="line.row.id"
+              :position="line.blocks.length"
+            />
             <button
-              v-if="store.pages.length > 1"
+              v-if="store.canEdit"
               type="button"
-              title="Move to another page"
+              class="view-card__menu-trigger"
               aria-haspopup="menu"
-              :aria-label="`Move ${block.record.name} to another page`"
-              @click="openPageMenu($event, block.record)"
+              :aria-label="`Block actions for ${line.row.name}`"
+              @click.stop="openBlockRowMenu($event, line.row)"
             >
-              ⇄
+              ⋮
             </button>
+          </header>
+          <div class="editor__line-blocks">
+            <template v-for="(block, place) in line.blocks" :key="block.record.id">
+              <div
+                :id="`block-${block.record.id}`"
+                tabindex="0"
+                role="region"
+                :aria-label="block.record.name"
+                class="editor__block"
+                @contextmenu="openBlockMenu($event, block.record)"
+                @keydown="onBlockKeydown($event, block.record)"
+              >
+                <TableCard
+                  v-if="block.table"
+                  :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
+                  :table="block.table"
+                  :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
+                  @trace="goToTrace"
+                  @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
+                  @toggle-collapse="toggleBlockCollapse(block.record.id)"
+                />
+                <ChartCard
+                  v-else-if="block.view.kind === 'chart'"
+                  :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
+                  :view="block.view"
+                  :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
+                  @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
+                  @toggle-collapse="toggleBlockCollapse(block.record.id)"
+                />
+                <ScriptCard
+                  v-else-if="block.view.kind === 'script'"
+                  :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
+                  :view="block.view"
+                  :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
+                  @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
+                  @toggle-collapse="toggleBlockCollapse(block.record.id)"
+                />
+                <TextCard
+                  v-else
+                  :ref="(instance) => registerBlockActionProvider(block.record.id, instance)"
+                  :view="block.view"
+                  :collapsed="isBlockCollapsed(spreadsheetId, block.record.id)"
+                  @actions="(event, items) => openBlockActionMenu(event, block.record, items)"
+                  @toggle-collapse="toggleBlockCollapse(block.record.id)"
+                />
+                <div
+                  v-if="
+                    !isBlockCollapsed(spreadsheetId, block.record.id) &&
+                    store.canEdit &&
+                    (line.blocks.length > 1 || lines.length > 1 || store.pages.length > 1)
+                  "
+                  class="editor__move"
+                >
+                  <!-- A block in a row moves among the blocks beside it, and one on the page among the lines. -->
+                  <template v-if="(line.row ? line.blocks : lines).length > 1">
+                    <button
+                      type="button"
+                      :title="line.row ? 'Move left' : 'Move up'"
+                      :aria-label="`Move ${block.record.name} ${line.row ? 'left' : 'up'}`"
+                      :disabled="(line.row ? place : index) === 0"
+                      @click="store.moveBlock(page.id, block.record.id, -1)"
+                    >
+                      {{ line.row ? "←" : "↑" }}
+                    </button>
+                    <button
+                      type="button"
+                      :title="line.row ? 'Move right' : 'Move down'"
+                      :aria-label="`Move ${block.record.name} ${line.row ? 'right' : 'down'}`"
+                      :disabled="
+                        (line.row ? place : index) === (line.row ? line.blocks : lines).length - 1
+                      "
+                      @click="store.moveBlock(page.id, block.record.id, 1)"
+                    >
+                      {{ line.row ? "→" : "↓" }}
+                    </button>
+                  </template>
+                  <button
+                    v-if="store.pages.length > 1"
+                    type="button"
+                    title="Move to another page"
+                    aria-haspopup="menu"
+                    :aria-label="`Move ${block.record.name} to another page`"
+                    @click="openPageMenu($event, block.record)"
+                  >
+                    ⇄
+                  </button>
+                </div>
+              </div>
+            </template>
+            <p v-if="line.row && line.blocks.length === 0" class="block-row__empty">
+              This row is empty.
+            </p>
           </div>
         </div>
       </template>
-      <p v-if="blocks.length === 0" class="editor__empty">This page is empty.</p>
-      <AddBlockRow :page-id="page.id" :position="blocks.length" />
+      <p v-if="lines.length === 0" class="editor__empty">This page is empty.</p>
+      <AddBlockRow :page-id="page.id" :position="lines.length" />
     </main>
 
     <ContextMenu

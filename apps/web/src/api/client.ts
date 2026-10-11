@@ -1,6 +1,7 @@
 import type {
   AppType,
   ActionRunRecord,
+  BlockRowRecord,
   ClickResult,
   DocumentList,
   FolderRecord,
@@ -43,6 +44,7 @@ import type {
 import { hc } from "hono/client";
 
 export type {
+  BlockRowRecord,
   ClickResult,
   FolderRecord,
   MemberRecord,
@@ -250,9 +252,30 @@ export const api = {
   renamePage: (pageId: string, name: string): Promise<Change> =>
     body(routes.pages[":pageId"].$patch({ param: { pageId }, json: { name } })),
 
-  /** Puts the blocks of a page in the order of their ids. */
-  reorderPage: (pageId: string, blocks: string[]): Promise<Change> =>
-    body(routes.pages[":pageId"].order.$put({ param: { pageId }, json: { blocks } })),
+  /** Puts the blocks of a page, and of each of its rows of blocks, in the order of their ids. */
+  reorderPage: (
+    pageId: string,
+    layout: { blocks: string[]; rows: { id: string; blocks: string[] }[] },
+  ): Promise<Change> =>
+    body(routes.pages[":pageId"].order.$put({ param: { pageId }, json: layout })),
+
+  /** Adds an empty row of blocks at an index, defaulting to the end of a page. */
+  createBlockRow: (
+    pageId: string,
+    position?: number,
+  ): Promise<{ blockRow: BlockRowRecord; change: Change }> =>
+    body(routes.pages[":pageId"]["block-rows"].$post({ param: { pageId }, json: { position } })),
+
+  renameBlockRow: (blockRowId: string, name: string): Promise<Change> =>
+    body(routes["block-rows"][":blockRowId"].$patch({ param: { blockRowId }, json: { name } })),
+
+  /** Removes a row of blocks and leaves what it held on the page. */
+  ungroupBlockRow: (blockRowId: string): Promise<Change> =>
+    body(routes["block-rows"][":blockRowId"].ungroup.$post({ param: { blockRowId } })),
+
+  /** Deletes a row of blocks and the tables and views in it. */
+  deleteBlockRow: (blockRowId: string): Promise<Change> =>
+    body(routes["block-rows"][":blockRowId"].$delete({ param: { blockRowId } })),
 
   /** Puts the pages of a spreadsheet in the order of their ids. */
   reorderPages: (spreadsheetId: string, pages: string[]): Promise<Change> =>
@@ -274,11 +297,15 @@ export const api = {
   deletePage: (pageId: string): Promise<Change> =>
     body(routes.pages[":pageId"].$delete({ param: { pageId } })),
 
+  /** Adds a table at an index, defaulting to the end of a page or of one of its rows of blocks. */
   createTable: (
     pageId: string,
     position?: number,
+    blockRowId?: string,
   ): Promise<{ table: StoredTable; change: Change }> =>
-    body(routes.pages[":pageId"].tables.$post({ param: { pageId }, json: { position } })),
+    body(
+      routes.pages[":pageId"].tables.$post({ param: { pageId }, json: { position, blockRowId } }),
+    ),
 
   updateTable: (tableId: string, changes: UpdateTableBody, stepId?: string): Promise<Change> =>
     body(
@@ -375,13 +402,19 @@ export const api = {
       }),
     ),
 
-  /** Adds a view at an index, defaulting to the end of a page. */
+  /** Adds a view at an index, defaulting to the end of a page or of one of its rows of blocks. */
   createView: (
     pageId: string,
     kind: ViewRecord["kind"],
     position?: number,
+    blockRowId?: string,
   ): Promise<{ view: ViewRecord; change: Change }> =>
-    body(routes.pages[":pageId"].views.$post({ param: { pageId }, json: { kind, position } })),
+    body(
+      routes.pages[":pageId"].views.$post({
+        param: { pageId },
+        json: { kind, position, blockRowId },
+      }),
+    ),
 
   updateView: (
     viewId: string,

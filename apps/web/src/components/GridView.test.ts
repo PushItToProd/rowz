@@ -2046,6 +2046,7 @@ describe("row and column headers, and the menu", () => {
         name: "Chart",
         source: "1",
         chartType: "bar",
+        blockRowId: null,
         position: 1,
       },
     ];
