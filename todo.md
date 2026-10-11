@@ -98,6 +98,7 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
   - [ ] **P8** broadcast `instance_num`, `match_mode`, and `match_end` over arrays; only `text` broadcasts today
 - [ ] **P6** reusable function ergonomics: parameter help for user defined functions and better arg-specific errors #formula-language
 - [ ] **P7** formula-checking: "array-aware assertions and explicit approximate numeric comparison" #formula-language
+- [ ] **P9** `TRIMRANGE` and trim references https://techcommunity.microsoft.com/blog/excelblog/announcing-trimrange-and-accompanying-trim-references/4230202
 
 ## Grid editing and navigation
 
