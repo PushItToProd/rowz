@@ -216,29 +216,39 @@ test("deleting a page can be undone immediately with its formulas and formats", 
   await expect(cell(page, "A1").locator(".cell-value")).toHaveCSS("font-weight", "700");
 });
 
-test("a table scrolls under the bars at the top of the page, headers included", async ({
-  page,
-}) => {
-  // A short window, so the table is taller than the room below the bars.
-  await page.setViewportSize({ width: 1280, height: 420 });
-  await newSpreadsheet(page);
-  await page.evaluate(() => {
-    window.scrollTo(0, document.documentElement.scrollHeight);
+for (const frozen of [false, true]) {
+  test(`a table${frozen ? " with frozen rows and columns" : ""} scrolls under the bars at the top of the page`, async ({
+    page,
+  }) => {
+    // A short window, so the table is taller than the room below the bars.
+    await page.setViewportSize({ width: 1280, height: 420 });
+    await newSpreadsheet(page);
+    if (frozen) {
+      const grid = page.getByRole("grid", { name: "Table 1", exact: true });
+      await grid.locator("tbody th").nth(9).click({ button: "right" });
+      await page.getByRole("menuitem", { name: "Freeze up to this row" }).click();
+      await grid.locator("thead th").nth(2).click({ button: "right" });
+      await page.getByRole("menuitem", { name: "Freeze up to this column" }).click();
+      await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
+    }
+    await page.evaluate(() => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+    // The headers and cells that are now at the height of the bars, and what is drawn at each.
+    const drawn = await page.evaluate(() => {
+      const bars = document.querySelector(".editor__chrome")?.getBoundingClientRect();
+      if (!bars) return [];
+      return [...document.querySelectorAll('[data-table="Table 1"] .grid :is(th, td)')]
+        .map((cell) => cell.getBoundingClientRect())
+        .filter((box) => box.top >= bars.top && box.bottom <= bars.bottom)
+        .map(
+          (box) =>
+            document
+              .elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+              ?.closest(".editor__chrome") !== null,
+        );
+    });
+    expect(drawn.length).toBeGreaterThan(0);
+    expect(drawn).not.toContain(false);
   });
-  // The row headers that are now at the height of the bars, and what is drawn at each.
-  const drawn = await page.evaluate(() => {
-    const bars = document.querySelector(".editor__chrome")?.getBoundingClientRect();
-    if (!bars) return [];
-    return [...document.querySelectorAll('[data-table="Table 1"] .grid tbody th')]
-      .map((header) => header.getBoundingClientRect())
-      .filter((box) => box.top >= bars.top && box.bottom <= bars.bottom)
-      .map(
-        (box) =>
-          document
-            .elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
-            ?.closest(".editor__chrome") !== null,
-      );
-  });
-  expect(drawn.length).toBeGreaterThan(0);
-  expect(drawn).not.toContain(false);
-});
+}
