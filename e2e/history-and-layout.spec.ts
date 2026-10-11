@@ -215,3 +215,30 @@ test("deleting a page can be undone immediately with its formulas and formats", 
   await expect(cell(page, "A1")).toHaveText("10");
   await expect(cell(page, "A1").locator(".cell-value")).toHaveCSS("font-weight", "700");
 });
+
+test("a table scrolls under the bars at the top of the page, headers included", async ({
+  page,
+}) => {
+  // A short window, so the table is taller than the room below the bars.
+  await page.setViewportSize({ width: 1280, height: 420 });
+  await newSpreadsheet(page);
+  await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  // The row headers that are now at the height of the bars, and what is drawn at each.
+  const drawn = await page.evaluate(() => {
+    const bars = document.querySelector(".editor__chrome")?.getBoundingClientRect();
+    if (!bars) return [];
+    return [...document.querySelectorAll('[data-table="Table 1"] .grid tbody th')]
+      .map((header) => header.getBoundingClientRect())
+      .filter((box) => box.top >= bars.top && box.bottom <= bars.bottom)
+      .map(
+        (box) =>
+          document
+            .elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+            ?.closest(".editor__chrome") !== null,
+      );
+  });
+  expect(drawn.length).toBeGreaterThan(0);
+  expect(drawn).not.toContain(false);
+});

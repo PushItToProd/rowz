@@ -11,7 +11,6 @@
   --success-soft: #e7f6ec;
   --z-content-raised: 1;
   --z-grid-checkbox: 1;
-  --z-editor-chrome: 2;
   --z-grid-interactive: 2;
   --z-grid-frozen-column: 2;
   --z-grid-frozen-row: 3;
@@ -19,6 +18,8 @@
   --z-grid-frozen-header: 6;
   --z-grid-corner: 7;
   --z-grid-control: 8;
+  /* Above everything in a grid, whose headers would otherwise show over the bars a page scrolls under. */
+  --z-editor-chrome: 10;
   --z-popover: 20;
   --z-menu: 30;
   --z-dialog: 40;
