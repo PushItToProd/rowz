@@ -838,6 +838,8 @@ describe("a row of blocks", () => {
     expect(inside).toEqual(
       expect.arrayContaining(["Move left", "Move right", "Move out of Row 1"]),
     );
+    // Row 1 is the only row, so the block has no other row to move to.
+    expect(inside).not.toContain("Move to row");
     expect(inside).not.toContain("Move up");
     expect(inside).not.toContain("Add table below");
     await bodyFindAll('[role="menuitem"]')
@@ -850,11 +852,16 @@ describe("a row of blocks", () => {
     });
 
     const outside = await menuLabels(wrapper, "Text");
-    expect(outside).toEqual(expect.arrayContaining(["Move up", "Move down", "Move into Row 1"]));
-    await bodyFindAll('[role="menuitem"]')
-      .find((item) => item.text() === "Move into Row 1")!
-      .trigger("click");
-    await flushPromises();
+    expect(outside).toEqual(expect.arrayContaining(["Move up", "Move down", "Move to row"]));
+    expect(outside).not.toContain("Row 1");
+    const choose = async (label: string) => {
+      await bodyFindAll('[role="menuitem"]')
+        .find((item) => item.text() === label)!
+        .trigger("click");
+      await flushPromises();
+    };
+    await choose("Move to row");
+    await choose("Row 1");
     expect(server.reorderPage.mock.lastCall?.[1].rows[0]?.blocks.at(-1)).toBe("v1");
     wrapper.unmount();
   });

@@ -12,7 +12,7 @@ import PageTabs from "../components/PageTabs.vue";
 import ChartCard from "../components/ChartCard.vue";
 import ContextMenu from "../components/ContextMenu.vue";
 import { contextMenuClickGuardKey } from "../components/contextMenuControl";
-import type { MenuItem } from "../components/menu";
+import { submenu, type MenuItem } from "../components/menu";
 import FormatBar from "../components/FormatBar.vue";
 import ErrorsPanel from "../components/ErrorsPanel.vue";
 import FindPanel from "../components/FindPanel.vue";
@@ -676,6 +676,9 @@ const blockMenuItems = computed((): MenuItem[] => {
       candidate.blocks.some((held) => held.record.id === block.record.id),
     );
     const within = line?.row ?? null;
+    // A page can hold many rows and a document many pages, so each list opens beside the menu.
+    const otherRows = [...blockRows.value.values()].filter((target) => target.id !== within?.id);
+    const otherPages = store.pages.filter((candidate) => candidate.id !== props.pageId);
     groups.push([
       ...(within
         ? [
@@ -685,23 +688,33 @@ const blockMenuItems = computed((): MenuItem[] => {
               run: () => void store.moveBlockOutOfRow(pageId, block.record.id),
             },
           ]
-        : [
-            ...moveItems(
-              block.record.id,
-              lines.value.map((candidate) => candidate.id),
-              "page",
+        : moveItems(
+            block.record.id,
+            lines.value.map((candidate) => candidate.id),
+            "page",
+          )),
+      ...(otherRows.length > 0
+        ? [
+            submenu(
+              "Move to row",
+              otherRows.map((target) => ({
+                label: target.name,
+                run: () => void store.moveBlockIntoRow(pageId, block.record.id, target.id),
+              })),
             ),
-            ...[...blockRows.value.values()].map((target) => ({
-              label: `Move into ${target.name}`,
-              run: () => void store.moveBlockIntoRow(pageId, block.record.id, target.id),
-            })),
-          ]),
-      ...store.pages
-        .filter((candidate) => candidate.id !== props.pageId)
-        .map((target) => ({
-          label: `Move to ${target.name}`,
-          run: () => void store.moveBlockToPage(block.record.id, target.id),
-        })),
+          ]
+        : []),
+      ...(otherPages.length > 0
+        ? [
+            submenu(
+              "Move to page",
+              otherPages.map((target) => ({
+                label: target.name,
+                run: () => void store.moveBlockToPage(block.record.id, target.id),
+              })),
+            ),
+          ]
+        : []),
     ]);
     // A row of blocks has its own controls for adding to it.
     if (!within) {

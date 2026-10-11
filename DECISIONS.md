@@ -2,6 +2,14 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-11: A menu lists a page's rows and a document's pages in submenus
+
+A block's menu has **Move to row** and **Move to page**. Each opens a menu beside it that lists the rows of the page or the other pages of the document. A block inside a row has **Move to row** too, listing the other rows, so it moves between rows in one step.
+
+**Why.** With one item per row and per page, a document with many of either made the block's menu too tall to see without scrolling.
+
+**What would reopen it.** Nothing the author named.
+
 ## 2026-10-11: A row of blocks is added with "Add row", and no block has move buttons
 
 The author reviewed the first build of rows of blocks and changed two things.

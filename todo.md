@@ -208,6 +208,7 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
 
 ## Menus, dialogs, and messages
 
+- [ ] **P5** submenus currently are subject to the diagonal submenu hover problem (if the user moves their cursor diagonally and crosses another menu item, the submenu they're moving toward disappears) -- use the safe triangle trick to fix this
 - [ ] **P5** a delete chosen from a menu should be confirmed in or beside the menu, not in a dialog in the middle of the screen: the item changes to "Confirm deletion?", or a small confirmation opens next to it. A second click counts only after a short delay, so an accidental double click does not confirm. Build both forms far enough for the author to choose. Keep the dialog where the confirmation explains what will be lost. See [DECISIONS.md](DECISIONS.md), "Removing a whole container is confirmed, beside the menu" #everyday
   - [ ] confirm deleting a page, which is not confirmed today
   - [ ] replace the centered dialogs that confirm deleting a block (a table, chart, text view, or script) and a row of blocks with a popup beside the menu (`apps/web/src/views/EditorView.vue`)

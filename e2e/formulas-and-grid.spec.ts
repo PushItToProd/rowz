@@ -135,7 +135,7 @@ test("a block moves to another page, formulas follow it, and pages are reordered
   await expect(cell(page, "A1")).toHaveText("10");
 
   // Table 2 goes to Page 2, and the formula that read it now names that page.
-  await chooseBlockAction(page, "Table 2", "Move to Page 2");
+  await chooseBlockAction(page, "Table 2", "Move to page", "Page 2");
   await expect(page.getByRole("status")).toHaveText(/Moved Table 2 to Page 2/);
   await expect(page.locator('[data-table="Table 2"]')).toHaveCount(0);
   await expect(cell(page, "A1")).toHaveText("10");
@@ -145,7 +145,7 @@ test("a block moves to another page, formulas follow it, and pages are reordered
   await pages.getByText("Page 2").click();
   await expect(cell(page, "A1", "Table 2")).toHaveText("5");
   // Page 1 has a table of the same name as the one Page 2 began with.
-  await chooseBlockAction(page, "Table 1", "Move to Page 1");
+  await chooseBlockAction(page, "Table 1", "Move to page", "Page 1");
   await expect(page.getByRole("alert")).toHaveText(/Page 1 already has a table named Table 1/);
   await expect(page.locator('[data-table="Table 1"]')).toBeVisible();
 

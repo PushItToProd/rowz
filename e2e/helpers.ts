@@ -43,14 +43,24 @@ export async function openBlockMenu(page: Page, blockName: string): Promise<Loca
   return menu;
 }
 
-/** Chooses a block action from its ellipsis menu. */
+/**
+ * Chooses a block action from its ellipsis menu. With `choice`, the action
+ * opens a menu of further choices, such as the rows a block can move to, and
+ * `choice` is the one to pick there.
+ */
 export async function chooseBlockAction(
   page: Page,
   blockName: string,
   action: string,
+  choice?: string,
 ): Promise<void> {
   const menu = await openBlockMenu(page, blockName);
   await menu.getByRole("menuitem", { name: action, exact: true }).click();
+  if (choice === undefined) return;
+  await page
+    .getByRole("menu", { name: action, exact: true })
+    .getByRole("menuitem", { name: choice, exact: true })
+    .click();
 }
 
 /** Opens a file chooser from a block menu action and selects a file. */

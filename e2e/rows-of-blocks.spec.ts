@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { chooseBlockAction, enter, newSpreadsheet, reload } from "./helpers";
+import { chooseBlockAction, enter, newSpreadsheet, openBlockMenu, reload } from "./helpers";
 
 /** The left edge and width of a block's card. */
 async function box(page: Page, selector: string) {
@@ -20,7 +20,7 @@ test("a row of blocks shows its blocks side by side, and ungrouping stacks them 
   // One block is added from the row's own controls, and one is moved in from the page.
   await row.getByRole("button", { name: "Add chart", exact: true }).click();
   await expect(row.locator('[data-view="Chart 1"]')).toBeVisible();
-  await chooseBlockAction(page, "Table 1", "Move into Row 1");
+  await chooseBlockAction(page, "Table 1", "Move to row", "Row 1");
   await expect(row.locator('.table-card[data-table="Table 1"]')).toBeVisible();
   await expect(page.locator(".editor[data-saving]")).toHaveCount(0);
 
@@ -163,4 +163,28 @@ test("Escape cancels a drag, and the release that follows renames nothing", asyn
   // A plain click on the name still renames.
   await page.mouse.click(name.x + name.width / 2, name.y + name.height / 2);
   await expect(page.getByLabel("Table name")).toBeVisible();
+});
+
+test("a block moves from one row to another from the submenu of rows", async ({ page }) => {
+  await newSpreadsheet(page);
+  await page.locator('[data-add-block-type="row"]').last().click();
+  await expect(page.getByRole("region", { name: "Row 1" })).toBeVisible();
+  await page.locator('[data-add-block-type="row"]').last().click();
+  const first = page.getByRole("region", { name: "Row 1" });
+  const second = page.getByRole("region", { name: "Row 2" });
+  await expect(second).toBeVisible();
+  await first.getByRole("button", { name: "Add text", exact: true }).click();
+  await expect(first.locator('[data-view="Text 1"]')).toBeVisible();
+
+  // The block's own row is not among the rows it can move to.
+  const menu = await openBlockMenu(page, "Text 1");
+  await menu.getByRole("menuitem", { name: "Move to row", exact: true }).hover();
+  const rows = page.getByRole("menu", { name: "Move to row", exact: true });
+  await expect(rows.getByRole("menuitem")).toHaveText(["Row 2"]);
+  await rows.getByRole("menuitem", { name: "Row 2", exact: true }).click();
+
+  await expect(second.locator('[data-view="Text 1"]')).toBeVisible();
+  await expect(first.getByText("This row is empty.")).toBeVisible();
+  await reload(page);
+  await expect(second.locator('[data-view="Text 1"]')).toBeVisible();
 });

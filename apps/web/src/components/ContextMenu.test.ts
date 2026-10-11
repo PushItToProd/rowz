@@ -3,7 +3,7 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { bodyFindAll, bodyGet } from "../testing/teleported";
 import ContextMenu from "./ContextMenu.vue";
-import type { MenuItem } from "./menu";
+import { submenu, type MenuItem } from "./menu";
 
 let wrapper: VueWrapper;
 
@@ -200,6 +200,81 @@ describe("ContextMenu", () => {
     await menu.trigger("keydown", { key });
     expect(wrapper.emitted("close")).toHaveLength(1);
     expect(first.run).not.toHaveBeenCalled();
+  });
+
+  describe("with a submenu", () => {
+    function nestedItems() {
+      const one = { label: "Row 1", run: vi.fn() };
+      const two = { label: "Row 2", run: vi.fn() };
+      const plain = { label: "Rename", run: vi.fn() };
+      return { one, two, plain, all: [plain, submenu("Move to row", [one, two])] };
+    }
+    const labels = (): string[] => bodyFindAll('[role="menuitem"]').map((item) => item.text());
+    const parent = () =>
+      bodyFindAll('[role="menuitem"]').find((item) => item.text() === "Move to row")!;
+
+    it("shows the item's choices only once the item is chosen, and runs the one picked", async () => {
+      const { one, all } = nestedItems();
+      render(all);
+      await flushPromises();
+      expect(labels()).toEqual(["Rename", "Move to row"]);
+      expect(parent().attributes("aria-expanded")).toBe("false");
+
+      await parent().trigger("click");
+      await flushPromises();
+      expect(wrapper.emitted("close")).toBeUndefined();
+      expect(parent().attributes("aria-expanded")).toBe("true");
+      expect(bodyGet('[role="menu"][aria-label="Move to row"]').exists()).toBe(true);
+      expect(labels()).toEqual(["Rename", "Move to row", "Row 1", "Row 2"]);
+      expect(focused()).toBe("Row 1");
+
+      await bodyFindAll('[role="menuitem"]')[2]!.trigger("click");
+      expect(one.run).toHaveBeenCalledOnce();
+      expect(wrapper.emitted("close")).toHaveLength(1);
+    });
+
+    it("opens with the right arrow, moves within the choices, and goes back with the left arrow or Escape", async () => {
+      const { all } = nestedItems();
+      render(all);
+      await flushPromises();
+      const key = async (name: string) => {
+        (document.activeElement as HTMLElement).dispatchEvent(
+          new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: name }),
+        );
+        await flushPromises();
+      };
+      await key("ArrowDown");
+      expect(focused()).toBe("Move to row");
+      await key("ArrowRight");
+      expect(focused()).toBe("Row 1");
+      await key("ArrowDown");
+      expect(focused()).toBe("Row 2");
+      await key("ArrowDown");
+      expect(focused()).toBe("Row 1");
+      await key("ArrowLeft");
+      expect(focused()).toBe("Move to row");
+      expect(labels()).toEqual(["Rename", "Move to row"]);
+
+      await key("ArrowRight");
+      await key("Escape");
+      expect(focused()).toBe("Move to row");
+      expect(wrapper.emitted("close")).toBeUndefined();
+      await key("Escape");
+      expect(wrapper.emitted("close")).toHaveLength(1);
+    });
+
+    it("stays open for a press inside the choices and closes for one outside both menus", async () => {
+      render(nestedItems().all);
+      await flushPromises();
+      await parent().trigger("click");
+      await flushPromises();
+      bodyFindAll('[role="menuitem"]')[3]!.element.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true }),
+      );
+      expect(wrapper.emitted("close")).toBeUndefined();
+      document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      expect(wrapper.emitted("close")).toHaveLength(1);
+    });
   });
 
   it("cycles Tab through enabled menu buttons and inputs when custom content is open", async () => {

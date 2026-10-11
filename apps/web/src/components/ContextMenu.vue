@@ -20,6 +20,9 @@ const emit = defineEmits<{ close: [] }>();
 const controlGuard = inject(contextMenuClickGuardKey, undefined);
 
 const menu = ref<HTMLElement>();
+/** The menu of further choices that is open beside this one, and the item it belongs to. */
+const nested = ref<HTMLElement>();
+const opened = ref<{ item: MenuItem; left: number; top: number; placed: boolean } | null>(null);
 const position = ref({ left: props.x, top: props.y });
 const positioned = ref(false);
 /** What had focus before the menu opened, which gets it back when the menu closes. */
@@ -31,8 +34,86 @@ let closed = false;
 let focusRestoreAfter: Promise<unknown> | undefined;
 let restoreFocusAfterAction = true;
 
+/** The items that can be chosen in the menu that has focus. */
 function buttons(): HTMLButtonElement[] {
-  return [...(menu.value?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
+  const within = nested.value?.contains(document.activeElement) ? nested.value : menu.value;
+  return [...(within?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
+}
+
+function contains(target: EventTarget | null): boolean {
+  return (
+    target instanceof Node &&
+    [menu.value, nested.value].some((element) => element?.contains(target))
+  );
+}
+
+/** The button of the item whose submenu is open. */
+function openedButton(): HTMLButtonElement | undefined {
+  return menu.value?.querySelector<HTMLButtonElement>('button[aria-expanded="true"]') ?? undefined;
+}
+
+function closeSubmenu(returnFocus = false): void {
+  if (!opened.value) return;
+  const button = openedButton();
+  opened.value = null;
+  if (returnFocus) button?.focus({ preventScroll: true });
+}
+
+/** Opens an item's submenu beside the item, on the side that has room for it. */
+async function openSubmenu(
+  item: MenuItem,
+  button: HTMLElement,
+  focusFirst: boolean,
+): Promise<void> {
+  if (opened.value?.item.label !== item.label)
+    opened.value = { item, left: 0, top: 0, placed: false };
+  await nextTick();
+  placeSubmenu(item, button, focusFirst);
+}
+
+function placeSubmenu(item: MenuItem, button: HTMLElement, focusFirst: boolean): void {
+  const element = nested.value;
+  const state = opened.value;
+  // Another item may have been chosen, or the menu closed, while this one waited to be drawn.
+  if (!element || state?.item.label !== item.label) return;
+  const viewport = viewportBounds();
+  element.style.maxHeight = `${Math.max(0, viewport.height - 8).toString()}px`;
+  element.style.maxWidth = `${Math.max(0, viewport.width - 8).toString()}px`;
+  const anchor = button.getBoundingClientRect();
+  const box = element.getBoundingClientRect();
+  const right = viewport.left + viewport.width - 4;
+  const bottom = viewport.top + viewport.height - 4;
+  const beside = anchor.right + 2;
+  const left = beside + box.width <= right ? beside : anchor.left - box.width - 2;
+  state.left = Math.max(viewport.left + 4, Math.min(left, right - box.width));
+  // The first item sits level with the item that opened the menu.
+  state.top = Math.max(viewport.top + 4, Math.min(anchor.top - 5, bottom - box.height));
+  state.placed = true;
+  if (focusFirst)
+    element.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({
+      preventScroll: true,
+    });
+}
+
+/**
+ * A mouse over an item opens its submenu, and over another item closes the one
+ * that is open. This follows movement, since a menu can open with an item
+ * already under the pointer, which the pointer then never enters.
+ */
+function onItemHover(event: PointerEvent, item: MenuItem): void {
+  if (event.pointerType !== "mouse" || item.disabled) return;
+  if (!item.submenu) closeSubmenu();
+  else if (opened.value?.item.label !== item.label && event.currentTarget instanceof HTMLElement)
+    void openSubmenu(item, event.currentTarget, false);
+}
+
+function viewportBounds(): ViewportBounds {
+  return {
+    left: window.visualViewport?.offsetLeft ?? 0,
+    top: window.visualViewport?.offsetTop ?? 0,
+    width: window.visualViewport?.width ?? window.innerWidth,
+    height: window.visualViewport?.height ?? window.innerHeight,
+  };
 }
 
 function focusItem(step: number): void {
@@ -67,12 +148,9 @@ function cycleTab(event: KeyboardEvent): void {
 function reposition(): void {
   const element = menu.value;
   if (!element) return;
-  const viewport: ViewportBounds = {
-    left: window.visualViewport?.offsetLeft ?? 0,
-    top: window.visualViewport?.offsetTop ?? 0,
-    width: window.visualViewport?.width ?? window.innerWidth,
-    height: window.visualViewport?.height ?? window.innerHeight,
-  };
+  // The submenu was placed against where its item was.
+  closeSubmenu();
+  const viewport = viewportBounds();
   const availableWidth = Math.max(0, viewport.width - 8);
   const availableHeight = Math.max(0, viewport.height - 8);
   element.style.minWidth = `${Math.min(190, availableWidth).toString()}px`;
@@ -88,7 +166,12 @@ function close(): void {
   emit("close");
 }
 
-function choose(item: MenuItem): void {
+function choose(item: MenuItem, event?: MouseEvent): void {
+  if (item.submenu) {
+    if (event?.currentTarget instanceof HTMLElement)
+      void openSubmenu(item, event.currentTarget, true);
+    return;
+  }
   if (!item.keepOpen) {
     restoreFocusAfterAction = item.restoreFocus !== false;
     close();
@@ -129,8 +212,17 @@ function onKeydown(event: KeyboardEvent): void {
   if (event.key === "Tab") {
     if (menu.value?.querySelector("input, select, textarea")) cycleTab(event);
     else close();
-  } else if (event.key === "Escape") close();
-  else if (event.key === "ArrowDown") focusItem(1);
+  } else if (event.key === "Escape" || event.key === "ArrowLeft") {
+    // In a submenu, both go back to the menu it opened from.
+    if (nested.value?.contains(document.activeElement)) closeSubmenu(true);
+    else if (event.key === "Escape") close();
+    else return;
+  } else if (event.key === "ArrowRight") {
+    const focused = document.activeElement;
+    if (!(focused instanceof HTMLButtonElement) || focused.getAttribute("aria-haspopup") !== "menu")
+      return;
+    focused.click();
+  } else if (event.key === "ArrowDown") focusItem(1);
   else if (event.key === "ArrowUp") focusItem(-1);
   else if (event.key === "Home") buttons().at(0)?.focus();
   else if (event.key === "End") buttons().at(-1)?.focus();
@@ -141,12 +233,12 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function onOutside(event: Event): void {
-  if (event.target instanceof Node && menu.value?.contains(event.target)) return;
+  if (contains(event.target)) return;
   close();
 }
 
 function onScrollIntent(event: Event): void {
-  if (event.target instanceof Node && menu.value?.contains(event.target)) return;
+  if (contains(event.target)) return;
   close();
 }
 
@@ -211,6 +303,7 @@ onBeforeUnmount(() => {
       @keydown="onKeydown"
       @click.capture="beforeMenuAction"
       @contextmenu.prevent
+      @scroll="closeSubmenu()"
     >
       <button
         v-for="item in items"
@@ -219,13 +312,49 @@ onBeforeUnmount(() => {
         role="menuitem"
         tabindex="-1"
         :data-formula-field="item.keepDraft ? '' : undefined"
-        :class="{ danger: item.danger, 'context-menu__item--separated': item.separated }"
+        :class="{
+          danger: item.danger,
+          'context-menu__item--separated': item.separated,
+          'context-menu__item--submenu': item.submenu,
+        }"
+        :disabled="item.disabled"
+        :aria-haspopup="item.submenu ? 'menu' : undefined"
+        :aria-expanded="item.submenu ? opened?.item.label === item.label : undefined"
+        @click="choose(item, $event)"
+        @pointermove="onItemHover($event, item)"
+      >
+        {{ item.label }}
+      </button>
+      <slot name="content" />
+    </div>
+    <div
+      v-if="opened"
+      ref="nested"
+      class="context-menu"
+      role="menu"
+      tabindex="-1"
+      :aria-label="opened.item.label"
+      :style="{
+        left: `${opened.left}px`,
+        top: `${opened.top}px`,
+        visibility: opened.placed ? 'visible' : 'hidden',
+      }"
+      @keydown="onKeydown"
+      @click.capture="beforeMenuAction"
+      @contextmenu.prevent
+    >
+      <button
+        v-for="item in opened.item.submenu"
+        :key="item.label"
+        type="button"
+        role="menuitem"
+        tabindex="-1"
+        :class="{ danger: item.danger }"
         :disabled="item.disabled"
         @click="choose(item)"
       >
         {{ item.label }}
       </button>
-      <slot name="content" />
     </div>
   </Teleport>
 </template>

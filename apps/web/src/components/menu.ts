@@ -13,7 +13,14 @@ export interface MenuItem {
   keepDraft?: boolean;
   /** Draws a line above this item, to set a group apart. */
   separated?: boolean;
+  /** The items of a menu that opens beside this one. Choosing the item opens it and does not run it. */
+  submenu?: readonly MenuItem[];
   run(): MaybePromise<void>;
+}
+
+/** An item that opens a menu of further choices, for a list too long to put in the menu itself. */
+export function submenu(label: string, items: readonly MenuItem[]): MenuItem {
+  return { label, submenu: items, run: () => undefined };
 }
 
 /**

@@ -38,6 +38,24 @@
   padding-top: 8px;
 }
 
+/* An item that opens a menu of further choices beside this one. */
+.context-menu .context-menu__item--submenu {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.context-menu .context-menu__item--submenu::after {
+  color: var(--muted);
+  /* The empty alternative text keeps the mark out of the item's name for a screen reader. */
+  content: "›" / "";
+}
+
+.context-menu .context-menu__item--submenu[aria-expanded="true"] {
+  background: var(--canvas);
+}
+
 .context-menu__custom {
   display: grid;
   gap: 5px;

@@ -26,10 +26,10 @@ The author chose the storage ([DECISIONS.md](DECISIONS.md), "A row of blocks is 
 **Choices.**
 
 - **Error messages and the undo label say "row of blocks",** because "row" alone could mean a table's row there. A row's own name (`Row 1`) and its menu say "row", because the thing in view settles the meaning.
-- **A row has a name and a header.** The header holds the name, the buttons that add a block to the row, and the ellipsis for its menu. A row needs a visible button for its menu, and the name is what the menus of other blocks call it ("Move into Row 1").
+- **A row has a name and a header.** The header holds the name, the buttons that add a block to the row, and the ellipsis for its menu. A row needs a visible button for its menu, and the name is what the menus of other blocks call it.
 - **The blocks of a row share its width equally,** and stack on a screen 640px wide or narrower.
 - **A row holds tables, charts, text views, and scripts, and no rows.**
-- **A block gets into a row from its own menu** ("Move into Row 1", listed for each row on the page) or by being added from the row's header. "Move out of Row 1" puts it on the page below the row. Inside a row the move items read "Move left" and "Move right".
+- **A block gets into a row from its own menu** or by being added from the row's header. "Move out of Row 1" puts it on the page below the row. Inside a row the move items read "Move left" and "Move right".
 - **A row has two ways to go.** "Ungroup" removes the row and leaves its blocks in its place. "Delete row and its blocks" deletes them too, after a dialog that names them, and keeps a version first. An empty row offers only "Delete row", which is also confirmed.
 - **A row and each block in it count toward the 50 blocks a page can hold.**
 - **A block moved to another page leaves its row** and goes to the end of that page, as any block does.
