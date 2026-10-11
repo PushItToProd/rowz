@@ -82,6 +82,10 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
 - [ ] **Author** (Claude) review the smaller candidates left in [docs/rows-functions.md](docs/rows-functions.md) and determine which to include (previously marked `[/]`, an undefined status).
 - [ ] **P6** the reference functions `OFFSET`, `INDIRECT`, `ADDRESS`, `ISFORMULA`, `ISREF` #formula-language (plan: plans/reference-functions.md)
 - [ ] **P7** random numbers #formula-language
+- [ ] **P8** explore adopting Excel's `[@Price]` for the cell of the formula's own row, where rowz writes a bare `[Price]`. The author finds the `@` form less ambiguous. [plans/function-suite-design-review.md](plans/function-suite-design-review.md) argues for keeping the bare form and discusses the spelling `@[Price]`. Plan before implementing: decide whether the bare form stays valid and how stored formulas are rewritten. #formula-language
+- [ ] **P11** slice syntax in the formula language, such as `SORT(x, 2)[:10]` for `TAKE(SORT(x, 2), 10)`. It works wherever a formula does, and is not a template feature. Plan before implementing: `[` already opens a structured reference such as `Sales[Price]`. #formula-language
+- [ ] **P7** (Claude) `QUERY` refuses the `matches` operator: `packages/engine/src/query.ts` throws "MATCHES is not supported". It was refused because the engine had no regular expression engine with a time bound. `packages/engine/src/regex.ts` now provides one, so `matches` can use it as `REGEXMATCH` does. #formula-language
+- [ ] **P8** (Claude) `YEARFRAC` with a basis outside 0 to 4 returns `#VALUE!` (`yearFraction` in `packages/engine/src/functions/dates.ts`). Excel returns `#NUM!`. The function was written before the engine had a `#NUM!` code. Decide whether it should match Excel, and check the other date helpers for the same substitution. #formula-language
 - [ ] **Hold** consider resolving an ambiguous bare word by nearness: a name in the formula's own table or script first, then names and tables on the formula's page. The author considers this dangerous and has not decided to do it. If it is done, every use of a word with more than one meaning in the document is marked with a yellow wavy underline. See [DECISIONS.md](DECISIONS.md), "An ambiguous name is an error" #formula-language
 - [ ] **Hold** consider having a rename qualify the bare words it would make ambiguous. Renaming the name `Y` to `X` while a table `X` exists would first rewrite each bare `X` to `'Page 1'!X` #formula-language
 - [ ] **Hold** (Claude) consider Excel's structured references for parts of a data table: `Sales[#Data]`, `Sales[#Headers]`, and `Sales[#All]`. The bare table name already means the data rows (see [plans/names-and-scripts.md](plans/names-and-scripts.md)) #formula-language
@@ -121,6 +125,9 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
 - [ ] support chart formulas in tables
   - [ ] **P7** `SPARKLINE` for a single cell #charts
   - [ ] **P7** `PIE_CHART`, `LINE_CHART`, etc. (implement after merging cells is done so the user can merge however many cells they want to show this) #charts
+- [ ] **P7** a chart block whose formula returns something other than data shows an error. Today a button, a control, or any other single value is charted as one cell (`data` in `apps/web/src/components/ChartCard.vue`). #charts
+  - [ ] **Author** decide the chart-function case. `=PIE_CHART(...)` in a chart block draws the function's rows with the block's own kind and ignores the function's kind and title. It could be an error, or the function's kind and title could win.
+- [ ] **P15** consider letting a formula read a chart block's data by the chart's name, as it reads a named range. Charts would then need names that are unique on their page, as scripts have. #charts
 - [ ] **P7** chart options: #charts
   - [ ] axis titles
   - [ ] stacked bars
@@ -197,6 +204,7 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
 - [ ] **P5** a command palette that lists every action, and a form dialog for an action that needs parameters (Tab between fields, Enter submits, Escape cancels). These are how a feature becomes usable from the keyboard without a shortcut of its own. Plan a shared command registry and keybinding table as part of this work; see [planning notes](plans/commands-navigation-and-macros.md). (Claude) #everyday
 - [ ] **P5** replace every native `<select>` with a shared in-app dropdown ([audit](docs/native-browser-ui-audit.md), priority 2), then add a lint rule that refuses `<select>` in `apps/web` #everyday
 - [ ] **P6** replace native `title` tooltips with an in-app tooltip ([audit](docs/native-browser-ui-audit.md), priority 3), then add a lint rule that refuses the `title` attribute in `apps/web` #everyday
+  - [ ] (Claude) a cell with the Wrap text format shows its full value in a `title` tooltip (`wrappedTitle` in `apps/web/src/components/CellView.vue`). It was added after the audit, which does not list it. The author decided to keep showing the full value on hover, in the in-app tooltip.
 - [ ] **P6** keep a history of recent messages and errors, so a notice that closed can be read again #everyday
 - [ ] **P7** tabs along the top of a context menu for the menus of the things that contain the clicked one: a right-click on a cell shows Cell, Row, Column, Table, and Page, and choosing one shows that thing's menu. Each menu then holds one thing's actions. Plan before implementing. The author will decide whether to keep it after seeing it in use. See [docs/design/ui.md](docs/design/ui.md) #everyday
 
@@ -214,6 +222,7 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
   - [ ] **P8** a combined date and time picker #small-apps
   - [ ] **P8** a slider input for picking a value from a range #small-apps
   - [ ] **P8** a numeric value input roughly like (don't use this as a literal template; make it nicer) "<button>-</button> <input value="100"> <button>+</button>" where you can increment and decrement the value using the -/+ buttons (but also still support editing the number directly) #small-apps
+- [ ] **P7** a cell of a typed column that holds an entry of the wrong kind shows `#VALUE!` in place of the entry. Show what was typed or pasted and mark the cell as an error, so the wrong value can be read and corrected. #data-tables
 - [ ] **P6** cell validation - require the value to match a pattern, regex, or custom formula #data-tables
 - [ ] **P6** touch: select a range, fill by dragging, and a long-press menu on Android+iOS #everyday
 - [ ] **P8** allow users to create and reuse their own document templates #documents
@@ -249,6 +258,7 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
   - (author) comments are also a way to give feedback to an AI agent on a document it created or edited, which makes them useful to one person
 
 - [ ] **P1** add a trash bin for deleted docs instead of nuking them right away #documents
+- [ ] **P11** (Claude) the browser still sends a starting `revision` with formula writes, and the request schemas accept it "for older clients" (`writtenAt` in `packages/shared/src/index.ts`). The server ignores it since parallel editing became last submitter wins. Stop sending it and remove it from the schemas. #codebase
 
 ## Accounts and email
 

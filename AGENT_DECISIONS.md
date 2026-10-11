@@ -2,14 +2,6 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
-## 2026-10-08: Lazy AND and OR functions
-
-**Choice.** Evaluate `AND` and `OR` arguments from left to right and stop when a collected Boolean decides the result. Treat each range or array as one evaluated argument: its existing collector processes every cell, including errors, before the function can continue. Keep `AND` and `OR` callable as built-in values; higher-order functions call them with already evaluated values. `ALL` and `ANY` use the old eager collection behavior. The dependency index continues to include references in skipped arguments.
-
-**Why.** This preserves the old coercion, range, array, and error behavior for every evaluated argument while allowing a later argument's formula to remain unevaluated. `referencesOf` already scans every non-action function argument, and the dependency test checks that a changed reference in a skipped argument invalidates the formula.
-
-**To change.** Update `shortCircuit` in `packages/engine/src/functions/logic.ts` and its tests in `packages/engine/src/boolean-operators.test.ts`.
-
 ## 2026-10-08: Consistent CSV formula warnings
 
 **Choice.** Use one warning sentence in both CSV replacement and append confirmations.
@@ -325,43 +317,6 @@ A version is skipped when nothing changed since the last one.
 
 **To change.** Rules: `packages/engine/src/formats.ts`. Display: `apps/web/src/formatStyle.ts` and `FormatBar.vue`.
 
-## 2026-10-01: Data tables: named, typed, and formula columns
-
-**Decision.** A data table is an ordinary table whose columns have been given names. It is not a separate kind of page item. **Name columns** converts a table, optionally taking the names from its first row, and **Remove column names** converts it back. Everything a table could already do still works: cell addresses, fill, paste, CSV, charts.
-
-**References.**
-
-| Written                                 | Means                                                               |
-| --------------------------------------- | ------------------------------------------------------------------- |
-| `[Price]`                               | The Price cell of the formula's own row, in the formula's own table |
-| `Sales[Price]`, `'Table 1'[Unit price]` | The whole Price column of that table on the formula's page          |
-| `'Page 2'!Sales[Price]`                 | The same on another page                                            |
-
-Your todo item gave `'Table 1'[Column Name]`. I added the bare `[Price]` form for "this row", because a formula column needs a way to say it and `'Table 1'[Price]` is the whole column. Excel writes this row as `[@Price]`. Here a bare `[Price]` could not sensibly mean anything else, so the `@` is left out. As an operand of an operator, `Sales[Price]` means this row's cell, the same rule as `A:A`.
-
-**Column types.** Anything (the default: what is typed is read as in any cell), Text, Number, Date, Checkbox, and Formula.
-
-- **A typed column shows `#VALUE!` for an entry of the wrong kind** and keeps what was typed. The alternative was to refuse the entry. Keeping it means a paste or an import never loses data, and changing a column's type back shows the values again.
-- **A formula column holds one formula for every row.** The formula is stored on the column, not in cells. Typing a formula into any cell of the column changes it for the whole column. Typing something that is not a formula is refused with a message, so a stray keystroke cannot replace the column.
-- **A formula column computes only in rows that hold something.** A table here has a fixed number of rows, most of them empty at the end. Without this rule `=[Price] * [Qty]` would show a column of zeros below the data, and `SUM(Sales[Total] + 1)` would count the empty rows.
-- **A column that becomes a formula column loses what was typed into it.** The change is made from a menu and names the column, and stored cells that nothing shows would otherwise come back as a surprise in exports.
-
-**Choices.**
-
-- **Row 1 is the first row of data.** With names taken from the first row, that row is deleted and formulas are rewritten as for any deleted row. `A1` then names the first data cell.
-- **Column names are unique within a table, ignoring case,** and cannot contain `[` or `]`.
-- **Renaming a column rewrites every formula that names it:** in cells, in charts and text views, and in formula columns of any table. A formula that names a deleted column keeps its text and shows `#REF!`.
-- **The formula for a formula column is asked for with the browser's prompt box.** It is the one place the app uses `prompt`. After that the formula is edited in the formula bar like any other.
-
-**Not done.**
-
-- Sorting and filtering a data table in place. `QUERY`, `SORT`, and `FILTER` over `Sales[...]` columns give sorted and filtered copies.
-- Dropdown (choice) columns, and number formats per column.
-- `QUERY(Sales, ...)` over a whole data table by name, with its column names as headers. A query currently needs a range, and a data table has no header row inside the range.
-- Showing only the rows that hold data. The table still shows its empty rows.
-
-**To change.** References: `packages/engine/src/ast.ts`, `parser.ts`. Typed and formula columns: `applyColumns` and `parseTyped` in `workbook.ts`. Server: `nameColumns` and `updateColumn` in `apps/server/src/repo/spreadsheets.ts`.
-
 ## 2026-10-01: Phone-width layout and touch
 
 **Decision.** The app is usable on a phone. Below 640px the headers wrap, the back link is an arrow, page tabs scroll sideways, and table cards put their buttons under the name. On a touch device rows and buttons are taller, and inputs are 16px so iOS does not zoom when one takes focus.
@@ -451,45 +406,6 @@ Your todo item gave `'Table 1'[Column Name]`. I added the bare `[Price]` form fo
 - **Hashes.** Browser hashing is asynchronous and the engine is synchronous.
 
 **Next from that list:** `UPDATE` and `OVERWRITE`, then scheduled actions. `QUERY` has since been added.
-
-## 2026-09-30: Charts and text views
-
-**Decision.** A page holds three kinds of item: tables, charts, and text views. A chart or text view is a row in a `views` table with a `source`: the data formula for a chart, the Markdown template for a text view. Views and tables share one ordering on the page.
-
-**Template syntax.** Your Jinja-style example, with these tags:
-
-| Tag                                                | Meaning                                                 |
-| -------------------------------------------------- | ------------------------------------------------------- |
-| `{{ expression }}`                                 | The value of a formula, written without the leading `=` |
-| `{% let name = expression %}`                      | Names a value                                           |
-| `{% for a, b in expression %} ... {% end %}`       | Once per row, naming the row's cells                    |
-| `{% if expression %} ... {% else %} ... {% end %}` | Conditional                                             |
-| `{# ... #}`                                        | Comment                                                 |
-
-`{% endfor %}` and `{% endif %}` are accepted for `{% end %}`. I kept Jinja over JSX-style tags because the expressions inside the tags are the app's own formulas, and the tag delimiters do not collide with Markdown or with formula syntax.
-
-**Differences from your example.**
-
-- **No slice syntax.** `SORT(x, 2)[:10]` is written `TAKE(SORT(x, 2), 10)`. The formula language already has `TAKE` and `DROP`, and a second way to say it would exist only inside templates.
-- **Chart functions are ordinary functions:** `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, `SCATTER_CHART`. They work in a cell too, where they show as a chip, because a cell has no room to draw one. Function names ignore case, so `pie_chart(...)` works.
-- **`${{ amount }}` works** and shows a dollar sign followed by the value. For a fixed number of decimals, write `{{ TEXT(amount, "$#,##0.00") }}`.
-
-**Choices.**
-
-- **A formula on a page must name its table.** `A1` alone is `#REF!` in a chart or text view. A page can hold several tables, so there is no table for a bare address to mean. The alternative was to let a bare address mean the first table on the page, which would silently change meaning when tables are reordered.
-- **What `{{ }}` shows depends on the value:** one value goes into the sentence, a range becomes a table, a chart is drawn.
-- **Values are escaped.** A cell holding `**bold**` or `<script>` shows those characters. Raw HTML in the template itself is also shown as text. A view can be written by one person and read by another, so nothing a view or cell contains can become markup or script.
-- **An error in a formula shows in place** as `#DIV/0!` and the rest of the view still renders. A malformed tag replaces the view with one message naming the line.
-- **A `for` loop stops at 10,000 repetitions** across the view, with a message, so `A:A` over a large table cannot hang the page.
-- **Renames and row or column edits rewrite view sources** the same way they rewrite cell formulas.
-- **Two views may share a name.** Nothing refers to a view by name.
-- **Charts are drawn as SVG by the app's own code,** about 300 lines, with no chart library. The four kinds asked for did not justify a dependency, and the drawing is testable as plain DOM. If charts grow (stacking, axes titles, tooltips, zoom), switching to a library is the better path.
-- **A standalone chart item takes its kind from the dropdown.** If its data formula is itself a chart function, the dropdown still decides the kind.
-- **Views do not act.** A `BUTTON` in a text view shows its label as text. Buttons run from cells because the server derives an action from a stored cell.
-
-**Not done.** Dragging items to reorder them. Data tables with named, typed columns are still on the todo list.
-
-**To change.** The template engine is `packages/engine/src/template.ts`. Rewriting of sources is `packages/engine/src/views.ts`. Drawing is `apps/web/src/components/ChartView.vue` with the arithmetic in `apps/web/src/charts/geometry.ts`.
 
 ## 2026-09-30: Dates
 
@@ -615,23 +531,6 @@ Together they make a form: inputs, a Save button that appends to a log table and
 - Functions that return several values (`FILTER`, `SORT`, `UNIQUE`) wait for array results.
 - Dates are not started. There is no date value yet, so `TODAY` and date arithmetic need their own design.
 
-## 2026-09-30: Deleting and inserting rows and columns
-
-**Decision.** A row or column anywhere in a table can be deleted, and one can be inserted before any row or column. The todo item asked only for deleting. Inserting uses the same code, so both shipped.
-
-**How it behaves.**
-
-- Cells past the edit move by one. Formulas anywhere in the spreadsheet that read the table are rewritten to keep reading the same cells.
-- A range shrinks when a row inside it is deleted and grows when one is inserted inside it. A formula that named a deleted cell gets `#REF!` in place of the reference.
-- The controls act on the selected cell's row and column. Deleting asks for confirmation only when the row or column holds something.
-- A table keeps at least one row and one column.
-
-**Why the engine computes it.** The engine function `inputsAfterEdit` takes the workbook and the edit and returns the cell writes. The server applies them in one transaction with the table's new size and returns them, and the browser applies the same list. Shifting rows in SQL would be faster for a large table but would put the rewriting rules in two places.
-
-**Known cost.** Every moved cell is rewritten in the database. Deleting row 1 of a full 1000 by 100 table writes about 100,000 cells.
-
-**To change.** `moveSpan` in `packages/engine/src/rewrite.ts` holds the range rules.
-
 ## 2026-09-30: Open-sided ranges
 
 **Decision.** A corner of a range may leave out its row or its column. `A:A` and `A:C` are whole columns, `2:2` and `2:5` are whole rows, `A2:A` runs from A2 to the bottom of the table, and `A1:4` covers rows 1 to 4 from column A to the last column. A reference that is not a range still needs both parts.
@@ -680,23 +579,6 @@ Together they make a form: inputs, a Save button that appends to a log table and
 - The server refuses a name that reads as a cell address, a value, or a function, and a name a table already lists. It does not check that a formula parses; the panel shows the error as the value, as a script does.
 
 **To change.** `setTableNames` in `apps/server/src/repo/spreadsheets.ts` and `setTableNamesBody` in `packages/shared/src/index.ts`.
-
-## 2026-10-02: Sort and filter
-
-**Decision.**
-
-- A sorted table re-sorts as its cells change. A row moves as soon as an edit changes its sort key.
-- A row for which the filter formula gives an error stays shown, and the filter bar shows the first error.
-- The server refuses a new or changed filter that was written before the last rewrite of references, as it does for any formula. Clearing a filter or changing only the sort carries no new formula and is never refused.
-- Formatting more than one row is refused while the table is sorted or filtered, because a format rule covers a run of stored rows. One row and whole columns work, and a selection is a whole column only while the filter hides no rows.
-- Inserting a row above or below is disabled while the table is sorted or filtered. The strip that adds a row at the end still works.
-- CSV export writes the rows in stored order, whatever is shown, and leaves out empty rows and columns at the end.
-- A filter is stored with its leading `=`, and the server adds it when the text lacks one.
-- A filter that names a column that has been deleted keeps its text and shows an error in the filter bar. Rewriting leaves `[Column]` references alone when a column is deleted, as it does for formula columns.
-
-**Why.** Each keeps the display settings from changing stored data. An error that hides every row would make a typo in a filter look like data loss.
-
-**To change.** `displayRows` in `packages/engine/src/display.ts`, `Workbook.filterRows`, `rowViews` in the workbook store, and `setTableDisplay` in `apps/server/src/repo/spreadsheets.ts`.
 
 ## 2026-10-02: Dropdown columns
 
@@ -829,18 +711,6 @@ Ordinary keyboard character input uses `EditorState.replaceSelection` from `befo
 ## Regex engine
 
 **Choice.** `REGEXMATCH`, `REGEXEXTRACT`, and `REGEXREPLACE` run on an in-engine Thompson NFA simulation with step, pattern-length, and output limits instead of JavaScript `RegExp`, which would backtrack catastrophically and the engine takes no dependencies. Backreferences and lookaround are unsupported.
-
-## Windowed grid row heights
-
-**Choice.** Clip cell values to the configured row height, including Markdown with hard line breaks. Fixed row geometry keeps spacer heights and keyboard scrolling independent of which columns are mounted. Users can resize a row to reveal more content.
-
-**Cost.** Content no longer expands a row automatically. Resize a row to reveal more content.
-
-## 2026-10-07: Wrapped cell text keeps fixed row geometry
-
-**Choice.** Wrapped text is clipped to the cell's configured row height with a line-clamp ellipsis. Hovering the cell shows the full value. Wrapping does not change the windowed grid's row offsets.
-
-**Cost.** A row shows only as many lines as its height permits; resize it to show more.
 
 - `MROUND` with a nonzero value and multiple of opposite signs returns a new `#NUM!` error, as Excel and Sheets do. The engine had no `#NUM!` code, so the change adds it to the error codes, the help page's error list, and the cell error label. `FLOOR` and `CEILING` keep their previous behavior for opposite signs.
 

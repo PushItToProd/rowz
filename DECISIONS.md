@@ -2,6 +2,86 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-10: How data tables, column references, and column types work for now
+
+The author reviewed the choices an agent made when data tables were built, and accepted them as how rowz works today. Three of them are expected to change.
+
+- **A data table is an ordinary table whose columns have names.** Name columns converts a table, optionally taking the names from its first row, and Remove column names converts it back. The author accepts this for now and would like a data table to become its own kind of block later.
+- **A bare `[Price]` means the Price cell of the formula's own row,** in the formula's own table. `Sales[Price]` is the whole column of that table on the formula's page, and `'Page 2'!Sales[Price]` is the same on another page. The author finds Excel's `[@Price]` less ambiguous for the row's own cell, and `todo.md` has an item to explore adopting it.
+- **`Sales[Price]` as an operand of an operator means this row's cell,** the rule `A:A` follows. As a function argument it is the whole column.
+- **A typed column shows `#VALUE!` for an entry of the wrong kind and keeps what was typed.** A paste or an import then loses nothing, and changing the column's type back shows the values again. The author wants the cell to show the entry itself with a mark that it is wrong, so that it can be read and corrected, and `todo.md` has the item.
+- **Typing a formula into any cell of a formula column changes it for every row.** Anything that is not a formula is refused there with a message.
+- **A column that becomes a formula column loses what was typed into it.** The app asks first and says the stored inputs will be removed. The author accepts the loss as long as that warning stays.
+- **Row 1 is the first row of data.** When names are taken from the first row, that row is deleted and formulas are rewritten as for any deleted row.
+- **Column names are unique within a table, ignoring case,** and cannot contain `[` or `]`.
+- **A formula that names a deleted column keeps its text and shows `#REF!`.**
+
+**What would reopen it.** Work on data tables as their own kind of block, or a decision on `[@Price]`.
+
+## 2026-10-10: How a sorted or filtered table behaves
+
+The author reviewed the details an agent chose when sort and filter were built, and confirmed these. The entry of 2026-10-02, "Sorting, filtering, choices, and conditional formats", sets the model they follow: sort and filter are display settings, and stored row order does not change.
+
+- **A sorted table re-sorts as its cells change.** A row moves as soon as an edit changes its sort key.
+- **A row whose filter formula gives an error stays shown,** and the filter bar shows the first error. A typo in a filter that hid every row would look like data loss.
+- **Formatting more than one row is refused while the table is sorted or filtered.** A format rule covers a run of stored rows, and the rows shown are not a run. One row works, and so do whole columns. A selection counts as a whole column only while the filter hides no rows.
+- **Inserting a row above or below is disabled while the table is sorted or filtered.** The strip that adds a row at the end still works.
+- **CSV export writes the rows in stored order, whatever is shown,** and leaves out empty rows and columns at the end.
+- **A filter is stored with its leading `=`.** The server adds one when the text lacks it.
+- **A filter that names a deleted column keeps its text and shows an error in the filter bar.** Deleting a column leaves `[Column]` references alone, as it does in a formula column.
+
+**What would reopen it.** Rows that jump away during editing often enough to be a nuisance. A sort would then hold its order until reapplied.
+
+## 2026-10-10: Deleting and inserting rows and columns rewrites the formulas that read them
+
+The author reviewed the choices an agent made when row and column edits were built, and confirmed these.
+
+- **A row or column can be inserted as well as deleted,** anywhere in a table. The request was for deleting, and inserting uses the same code.
+- **Formulas keep reading the same cells.** A formula anywhere in the document that reads the edited table is rewritten.
+- **A range shrinks when a row or column inside it is deleted,** including one at its edge. When every row or column of a range is deleted, the reference becomes `#REF!`, as does a reference to a single deleted cell. Excel does the same. How a range grows on an insert is the entry of 2026-10-05, "A row or column added from inside a range joins it".
+- **A plain table keeps at least one row, and any table keeps at least one column.** A data table can lose every row.
+- **The engine computes the rewrite.** The server applies it in the transaction that makes the edit and returns the changed formulas for the browser to apply. The rewriting rules then live in one place, `packages/engine/src/rewrite.ts`.
+
+**What would reopen it.** A structural edit whose rewrite surprises in use.
+
+## 2026-10-10: Text view templates and chart functions
+
+The author reviewed the choices agents made when charts and text views were built, and confirmed these.
+
+- **Template tags follow Jinja.** `{{ expression }}` shows a formula's value, written without the leading `=`. `{% let name = expression %}` names a value. `{% for a, b in expression %} ... {% end %}` repeats once per row. `{% if expression %} ... {% else %} ... {% end %}` chooses. `{# ... #}` is a comment. `{% endfor %}` and `{% endif %}` are accepted for `{% end %}`. The delimiters collide with neither Markdown nor formula syntax.
+- **A formula in a chart or text view names its table.** A bare `A1` is `#REF!` there. A page can hold several tables, so a bare address has more than one possible meaning, and rowz treats ambiguity as an error.
+- **What `{{ }}` shows depends on the value:** one value goes into the sentence, a range becomes a table, and a chart is drawn.
+- **Values are escaped, and raw HTML in a template shows as text.** One person can write a view that another reads, so nothing a view or a cell holds becomes markup or script. A value made with `MARKDOWN` is the exception.
+- **An error in a formula shows in place,** and the rest of the view renders. A malformed tag replaces the view with one message that names the line. Rendering around a malformed tag can be added if the single message proves a nuisance.
+- **A `for` loop stops at 10,000 repetitions across a view,** with a message, so a loop over a large table cannot hang the page.
+- **Chart functions are ordinary functions:** `BAR_CHART`, `LINE_CHART`, `PIE_CHART`, and `SCATTER_CHART`. In a cell a chart shows as a chip. The chip is accepted for now, and `todo.md` has an item to draw charts in cells.
+
+**Slicing belongs to the formula language.** The author's template example wrote `SORT(x, 2)[:10]`. An agent declined to add slicing to templates and gave `TAKE(SORT(x, 2), 10)` as the way to write it. The author rejected that reading: slice syntax is wanted in the formula language itself, where it would work in a cell as well as a template. It is not scheduled, and `TAKE` and `DROP` cover it until then.
+
+**Not decided.** What a chart block does when its formula returns something other than data. Today the block's own chart kind decides the drawing. When the formula is a chart function, the block draws that chart's rows and ignores its kind and title. Any other single value, including a button, is charted as one cell. The author leans toward an error for a value that is not data, and has not decided the chart-function case.
+
+**What would reopen it.** A template feature that the Jinja tags cannot express.
+
+## 2026-10-10: A row keeps its set height whatever its cells hold
+
+**Decision.** A cell's content never changes the height of its row. A value taller than the row is clipped to it, including Markdown with line breaks. A cell with the Wrap text format shows as many lines as fit and ends the last with an ellipsis. Hovering a wrapped cell shows its full value. A person resizes the row to show more.
+
+**Why.** The grid draws only the rows in view and places them from their stored heights. A row that grew with its content would have to be measured before the rows after it could be placed, and scrolling by keyboard would depend on which cells were drawn. The author accepted this as a reasonable simplification.
+
+**What this costs.** Excel and Sheets grow a row to fit wrapped text unless its height was set by hand. Here a long wrapped value stays clipped until the row is resized.
+
+**What would reopen it.** Wrapped text that is clipped often enough to be a nuisance. Rows would then be measured as they are drawn.
+
+## 2026-10-10: `AND` and `OR` stop at the first argument that decides the result
+
+**Decision.** The `AND` and `OR` functions and the `and` and `or` operators evaluate their arguments from left to right and stop when one decides the result. `OR(TRUE, 1/0)` is `TRUE`, and `B1 <> 0 and A1 / B1 > 2` is a usable guard. A range or array is one argument: every cell of it is read, and an error in it is the result. `ALL` and `ANY` evaluate every argument and return an error found in any of them.
+
+A formula still depends on the references in an argument that was skipped, so a change to one of them recalculates the formula. `AND` and `OR` can still be passed as function values. A higher-order function calls them with values it has already evaluated.
+
+**Why.** A guard needs the later argument left unevaluated when the earlier one fails. Excel's and Sheets' `AND` and `OR` evaluate everything, so this is a deliberate difference from both. `ALL` and `ANY` keep that behavior for a formula that wants an error anywhere to show.
+
+**What would reopen it.** Formulas brought from Excel or Sheets that relied on `AND` or `OR` to report an error in a later argument.
+
 ## 2026-10-08: A click renames only where it has no more important job
 
 **Decision.** One click renames a name only where a click on it has nothing more important to do. This narrows the entry of 2026-10-07, "A name opens for editing on one click": the document's name there is the name shown in the editor, not the document's entry in the document list. In the document list, a click on a document opens it, and Rename is in the document's menu.
@@ -236,14 +316,14 @@ A delete chosen from a menu is confirmed in or beside that menu: the item change
 
 Four decisions shape how a data table is shown.
 
-- **One filter formula per table**, such as `=[Payout] > 60000`. It is written in the table, so `[Column]` means the row's own cell, as in a formula column.
+- **A filter is one formula, not a set of per-column filters.** A table's filter is written as a single formula such as `=[Payout] > 60000`, where Excel and Sheets attach a separate filter to each column. It is written in the table, so `[Column]` means the row's own cell, as in a formula column. This is about how one filter is expressed. It does not limit a table to one saved filter: saved sort and filter presets for a table are wanted and are in `todo.md`.
 - **A selection is a rectangle of the rows shown.** While a table is sorted or filtered, copy, clear, fill, paste, and delete act on those rows.
 - **A dropdown column takes its choices from a list on the column, or from a column of another data table.**
 - **A conditional format tests the cell's own value** with a `COUNTIF`-style criterion, or shades a range with a two-color scale.
 
 Sort and filter are display settings stored on the table. The stored row order does not change, so a position such as `A2` reads the same cell under any sort or filter.
 
-**What would reopen it.** A filter that is several conditions the person edits separately, a conditional format that reads other cells, or a view of one table with its own sort and filter.
+**What would reopen it.** A filter that is several conditions the person edits separately, or a conditional format that reads other cells.
 
 ## 2026-10-02: An ambiguous name is an error
 
