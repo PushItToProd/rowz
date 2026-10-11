@@ -2,6 +2,21 @@
 
 Decisions the author made or approved. Each entry says what was decided, why, and what would reopen it. Newest first. Choices agents made on their own are in [AGENT_DECISIONS.md](AGENT_DECISIONS.md).
 
+## 2026-10-11: Blocks and rows of blocks are dragged by their headers
+
+The author asked for blocks and rows of blocks to be rearranged by dragging. An agent chose how, and the author reviewed these choices on 2026-10-11 and accepted them.
+
+- **The header is the handle.** A press anywhere on a block's or a row's header that is not a button starts a drag once the pointer has moved 6px. A press that does not move stays a click, so a click on the name still renames it. The pointer over a header is a grab hand.
+- **A bar shows the gap the block will go to,** and the block being dragged dims in place. Nothing moves until the release.
+- **Over the blocks of a row, a block goes into that row,** at the gap nearest the pointer. Anywhere else, including a row's header, it goes between the lines of the page. A row dragged over another row stays on the page, since a row holds no rows.
+- **Escape cancels.** Holding the pointer near the top or bottom of the window scrolls the page.
+- **A finger does not drag,** because a finger on a header scrolls the page.
+- **A drag stays on its page.** Moving a block to another page is still in its menu.
+
+**Why.** [docs/design/ui.md](docs/design/ui.md) puts acting on the thing itself first, and the author found separate move buttons too costly in width. A handle of its own would cost the same width in every block of a row. Each drop is one request to `PUT /pages/:pageId/order`, so it is one undo step.
+
+**What would reopen it.** Trouble finding the gesture, which a visible grip in the header would answer. `todo.md` has an item to use the ellipsis as a grip on a phone, where a finger on a header scrolls the page.
+
 ## 2026-10-11: A menu lists a page's rows and a document's pages in submenus
 
 A block's menu has **Move to row** and **Move to page**. Each opens a menu beside it that lists the rows of the page or the other pages of the document. A block inside a row has **Move to row** too, listing the other rows, so it moves between rows in one step.
@@ -20,6 +35,24 @@ The author reviewed the first build of rows of blocks and changed two things.
 **Why.** The drag and the menu already move the block, and the buttons took width from the blocks.
 
 **What would reopen it.** People mistaking the button for the one that adds a row to a table.
+
+## 2026-10-10: How a row of blocks behaves
+
+The author chose the storage ("A row of blocks is stored in its own table", below). An agent chose the rest while building it, and the author reviewed these choices on 2026-10-11 and accepted them.
+
+- **Error messages and the undo label say "row of blocks",** because "row" alone could mean a table's row there. A row's own name (`Row 1`) and its menu say "row", because the thing in view settles the meaning.
+- **A row has a name and a header.** The header holds the name, the buttons that add a block to the row, and the ellipsis for its menu. A row needs a visible button for its menu, and the name is what the menus of other blocks call it.
+- **The blocks of a row share its width equally,** and stack on a screen 640px wide or narrower.
+- **A row holds tables, charts, text views, and scripts, and no rows.**
+- **A block gets into a row from its own menu** or by being added from the row's header. "Move out of Row 1" puts it on the page below the row. Inside a row the move items read "Move left" and "Move right".
+- **A row has two ways to go.** "Ungroup" removes the row and leaves its blocks in its place. "Delete row and its blocks" deletes them too, after a dialog that names them, and keeps a version first. An empty row offers only "Delete row", which is also confirmed.
+- **A row and each block in it count toward the 50 blocks a page can hold.**
+- **A block moved to another page leaves its row** and goes to the end of that page, as any block does.
+- **A row has no Collapse, Copy link, or move to another page.** `todo.md` has an item for each.
+- **Deleting a row record sets `block_row_id` to null on its blocks** and deletes none of them. Redo of an ungroup deletes the row before it writes the blocks' new places, and a cascade there would delete the blocks.
+- **`PUT /pages/:pageId/order` takes the whole arrangement:** the order of the page, and the blocks of each row. A request that names only the page's own blocks is refused with 409 when a row holds any.
+
+**What would reopen it.** The open `#row-blocks` items in `todo.md`: different widths for the blocks of a row, and Collapse, Copy link, and a move to another page for a row.
 
 ## 2026-10-10: A row of blocks is stored in its own table
 

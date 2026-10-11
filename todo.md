@@ -134,19 +134,17 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
   - [ ] stacked bars
   - [ ] colors
 - [ ] **P7** support conditional formatting and sorting when rendering a data table in Markdown, or allow embedding an existing table/sheet in a Markdown view so its conditional formatting is applied #data-tables
-- [x] **P3** add a new type of block (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side #charts #row-blocks
-  - [ ] **Author** review how a row of blocks behaves. See [AGENT_DECISIONS.md](AGENT_DECISIONS.md), "How a row of blocks behaves" #row-blocks
-  - [ ] **P7** (Claude) let the blocks of a row have different widths, set by dragging the edge between two of them and by a number in a form #small-apps #row-blocks
-  - [ ] **P7** (Claude) collapse a row of blocks, copy a link to it, and move it with its blocks to another page, as other blocks can #small-apps #row-blocks
-  - [ ] **P8** (Claude) describe the `row` block in the `create-rowz-document` skill, and use a row in a sample where two blocks read better side by side #small-apps #row-blocks
+- [ ] **P7** (Claude) let the blocks of a row have different widths, set by dragging the edge between two of them and by a number in a form #small-apps #row-blocks
+- [ ] **P7** (Claude) collapse a row of blocks, copy a link to it, and move it with its blocks to another page, as other blocks can #small-apps #row-blocks
+- [ ] **P8** (Claude) describe the `row` block in the `create-rowz-document` skill, and use a row in a sample where two blocks read better side by side #small-apps #row-blocks
 - [ ] **P10** support nested pages #small-apps
 - [ ] support reordering things by dragging and dropping
   - [ ] **P7** pages #small-apps
   - [ ] **P6** rows and cols by dragging and dropping their headers (including when a range of them is selected) (but no need to handle dragging and dropping a selected range of cells - only do it if the user has specifically selected full rows or columns) #everyday
-  - [x] **P7** blocks #small-apps
-    - [x] **Author** **P5** (Claude) review how dragging a block behaves: [AGENT_DECISIONS.md](AGENT_DECISIONS.md), "Blocks and rows of blocks are dragged by their headers"
-    - [ ] **P6** allow drag-and-drop on mobile by using the ellipsis menu as a grip. this should not replace the current behavior that allows dragging blocks by their whole header on desktop #row-blocks
-    - [ ] **P7** drag a block to another page by holding it over the page's tab #small-apps
+  - [ ] **P6** allow drag-and-drop on mobile by using the ellipsis menu as a grip. this should not replace the current behavior that allows dragging blocks by their whole header on desktop #row-blocks
+  - [ ] **P7** drag a block to another page by holding it over the page's tab #small-apps
+  - [ ] **P8** (Claude) test dragging a block where the blocks of a row stack (640px wide or narrower) in a browser; only the geometry has a unit test (`apps/web/src/blockDrag.test.ts`) #codebase #row-blocks
+  - [ ] **P8** (Claude) test that a `pointercancel` from another pointer does not end a drag (`apps/web/src/blockDrag.ts`); jsdom has no `PointerEvent`, so it needs a browser test #codebase #row-blocks
 - [ ] **P7** data tables - allow choices to be drawn from a formula's result (when the formula value changes, keep the raw underlying value in the cell but flag it visibly as invalid) #data-tables
 - [ ] **P7** (Claude) the editor for a formula column's formula looks unfinished beside the other panels: its heading is small, "Pick reference" is smaller than the other buttons, and Apply and Cancel touch. See `_scratch/qa/15-formula-col.png` #formula-editing
 - [ ] **P7** double clicking a cell in a formula column should open the formula column formula editor instead of editing in the cell
@@ -209,6 +207,7 @@ Open work is grouped by product area. Priorities order work; hashtags identify t
 ## Menus, dialogs, and messages
 
 - [ ] **P5** submenus currently are subject to the diagonal submenu hover problem (if the user moves their cursor diagonally and crosses another menu item, the submenu they're moving toward disappears) -- use the safe triangle trick to fix this
+- [ ] **P8** (Claude) a submenu on a phone-width screen opens over its parent menu, because neither side has room, and nobody has tried a submenu by touch; decide where it should open there (`apps/web/src/components/ContextMenu.vue`) #everyday
 - [ ] **P5** a delete chosen from a menu should be confirmed in or beside the menu, not in a dialog in the middle of the screen: the item changes to "Confirm deletion?", or a small confirmation opens next to it. A second click counts only after a short delay, so an accidental double click does not confirm. Build both forms far enough for the author to choose. Keep the dialog where the confirmation explains what will be lost. See [DECISIONS.md](DECISIONS.md), "Removing a whole container is confirmed, beside the menu" #everyday
   - [ ] confirm deleting a page, which is not confirmed today
   - [ ] replace the centered dialogs that confirm deleting a block (a table, chart, text view, or script) and a row of blocks with a popup beside the menu (`apps/web/src/views/EditorView.vue`) #row-blocks

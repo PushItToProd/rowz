@@ -261,6 +261,10 @@ The original list included a browser QA pass on 2026-10-05 at commit `b236b7f730
   - [x] the block changes size between showing and editing. Keep its place and size in both, ideally the full width of the page
   - [x] the editing state looks unstyled beside the rest of the block
   - [x] show the preview to the right of the text being edited, not below it
+- [x] add a new type of block (in addition to tables, charts, and text): a row, which can itself contain one or more table/chart/text components laid out side-by-side #charts #row-blocks
+  - [x] review how a row of blocks behaves. The author accepted the choices on 2026-10-11, and the entry moved to [DECISIONS.md](../../DECISIONS.md), "How a row of blocks behaves" #row-blocks
+- [x] support reordering blocks by dragging and dropping #small-apps #row-blocks
+  - [x] (Claude) review how dragging a block behaves. The author accepted the choices on 2026-10-11, and the entry moved to [DECISIONS.md](../../DECISIONS.md), "Blocks and rows of blocks are dragged by their headers"
 
 ## Formatting
 

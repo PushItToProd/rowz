@@ -2,43 +2,6 @@
 
 Choices made by agents while acting autonomously, for the author to review. Each entry says what was decided, why, and what to change if you disagree. Newest first.
 
-## 2026-10-11: Blocks and rows of blocks are dragged by their headers
-
-The author asked for blocks and rows of blocks to be rearranged by dragging. An agent chose how.
-
-**Choices.**
-
-- **The header is the handle.** A press anywhere on a block's or a row's header that is not a button starts a drag once the pointer has moved 6px. A press that does not move stays a click, so a click on the name still renames it. The pointer over a header is a grab hand.
-- **A bar shows the gap the block will go to,** and the block being dragged dims in place. Nothing moves until the release.
-- **Over the blocks of a row, a block goes into that row,** at the gap nearest the pointer. Anywhere else, including a row's header, it goes between the lines of the page. A row dragged over another row stays on the page, since a row holds no rows.
-- **Escape cancels.** Holding the pointer near the top or bottom of the window scrolls the page.
-- **A finger does not drag,** because a finger on a header scrolls the page.
-- **A drag stays on its page.** Moving a block to another page is still in its menu.
-
-**Why.** [docs/design/ui.md](docs/design/ui.md) puts acting on the thing itself first, and the author found separate move buttons too costly in width. A handle of its own would cost the same width in every block of a row. Each drop is one request to `PUT /pages/:pageId/order`, so it is one undo step.
-
-**If you disagree.** A visible grip in the header would make the gesture easier to find. Blocks could also shift to open the gap while the pointer moves, as some editors do. The 6px threshold is `SLOP` in `apps/web/src/blockDrag.ts`.
-
-## 2026-10-10: How a row of blocks behaves
-
-The author chose the storage ([DECISIONS.md](DECISIONS.md), "A row of blocks is stored in its own table"). An agent chose the rest while building it.
-
-**Choices.**
-
-- **Error messages and the undo label say "row of blocks",** because "row" alone could mean a table's row there. A row's own name (`Row 1`) and its menu say "row", because the thing in view settles the meaning.
-- **A row has a name and a header.** The header holds the name, the buttons that add a block to the row, and the ellipsis for its menu. A row needs a visible button for its menu, and the name is what the menus of other blocks call it.
-- **The blocks of a row share its width equally,** and stack on a screen 640px wide or narrower.
-- **A row holds tables, charts, text views, and scripts, and no rows.**
-- **A block gets into a row from its own menu** or by being added from the row's header. "Move out of Row 1" puts it on the page below the row. Inside a row the move items read "Move left" and "Move right".
-- **A row has two ways to go.** "Ungroup" removes the row and leaves its blocks in its place. "Delete row and its blocks" deletes them too, after a dialog that names them, and keeps a version first. An empty row offers only "Delete row", which is also confirmed.
-- **A row and each block in it count toward the 50 blocks a page can hold.**
-- **A block moved to another page leaves its row** and goes to the end of that page, as any block does.
-- **A row has no Collapse, Copy link, or move to another page.** `todo.md` has an item for each.
-- **Deleting a row record sets `block_row_id` to null on its blocks** and deletes none of them. Redo of an ungroup deletes the row before it writes the blocks' new places, and a cascade there would delete the blocks.
-- **`PUT /pages/:pageId/order` takes the whole arrangement:** the order of the page, and the blocks of each row. A request that names only the page's own blocks is refused with 409 when a row holds any.
-
-**To change.** The labels and the row's markup are in `apps/web/src/views/EditorView.vue` and `apps/web/src/components/AddBlockRow.vue`, and the layout is `.block-row` in `apps/web/src/styles/charts-text-views.css`. The server rules are in `apps/server/src/repo/spreadsheets/blockRows.ts` and `pages.ts`.
-
 ## 2026-10-08: Consistent CSV formula warnings
 
 **Choice.** Use one warning sentence in both CSV replacement and append confirmations.
