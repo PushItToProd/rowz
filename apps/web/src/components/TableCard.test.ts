@@ -901,6 +901,34 @@ describe("column names", () => {
     return found;
   }
 
+  it("selects a column of a data table with no rows, and a second click renames it", async () => {
+    const table = { ...TABLE, columns: COLUMNS, rowCount: 0, rows: [] };
+    server.getSnapshot.mockResolvedValue(wireSnapshot({ ...snapshotWith(), tables: [table] }));
+    await useWorkbookStore().load("s1");
+    const store = useWorkbookStore();
+    wrapper = mount(
+      {
+        components: { TableCard },
+        setup: () => ({ store }),
+        template: '<TableCard :table="store.tables[0]" />',
+      },
+      { attachTo: document.body },
+    );
+    const header = () => wrapper.get(`thead th[data-column="${COLUMNS[0]!.name}"]`);
+    const press = async () => {
+      const name = header().get(".editable-name");
+      const init = { bubbles: true, cancelable: true, button: 0, detail: 1 };
+      name.element.dispatchEvent(new MouseEvent("mousedown", init));
+      name.element.dispatchEvent(new MouseEvent("click", init));
+      await flushPromises();
+    };
+    await press();
+    expect(header().classes()).toContain("grid__header--selected");
+    expect(header().find("input").exists()).toBe(false);
+    await press();
+    expect(header().find("input").exists()).toBe(true);
+  });
+
   it("converts a plain table to a data table in two ways", async () => {
     await render();
     server.nameColumns.mockResolvedValue(

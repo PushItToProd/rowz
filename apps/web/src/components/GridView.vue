@@ -610,8 +610,9 @@ function isLineSelected(axis: Axis, index: number): boolean {
     ? whole.startCol === 0 &&
         whole.endCol === colCount - 1 &&
         contains(whole, { row: index, col: 0 })
-    : whole.startRow === 0 &&
-        whole.endRow === rowCount - 1 &&
+    : // A table with no rows still has a column selection, which ends at row 0.
+      whole.startRow === 0 &&
+        whole.endRow === Math.max(0, rowCount - 1) &&
         contains(whole, { row: 0, col: index });
 }
 
