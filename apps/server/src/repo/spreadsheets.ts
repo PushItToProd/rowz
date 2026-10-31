@@ -16,6 +16,7 @@ import {
   type SpreadsheetFile,
   type UpdateTableBody,
   type ReorderBody,
+  type TableKind,
 } from "@spreadsheet-app/shared";
 import type { Database } from "../db/client";
 import { type Contents } from "./contents";
@@ -276,14 +277,15 @@ export class SpreadsheetRepository {
     return this.context.deletePage(pageId);
   }
 
-  /** Creates an empty table. Without a name the table gets the next free `Table N`. */
+  /** Creates an empty plain table or data table. Without a name it gets the next free `Table N`. */
   async createTable(
     pageId: string,
     name?: string,
     position?: number,
     blockRowId?: string,
+    kind?: TableKind,
   ): Promise<Created<{ table: TableRecord }>> {
-    return this.context.createTable(pageId, name, position, blockRowId);
+    return this.context.createTable(pageId, name, position, blockRowId, kind);
   }
 
   /**

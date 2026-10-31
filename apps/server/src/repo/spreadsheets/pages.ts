@@ -1,4 +1,10 @@
-import { DEFAULT_TABLE_SIZE, FILE_LIMITS, type ReorderBody } from "@spreadsheet-app/shared";
+import {
+  DEFAULT_DATA_TABLE_COLUMNS,
+  DEFAULT_TABLE_SIZE,
+  FILE_LIMITS,
+  type ReorderBody,
+  type TableKind,
+} from "@spreadsheet-app/shared";
 import { and, eq } from "drizzle-orm";
 import type { Database } from "../../db/client";
 import { type ContentWriter, type Change } from "../journal";
@@ -314,6 +320,7 @@ export async function insertTable(
   writer: ContentWriter,
   position?: number,
   blockRowId?: string,
+  kind: TableKind = "sheet",
 ): Promise<TableRecord> {
   if (name !== undefined) await ctx.checkHolderName(tx, pageId, name, { kind: "table" });
   const values = {
@@ -321,10 +328,19 @@ export async function insertTable(
     name: name ?? nextName("Table", await ctx.holderNames(tx, pageId)),
     blockRowId: blockRowId ?? null,
     position: await ctx.within(tx).insertPosition(pageId, writer, position, blockRowId),
+    // A data table starts with named columns and no rows, as Name columns leaves an empty table.
+    ...(kind === "table"
+      ? {
+          columns: Array.from({ length: DEFAULT_DATA_TABLE_COLUMNS }, (_, index) => ({
+            name: `Column ${String(index + 1)}`,
+            type: "any" as const,
+          })),
+        }
+      : {}),
   };
-  return writer
-    .insertTable(values, DEFAULT_TABLE_SIZE)
-    .catch(rethrowDuplicate("table", values.name));
+  const size =
+    kind === "table" ? { rowCount: 0, colCount: DEFAULT_DATA_TABLE_COLUMNS } : DEFAULT_TABLE_SIZE;
+  return writer.insertTable(values, size).catch(rethrowDuplicate("table", values.name));
 }
 
 export async function deletePage(ctx: RepositoryContext, pageId: string): Promise<Change> {

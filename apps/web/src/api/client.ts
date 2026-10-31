@@ -33,6 +33,7 @@ import type {
   ResizeLinesBody,
   UpdateTableBody,
   DocumentSearchResponse,
+  TableKind,
 } from "@spreadsheet-app/shared";
 import type {
   ChartType,
@@ -300,11 +301,15 @@ export const api = {
   /** Adds a table at an index, defaulting to the end of a page or of one of its rows of blocks. */
   createTable: (
     pageId: string,
+    kind: TableKind,
     position?: number,
     blockRowId?: string,
   ): Promise<{ table: StoredTable; change: Change }> =>
     body(
-      routes.pages[":pageId"].tables.$post({ param: { pageId }, json: { position, blockRowId } }),
+      routes.pages[":pageId"].tables.$post({
+        param: { pageId },
+        json: { kind, position, blockRowId },
+      }),
     ),
 
   updateTable: (tableId: string, changes: UpdateTableBody, stepId?: string): Promise<Change> =>

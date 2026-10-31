@@ -901,38 +901,40 @@ describe("column names", () => {
     return found;
   }
 
-  it("offers two ways to name the columns of a plain table", async () => {
+  it("converts a plain table to a data table in two ways", async () => {
     await render();
     server.nameColumns.mockResolvedValue(
       changeWith({ table: DATA_TABLE, cells: [], views: [], tables: [] }),
     );
+    const choose = async (label: string) => {
+      await item(label).trigger("click");
+      await flushPromises();
+    };
     const opened = await openBlockActionMenu(wrapper, "Table 1");
-    const labels = opened.menu.findAll('[role="menuitem"]').map((entry) => entry.text());
     expect(opened.menu.attributes("aria-label")).toBe("Actions for Table 1");
-    expect(labels).toContain("Use the first row as the names");
-    expect(labels).toContain("Name them Column 1, Column 2, …");
-    await opened.menu
-      .findAll('[role="menuitem"]')
-      .find((entry) => entry.text() === "Use the first row as the names")!
-      .trigger("click");
+    await choose("Convert to table");
+    await choose("Use the first row as column names");
     opened.close();
     expect(server.nameColumns).toHaveBeenCalledExactlyOnceWith("t1", true);
 
-    await chooseBlockAction(wrapper, "Table 1", "Name them Column 1, Column 2, …");
+    const again = await openBlockActionMenu(wrapper, "Table 1");
+    await choose("Convert to table");
+    await choose("Name columns Column 1, Column 2, …");
+    again.close();
     expect(server.nameColumns).toHaveBeenLastCalledWith("t1", false);
   });
 
-  it("removes the names of a data table after confirming, with a warning about formula columns", async () => {
+  it("converts a data table to a sheet after confirming, with a warning about formula columns", async () => {
     await renderData();
     server.dropColumns.mockResolvedValue(changeWith(TABLE));
     expect(wrapper.findAll("button").some((found) => found.text() === "Name columns")).toBe(false);
-    await chooseBlockAction(wrapper, "Table 1", "Remove column names", TableCard);
+    await chooseBlockAction(wrapper, "Table 1", "Convert to sheet", TableCard);
     expect(appDialog()?.textContent).toContain(
-      "Remove the column names of Table 1? Its formula columns will become empty.",
+      "Convert Table 1 to a sheet? Its column names will be removed. Its formula columns will become empty.",
     );
     await respondToDialog("cancel");
     expect(server.dropColumns).not.toHaveBeenCalled();
-    await chooseBlockAction(wrapper, "Table 1", "Remove column names", TableCard);
+    await chooseBlockAction(wrapper, "Table 1", "Convert to sheet", TableCard);
     await respondToDialog("confirm");
     expect(server.dropColumns).toHaveBeenCalledExactlyOnceWith("t1");
   });

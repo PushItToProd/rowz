@@ -117,7 +117,7 @@ test("a function error opens its cell and the Raised in link opens its script de
       await enter(page, `${"ABC"[col] ?? ""}${String(row + 1)}`, value);
     }
   }
-  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
+  await chooseBlockAction(page, "Table 1", "Convert to table", "Use the first row as column names");
   await page.locator('[data-table="Table 1"]').getByText("Table 1").click();
   await page.getByLabel("Table name").fill("Runs");
   await page.getByLabel("Table name").press("Enter");
@@ -135,7 +135,7 @@ test("a function error opens its cell and the Raised in link opens its script de
   );
   await source.press("Control+Enter");
   await expect(source).toHaveCount(0);
-  await page.getByRole("button", { name: "Add table", exact: true }).last().click();
+  await page.getByRole("button", { name: "Add sheet", exact: true }).last().click();
   // Renaming the original Table 1 to Runs freed this name for the new table.
   const callerTable = "Table 1";
   await expect(cell(page, "A1", callerTable)).toBeVisible();
@@ -511,7 +511,7 @@ test("named headers use same-row filters, reject multiple columns, and keep hidd
     for (const [col, text] of inputs.entries())
       await enter(page, `${"AB"[col] ?? ""}${String(row + 1)}`, text);
   }
-  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
+  await chooseBlockAction(page, "Table 1", "Convert to table", "Use the first row as column names");
   const item = page.locator('[data-table="Table 1"] thead th[data-column="Item"]');
   const qty = page.locator('[data-table="Table 1"] thead th[data-column="Qty"]');
   await item.click({ button: "right" });

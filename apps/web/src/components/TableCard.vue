@@ -31,7 +31,7 @@ import NamesPanel from "./NamesPanel.vue";
 import ResizeTable from "./ResizeTable.vue";
 import ResizeLines from "./ResizeLines.vue";
 import TableDisplayBar from "./TableDisplayBar.vue";
-import type { MenuItem, MenuScope } from "./menu";
+import { submenu, type MenuItem, type MenuScope } from "./menu";
 import { useActiveSidePane } from "../sidePane";
 
 const props = withDefaults(defineProps<{ table: TableRecord; collapsed?: boolean }>(), {
@@ -319,9 +319,9 @@ async function dropColumns(): Promise<void> {
   const warning = computed ? " Its formula columns will become empty." : "";
   if (
     await dialog.confirm({
-      title: "Remove column names",
-      message: `Remove the column names of ${props.table.name}?${warning}`,
-      confirmLabel: "Remove names",
+      title: "Convert to sheet",
+      message: `Convert ${props.table.name} to a sheet? Its column names will be removed.${warning}`,
+      confirmLabel: "Convert",
       danger: true,
     })
   ) {
@@ -355,7 +355,12 @@ const blockMenuActions = computed((): MenuItem[] => {
   }
 
   return [
-    { label: "Resize", run: () => (resizing.value = true) },
+    {
+      label: "Resize",
+      run: () => {
+        resizing.value = true;
+      },
+    },
     { label: "Freeze rows and columns", run: openFreezeSettings },
     ...(!props.table.columns
       ? [
@@ -374,16 +379,18 @@ const blockMenuActions = computed((): MenuItem[] => {
       },
     },
     ...(props.table.columns
-      ? [{ label: "Remove column names", danger: true, run: dropColumns }]
+      ? [{ label: "Convert to sheet", danger: true, run: dropColumns }]
       : [
-          {
-            label: "Use the first row as the names",
-            run: () => void store.nameColumns(props.table.id, true),
-          },
-          {
-            label: "Name them Column 1, Column 2, …",
-            run: () => void store.nameColumns(props.table.id, false),
-          },
+          submenu("Convert to table", [
+            {
+              label: "Use the first row as column names",
+              run: () => void store.nameColumns(props.table.id, true),
+            },
+            {
+              label: "Name columns Column 1, Column 2, …",
+              run: () => void store.nameColumns(props.table.id, false),
+            },
+          ]),
         ]),
     { label: "Import CSV", run: () => importInput.value?.click() },
     { label: "Append CSV rows", run: () => appendInput.value?.click() },

@@ -97,7 +97,7 @@ test("capture the README screenshots", async ({ page }) => {
     await header(column).click({ button: "right" });
     await page.getByRole("menuitem", { name: item }).click();
   };
-  await chooseBlockAction(page, "Orders", "Use the first row as the names");
+  await chooseBlockAction(page, "Orders", "Convert to table", "Use the first row as column names");
   await choose("Paid", "Column holds: Checkbox");
   await choose("Column 1", "Column holds: A formula…");
   await page.getByLabel("Column formula").fill("=[Price] * [Qty]");
@@ -171,7 +171,7 @@ test("capture the README screenshots", async ({ page }) => {
   await page.getByRole("button", { name: "Add page" }).click();
   await expect(pages.locator('[aria-current="page"]')).toHaveText(/Page 1/);
   await rename(page, "Page", pages.locator('[aria-current="page"]'), "Order form");
-  await page.getByRole("button", { name: "Add table" }).last().click();
+  await page.getByRole("button", { name: "Add sheet" }).last().click();
   await fill(page, [["Item", "Tea pot"], ["Size"], ["Gift"]]);
   await enter(page, "C2", '=DROPDOWN("small, medium, large", B2)');
   await enter(page, "C3", '=CHECKBOX(B3, "wrap it")');

@@ -55,9 +55,16 @@ async function addBlock(event: MouseEvent, add: () => Promise<boolean>): Promise
     <button
       type="button"
       data-add-block-type="table"
-      @click="addBlock($event, () => store.addTable(pageId, position, blockRowId))"
+      @click="addBlock($event, () => store.addTable(pageId, 'table', position, blockRowId))"
     >
       Add table
+    </button>
+    <button
+      type="button"
+      data-add-block-type="sheet"
+      @click="addBlock($event, () => store.addTable(pageId, 'sheet', position, blockRowId))"
+    >
+      Add sheet
     </button>
     <button
       type="button"

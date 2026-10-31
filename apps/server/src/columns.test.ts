@@ -213,6 +213,22 @@ describe("naming a table's columns", () => {
   });
 });
 
+describe("adding a table of each kind", () => {
+  it("adds a data table with three named columns and no rows", async () => {
+    const { id, page } = await start();
+    const table = await addTable(user, page.id, { kind: "table" });
+    expect(names(table)).toEqual(["Column 1", "Column 2", "Column 3"]);
+    const snapshot = await readSnapshot(user, id);
+    expect(snapshot.tables.find((found) => found.id === table.id)?.rowCount).toBe(0);
+  });
+
+  it("adds a plain table when no kind is given", async () => {
+    const { page } = await start();
+    expect((await addTable(user, page.id)).columns).toBeNull();
+    expect((await addTable(user, page.id, { kind: "sheet" })).columns).toBeNull();
+  });
+});
+
 describe("changing a column", () => {
   it("changes its type", async () => {
     const { patchColumn, current } = await sales();

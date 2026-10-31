@@ -9,6 +9,7 @@ import {
   type IdentifiedStructuralEditBody,
   type StructuralEditBody,
   type UpdateTableBody,
+  type TableKind,
 } from "@spreadsheet-app/shared";
 import { api, type PageRecord, type ViewRecord } from "../../api/client";
 import type { PageLayout, WorkbookContext } from "./context";
@@ -381,11 +382,21 @@ export function createStructure(context: WorkbookContext) {
     }, "The page could not be deleted");
   }
 
-  /** Adds a table at a place on a page, or in one of its rows of blocks. */
-  function addTable(pageId: string, position?: number, blockRowId?: string): Promise<boolean> {
-    return context.attempt(async () => {
-      await context.receiveChange((await api.createTable(pageId, position, blockRowId)).change);
-    }, "The table could not be added");
+  /** Adds a sheet or a data table at a place on a page, or in one of its rows of blocks. */
+  function addTable(
+    pageId: string,
+    kind: TableKind,
+    position?: number,
+    blockRowId?: string,
+  ): Promise<boolean> {
+    return context.attempt(
+      async () => {
+        await context.receiveChange(
+          (await api.createTable(pageId, kind, position, blockRowId)).change,
+        );
+      },
+      kind === "table" ? "The table could not be added" : "The sheet could not be added",
+    );
   }
 
   function updateTable(tableId: string, changes: UpdateTableBody): Promise<boolean> {

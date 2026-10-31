@@ -702,10 +702,10 @@ it("places insertion controls before, between, and after blocks and sends their 
   const rows = wrapper.findAll("[data-insert-position]");
   expect(rows.map((row) => row.attributes("data-insert-position"))).toEqual(["0", "1", "2"]);
   await rows[0]!.findAll("button")[0]!.trigger("click");
-  await rows[1]!.findAll("button")[1]!.trigger("click");
-  await rows[2]!.findAll("button")[2]!.trigger("click");
+  await rows[1]!.findAll("button")[2]!.trigger("click");
+  await rows[2]!.findAll("button")[3]!.trigger("click");
   await flushPromises();
-  expect(server.createTable).toHaveBeenCalledWith("p1", 0, undefined);
+  expect(server.createTable).toHaveBeenCalledWith("p1", "table", 0, undefined);
   expect(server.createView).toHaveBeenCalledWith("p1", "chart", 1, undefined);
   expect(server.createView).toHaveBeenCalledWith("p1", "text", 2, undefined);
   expect(rows[0]!.findAll("button").every((button) => button.attributes("tabindex") !== "-1")).toBe(
@@ -765,14 +765,17 @@ describe("a row of blocks", () => {
     const controls = wrapper.get("#block-br1 .block-row__header .editor__add");
     expect(controls.findAll("button").map((button) => button.text())).toEqual([
       "Add table",
+      "Add sheet",
       "Add chart",
       "Add text",
       "Add script",
     ]);
     await controls.get('[data-add-block-type="table"]').trigger("click");
+    await controls.get('[data-add-block-type="sheet"]').trigger("click");
     await controls.get('[data-add-block-type="text"]').trigger("click");
     await flushPromises();
-    expect(server.createTable).toHaveBeenCalledWith("p1", undefined, "br1");
+    expect(server.createTable).toHaveBeenCalledWith("p1", "table", undefined, "br1");
+    expect(server.createTable).toHaveBeenCalledWith("p1", "sheet", undefined, "br1");
     expect(server.createView).toHaveBeenCalledWith("p1", "text", undefined, "br1");
     wrapper.unmount();
   });
@@ -875,12 +878,12 @@ it("scrolls to and focuses each kind of block after it is added", async () => {
   const wrapper = await render("owner", true, true);
   const store = useWorkbookStore();
   const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
-  vi.spyOn(store, "addTable").mockImplementation((pageId, position) => {
+  vi.spyOn(store, "addTable").mockImplementation((pageId, kind, position) => {
     store.tables.push({
       ...snapshotWith().tables[0]!,
-      id: "added-table",
+      id: `added-${kind}`,
       pageId,
-      name: "Added Table",
+      name: `Added ${kind}`,
       blockRowId: null,
       position: position ?? 0,
     });
@@ -900,7 +903,7 @@ it("scrolls to and focuses each kind of block after it is added", async () => {
     return Promise.resolve(true);
   });
 
-  for (const name of ["Add table", "Add chart", "Add text", "Add script"]) {
+  for (const name of ["Add table", "Add sheet", "Add chart", "Add text", "Add script"]) {
     const row = wrapper.findAll("[data-insert-position]").at(-1)!;
     const button = row.findAll("button").find((candidate) => candidate.text() === name)!;
     expect(document.activeElement).not.toBe(button.element);
@@ -910,11 +913,13 @@ it("scrolls to and focuses each kind of block after it is added", async () => {
     const card = wrapper.findAll(".editor__block").at(-1)!;
     expect(scrollIntoView).toHaveBeenLastCalledWith({ block: "nearest", behavior: "smooth" });
     expect(card.element.contains(document.activeElement)).toBe(true);
-    const focused =
-      name === "Add table" ? card.find('[role="grid"]') : card.find(".editable-name:not(input)");
+    const grid = name === "Add table" || name === "Add sheet";
+    const focused = grid ? card.find('[role="grid"]') : card.find(".editable-name:not(input)");
     expect(document.activeElement).toBe(focused.element);
-    if (name === "Add table")
-      expect(store.selection).toEqual({ tableId: "added-table", row: 0, col: 0 });
+    if (grid) {
+      const tableId = name === "Add table" ? "added-table" : "added-sheet";
+      expect(store.selection).toEqual({ tableId, row: 0, col: 0 });
+    }
   }
   wrapper.unmount();
 });
@@ -925,7 +930,7 @@ it("does not take focus back when the user moves while a block is being added", 
   const tableGrid = wrapper.find<HTMLElement>('[role="grid"]');
   store.selection = { tableId: "t1", row: 0, col: 0 };
   let finishAdd: ((success: boolean) => void) | undefined;
-  vi.spyOn(store, "addTable").mockImplementation((pageId, position) => {
+  vi.spyOn(store, "addTable").mockImplementation((pageId, _kind, position) => {
     return new Promise((resolve) => {
       finishAdd = (success) => {
         if (success)

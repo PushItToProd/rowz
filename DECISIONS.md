@@ -4,6 +4,22 @@ Decisions the author made, and choices by agents that the author has seen. Each 
 
 An entry's `**Standing.**` line says how firmly it holds: Rule, Default, or Stopgap. An entry without the line is a Default, which an agent may change when a task gives a reason. [CLAUDE.md](CLAUDE.md), "Decision records", defines the three.
 
+## 2026-10-31: Sheets and data tables are separate kinds of block to a person, and share storage
+
+The author asked for data tables and plain tables to be separate in the interface, and accepted an agent's recommendation to keep one storage model for both.
+
+- **The interface names two kinds.** A plain table is a **sheet**, and a data table is a **table**. The add controls offer **Add table**, which makes a data table with three named columns and no rows, and **Add sheet**, which makes a plain table of the default size. Each is one request and one undo step.
+- **Conversion is in the block menu.** A sheet's menu has **Convert to table**, a submenu with **Use the first row as column names** and **Name columns Column 1, Column 2, …**. A data table's menu has **Convert to sheet**, which confirms first.
+- **Storage, the engine, and code keep one kind of table.** `tables.columns` is null for a sheet and holds the named columns of a data table. Code says "table" for both, and "plain table" and "data table" for the kinds. `POST /pages/:pageId/tables` takes `kind: "sheet" | "table"`, defaulting to `"sheet"`.
+
+**Standing.** Default.
+
+**Why.** Rows, cells, stable row and column IDs, formats, display settings, undo journaling, and formula rewriting are the same for both kinds. Separate storage would need a second copy of `ContentWriter`, `rewrite.ts`, `TableLayout`, and every route that takes a table ID, and conversion would become a move of data between records instead of setting one field. The author chose "sheet" because it reads as "spreadsheet", and accepts renaming it later.
+
+**Deferred.** An explicit `kind` column on `tables`, in place of inferring the kind from whether `columns` is null. Add it when the two kinds come to differ in a way `columns` does not capture.
+
+**What would reopen it.** A feature that one kind needs and the other must not have, which the shared storage makes awkward; or "sheet" being read as a page.
+
 ## 2026-10-11: Blocks and rows of blocks are dragged by their headers
 
 The author asked for blocks and rows of blocks to be rearranged by dragging. An agent chose how, and the author reviewed these choices on 2026-10-11 and accepted them.

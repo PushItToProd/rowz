@@ -719,7 +719,7 @@ const blockMenuItems = computed((): MenuItem[] => {
     // A row of blocks has its own controls for adding to it.
     if (!within) {
       groups.push(
-        (["table", "chart", "text", "script"] as const).map((kind) => ({
+        (["table", "sheet", "chart", "text", "script"] as const).map((kind) => ({
           label: `Add ${kind} below`,
           run: () => {
             addBlockBelow(block.record.id, kind);

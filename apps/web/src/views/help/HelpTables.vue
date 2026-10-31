@@ -13,9 +13,11 @@ import { LIMITS } from "@spreadsheet-app/shared";
       </p>
       <ul>
         <li>
-          Use <strong>Add page</strong> and <strong>Add table</strong> to grow a document. The strip
-          marked <strong>+</strong> under a table adds a row, and the one along its right edge adds
-          a column. A table can have up to {{ LIMITS.tableRows }} rows and
+          Use <strong>Add page</strong> to add a page. <strong>Add sheet</strong> adds a plain
+          table, a grid addressed by column letter and row number. <strong>Add table</strong> adds a
+          data table, whose columns have names (see below). The strip marked
+          <strong>+</strong> under a table adds a row, and the one along its right edge adds a
+          column. A table can have up to {{ LIMITS.tableRows }} rows and
           {{ LIMITS.tableCols }} columns.
         </li>
         <li>
@@ -90,11 +92,13 @@ import { LIMITS } from "@spreadsheet-app/shared";
     <section id="columns">
       <h2>Tables with named columns</h2>
       <p>
-        Choose <strong>Use the first row as the names</strong> or
-        <strong>Name them Column 1, Column 2, …</strong> in a plain table's block menu to give each
-        column a name in place of its letter. Using the first row removes it from the data. Click a
-        column header to select it, then click its name to rename it. Double-click another part of
-        the header, outside the resize handle, to open its name editor.
+        <strong>Add table</strong> adds a data table with three named columns. To convert a sheet,
+        choose <strong>Convert to table</strong> in its block menu, then
+        <strong>Use the first row as column names</strong> or
+        <strong>Name columns Column 1, Column 2, …</strong>, to give each column a name in place of
+        its letter. Using the first row removes it from the data. Click a column header to select
+        it, then click its name to rename it. Double-click another part of the header, outside the
+        resize handle, to open its name editor.
       </p>
       <ul>
         <li>
@@ -142,8 +146,9 @@ import { LIMITS } from "@spreadsheet-app/shared";
           position or unfreeze the grid.
         </li>
         <li>
-          <strong>Remove column names</strong> in a data table's block menu makes it a plain table
-          again. Its formula columns become empty, and its sort and filter are cleared.
+          <strong>Convert to sheet</strong> in a data table's block menu removes its column names
+          and makes it a plain table again. Its formula columns become empty, and its sort and
+          filter are cleared.
         </li>
       </ul>
     </section>

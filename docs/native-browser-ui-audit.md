@@ -82,7 +82,7 @@ The 13 former native confirmations now use the shared dialog:
 | [`TableCard.vue`](../apps/web/src/components/TableCard.vue)                             | Delete a table and everything in it.                                                                     |
 | [`TableCard.vue`](../apps/web/src/components/TableCard.vue)                             | Replace existing table contents during CSV import.                                                       |
 | [`TableCard.vue`](../apps/web/src/components/TableCard.vue)                             | Shrink a table and discard cells outside the new size.                                                   |
-| [`TableCard.vue`](../apps/web/src/components/TableCard.vue)                             | Remove column names, including a warning if formula columns will be emptied.                             |
+| [`TableCard.vue`](../apps/web/src/components/TableCard.vue)                             | Convert to sheet, which removes column names and warns if formula columns will be emptied.               |
 | [`TableCard.vue`](../apps/web/src/components/TableCard.vue)                             | Convert a column with stored values into a formula column and remove those values.                       |
 | [`HistoryPanel.vue`](../apps/web/src/components/HistoryPanel.vue)                       | Restore an earlier document version.                                                                     |
 | [`ChartCard.vue`](../apps/web/src/components/ChartCard.vue)                             | Delete a chart.                                                                                          |

@@ -99,7 +99,7 @@ test("a cell button asks before clearing cells", async ({ page }) => {
 test("formulas read other tables and other pages, and follow their changes", async ({ page }) => {
   await newSpreadsheet(page);
 
-  await page.getByRole("button", { name: "Add table" }).last().click();
+  await page.getByRole("button", { name: "Add sheet" }).last().click();
   await enter(page, "A1", "5", "Table 2");
   await enter(page, "A1", "='Table 2'!A1*2");
   await expect(cell(page, "A1")).toHaveText("10");
@@ -125,7 +125,7 @@ test("a block moves to another page, formulas follow it, and pages are reordered
   page,
 }) => {
   await newSpreadsheet(page);
-  await page.getByRole("button", { name: "Add table" }).last().click();
+  await page.getByRole("button", { name: "Add sheet" }).last().click();
   await enter(page, "A1", "5", "Table 2");
   await enter(page, "A1", "='Table 2'!A1*2");
   await page.getByRole("button", { name: "Add page" }).click();
@@ -179,7 +179,7 @@ test("a button sends an email built from cells, and reports a bad address", asyn
 
 test("renaming a table or page rewrites the formulas that name it", async ({ page }) => {
   await newSpreadsheet(page);
-  await page.getByRole("button", { name: "Add table" }).last().click();
+  await page.getByRole("button", { name: "Add sheet" }).last().click();
   await enter(page, "A1", "5", "Table 2");
   await enter(page, "A1", "='Table 2'!A1+1");
   await enter(page, "A2", "='Page 1'!'Table 2'!A1*2");
@@ -396,7 +396,7 @@ test("a formula with several results fills the cells around it", async ({ page }
 
 test("a form with a checkbox and a dropdown saves rows to a log", async ({ page }) => {
   await newSpreadsheet(page);
-  await page.getByRole("button", { name: "Add table" }).last().click();
+  await page.getByRole("button", { name: "Add sheet" }).last().click();
 
   // Table 1 is the form. Table 2 is the log.
   await enter(page, "A1", "Item");

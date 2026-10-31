@@ -111,7 +111,7 @@ test("a table with named columns has typed columns, a formula column, and column
   };
 
   // The first row becomes the names, and the data moves up.
-  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
+  await chooseBlockAction(page, "Table 1", "Convert to table", "Use the first row as column names");
   await expect(header("Price")).toBeVisible();
   await expect(cell(page, "A1")).toHaveText("pen");
 
@@ -200,7 +200,7 @@ test("a table with named columns has typed columns, a formula column, and column
   await expect(cell(page, "E2")).toHaveText("16");
 
   // Another table reads a whole column by the table's name.
-  await page.getByRole("button", { name: "Add table" }).last().click();
+  await page.getByRole("button", { name: "Add sheet" }).last().click();
   await enter(page, "A1", "=SUM('Table 1'[Total])", "Table 2");
   await expect(cell(page, "A1", "Table 2")).toHaveText("37");
 
@@ -222,7 +222,7 @@ test("warns before changing a column type when stored values do not fit", async 
   await enter(page, "A2", "TRUE");
   await enter(page, "A3", "not done");
   await enter(page, "A4", "FALSE");
-  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
+  await chooseBlockAction(page, "Table 1", "Convert to table", "Use the first row as column names");
 
   const header = page.locator('[data-table="Table 1"] thead th[data-column="Done"]');
   await header.click({ button: "right" });
@@ -261,7 +261,7 @@ test("a data table is sorted and filtered in place, and edits and fills act on t
       await enter(page, `${"AB"[col] ?? ""}${String(row + 1)}`, text);
     }
   }
-  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
+  await chooseBlockAction(page, "Table 1", "Convert to table", "Use the first row as column names");
 
   // Sorting by Item shows apple, fig, pear, which are stored rows 2, 3, and 1.
   await page
@@ -313,7 +313,7 @@ test("a dropdown column offers a list of choices, and a choice is picked", async
   await newSpreadsheet(page);
   await enter(page, "A1", "Race");
   await enter(page, "A2", "one");
-  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
+  await chooseBlockAction(page, "Table 1", "Convert to table", "Use the first row as column names");
 
   await page
     .locator('[data-table="Table 1"] thead th[data-column="Race"]')
@@ -392,7 +392,7 @@ test("a whole-column selection stays whole when the table sort is removed", asyn
     for (const [col, value] of values.entries())
       await enter(page, `${"AB"[col] ?? ""}${String(row + 1)}`, value);
   }
-  await chooseBlockAction(page, "Table 1", "Use the first row as the names");
+  await chooseBlockAction(page, "Table 1", "Convert to table", "Use the first row as column names");
   await page.getByRole("button", { name: "Add sort", exact: true }).click();
   await page.getByLabel("Sort column 1").selectOption({ label: "Qty" });
   await page.getByLabel("Sort direction 1").selectOption("descending");
@@ -494,4 +494,38 @@ test("cells are formatted from the toolbar, and the formats follow their cells",
   await cell(page, "B2").click();
   await bar.getByRole("button", { name: "Clear format" }).click();
   await expect(cell(page, "B2")).toHaveText("1234.5");
+});
+
+test("Add table makes a data table and Add sheet a plain one, and each converts", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await page.getByRole("button", { name: "Add table", exact: true }).last().click();
+  const data = page.locator('[data-table="Table 2"]');
+  for (const name of ["Column 1", "Column 2", "Column 3"]) {
+    await expect(data.locator(`thead th[data-column="${name}"]`)).toBeVisible();
+  }
+  await expect(data.locator("thead th[data-column]")).toHaveCount(3);
+  // A data table with no rows shows only its new-row line, at A1.
+  await expect(cell(page, "A2", "Table 2")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Add sheet", exact: true }).last().click();
+  const sheet = page.locator('[data-table="Table 3"]');
+  await expect(cell(page, "A1", "Table 3")).toBeVisible();
+  await expect(sheet.locator("thead th[data-column]")).toHaveCount(0);
+
+  await chooseBlockAction(page, "Table 2", "Convert to sheet");
+  await page
+    .getByRole("alertdialog", { name: "Convert to sheet" })
+    .getByRole("button", { name: "Convert" })
+    .click();
+  await expect(data.locator("thead th[data-column]")).toHaveCount(0);
+
+  await chooseBlockAction(
+    page,
+    "Table 3",
+    "Convert to table",
+    "Name columns Column 1, Column 2, …",
+  );
+  await expect(sheet.locator('thead th[data-column="Column 1"]')).toBeVisible();
 });

@@ -51,9 +51,9 @@ export function pageRoutes() {
         zValidator("json", createTableBody, onInvalid),
         async (c) => {
           const { pageId } = c.req.valid("param");
-          const { name, position, blockRowId } = c.req.valid("json");
+          const { name, position, blockRowId, kind } = c.req.valid("json");
           return c.json(
-            await c.var.repository.createTable(pageId, name, position, blockRowId),
+            await c.var.repository.createTable(pageId, name, position, blockRowId, kind),
             201,
           );
         },

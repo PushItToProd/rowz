@@ -47,7 +47,7 @@ The rules agents break most often:
 - **Anything with actions has a right-click menu and a visible button that opens the same menu.** Items describe the current selection and leave out what cannot apply.
 - **Confirm what undo cannot reverse and the removal of a whole page, block, or document.** Do not confirm a small edit in view that undo reverses. Confirm a delete beside the menu it was chosen from, not in a dialog across the screen.
 - **A click on a thing in a list that exists for choosing opens or selects it.** One click renames a name only where the click has no more important job, as on the name of the document being viewed. In the document list, Rename is in the document's menu.
-- **Do not repeat a menu's actions as buttons beside the thing.**
+- **Do not copy a menu's whole list as buttons beside the thing.** A second way to an action needs a job of its own, as a toolbar's few one-click actions have beside a menu that lists everything. [ui.md](docs/design/ui.md), "Menus", explains.
 - **An error says what could not be done and why in one sentence, with the actual names and numbers, then what to do.** It shows an underlying error word for word below the summary, and links to where it arose.
 - **A delete control looks destructive.** A plain "×" means close.
 - **Interface text is plain.** Say "document", "page", and "block". Do not explain what the screen makes obvious.

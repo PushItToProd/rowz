@@ -734,7 +734,7 @@ describe("click", () => {
     server.createTable.mockResolvedValue(
       createdTable({ ...TABLE, id: "t2", name: "Log", position: 1 }),
     );
-    await store.addTable("p1");
+    await store.addTable("p1", "sheet");
     server.click.mockResolvedValue(
       clickResult({
         cells: [
@@ -1159,7 +1159,7 @@ describe("structure", () => {
     server.createTable.mockResolvedValue(
       createdTable({ ...TABLE, id: "t2", name: "Table 2", position: 1 }),
     );
-    expect(await store.addTable("p1")).toBe(true);
+    expect(await store.addTable("p1", "sheet")).toBe(true);
     expect(store.tables.map((table) => table.name)).toEqual(["Table 1", "Table 2"]);
   });
 

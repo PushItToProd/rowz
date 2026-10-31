@@ -63,6 +63,8 @@ export function appName(env: { APP_NAME?: string | undefined }): string {
 }
 
 export const DEFAULT_TABLE_SIZE = { rowCount: 20, colCount: 8 } as const;
+/** A new data table starts with this many named columns and no rows. */
+export const DEFAULT_DATA_TABLE_COLUMNS = 3;
 
 const name = z.string().trim().min(1).max(LIMITS.nameLength);
 
@@ -394,8 +396,15 @@ export const reorderBody = z.object({
 export type ReorderBody = z.infer<typeof reorderBody>;
 
 const insertPosition = z.number().int().nonnegative().optional();
-/** `blockRowId` puts the new block in a row of blocks, where `position` is its place in the row. */
+/**
+ * `blockRowId` puts the new block in a row of blocks, where `position` is its
+ * place in the row. `kind` is "sheet" for a plain table and "table" for a
+ * data table with named columns.
+ */
+export const tableKind = z.enum(["sheet", "table"]);
+export type TableKind = z.infer<typeof tableKind>;
 export const createTableBody = optionalNameBody.extend({
+  kind: tableKind.default("sheet"),
   position: insertPosition,
   blockRowId: z.uuid().optional(),
 });

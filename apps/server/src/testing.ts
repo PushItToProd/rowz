@@ -175,7 +175,7 @@ export async function readSnapshot(user: TestClient, spreadsheetId: string): Pro
 export async function addTable(
   user: TestClient,
   pageId: string,
-  body: { name?: string } = {},
+  body: { name?: string; kind?: "sheet" | "table" } = {},
 ): Promise<TableRecord> {
   const created = await user.json<Created<{ table: TableRecord }>>(
     "POST",

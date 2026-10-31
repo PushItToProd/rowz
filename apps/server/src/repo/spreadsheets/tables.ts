@@ -13,6 +13,7 @@ import {
   type AppendCsvRowsBody,
   type StoredCell,
   type UpdateTableBody,
+  type TableKind,
 } from "@spreadsheet-app/shared";
 import { randomUUID } from "node:crypto";
 
@@ -33,17 +34,21 @@ export async function deleteTable(ctx: RepositoryContext, tableId: string): Prom
   return change;
 }
 
-/** Creates an empty table. Without a name the table gets the next free `Table N`. */
+/**
+ * Creates an empty plain table ("sheet") or data table ("table"). Without a
+ * name the table gets the next free `Table N`.
+ */
 export async function createTable(
   ctx: RepositoryContext,
   pageId: string,
   name?: string,
   position?: number,
   blockRowId?: string,
+  kind: TableKind = "sheet",
 ): Promise<Created<{ table: TableRecord }>> {
   const { result, change } = await ctx.changePage(pageId, async (_page, tx, writer) => {
-    writer.setLabel("Add table");
-    return ctx.insertTable(tx, pageId, name, writer, position, blockRowId);
+    writer.setLabel(kind === "table" ? "Add table" : "Add sheet");
+    return ctx.insertTable(tx, pageId, name, writer, position, blockRowId, kind);
   });
   return { table: result, change };
 }
