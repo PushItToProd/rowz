@@ -23,8 +23,16 @@
   margin-left: 4px;
 }
 
-.grid__column--named .editable-name--editing {
-  width: 8em;
+/*
+ * The editor covers the header, letter included. Inline beside the letter it
+ * could overflow a narrow header, and the header's text-overflow ellipsis
+ * then hides the whole input while it keeps focus.
+ */
+.grid__column--named input.editable-name--editing {
+  position: absolute;
+  inset: 3px 4px;
+  width: auto;
+  min-width: 0;
   padding: 1px 4px;
 }
 

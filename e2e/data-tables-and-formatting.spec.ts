@@ -529,3 +529,27 @@ test("Add table makes a data table and Add sheet a plain one, and each converts"
   );
   await expect(sheet.locator('thead th[data-column="Column 1"]')).toBeVisible();
 });
+
+test("a column name shows a text cursor only when a click renames it, and its editor fits the header", async ({
+  page,
+}) => {
+  await newSpreadsheet(page);
+  await enter(page, "A1", "Name");
+  await enter(page, "A2", "first");
+  await chooseBlockAction(page, "Table 1", "Convert to table", "Use the first row as column names");
+  const header = page.locator('[data-table="Table 1"] thead th[data-column="Name"]');
+  const name = header.locator(".editable-name");
+  const cursor = () => name.evaluate((element) => getComputedStyle(element).cursor);
+
+  // An unselected column's name selects the column, so it does not promise text editing.
+  expect(await cursor()).toBe("pointer");
+  await name.click();
+  await expect(header).toHaveClass(/grid__header--selected/);
+  expect(await cursor()).toBe("text");
+
+  await name.click();
+  const input = header.getByRole("textbox", { name: "Column name" });
+  await expect(input).toBeFocused();
+  // A header clips what overflows it with an ellipsis, which hides an input that does not fit.
+  expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+});

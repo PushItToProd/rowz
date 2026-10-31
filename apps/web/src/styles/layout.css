@@ -154,14 +154,23 @@
   padding: 16px;
 }
 
+/*
+ * The text cursor and the hover box promise that a click renames. A name whose
+ * click selects or opens its thing, such as an unselected column or another
+ * page's tab, shows the pointer instead.
+ */
 .editable-name {
   padding: 2px 4px;
   border: 1px solid transparent;
   border-radius: 4px;
+  cursor: pointer;
+}
+
+.editable-name[data-click-to-edit]:not(.editable-name--locked) {
   cursor: text;
 }
 
-.editable-name:hover:not(.editable-name--locked) {
+.editable-name[data-click-to-edit]:hover:not(.editable-name--locked) {
   border-color: var(--line);
 }
 
